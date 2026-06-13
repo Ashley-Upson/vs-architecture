@@ -24,6 +24,12 @@ TestResults/
 *.vsix
 *.pkgdef
 *.ctmenu
+!src/StandardIo.ArchitectureDiagram.Vsix/
+!src/StandardIo.ArchitectureDiagram.Vsix/**
+src/StandardIo.ArchitectureDiagram.Vsix/**/*.vsix
+src/StandardIo.ArchitectureDiagram.Vsix/**/*.pkgdef
+src/StandardIo.ArchitectureDiagram.Vsix/**/[Bb]in/
+src/StandardIo.ArchitectureDiagram.Vsix/**/[Oo]bj/
 
 # .NET / NuGet
 project.lock.json
