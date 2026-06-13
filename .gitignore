@@ -1,0 +1,64 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+out/
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+*.vsp
+*.vspx
+
+# Visual Studio
+.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# VSIX / extension build artifacts
+*.vsix
+*.pkgdef
+*.ctmenu
+
+# .NET / NuGet
+project.lock.json
+project.assets.json
+*.nuget.props
+*.nuget.targets
+packages/
+*.nupkg
+*.snupkg
+
+# Generated source/link/build metadata
+*.AssemblyInfo.cs
+*.AssemblyInfoInputs.cache
+*.GeneratedMSBuildEditorConfig.editorconfig
+*.FileListAbsolute.txt
+*.CoreCompileInputs.cache
+*.AssemblyReference.cache
+*.assets.cache
+*.genruntimeconfig.cache
+*.sourcelink.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.cache
+*.pid
+*.orig
+*.rej
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
