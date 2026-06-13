@@ -161,30 +161,37 @@ public sealed class DrawioExporter
         }
 
         var rowNextLeft = new Dictionary<int, int>();
+        var rowVerticalOffsets = new Dictionary<int, int>();
+        var previousProjectRowBottom = int.MinValue;
         foreach (var projectRow in projectLayouts
             .GroupBy(p => p.FirstDepth)
             .OrderBy(g => g.Key))
         {
+            var naturalRowTop = projectRow.Min(p => p.NaturalTop(originTop, layout));
+            var rowTop = previousProjectRowBottom == int.MinValue
+                ? naturalRowTop
+                : System.Math.Max(naturalRowTop, SafeAdd(previousProjectRowBottom, layout.VerticalSpacing));
+            var rowVerticalOffset = SafeSubtract(rowTop, naturalRowTop);
             var projectLeft = originLeft;
+            var projectRowBottom = rowTop;
+
             foreach (var projectLayout in projectRow)
             {
-                var projectTop = SafeSubtract(
-                    SafeAdd(originTop, SafeMultiply(projectLayout.FirstDepth, layout.NodeHeight + layout.VerticalSpacing)),
-                    layout.ContainerPadding);
-                var projectBottom = SafeAdd(
-                    originTop,
-                    SafeMultiply(projectLayout.LastDepth, layout.NodeHeight + layout.VerticalSpacing),
-                    layout.NodeHeight,
-                    layout.ContainerPadding);
+                var projectTop = SafeAdd(projectLayout.NaturalTop(originTop, layout), rowVerticalOffset);
+                var projectBottom = SafeAdd(projectLayout.NaturalBottom(originTop, layout), rowVerticalOffset);
                 result[projectLayout.Project.Id] = new Rect(
                     projectLeft,
                     projectTop,
                     projectLayout.Width,
                     SafeSubtract(projectBottom, projectTop));
+                projectRowBottom = System.Math.Max(projectRowBottom, projectBottom);
 
                 foreach (var layerGroup in projectLayout.Layers)
                 {
-                    var y = SafeAdd(originTop, SafeMultiply(layerGroup.Depth, layout.NodeHeight + layout.VerticalSpacing));
+                    var y = SafeAdd(
+                        originTop,
+                        SafeMultiply(layerGroup.Depth, layout.NodeHeight + layout.VerticalSpacing),
+                        rowVerticalOffset);
 
                     for (var i = 0; i < layerGroup.Nodes.Count; i++)
                     {
@@ -197,6 +204,8 @@ public sealed class DrawioExporter
             }
 
             rowNextLeft[projectRow.Key] = projectLeft;
+            rowVerticalOffsets[projectRow.Key] = rowVerticalOffset;
+            previousProjectRowBottom = projectRowBottom;
         }
 
         foreach (var externalLayer in graph.ExternalDependencies
@@ -205,7 +214,10 @@ public sealed class DrawioExporter
             .OrderBy(g => g.Key))
         {
             var layer = externalLayer.ToList();
-            var y = SafeAdd(originTop, SafeMultiply(externalLayer.Key, layout.NodeHeight + layout.VerticalSpacing));
+            var y = SafeAdd(
+                originTop,
+                SafeMultiply(externalLayer.Key, layout.NodeHeight + layout.VerticalSpacing),
+                rowVerticalOffsets.TryGetValue(externalLayer.Key, out var rowOffset) ? rowOffset : 0);
             var externalLeft = rowNextLeft.TryGetValue(externalLayer.Key, out var rowLeft)
                 ? rowLeft
                 : originLeft;
@@ -517,6 +529,22 @@ public sealed class DrawioExporter
     {
         public int FirstDepth { get; } = Layers.Min(l => l.Depth);
         public int LastDepth { get; } = Layers.Max(l => l.Depth);
+
+        public int NaturalTop(int originTop, LayoutSettings layout)
+        {
+            return SafeSubtract(
+                SafeAdd(originTop, SafeMultiply(FirstDepth, layout.NodeHeight + layout.VerticalSpacing)),
+                layout.ContainerPadding);
+        }
+
+        public int NaturalBottom(int originTop, LayoutSettings layout)
+        {
+            return SafeAdd(
+                originTop,
+                SafeMultiply(LastDepth, layout.NodeHeight + layout.VerticalSpacing),
+                layout.NodeHeight,
+                layout.ContainerPadding);
+        }
     }
 
     private sealed record ProjectLayer(int Depth, List<TypeNode> Nodes);

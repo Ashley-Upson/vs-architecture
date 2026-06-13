@@ -240,6 +240,52 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_prevents_project_container_overlap_across_all_rows()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_controller", "project_api", "Controller", "Api.Controller", "Class"),
+                    new TypeNode("type_orchestration", "project_api", "Orchestration", "Api.Orchestration", "Class"),
+                    new TypeNode("type_processor", "project_api", "Processor", "Api.Processor", "Class"),
+                    new TypeNode("type_worker", "project_api", "Worker", "Api.Worker", "Class")
+                }),
+                new ProjectContainer("project_domain", "Domain", new[]
+                {
+                    new TypeNode("type_domain_service", "project_domain", "DomainService", "Domain.DomainService", "Class")
+                }),
+                new ProjectContainer("project_data", "Data", new[]
+                {
+                    new TypeNode("type_repository", "project_data", "Repository", "Data.Repository", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_orchestration", "internal"),
+                new DependencyEdge("edge_2", "type_orchestration", "type_processor", "internal"),
+                new DependencyEdge("edge_3", "type_processor", "type_worker", "internal"),
+                new DependencyEdge("edge_4", "type_controller", "type_domain_service", "internal"),
+                new DependencyEdge("edge_5", "type_worker", "type_repository", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+        var projects = new[] { "project_api", "project_domain", "project_data" }
+            .Select(id => Rect(document, id))
+            .ToArray();
+
+        for (var i = 0; i < projects.Length; i++)
+        {
+            for (var j = i + 1; j < projects.Length; j++)
+            {
+                Assert.False(Overlaps(projects[i], projects[j]));
+            }
+        }
+    }
+
+    [Fact]
     public void Export_keeps_cycles_on_bounded_vertical_layers()
     {
         var settings = DiagramSettings.CreateDefault();
