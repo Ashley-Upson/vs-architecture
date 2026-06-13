@@ -130,13 +130,7 @@ public sealed class DrawioExporter
                     .Distinct()
                     .OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id)
                     .ToList());
-        var incoming = new HashSet<string>(outgoing.Values.SelectMany(targets => targets));
-        var roots = nodeIds
-            .Where(id => !incoming.Contains(id))
-            .OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id)
-            .ToList();
-
-        var depths = CalculateDepths(nodeIds, outgoing, roots);
+        var depths = CalculateDepths(graph, nodeIds, outgoing);
         var layers = nodeIds
             .GroupBy(id => depths.TryGetValue(id, out var depth) ? depth : 0)
             .OrderBy(g => g.Key)
@@ -180,15 +174,45 @@ public sealed class DrawioExporter
     }
 
     private static Dictionary<string, int> CalculateDepths(
+        ArchitectureGraph graph,
         HashSet<string> nodeIds,
-        Dictionary<string, List<string>> outgoing,
-        List<string> roots)
+        Dictionary<string, List<string>> outgoing)
     {
-        var depths = nodeIds.ToDictionary(id => id, _ => 0);
-        var startNodes = roots.Count > 0 ? roots : nodeIds.OrderBy(id => id).ToList();
-        var assigned = new HashSet<string>(startNodes);
-        var queue = new Queue<string>(startNodes);
+        var depths = new Dictionary<string, int>();
+        var selectedProject = graph.Projects.FirstOrDefault();
+        var selectedTypeIds = selectedProject is null
+            ? new HashSet<string>()
+            : new HashSet<string>(selectedProject.Types
+                .Where(t => nodeIds.Contains(t.Id))
+                .Select(t => t.Id));
+        var selectedIncoming = new HashSet<string>(outgoing
+            .Where(kv => selectedTypeIds.Contains(kv.Key))
+            .SelectMany(kv => kv.Value)
+            .Where(selectedTypeIds.Contains));
+        var roots = selectedTypeIds
+            .Where(id => !selectedIncoming.Contains(id))
+            .OrderBy(id => id)
+            .ToList();
 
+        if (roots.Count == 0)
+        {
+            roots = selectedTypeIds.OrderBy(id => id).ToList();
+        }
+
+        if (roots.Count == 0)
+        {
+            roots = nodeIds.OrderBy(id => id).ToList();
+        }
+
+        var rootSet = new HashSet<string>(roots);
+        var queue = new Queue<string>();
+        foreach (var root in roots)
+        {
+            depths[root] = 0;
+            queue.Enqueue(root);
+        }
+
+        var maxDepth = System.Math.Max(0, nodeIds.Count - 1);
         while (queue.Count > 0)
         {
             var sourceId = queue.Dequeue();
@@ -199,13 +223,52 @@ public sealed class DrawioExporter
 
             foreach (var targetId in targets)
             {
-                if (!assigned.Add(targetId))
+                if (rootSet.Contains(targetId))
                 {
                     continue;
                 }
 
-                depths[targetId] = SafeAdd(depths[sourceId], 1);
-                queue.Enqueue(targetId);
+                var nextDepth = System.Math.Min(maxDepth, SafeAdd(depths[sourceId], 1));
+                if (depths.TryGetValue(targetId, out var existingDepth) && nextDepth <= existingDepth)
+                {
+                    continue;
+                }
+
+                depths[targetId] = nextDepth;
+                if (nextDepth < maxDepth)
+                {
+                    queue.Enqueue(targetId);
+                }
+            }
+        }
+
+        var fallbackDepth = depths.Count == 0 ? 0 : SafeAdd(depths.Values.Max(), 1);
+        foreach (var project in graph.Projects)
+        {
+            var projectTypeIds = project.Types
+                .Where(t => nodeIds.Contains(t.Id))
+                .Select(t => t.Id)
+                .ToList();
+            var projectDepth = projectTypeIds
+                .Where(depths.ContainsKey)
+                .Select(id => depths[id])
+                .DefaultIfEmpty(fallbackDepth)
+                .Min();
+
+            foreach (var id in projectTypeIds)
+            {
+                if (!depths.ContainsKey(id))
+                {
+                    depths[id] = projectDepth;
+                }
+            }
+        }
+
+        foreach (var id in nodeIds)
+        {
+            if (!depths.ContainsKey(id))
+            {
+                depths[id] = fallbackDepth;
             }
         }
 

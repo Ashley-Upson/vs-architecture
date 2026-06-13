@@ -144,6 +144,41 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_starts_dependent_project_nodes_below_the_depending_layer()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_selected", "Api", new[]
+                {
+                    new TypeNode("type_controller", "project_selected", "Controller", "Api.Controller", "Class"),
+                    new TypeNode("type_orchestration", "project_selected", "Orchestration", "Api.Orchestration", "Class"),
+                    new TypeNode("type_processing", "project_selected", "Processing", "Api.Processing", "Class"),
+                    new TypeNode("type_worker", "project_selected", "Worker", "Api.Worker", "Class")
+                }),
+                new ProjectContainer("project_dependency", "Domain", new[]
+                {
+                    new TypeNode("type_domain_service", "project_dependency", "DomainService", "Domain.DomainService", "Class"),
+                    new TypeNode("type_domain_helper", "project_dependency", "DomainHelper", "Domain.DomainHelper", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_orchestration", "internal"),
+                new DependencyEdge("edge_2", "type_orchestration", "type_processing", "internal"),
+                new DependencyEdge("edge_3", "type_processing", "type_worker", "internal"),
+                new DependencyEdge("edge_4", "type_worker", "type_domain_service", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+
+        Assert.True(AbsoluteY(document, "type_domain_service") > AbsoluteY(document, "type_worker"));
+        Assert.Equal(AbsoluteY(document, "type_domain_service"), AbsoluteY(document, "type_domain_helper"));
+        Assert.True(AbsoluteY(document, "type_domain_helper") > AbsoluteY(document, "type_controller"));
+    }
+
+    [Fact]
     public void Export_reuses_shared_dependency_nodes()
     {
         var graph = new ArchitectureGraph(
@@ -221,6 +256,19 @@ public sealed class DrawioExporterTests
     private static int Y(XDocument document, string id)
     {
         return Geometry(document, id, "y");
+    }
+
+    private static int AbsoluteY(XDocument document, string id)
+    {
+        var cell = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == id);
+        var y = Geometry(document, id, "y");
+        var parentId = (string?)cell.Attribute("parent");
+        if (string.IsNullOrWhiteSpace(parentId) || parentId == "1")
+        {
+            return y;
+        }
+
+        return y + Geometry(document, parentId, "y");
     }
 
     private static int Geometry(XDocument document, string id, string attributeName)

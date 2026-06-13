@@ -40,6 +40,7 @@ public sealed class RoslynDependencyAnalyzerTests
 
         Assert.Contains(graph.Projects, p => p.Name == "Api");
         Assert.Contains(graph.Projects, p => p.Name == "Domain");
+        Assert.Equal("Api", graph.Projects[0].Name);
         Assert.Contains(graph.Edges, e => e.Kind == "internal");
     }
 

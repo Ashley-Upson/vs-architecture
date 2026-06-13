@@ -134,7 +134,7 @@ public sealed class RoslynDependencyAnalyzer
         }
 
         return new ArchitectureGraph(
-            projectContainers.Where(p => p.Types.Count > 0).OrderBy(p => p.Name).ToImmutableArray(),
+            projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
             externalDependencies.Values.OrderBy(e => e.Name).ToImmutableArray(),
             edges.Values.OrderBy(e => e.Id).ToImmutableArray());
     }
