@@ -1,0 +1,70 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net472</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<GeneratePkgDefFile>true</GeneratePkgDefFile>
+		<IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+		<IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+		<IncludePkgdefInVSIXContainer>true</IncludePkgdefInVSIXContainer>
+		<IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
+		<CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+		<CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+		<CreateVsixContainer>true</CreateVsixContainer>
+		<CreatePkgDefAssemblyToProcess>$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
+		<TargetVsixContainerName>StandardIo.ArchitectureDiagram.Vsix.vsix</TargetVsixContainerName>
+		<VsixIntermediateOutputPath>$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\vsix\</VsixIntermediateOutputPath>
+		<IntermediateVsixManifest>$(VsixIntermediateOutputPath)extension.vsixmanifest</IntermediateVsixManifest>
+		<FileManifest>$(VsixIntermediateOutputPath)files.json</FileManifest>
+		<TemplateFileManifest>$(VsixIntermediateOutputPath)templateFiles.json</TemplateFileManifest>
+		<TemplateOutputDirectory>$(VsixIntermediateOutputPath)</TemplateOutputDirectory>
+		<CreateTemplateManifestsCacheFile>$(VsixIntermediateOutputPath)createTemplateManifests.cache</CreateTemplateManifestsCacheFile>
+		<ResourceManifest>$(VsixIntermediateOutputPath)resources.json</ResourceManifest>
+		<CtoFileManifest>$(VsixIntermediateOutputPath)ctoFiles.json</CtoFileManifest>
+		<CtoCacheFile>$(VsixIntermediateOutputPath)mergeCto.cache</CtoCacheFile>
+		<StartAction>Program</StartAction>
+		<StartProgram>$(DevEnvDir)devenv.exe</StartProgram>
+		<StartArguments>/rootsuffix Exp</StartArguments>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.40392" />
+		<PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.12.2069" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
+		<PackageReference Include="Microsoft.VisualStudio.LanguageServices" Version="4.14.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\StandardIo.ArchitectureDiagram.Core\StandardIo.ArchitectureDiagram.Core.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<VSCTCompile Include="Menus.vsct">
+			<ResourceName>Menus.ctmenu</ResourceName>
+		</VSCTCompile>
+		<None Include="source.extension.vsixmanifest">
+			<SubType>Designer</SubType>
+		</None>
+	</ItemGroup>
+	<Import Project="$(PkgMicrosoft_VSSDK_BuildTools)\tools\vssdk\Microsoft.VsSDK.targets" Condition="'$(PkgMicrosoft_VSSDK_BuildTools)' != '' And Exists('$(PkgMicrosoft_VSSDK_BuildTools)\tools\vssdk\Microsoft.VsSDK.targets')" />
+	<Target Name="EnsureVsixIntermediateOutputPath" BeforeTargets="CreateVsixContainer;GenerateFileManifest;GenerateResourcePackagesManifest;MergeCtoResource">
+		<MakeDir Directories="$(VsixIntermediateOutputPath)" />
+	</Target>
+	<Target Name="CopyCurrentVsixManifest" BeforeTargets="CreateVsixContainer" DependsOnTargets="EnsureVsixIntermediateOutputPath">
+		<Copy SourceFiles="source.extension.vsixmanifest" DestinationFiles="$(IntermediateVsixManifest)" />
+	</Target>
+	<Target Name="AddPackageCodeBaseToPkgDef" AfterTargets="GeneratePkgDef">
+		<ItemGroup>
+			<PackageCodeBasePkgDefLine Include="[$RootKey$\Packages\{0b6455a2-a7c4-4e64-9d0e-732668ff5ab3}]" />
+			<PackageCodeBasePkgDefLine Include="&quot;CodeBase&quot;=&quot;$PackageFolder$\$(TargetFileName)&quot;" />
+		</ItemGroup>
+		<WriteLinesToFile File="$(IntermediateOutputPath)$(TargetName).pkgdef" Lines="@(PackageCodeBasePkgDefLine)" Encoding="Unicode" Overwrite="false" />
+	</Target>
+	<Target Name="IncludeGeneratedMenuResourceInVsix" BeforeTargets="GetVsixSourceItems" DependsOnTargets="MergeCtoResource">
+		<ItemGroup>
+			<VSIXSourceItem Include="$(IntermediateOutputPath)Menus.ctmenu">
+				<TargetPath>Menus.ctmenu</TargetPath>
+			</VSIXSourceItem>
+		</ItemGroup>
+	</Target>
+	<Target Name="BuildVsixContainer" AfterTargets="Build" DependsOnTargets="GeneratePkgDef;CreateVsixContainer" />
+</Project>

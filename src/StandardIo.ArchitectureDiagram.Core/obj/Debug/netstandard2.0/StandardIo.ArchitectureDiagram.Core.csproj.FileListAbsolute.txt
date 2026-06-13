@@ -1,0 +1,10 @@
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\bin\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.deps.json
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\bin\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.dll
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\bin\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.pdb
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.csproj.AssemblyReference.cache
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.AssemblyInfoInputs.cache
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.AssemblyInfo.cs
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.csproj.CoreCompileInputs.cache
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.dll
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.pdb
