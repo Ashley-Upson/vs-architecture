@@ -134,7 +134,7 @@ public sealed class DrawioExporter
                     .Distinct()
                     .OrderBy(id => nodeOrder.TryGetValue(id, out var index) ? index : int.MaxValue)
                     .ToList());
-        var depths = CalculateDepths(graph, nodeIds, orderedNodeIds, outgoing);
+        var depths = CalculateDepths(graph, types, nodeIds, orderedNodeIds, outgoing);
         var originTop = layout.ContainerPadding * 2 + 40;
         var originLeft = layout.ContainerPadding * 2;
         var projectLayouts = new List<ProjectLayout>();
@@ -149,17 +149,7 @@ public sealed class DrawioExporter
                 continue;
             }
 
-            var projectLayers = projectTypes
-                .GroupBy(t => depths.TryGetValue(t.Id, out var depth) ? depth : 0)
-                .OrderBy(g => g.Key)
-                .Select(g => new ProjectLayer(g.Key, g.ToList()))
-                .ToList();
-            var maxLayerCount = projectLayers.Max(g => g.Nodes.Count);
-            var projectWidth = SafeAdd(
-                SafeMultiply(layout.ContainerPadding, 2),
-                SafeMultiply(maxLayerCount, layout.NodeWidth),
-                SafeMultiply(System.Math.Max(0, maxLayerCount - 1), layout.HorizontalSpacing));
-            projectLayouts.Add(new ProjectLayout(project, projectLayers, projectWidth));
+            projectLayouts.Add(BuildProjectLayout(project, projectTypes, depths, outgoing, layout));
         }
 
         var rowNextLeft = new Dictionary<int, int>();
@@ -195,10 +185,10 @@ public sealed class DrawioExporter
                         SafeMultiply(layerGroup.Depth, layout.NodeHeight + layout.VerticalSpacing),
                         rowVerticalOffset);
 
-                    for (var i = 0; i < layerGroup.Nodes.Count; i++)
+                    foreach (var node in layerGroup.Nodes)
                     {
-                        var x = SafeAdd(projectLeft, layout.ContainerPadding, SafeMultiply(i, layout.NodeWidth + layout.HorizontalSpacing));
-                        result[layerGroup.Nodes[i].Id] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
+                        var x = SafeAdd(projectLeft, layout.ContainerPadding, node.X);
+                        result[node.Type.Id] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
                     }
                 }
 
@@ -244,6 +234,79 @@ public sealed class DrawioExporter
         }
 
         return result;
+    }
+
+    private static ProjectLayout BuildProjectLayout(
+        ProjectContainer project,
+        List<TypeNode> projectTypes,
+        Dictionary<string, int> depths,
+        Dictionary<string, List<string>> outgoing,
+        LayoutSettings layout)
+    {
+        var projectTypeIds = new HashSet<string>(projectTypes.Select(t => t.Id));
+        var relativePositions = new Dictionary<string, int>();
+        var layers = projectTypes
+            .GroupBy(t => depths.TryGetValue(t.Id, out var depth) ? depth : 0)
+            .OrderByDescending(g => g.Key)
+            .ToList();
+
+        foreach (var layerGroup in layers)
+        {
+            var layerNodes = layerGroup.ToList();
+            var desiredPositions = new Dictionary<string, int>();
+            foreach (var node in layerNodes)
+            {
+                var childCenters = outgoing.TryGetValue(node.Id, out var targets)
+                    ? targets
+                        .Where(targetId => projectTypeIds.Contains(targetId) &&
+                            depths.TryGetValue(targetId, out var targetDepth) &&
+                            targetDepth > layerGroup.Key &&
+                            relativePositions.ContainsKey(targetId))
+                        .Select(targetId => SafeAdd(relativePositions[targetId], layout.NodeWidth / 2))
+                        .ToList()
+                    : new List<int>();
+
+                desiredPositions[node.Id] = childCenters.Count == 0
+                    ? int.MinValue
+                    : SafeSubtract((int)childCenters.Average(), layout.NodeWidth / 2);
+            }
+
+            var nextX = 0;
+            foreach (var node in layerNodes)
+            {
+                var desiredX = desiredPositions[node.Id] == int.MinValue
+                    ? nextX
+                    : desiredPositions[node.Id];
+                var x = System.Math.Max(desiredX, nextX);
+                relativePositions[node.Id] = x;
+                nextX = SafeAdd(x, layout.NodeWidth, layout.HorizontalSpacing);
+            }
+        }
+
+        var minX = relativePositions.Values.DefaultIfEmpty(0).Min();
+        if (minX != 0)
+        {
+            foreach (var id in relativePositions.Keys.ToList())
+            {
+                relativePositions[id] = SafeSubtract(relativePositions[id], minX);
+            }
+        }
+
+        var positionedLayers = projectTypes
+            .GroupBy(t => depths.TryGetValue(t.Id, out var depth) ? depth : 0)
+            .OrderBy(g => g.Key)
+            .Select(g => new ProjectLayer(
+                g.Key,
+                g.Select(t => new PositionedNode(t, relativePositions[t.Id]))
+                    .OrderBy(n => n.X)
+                    .ToList()))
+            .ToList();
+        var width = SafeAdd(
+            SafeMultiply(layout.ContainerPadding, 2),
+            relativePositions.Values.DefaultIfEmpty(0).Max(),
+            layout.NodeWidth);
+
+        return new ProjectLayout(project, positionedLayers, width);
     }
 
     private static XElement BuildEdgeGeometry(
@@ -369,6 +432,7 @@ public sealed class DrawioExporter
 
     private static Dictionary<string, int> CalculateDepths(
         ArchitectureGraph graph,
+        Dictionary<string, TypeNode> types,
         HashSet<string> nodeIds,
         List<string> orderedNodeIds,
         Dictionary<string, List<string>> outgoing)
@@ -424,6 +488,12 @@ public sealed class DrawioExporter
             .Where(id => !selectedIncoming.Contains(id))
             .OrderBy(id => orderedNodeIds.IndexOf(id))
             .ToList();
+
+        var topLevelRoots = SelectTopLevelRoots(roots, types, outgoing);
+        if (topLevelRoots.Count > 0)
+        {
+            roots = topLevelRoots;
+        }
 
         if (roots.Count == 0)
         {
@@ -487,11 +557,14 @@ public sealed class DrawioExporter
                 .Where(t => nodeIds.Contains(t.Id))
                 .Select(t => t.Id)
                 .ToList();
-            var projectDepth = projectTypeIds
-                .Where(depths.ContainsKey)
-                .Select(id => depths[id])
-                .DefaultIfEmpty(fallbackDepth)
-                .Min();
+            var isSelectedProject = selectedProject is not null && project.Id == selectedProject.Id;
+            var projectDepth = isSelectedProject
+                ? fallbackDepth
+                : projectTypeIds
+                    .Where(depths.ContainsKey)
+                    .Select(id => depths[id])
+                    .DefaultIfEmpty(fallbackDepth)
+                    .Min();
 
             foreach (var id in projectTypeIds)
             {
@@ -511,6 +584,60 @@ public sealed class DrawioExporter
         }
 
         return depths;
+    }
+
+    private static List<string> SelectTopLevelRoots(
+        List<string> roots,
+        Dictionary<string, TypeNode> types,
+        Dictionary<string, List<string>> outgoing)
+    {
+        var rootsWithDependencies = roots
+            .Where(id => outgoing.TryGetValue(id, out var targets) && targets.Count > 0)
+            .ToList();
+        if (rootsWithDependencies.Count == 0)
+        {
+            return roots;
+        }
+
+        var bestPriority = rootsWithDependencies
+            .Select(id => types.TryGetValue(id, out var type) ? ArchitecturalPriority(type) : int.MaxValue)
+            .Min();
+        return bestPriority == int.MaxValue
+            ? rootsWithDependencies
+            : rootsWithDependencies
+                .Where(id => types.TryGetValue(id, out var type) && ArchitecturalPriority(type) == bestPriority)
+                .ToList();
+    }
+
+    private static int ArchitecturalPriority(TypeNode type)
+    {
+        var text = $"{type.FullName}.{type.Name}";
+        if (text.Contains("Coordination"))
+        {
+            return 0;
+        }
+
+        if (text.Contains("Orchestration"))
+        {
+            return 1;
+        }
+
+        if (text.Contains("Processing"))
+        {
+            return 2;
+        }
+
+        if (text.Contains("Foundation"))
+        {
+            return 3;
+        }
+
+        if (text.Contains("Broker"))
+        {
+            return 4;
+        }
+
+        return int.MaxValue;
     }
 
     private static List<List<string>> FindComponents(
@@ -716,5 +843,6 @@ public sealed class DrawioExporter
         }
     }
 
-    private sealed record ProjectLayer(int Depth, List<TypeNode> Nodes);
+    private sealed record ProjectLayer(int Depth, List<PositionedNode> Nodes);
+    private sealed record PositionedNode(TypeNode Type, int X);
 }

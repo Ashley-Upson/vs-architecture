@@ -65,6 +65,70 @@ public sealed class RoslynDependencyAnalyzerTests
     }
 
     [Fact]
+    public async Task Analyze_ignores_implicit_framework_member_dependencies()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Controller.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class HomeController
+                    {
+                        public void Run()
+                        {
+                            var values = new[] { "a", "b" };
+                            var count = values.Length;
+                            var name = typeof(HomeController).FullName;
+                        }
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+
+        Assert.DoesNotContain(graph.ExternalDependencies, e => e.AssemblyName.StartsWith("System"));
+        Assert.DoesNotContain(graph.ExternalDependencies, e => e.AssemblyName.StartsWith("Microsoft"));
+    }
+
+    [Fact]
+    public async Task Analyze_never_emits_core_library_dependencies()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Controller.cs", SourceText.From("""
+                using System;
+
+                namespace Api
+                {
+                    public class HomeController
+                    {
+                        public string Name { get; set; } = String.Empty;
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+
+        Assert.DoesNotContain(graph.ExternalDependencies, e => e.AssemblyName is "System.Private.CoreLib" or "mscorlib" or "netstandard");
+    }
+
+    [Fact]
     public async Task Analyze_accepts_multiple_selected_projects()
     {
         using var workspace = new AdhocWorkspace();

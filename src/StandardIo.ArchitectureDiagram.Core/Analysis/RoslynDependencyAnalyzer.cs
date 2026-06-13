@@ -104,6 +104,13 @@ public sealed class RoslynDependencyAnalyzer
                 }
 
                 var model = compilation.GetSemanticModel(root.SyntaxTree);
+                var usingNamespaces = root.DescendantNodes()
+                    .OfType<UsingDirectiveSyntax>()
+                    .Select(u => u.Name?.ToString())
+                    .OfType<string>()
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .ToList();
+
                 foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -135,7 +142,7 @@ public sealed class RoslynDependencyAnalyzer
                             continue;
                         }
 
-                        var external = GetExternalDependency(dependency, externalDependencies);
+                        var external = GetExternalDependency(dependency, externalDependencies, usingNamespaces);
                         if (external is not null)
                         {
                             AddEdge(edges, sourceNode.Id, external.Id, "external");
@@ -224,18 +231,6 @@ public sealed class RoslynDependencyAnalyzer
                 case ObjectCreationExpressionSyntax creation:
                     AddType(model.GetTypeInfo(creation, cancellationToken).Type);
                     break;
-                case InvocationExpressionSyntax invocation:
-                    var invocationSymbol = model.GetSymbolInfo(invocation, cancellationToken).Symbol;
-                    AddSymbol(invocationSymbol);
-                    break;
-                case MemberAccessExpressionSyntax memberAccess:
-                    var memberSymbol = model.GetSymbolInfo(memberAccess, cancellationToken).Symbol;
-                    AddSymbol(memberSymbol);
-                    break;
-                case IdentifierNameSyntax identifier:
-                    var identifierSymbol = model.GetSymbolInfo(identifier, cancellationToken).Symbol;
-                    AddSymbol(identifierSymbol);
-                    break;
                 case TypeSyntax typeSyntax:
                     AddType(model.GetTypeInfo(typeSyntax, cancellationToken).Type);
                     break;
@@ -243,36 +238,6 @@ public sealed class RoslynDependencyAnalyzer
         }
 
         return ordered;
-
-        void AddSymbol(ISymbol? symbol)
-        {
-            switch (symbol)
-            {
-                case IMethodSymbol method:
-                    AddType(method.ContainingType);
-                    AddType(method.ReturnType);
-                    foreach (var parameter in method.Parameters)
-                    {
-                        AddType(parameter.Type);
-                    }
-                    break;
-                case IPropertySymbol property:
-                    AddType(property.Type);
-                    AddType(property.ContainingType);
-                    break;
-                case IFieldSymbol field:
-                    AddType(field.Type);
-                    AddType(field.ContainingType);
-                    break;
-                case IEventSymbol eventSymbol:
-                    AddType(eventSymbol.Type);
-                    AddType(eventSymbol.ContainingType);
-                    break;
-                case INamedTypeSymbol type:
-                    AddType(type);
-                    break;
-            }
-        }
 
         void AddType(ITypeSymbol? type)
         {
@@ -378,10 +343,11 @@ public sealed class RoslynDependencyAnalyzer
 
     private static ExternalDependencyNode? GetExternalDependency(
         INamedTypeSymbol symbol,
-        Dictionary<string, ExternalDependencyNode> externalDependencies)
+        Dictionary<string, ExternalDependencyNode> externalDependencies,
+        IReadOnlyList<string> usingNamespaces)
     {
         var assemblyName = symbol.ContainingAssembly?.Identity.Name;
-        if (string.IsNullOrWhiteSpace(assemblyName) || assemblyName == "System.Private.CoreLib")
+        if (string.IsNullOrWhiteSpace(assemblyName) || IsImplicitFrameworkDependency(symbol, assemblyName!, usingNamespaces))
         {
             return null;
         }
@@ -396,6 +362,38 @@ public sealed class RoslynDependencyAnalyzer
         }
 
         return external;
+    }
+
+    private static bool IsImplicitFrameworkDependency(
+        INamedTypeSymbol symbol,
+        string assemblyName,
+        IReadOnlyList<string> usingNamespaces)
+    {
+        if (assemblyName == "System.Private.CoreLib" ||
+            assemblyName == "mscorlib" ||
+            assemblyName == "netstandard")
+        {
+            return true;
+        }
+
+        if (!IsFrameworkAssembly(assemblyName))
+        {
+            return false;
+        }
+
+        var namespaceName = symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(namespaceName))
+        {
+            return true;
+        }
+
+        return !usingNamespaces.Any(u => namespaceName == u || namespaceName.StartsWith(u + ".", System.StringComparison.Ordinal));
+    }
+
+    private static bool IsFrameworkAssembly(string assemblyName)
+    {
+        return assemblyName.StartsWith("System.", System.StringComparison.Ordinal) ||
+            assemblyName.StartsWith("Microsoft.", System.StringComparison.Ordinal);
     }
 
     private static void AddEdge(Dictionary<string, DependencyEdge> edges, string sourceId, string targetId, string kind)

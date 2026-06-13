@@ -144,6 +144,33 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_centres_parent_above_child_span()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_parent", "project_a", "Parent", "App.Parent", "Class"),
+                    new TypeNode("type_left", "project_a", "LeftChild", "App.LeftChild", "Class"),
+                    new TypeNode("type_right", "project_a", "RightChild", "App.RightChild", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_parent", "type_left", "internal"),
+                new DependencyEdge("edge_2", "type_parent", "type_right", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+        var parentCenter = CenterX(document, "type_parent");
+        var childSpanCenter = (CenterX(document, "type_left") + CenterX(document, "type_right")) / 2;
+
+        Assert.Equal(childSpanCenter, parentCenter);
+    }
+
+    [Fact]
     public void Export_keeps_discovery_order_and_places_dependencies_below_parent()
     {
         var graph = new ArchitectureGraph(
@@ -171,6 +198,33 @@ public sealed class DrawioExporterTests
         Assert.Equal(Y(document, "type_b_cache"), Y(document, "type_a_repository"));
         Assert.True(Y(document, "type_worker") > Y(document, "type_b_cache"));
         Assert.True(X(document, "type_b_cache") < X(document, "type_a_repository"));
+    }
+
+    [Fact]
+    public void Export_prefers_coordination_roots_over_lower_layer_selected_roots()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_coordination", "project_a", "PaymentCoordinationService", "App.Services.Coordination.PaymentCoordinationService", "Class"),
+                    new TypeNode("type_orchestration", "project_a", "PaymentOrchestrationService", "App.Services.Orchestration.PaymentOrchestrationService", "Class"),
+                    new TypeNode("type_foundation", "project_a", "PaymentFoundationService", "App.Services.Foundation.PaymentFoundationService", "Class"),
+                    new TypeNode("type_broker", "project_a", "PaymentBroker", "App.Services.Broker.PaymentBroker", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_coordination", "type_orchestration", "internal"),
+                new DependencyEdge("edge_2", "type_foundation", "type_broker", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+
+        Assert.True(Y(document, "type_coordination") < Y(document, "type_orchestration"));
+        Assert.True(Y(document, "type_coordination") < Y(document, "type_foundation"));
     }
 
     [Fact]
@@ -469,6 +523,11 @@ public sealed class DrawioExporterTests
         }
 
         return y + Geometry(document, parentId, "y");
+    }
+
+    private static int CenterX(XDocument document, string id)
+    {
+        return X(document, id) + Geometry(document, id, "width") / 2;
     }
 
     private static bool Overlaps(RectInfo left, RectInfo right)
