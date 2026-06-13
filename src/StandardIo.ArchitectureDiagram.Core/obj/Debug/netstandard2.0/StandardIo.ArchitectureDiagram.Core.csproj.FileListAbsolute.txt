@@ -8,3 +8,4 @@ C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\D
 C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.csproj.CoreCompileInputs.cache
 C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.dll
 C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.pdb
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Core\obj\Debug\netstandard2.0\StandardIo.ArchitectureDiagram.Core.sourcelink.json

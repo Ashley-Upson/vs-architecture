@@ -164,3 +164,4 @@ C:\Users\Ash\Documents\standard-io\tests\StandardIo.ArchitectureDiagram.Core.Tes
 C:\Users\Ash\Documents\standard-io\tests\StandardIo.ArchitectureDiagram.Core.Tests\obj\Debug\net8.0\StandardIo.ArchitectureDiagram.Core.Tests.pdb
 C:\Users\Ash\Documents\standard-io\tests\StandardIo.ArchitectureDiagram.Core.Tests\obj\Debug\net8.0\StandardIo.ArchitectureDiagram.Core.Tests.genruntimeconfig.cache
 C:\Users\Ash\Documents\standard-io\tests\StandardIo.ArchitectureDiagram.Core.Tests\obj\Debug\net8.0\ref\StandardIo.ArchitectureDiagram.Core.Tests.dll
+C:\Users\Ash\Documents\standard-io\tests\StandardIo.ArchitectureDiagram.Core.Tests\obj\Debug\net8.0\StandardIo.ArchitectureDiagram.Core.Tests.sourcelink.json

@@ -184,8 +184,8 @@ internal sealed class DiagramCommands
                 $"Roslyn projects: {string.Join("; ", csharpProjects.Select(p => $"{p.Name} | {p.FilePath}"))}.");
         }
 
-        DiagnosticLog.Write("GenerateDiagram target defaulted to all C# projects because no selected project could be resolved.");
-        return new DiagramTarget(GetSolutionName(dte), csharpProjects);
+        DiagnosticLog.Write("GenerateDiagram target rejected: no selected C# project could be resolved.");
+        return null;
     }
 
     private async Task<VisualStudioWorkspace?> GetWorkspaceAsync()
@@ -295,9 +295,10 @@ internal sealed class DiagramCommands
             return pathMatch;
         }
 
+        var selectedName = selectedProject.Name;
         return csharpProjects.FirstOrDefault(project =>
-            string.Equals(project.Name, selectedProject.Name, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(project.AssemblyName, selectedProject.Name, StringComparison.OrdinalIgnoreCase));
+            string.Equals(project.Name, selectedName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(project.AssemblyName, selectedName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<string> GetProjectPathCandidates(EnvDTE.Project selectedProject, DTE2? dte)
@@ -388,7 +389,19 @@ internal sealed class DiagramCommands
         }
 
         var selected = dte.SelectedItems.Item(1);
-        return selected.Project is null && selected.ProjectItem is null;
+        if (selected.Project is not null || selected.ProjectItem is not null)
+        {
+            return false;
+        }
+
+        var solutionName = GetSolutionName(dte);
+        if (string.Equals(selected.Name, solutionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return selected.Name?.StartsWith("Solution", StringComparison.OrdinalIgnoreCase) == true
+            && selected.Name.IndexOf(solutionName, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private static string GetSolutionName(DTE2? dte)

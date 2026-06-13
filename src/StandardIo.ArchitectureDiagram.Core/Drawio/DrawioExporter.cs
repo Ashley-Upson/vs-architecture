@@ -8,6 +8,8 @@ namespace StandardIo.ArchitectureDiagram.Core.Drawio;
 
 public sealed class DrawioExporter
 {
+    private const int MaxGeometryValue = 1_000_000_000;
+
     public string Export(ArchitectureGraph graph, DiagramSettings settings)
     {
         var positions = Layout(graph, settings);
@@ -110,95 +112,215 @@ public sealed class DrawioExporter
     {
         var layout = settings.Layout;
         var result = new Dictionary<string, Rect>();
-        var projectX = layout.ContainerPadding;
-        var top = layout.ContainerPadding;
+        var types = graph.Projects.SelectMany(p => p.Types).ToDictionary(t => t.Id);
+        var externals = graph.ExternalDependencies.ToDictionary(e => e.Id);
+        var nodeIds = new HashSet<string>(types.Keys.Concat(externals.Keys));
+        var displayNames = types.ToDictionary(kv => kv.Key, kv => kv.Value.Name);
+        foreach (var external in externals.Values)
+        {
+            displayNames[external.Id] = external.Name;
+        }
+
+        var outgoing = graph.Edges
+            .Where(e => nodeIds.Contains(e.SourceId) && nodeIds.Contains(e.TargetId))
+            .GroupBy(e => e.SourceId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(e => e.TargetId)
+                    .Distinct()
+                    .OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id)
+                    .ToList());
+        var incoming = new HashSet<string>(outgoing.Values.SelectMany(targets => targets));
+        var roots = nodeIds
+            .Where(id => !incoming.Contains(id))
+            .OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id)
+            .ToList();
+
+        var placed = new HashSet<string>();
+        var measuring = new HashSet<string>();
+        var measured = new Dictionary<string, Size>();
+        var x = layout.ContainerPadding * 2;
+        var y = layout.ContainerPadding * 2 + 40;
+
+        foreach (var root in roots)
+        {
+            var size = MeasureSubgraph(root);
+            PlaceSubgraph(root, x, y);
+            x = SafeAdd(x, size.Width, layout.HorizontalSpacing);
+        }
+
+        foreach (var id in nodeIds.OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id))
+        {
+            if (placed.Contains(id))
+            {
+                continue;
+            }
+
+            var size = MeasureSubgraph(id);
+            PlaceSubgraph(id, x, y);
+            x = SafeAdd(x, size.Width, layout.HorizontalSpacing);
+        }
 
         foreach (var project in graph.Projects)
         {
-            var ranks = RankTypes(project.Types, graph.Edges);
-            var columns = project.Types
-                .GroupBy(t => ranks.TryGetValue(t.Id, out var rank) ? rank : 0)
-                .OrderBy(g => g.Key)
+            var typeRects = project.Types
+                .Where(t => result.ContainsKey(t.Id))
+                .Select(t => result[t.Id])
                 .ToList();
-
-            var columnCount = columns.Count == 0 ? 1 : columns.Count;
-            var maxRows = columns.Count == 0 ? 1 : columns.Max(c => c.Count());
-            var projectWidth = layout.ContainerPadding * 2
-                + columnCount * layout.NodeWidth
-                + (columnCount - 1) * layout.HorizontalSpacing;
-            var projectHeight = layout.ContainerPadding * 2 + 40
-                + maxRows * layout.NodeHeight
-                + (maxRows - 1) * layout.VerticalSpacing;
-
-            result[project.Id] = new Rect(projectX, top, projectWidth, projectHeight);
-
-            foreach (var column in columns)
+            if (typeRects.Count == 0)
             {
-                var colIndex = columns.IndexOf(column);
-                var row = 0;
-                foreach (var type in column.OrderBy(t => t.Name))
-                {
-                    var x = projectX + layout.ContainerPadding + colIndex * (layout.NodeWidth + layout.HorizontalSpacing);
-                    var y = top + layout.ContainerPadding + 40 + row * (layout.NodeHeight + layout.VerticalSpacing);
-                    result[type.Id] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
-                    row++;
-                }
+                continue;
             }
 
-            projectX += projectWidth + layout.HorizontalSpacing;
-        }
-
-        var externalTop = graph.Projects.Count == 0
-            ? top
-            : result.Values.Max(r => r.Y + r.Height) + layout.VerticalSpacing;
-        var externalX = layout.ContainerPadding;
-
-        foreach (var external in graph.ExternalDependencies.OrderBy(e => e.Name))
-        {
-            result[external.Id] = new Rect(externalX, externalTop, layout.NodeWidth, layout.NodeHeight);
-            externalX += layout.NodeWidth + layout.HorizontalSpacing;
+            var left = SafeSubtract(typeRects.Min(r => r.X), layout.ContainerPadding);
+            var top = SafeSubtract(typeRects.Min(r => r.Y), layout.ContainerPadding, 40);
+            var right = SafeAdd(typeRects.Max(r => SafeAdd(r.X, r.Width)), layout.ContainerPadding);
+            var bottom = SafeAdd(typeRects.Max(r => SafeAdd(r.Y, r.Height)), layout.ContainerPadding);
+            result[project.Id] = new Rect(left, top, SafeSubtract(right, left), SafeSubtract(bottom, top));
         }
 
         return result;
+
+        Size MeasureSubgraph(string id)
+        {
+            if (placed.Contains(id))
+            {
+                return new Size(layout.NodeWidth, layout.NodeHeight);
+            }
+
+            if (measured.TryGetValue(id, out var cached))
+            {
+                return cached;
+            }
+
+            if (!measuring.Add(id))
+            {
+                return new Size(layout.NodeWidth, layout.NodeHeight);
+            }
+
+            if (!outgoing.TryGetValue(id, out var targets) || targets.Count == 0)
+            {
+                measuring.Remove(id);
+                var leaf = new Size(layout.NodeWidth, layout.NodeHeight);
+                measured[id] = leaf;
+                return leaf;
+            }
+
+            var childSizes = targets.Select(MeasureSubgraph).ToList();
+            var childrenWidth = SafeAdd(
+                SafeSum(childSizes.Select(s => s.Width)),
+                SafeMultiply(layout.HorizontalSpacing, childSizes.Count - 1));
+            var childrenHeight = childSizes.Max(s => s.Height);
+
+            measuring.Remove(id);
+            var size = new Size(
+                System.Math.Max(layout.NodeWidth, childrenWidth),
+                SafeAdd(layout.NodeHeight, layout.VerticalSpacing, childrenHeight));
+            measured[id] = size;
+            return size;
+        }
+
+        void PlaceSubgraph(string id, int left, int top)
+        {
+            if (placed.Contains(id))
+            {
+                return;
+            }
+
+            var size = MeasureSubgraph(id);
+            var nodeX = SafeAdd(left, (size.Width - layout.NodeWidth) / 2);
+            result[id] = new Rect(nodeX, top, layout.NodeWidth, layout.NodeHeight);
+            placed.Add(id);
+
+            if (!outgoing.TryGetValue(id, out var targets) || targets.Count == 0)
+            {
+                return;
+            }
+
+            var childSizes = targets.Select(MeasureSubgraph).ToList();
+            var childrenWidth = SafeAdd(
+                SafeSum(childSizes.Select(s => s.Width)),
+                SafeMultiply(layout.HorizontalSpacing, childSizes.Count - 1));
+            var childX = SafeAdd(left, (size.Width - childrenWidth) / 2);
+            var childY = SafeAdd(top, layout.NodeHeight, layout.VerticalSpacing);
+
+            for (var i = 0; i < targets.Count; i++)
+            {
+                PlaceSubgraph(targets[i], childX, childY);
+                childX = SafeAdd(childX, childSizes[i].Width, layout.HorizontalSpacing);
+            }
+        }
     }
 
-    private static Dictionary<string, int> RankTypes(IReadOnlyList<TypeNode> types, IReadOnlyList<DependencyEdge> edges)
+    private static int SafeSum(IEnumerable<int> values)
     {
-        var ids = new HashSet<string>(types.Select(t => t.Id));
-        var outgoing = edges
-            .Where(e => ids.Contains(e.SourceId) && ids.Contains(e.TargetId))
-            .GroupBy(e => e.SourceId)
-            .ToDictionary(g => g.Key, g => g.Select(e => e.TargetId).Distinct().ToList());
-        var memo = new Dictionary<string, int>();
-
-        int Rank(string id, HashSet<string> visiting)
+        long total = 0;
+        foreach (var value in values)
         {
-            if (memo.TryGetValue(id, out var value))
+            total += value;
+            if (total > MaxGeometryValue)
             {
-                return value;
+                return MaxGeometryValue;
             }
-
-            if (!visiting.Add(id))
-            {
-                return 0;
-            }
-
-            var rank = outgoing.TryGetValue(id, out var targets) && targets.Count > 0
-                ? 1 + targets.Max(target => Rank(target, visiting))
-                : 0;
-
-            visiting.Remove(id);
-            memo[id] = rank;
-            return rank;
         }
 
-        foreach (var id in ids)
+        return (int)total;
+    }
+
+    private static int SafeAdd(params int[] values)
+    {
+        long total = 0;
+        foreach (var value in values)
         {
-            Rank(id, new HashSet<string>());
+            total += value;
+            if (total > MaxGeometryValue)
+            {
+                return MaxGeometryValue;
+            }
+
+            if (total < -MaxGeometryValue)
+            {
+                return -MaxGeometryValue;
+            }
         }
 
-        var maxRank = memo.Count == 0 ? 0 : memo.Values.Max();
-        return memo.ToDictionary(kv => kv.Key, kv => maxRank - kv.Value);
+        return (int)total;
+    }
+
+    private static int SafeSubtract(int value, params int[] subtract)
+    {
+        long total = value;
+        foreach (var item in subtract)
+        {
+            total -= item;
+            if (total > MaxGeometryValue)
+            {
+                return MaxGeometryValue;
+            }
+
+            if (total < -MaxGeometryValue)
+            {
+                return -MaxGeometryValue;
+            }
+        }
+
+        return (int)total;
+    }
+
+    private static int SafeMultiply(int value, int multiplier)
+    {
+        var result = (long)value * multiplier;
+        if (result > MaxGeometryValue)
+        {
+            return MaxGeometryValue;
+        }
+
+        if (result < -MaxGeometryValue)
+        {
+            return -MaxGeometryValue;
+        }
+
+        return (int)result;
     }
 
     private static string BuildNodeStyle(NodeStyle style)
@@ -223,4 +345,6 @@ public sealed class DrawioExporter
     }
 
     private readonly record struct Rect(int X, int Y, int Width, int Height);
+
+    private readonly record struct Size(int Width, int Height);
 }

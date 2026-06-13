@@ -422,3 +422,4 @@ C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Vsix\obj\D
 C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Vsix\obj\Debug\net472\Standard.429D00FF.Up2Date
 C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Vsix\obj\Debug\net472\StandardIo.ArchitectureDiagram.Vsix.dll
 C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Vsix\obj\Debug\net472\StandardIo.ArchitectureDiagram.Vsix.pdb
+C:\Users\Ash\Documents\standard-io\src\StandardIo.ArchitectureDiagram.Vsix\obj\Debug\net472\StandardIo.ArchitectureDiagram.Vsix.sourcelink.json
