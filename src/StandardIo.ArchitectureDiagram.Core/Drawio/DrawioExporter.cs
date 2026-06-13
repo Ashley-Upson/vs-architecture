@@ -69,6 +69,10 @@ public sealed class DrawioExporter
                     new XAttribute("as", "geometry"))));
         }
 
+        var routeObstacleIds = new HashSet<string>(
+            graph.Projects.SelectMany(p => p.Types.Select(t => t.Id))
+                .Concat(graph.ExternalDependencies.Select(e => e.Id)));
+
         foreach (var edge in graph.Edges)
         {
             root.Add(new XElement("mxCell",
@@ -78,9 +82,7 @@ public sealed class DrawioExporter
                 new XAttribute("parent", "1"),
                 new XAttribute("source", edge.SourceId),
                 new XAttribute("target", edge.TargetId),
-                new XElement("mxGeometry",
-                    new XAttribute("relative", "1"),
-                    new XAttribute("as", "geometry"))));
+                BuildEdgeGeometry(edge, positions, routeObstacleIds, settings.Layout)));
         }
 
         var model = new XElement("mxGraphModel",
@@ -213,6 +215,10 @@ public sealed class DrawioExporter
             .GroupBy(e => depths.TryGetValue(e.Id, out var depth) ? depth : 0)
             .OrderBy(g => g.Key))
         {
+            var projectRects = graph.Projects
+                .Where(p => result.ContainsKey(p.Id))
+                .Select(p => result[p.Id])
+                .ToList();
             var layer = externalLayer.ToList();
             var y = SafeAdd(
                 originTop,
@@ -221,20 +227,144 @@ public sealed class DrawioExporter
             var externalLeft = rowNextLeft.TryGetValue(externalLayer.Key, out var rowLeft)
                 ? rowLeft
                 : originLeft;
+            var nextExternalLeft = externalLeft;
             for (var i = 0; i < layer.Count; i++)
             {
-                var x = SafeAdd(externalLeft, SafeMultiply(i, layout.NodeWidth + layout.HorizontalSpacing));
-                result[layer[i].Id] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
+                var position = new Rect(nextExternalLeft, y, layout.NodeWidth, layout.NodeHeight);
+                while (TryFindOverlappingRect(position, projectRects, out var overlappingProject))
+                {
+                    position = position with { X = SafeAdd(overlappingProject.Right, layout.HorizontalSpacing) };
+                }
+
+                result[layer[i].Id] = position;
+                nextExternalLeft = SafeAdd(position.Right, layout.HorizontalSpacing);
             }
 
-            rowNextLeft[externalLayer.Key] = SafeAdd(
-                externalLeft,
-                SafeMultiply(layer.Count, layout.NodeWidth),
-                SafeMultiply(System.Math.Max(0, layer.Count - 1), layout.HorizontalSpacing),
-                layout.HorizontalSpacing);
+            rowNextLeft[externalLayer.Key] = nextExternalLeft;
         }
 
         return result;
+    }
+
+    private static XElement BuildEdgeGeometry(
+        DependencyEdge edge,
+        Dictionary<string, Rect> positions,
+        HashSet<string> routeObstacleIds,
+        LayoutSettings layout)
+    {
+        var geometry = new XElement("mxGeometry",
+            new XAttribute("relative", "1"),
+            new XAttribute("as", "geometry"));
+
+        if (!positions.TryGetValue(edge.SourceId, out var source) ||
+            !positions.TryGetValue(edge.TargetId, out var target))
+        {
+            return geometry;
+        }
+
+        var obstacles = positions
+            .Where(kv => routeObstacleIds.Contains(kv.Key) &&
+                kv.Key != edge.SourceId &&
+                kv.Key != edge.TargetId)
+            .Select(kv => kv.Value.Expand(8))
+            .ToList();
+        var points = RouteEdge(source, target, obstacles, layout);
+        if (points.Count == 0)
+        {
+            return geometry;
+        }
+
+        geometry.Add(new XElement("Array",
+            new XAttribute("as", "points"),
+            points.Select(p => new XElement("mxPoint",
+                new XAttribute("x", p.X),
+                new XAttribute("y", p.Y)))));
+
+        return geometry;
+    }
+
+    private static List<Point> RouteEdge(
+        Rect source,
+        Rect target,
+        List<Rect> obstacles,
+        LayoutSettings layout)
+    {
+        var sourcePoint = new Point(source.CenterX, source.Bottom);
+        var targetPoint = new Point(target.CenterX, target.Y);
+        var gap = System.Math.Max(20, layout.VerticalSpacing / 2);
+        var midY = target.Y >= source.Bottom
+            ? SafeAdd(source.Bottom, System.Math.Max(gap, SafeSubtract(target.Y, source.Bottom) / 2))
+            : SafeAdd(System.Math.Max(source.Bottom, target.Bottom), gap);
+        var directPoints = new List<Point>
+        {
+            new(sourcePoint.X, midY),
+            new(targetPoint.X, midY)
+        };
+
+        if (!RouteIntersects(sourcePoint, targetPoint, directPoints, obstacles))
+        {
+            return directPoints;
+        }
+
+        var bandTop = System.Math.Min(source.Y, target.Y);
+        var bandBottom = System.Math.Max(source.Bottom, target.Bottom);
+        var laneX = obstacles
+            .Where(o => o.Bottom >= bandTop && o.Y <= bandBottom)
+            .Select(o => o.Right)
+            .DefaultIfEmpty(System.Math.Max(source.Right, target.Right))
+            .Max();
+        laneX = SafeAdd(laneX, layout.HorizontalSpacing);
+
+        var sourceLaneY = SafeAdd(source.Bottom, gap);
+        var targetLaneY = SafeSubtract(target.Y, gap);
+        return new List<Point>
+        {
+            new(sourcePoint.X, sourceLaneY),
+            new(laneX, sourceLaneY),
+            new(laneX, targetLaneY),
+            new(targetPoint.X, targetLaneY)
+        };
+    }
+
+    private static bool RouteIntersects(Point source, Point target, List<Point> points, List<Rect> obstacles)
+    {
+        var routePoints = new List<Point> { source };
+        routePoints.AddRange(points);
+        routePoints.Add(target);
+
+        for (var i = 0; i < routePoints.Count - 1; i++)
+        {
+            foreach (var obstacle in obstacles)
+            {
+                if (SegmentIntersects(routePoints[i], routePoints[i + 1], obstacle))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool SegmentIntersects(Point start, Point end, Rect rect)
+    {
+        if (start.X == end.X)
+        {
+            return start.X >= rect.X &&
+                start.X <= rect.Right &&
+                System.Math.Max(start.Y, end.Y) >= rect.Y &&
+                System.Math.Min(start.Y, end.Y) <= rect.Bottom;
+        }
+
+        if (start.Y == end.Y)
+        {
+            return start.Y >= rect.Y &&
+                start.Y <= rect.Bottom &&
+                System.Math.Max(start.X, end.X) >= rect.X &&
+                System.Math.Min(start.X, end.X) <= rect.Right;
+        }
+
+        return false;
     }
 
     private static Dictionary<string, int> CalculateDepths(
@@ -521,10 +651,49 @@ public sealed class DrawioExporter
 
     private static string BuildConnectorStyle(ConnectorStyle style)
     {
-        return $"edgeStyle=orthogonalEdgeStyle;rounded={(style.Rounded ? 1 : 0)};orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};";
+        return $"edgeStyle=orthogonalEdgeStyle;rounded={(style.Rounded ? 1 : 0)};orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};";
     }
 
-    private readonly record struct Rect(int X, int Y, int Width, int Height);
+    private static bool TryFindOverlappingRect(Rect rect, List<Rect> candidates, out Rect overlap)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (rect.Intersects(candidate))
+            {
+                overlap = candidate;
+                return true;
+            }
+        }
+
+        overlap = default;
+        return false;
+    }
+
+    private readonly record struct Rect(int X, int Y, int Width, int Height)
+    {
+        public int Right => SafeAdd(X, Width);
+        public int Bottom => SafeAdd(Y, Height);
+        public int CenterX => SafeAdd(X, Width / 2);
+
+        public bool Intersects(Rect other)
+        {
+            return X < other.Right &&
+                Right > other.X &&
+                Y < other.Bottom &&
+                Bottom > other.Y;
+        }
+
+        public Rect Expand(int amount)
+        {
+            return new Rect(
+                SafeSubtract(X, amount),
+                SafeSubtract(Y, amount),
+                SafeAdd(Width, amount * 2),
+                SafeAdd(Height, amount * 2));
+        }
+    }
+
+    private readonly record struct Point(int X, int Y);
     private sealed record ProjectLayout(ProjectContainer Project, List<ProjectLayer> Layers, int Width)
     {
         public int FirstDepth { get; } = Layers.Min(l => l.Depth);

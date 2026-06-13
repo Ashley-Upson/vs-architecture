@@ -286,6 +286,70 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_keeps_external_dependency_diamonds_outside_project_containers()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_controller", "project_api", "Controller", "Api.Controller", "Class"),
+                    new TypeNode("type_service", "project_api", "Service", "Api.Service", "Class"),
+                    new TypeNode("type_worker", "project_api", "Worker", "Api.Worker", "Class")
+                })
+            },
+            new[]
+            {
+                new ExternalDependencyNode("external_logging", "Logging", "Logging"),
+                new ExternalDependencyNode("external_queue", "Queue", "Queue")
+            },
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_service", "internal"),
+                new DependencyEdge("edge_2", "type_service", "type_worker", "internal"),
+                new DependencyEdge("edge_3", "type_service", "external_logging", "external"),
+                new DependencyEdge("edge_4", "type_service", "external_queue", "external")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+        var project = Rect(document, "project_api");
+        var logging = Rect(document, "external_logging");
+        var queue = Rect(document, "external_queue");
+
+        Assert.False(Overlaps(project, logging));
+        Assert.False(Overlaps(project, queue));
+        Assert.False(Overlaps(logging, queue));
+    }
+
+    [Fact]
+    public void Export_routes_edges_with_explicit_top_and_bottom_connection_points()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_controller", "project_api", "Controller", "Api.Controller", "Class"),
+                    new TypeNode("type_service", "project_api", "Service", "Api.Service", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_service", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+        var edge = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == "edge_1");
+        var style = (string)edge.Attribute("style")!;
+        var points = edge.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint").ToArray();
+
+        Assert.Contains("exitX=0.5;exitY=1", style);
+        Assert.Contains("entryX=0.5;entryY=0", style);
+        Assert.True(points.Length >= 2);
+    }
+
+    [Fact]
     public void Export_keeps_cycles_on_bounded_vertical_layers()
     {
         var settings = DiagramSettings.CreateDefault();
