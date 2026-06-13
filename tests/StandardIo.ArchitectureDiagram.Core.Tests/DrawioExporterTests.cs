@@ -144,6 +144,36 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_keeps_discovery_order_and_places_dependencies_below_parent()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_z_controller", "project_a", "ZController", "App.ZController", "Class"),
+                    new TypeNode("type_b_cache", "project_a", "BCache", "App.BCache", "Class"),
+                    new TypeNode("type_a_repository", "project_a", "ARepository", "App.ARepository", "Class"),
+                    new TypeNode("type_worker", "project_a", "Worker", "App.Worker", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_z_controller", "type_b_cache", "internal"),
+                new DependencyEdge("edge_2", "type_z_controller", "type_a_repository", "internal"),
+                new DependencyEdge("edge_3", "type_b_cache", "type_worker", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+
+        Assert.True(Y(document, "type_b_cache") > Y(document, "type_z_controller"));
+        Assert.Equal(Y(document, "type_b_cache"), Y(document, "type_a_repository"));
+        Assert.True(Y(document, "type_worker") > Y(document, "type_b_cache"));
+        Assert.True(X(document, "type_b_cache") < X(document, "type_a_repository"));
+    }
+
+    [Fact]
     public void Export_starts_dependent_project_nodes_below_the_depending_layer()
     {
         var graph = new ArchitectureGraph(
@@ -206,7 +236,7 @@ public sealed class DrawioExporterTests
         var api = Rect(document, "project_api");
         var domain = Rect(document, "project_domain");
 
-        Assert.True(domain.X >= api.X + api.Width + settings.Layout.HorizontalSpacing);
+        Assert.False(Overlaps(api, domain));
     }
 
     [Fact]
@@ -329,6 +359,14 @@ public sealed class DrawioExporterTests
         }
 
         return y + Geometry(document, parentId, "y");
+    }
+
+    private static bool Overlaps(RectInfo left, RectInfo right)
+    {
+        return left.X < right.X + right.Width &&
+            left.X + left.Width > right.X &&
+            left.Y < right.Y + right.Height &&
+            left.Y + left.Height > right.Y;
     }
 
     private static RectInfo Rect(XDocument document, string id)

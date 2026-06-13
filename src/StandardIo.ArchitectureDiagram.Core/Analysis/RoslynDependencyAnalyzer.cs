@@ -29,7 +29,8 @@ public sealed class RoslynDependencyAnalyzer
         var resolver = new StyleResolver(settings);
         var typeBySymbol = new Dictionary<ISymbol, TypeNode>(SymbolEqualityComparer.Default);
         var typeByFullName = new Dictionary<string, TypeNode>();
-        var projectContainers = new List<ProjectContainer>();
+        var symbolByNodeId = new Dictionary<string, INamedTypeSymbol>();
+        var projectTypes = new List<(Project Project, string ProjectId, List<TypeNode> Types)>();
 
         foreach (var project in projects)
         {
@@ -68,13 +69,20 @@ public sealed class RoslynDependencyAnalyzer
                 types.Add(node);
                 typeBySymbol[type.OriginalDefinition] = node;
                 typeByFullName[fullName] = node;
+                symbolByNodeId[node.Id] = type.OriginalDefinition;
             }
 
-            projectContainers.Add(new ProjectContainer(
-                StableId.From("project", project.Id.Id.ToString()),
-                project.Name,
-                types.OrderBy(t => t.FullName).ToImmutableArray()));
+            projectTypes.Add((project, StableId.From("project", project.Id.Id.ToString()), types));
         }
+
+        var implementedInterfaceNodes = MapImplementedInterfaces(typeBySymbol, symbolByNodeId);
+        var hiddenInterfaceIds = new HashSet<string>(implementedInterfaceNodes.Keys);
+        var projectContainers = projectTypes
+            .Select(p => new ProjectContainer(
+                p.ProjectId,
+                p.Project.Name,
+                p.Types.Where(t => !hiddenInterfaceIds.Contains(t.Id)).ToImmutableArray()))
+            .ToList();
 
         var externalDependencies = new Dictionary<string, ExternalDependencyNode>();
         var edges = new Dictionary<string, DependencyEdge>();
@@ -110,6 +118,8 @@ public sealed class RoslynDependencyAnalyzer
                         continue;
                     }
 
+                    sourceNode = ResolveVisibleNode(sourceNode, implementedInterfaceNodes);
+
                     foreach (var dependency in CollectDependencies(declaration, model, cancellationToken))
                     {
                         if (SymbolEqualityComparer.Default.Equals(dependency, sourceSymbol))
@@ -119,6 +129,8 @@ public sealed class RoslynDependencyAnalyzer
 
                         if (TryFindInternalNode(dependency, typeBySymbol, typeByFullName, out var targetNode))
                         {
+                            targetNode = ResolveVisibleNode(targetNode, implementedInterfaceNodes);
+
                             AddEdge(edges, sourceNode.Id, targetNode.Id, "internal");
                             continue;
                         }
@@ -135,8 +147,8 @@ public sealed class RoslynDependencyAnalyzer
 
         return new ArchitectureGraph(
             projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
-            externalDependencies.Values.OrderBy(e => e.Name).ToImmutableArray(),
-            edges.Values.OrderBy(e => e.Id).ToImmutableArray());
+            externalDependencies.Values.ToImmutableArray(),
+            edges.Values.ToImmutableArray());
     }
 
     private static IReadOnlyList<Project> CollectSelectedAndReferencedProjects(IEnumerable<Project> selectedProjects)
@@ -196,6 +208,7 @@ public sealed class RoslynDependencyAnalyzer
         CancellationToken cancellationToken)
     {
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var ordered = new List<INamedTypeSymbol>();
 
         foreach (var baseType in declaration.BaseList?.Types ?? Enumerable.Empty<BaseTypeSyntax>())
         {
@@ -229,7 +242,7 @@ public sealed class RoslynDependencyAnalyzer
             }
         }
 
-        return seen;
+        return ordered;
 
         void AddSymbol(ISymbol? symbol)
         {
@@ -282,13 +295,53 @@ public sealed class RoslynDependencyAnalyzer
 
             if (type is INamedTypeSymbol named)
             {
-                seen.Add(named.OriginalDefinition);
+                if (seen.Add(named.OriginalDefinition))
+                {
+                    ordered.Add(named.OriginalDefinition);
+                }
+
                 foreach (var argument in named.TypeArguments)
                 {
                     AddType(argument);
                 }
             }
         }
+    }
+
+    private static Dictionary<string, TypeNode> MapImplementedInterfaces(
+        Dictionary<ISymbol, TypeNode> typeBySymbol,
+        Dictionary<string, INamedTypeSymbol> symbolByNodeId)
+    {
+        var implementedInterfaceNodes = new Dictionary<string, TypeNode>();
+        foreach (var nodeSymbol in symbolByNodeId)
+        {
+            var implementationSymbol = nodeSymbol.Value;
+            if (implementationSymbol.TypeKind != TypeKind.Class ||
+                !typeBySymbol.TryGetValue(implementationSymbol, out var implementationNode))
+            {
+                continue;
+            }
+
+            foreach (var interfaceSymbol in implementationSymbol.AllInterfaces)
+            {
+                if (typeBySymbol.TryGetValue(interfaceSymbol.OriginalDefinition, out var interfaceNode) &&
+                    !implementedInterfaceNodes.ContainsKey(interfaceNode.Id))
+                {
+                    implementedInterfaceNodes[interfaceNode.Id] = implementationNode;
+                }
+            }
+        }
+
+        return implementedInterfaceNodes;
+    }
+
+    private static TypeNode ResolveVisibleNode(
+        TypeNode node,
+        Dictionary<string, TypeNode> implementedInterfaceNodes)
+    {
+        return implementedInterfaceNodes.TryGetValue(node.Id, out var visibleNode)
+            ? visibleNode
+            : node;
     }
 
     private static bool TryFindInternalNode(

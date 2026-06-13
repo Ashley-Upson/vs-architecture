@@ -96,6 +96,72 @@ public sealed class RoslynDependencyAnalyzerTests
         Assert.Contains(graph.Projects, p => p.Name == "Worker");
     }
 
+    [Fact]
+    public async Task Analyze_uses_implementation_when_interface_has_solution_implementation()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public interface IPaymentService {}
+                    public class PaymentService : IPaymentService {}
+                    public class HomeController
+                    {
+                        public HomeController(IPaymentService service) {}
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var controller = project.Types.Single(t => t.Name == "HomeController");
+        var implementation = project.Types.Single(t => t.Name == "PaymentService");
+
+        Assert.DoesNotContain(project.Types, t => t.Name == "IPaymentService");
+        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == implementation.Id);
+    }
+
+    [Fact]
+    public async Task Analyze_keeps_interface_when_no_solution_implementation_exists()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public interface IPaymentService {}
+                    public class HomeController
+                    {
+                        public HomeController(IPaymentService service) {}
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var controller = project.Types.Single(t => t.Name == "HomeController");
+        var serviceInterface = project.Types.Single(t => t.Name == "IPaymentService");
+
+        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == serviceInterface.Id);
+    }
+
     private static IEnumerable<MetadataReference> BasicReferences()
     {
         yield return MetadataReference.CreateFromFile(typeof(object).Assembly.Location);
