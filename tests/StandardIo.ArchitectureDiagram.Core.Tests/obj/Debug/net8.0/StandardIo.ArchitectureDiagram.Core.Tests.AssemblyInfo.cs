@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("StandardIo.ArchitectureDiagram.Core.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+602604851696f5822a0356ed77e3d507e3f7e091")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a18d3128dc8593460fd18dad78cc00964069eb57")]
 [assembly: System.Reflection.AssemblyProductAttribute("StandardIo.ArchitectureDiagram.Core.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("StandardIo.ArchitectureDiagram.Core.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

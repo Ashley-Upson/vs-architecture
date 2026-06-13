@@ -136,29 +136,26 @@ public sealed class DrawioExporter
             .OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id)
             .ToList();
 
-        var placed = new HashSet<string>();
-        var measuring = new HashSet<string>();
-        var measured = new Dictionary<string, Size>();
-        var x = layout.ContainerPadding * 2;
-        var y = layout.ContainerPadding * 2 + 40;
+        var depths = CalculateDepths(nodeIds, outgoing, roots);
+        var layers = nodeIds
+            .GroupBy(id => depths.TryGetValue(id, out var depth) ? depth : 0)
+            .OrderBy(g => g.Key)
+            .ToList();
+        var originTop = layout.ContainerPadding * 2 + 40;
+        var originLeft = layout.ContainerPadding * 2;
 
-        foreach (var root in roots)
+        foreach (var layerGroup in layers)
         {
-            var size = MeasureSubgraph(root);
-            PlaceSubgraph(root, x, y);
-            x = SafeAdd(x, size.Width, layout.HorizontalSpacing);
-        }
+            var layer = layerGroup
+                .OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id)
+                .ToList();
+            var y = SafeAdd(originTop, SafeMultiply(layerGroup.Key, layout.NodeHeight + layout.VerticalSpacing));
 
-        foreach (var id in nodeIds.OrderBy(id => displayNames.TryGetValue(id, out var name) ? name : id))
-        {
-            if (placed.Contains(id))
+            for (var i = 0; i < layer.Count; i++)
             {
-                continue;
+                var x = SafeAdd(originLeft, SafeMultiply(i, layout.NodeWidth + layout.HorizontalSpacing));
+                result[layer[i]] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
             }
-
-            var size = MeasureSubgraph(id);
-            PlaceSubgraph(id, x, y);
-            x = SafeAdd(x, size.Width, layout.HorizontalSpacing);
         }
 
         foreach (var project in graph.Projects)
@@ -180,91 +177,39 @@ public sealed class DrawioExporter
         }
 
         return result;
-
-        Size MeasureSubgraph(string id)
-        {
-            if (placed.Contains(id))
-            {
-                return new Size(layout.NodeWidth, layout.NodeHeight);
-            }
-
-            if (measured.TryGetValue(id, out var cached))
-            {
-                return cached;
-            }
-
-            if (!measuring.Add(id))
-            {
-                return new Size(layout.NodeWidth, layout.NodeHeight);
-            }
-
-            if (!outgoing.TryGetValue(id, out var targets) || targets.Count == 0)
-            {
-                measuring.Remove(id);
-                var leaf = new Size(layout.NodeWidth, layout.NodeHeight);
-                measured[id] = leaf;
-                return leaf;
-            }
-
-            var childSizes = targets.Select(MeasureSubgraph).ToList();
-            var childrenWidth = SafeAdd(
-                SafeSum(childSizes.Select(s => s.Width)),
-                SafeMultiply(layout.HorizontalSpacing, childSizes.Count - 1));
-            var childrenHeight = childSizes.Max(s => s.Height);
-
-            measuring.Remove(id);
-            var size = new Size(
-                System.Math.Max(layout.NodeWidth, childrenWidth),
-                SafeAdd(layout.NodeHeight, layout.VerticalSpacing, childrenHeight));
-            measured[id] = size;
-            return size;
-        }
-
-        void PlaceSubgraph(string id, int left, int top)
-        {
-            if (placed.Contains(id))
-            {
-                return;
-            }
-
-            var size = MeasureSubgraph(id);
-            var nodeX = SafeAdd(left, (size.Width - layout.NodeWidth) / 2);
-            result[id] = new Rect(nodeX, top, layout.NodeWidth, layout.NodeHeight);
-            placed.Add(id);
-
-            if (!outgoing.TryGetValue(id, out var targets) || targets.Count == 0)
-            {
-                return;
-            }
-
-            var childSizes = targets.Select(MeasureSubgraph).ToList();
-            var childrenWidth = SafeAdd(
-                SafeSum(childSizes.Select(s => s.Width)),
-                SafeMultiply(layout.HorizontalSpacing, childSizes.Count - 1));
-            var childX = SafeAdd(left, (size.Width - childrenWidth) / 2);
-            var childY = SafeAdd(top, layout.NodeHeight, layout.VerticalSpacing);
-
-            for (var i = 0; i < targets.Count; i++)
-            {
-                PlaceSubgraph(targets[i], childX, childY);
-                childX = SafeAdd(childX, childSizes[i].Width, layout.HorizontalSpacing);
-            }
-        }
     }
 
-    private static int SafeSum(IEnumerable<int> values)
+    private static Dictionary<string, int> CalculateDepths(
+        HashSet<string> nodeIds,
+        Dictionary<string, List<string>> outgoing,
+        List<string> roots)
     {
-        long total = 0;
-        foreach (var value in values)
+        var depths = nodeIds.ToDictionary(id => id, _ => 0);
+        var startNodes = roots.Count > 0 ? roots : nodeIds.OrderBy(id => id).ToList();
+        var assigned = new HashSet<string>(startNodes);
+        var queue = new Queue<string>(startNodes);
+
+        while (queue.Count > 0)
         {
-            total += value;
-            if (total > MaxGeometryValue)
+            var sourceId = queue.Dequeue();
+            if (!outgoing.TryGetValue(sourceId, out var targets))
             {
-                return MaxGeometryValue;
+                continue;
+            }
+
+            foreach (var targetId in targets)
+            {
+                if (!assigned.Add(targetId))
+                {
+                    continue;
+                }
+
+                depths[targetId] = SafeAdd(depths[sourceId], 1);
+                queue.Enqueue(targetId);
             }
         }
 
-        return (int)total;
+        return depths;
     }
 
     private static int SafeAdd(params int[] values)
@@ -345,6 +290,4 @@ public sealed class DrawioExporter
     }
 
     private readonly record struct Rect(int X, int Y, int Width, int Height);
-
-    private readonly record struct Size(int Width, int Height);
 }

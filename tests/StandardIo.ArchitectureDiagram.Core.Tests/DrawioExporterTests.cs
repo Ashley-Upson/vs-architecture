@@ -109,6 +109,41 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_uses_consistent_spacing_for_adjacent_nodes_in_same_layer()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_controller", "project_a", "HomeController", "App.HomeController", "Class"),
+                    new TypeNode("type_cache", "project_a", "Cache", "App.Cache", "Class"),
+                    new TypeNode("type_repository", "project_a", "Repository", "App.Repository", "Class"),
+                    new TypeNode("type_service", "project_a", "Service", "App.Service", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_cache", "internal"),
+                new DependencyEdge("edge_2", "type_controller", "type_repository", "internal"),
+                new DependencyEdge("edge_3", "type_controller", "type_service", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var layerNodes = new[] { "type_cache", "type_repository", "type_service" }
+            .OrderBy(id => X(document, id))
+            .ToArray();
+        var expectedDelta = settings.Layout.NodeWidth + settings.Layout.HorizontalSpacing;
+
+        Assert.Equal(Y(document, layerNodes[0]), Y(document, layerNodes[1]));
+        Assert.Equal(Y(document, layerNodes[1]), Y(document, layerNodes[2]));
+        Assert.Equal(expectedDelta, X(document, layerNodes[1]) - X(document, layerNodes[0]));
+        Assert.Equal(expectedDelta, X(document, layerNodes[2]) - X(document, layerNodes[1]));
+    }
+
+    [Fact]
     public void Export_reuses_shared_dependency_nodes()
     {
         var graph = new ArchitectureGraph(
