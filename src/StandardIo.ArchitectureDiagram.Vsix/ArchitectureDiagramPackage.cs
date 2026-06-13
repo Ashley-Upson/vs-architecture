@@ -8,7 +8,7 @@ using Task = System.Threading.Tasks.Task;
 namespace StandardIo.ArchitectureDiagram.Vsix;
 
 [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-[InstalledProductRegistration("Architecture Diagram Generator", "Generates Draw.io dependency diagrams from .NET projects.", "0.1.19")]
+[InstalledProductRegistration("Architecture Diagram Generator", "Generates Draw.io dependency diagrams from .NET projects.", "0.1.20")]
 [ProvideMenuResource("Menus.ctmenu", 1)]
 [ProvideOptionPage(typeof(DiagramOptionsPage), "Architecture Diagram", "Settings", 0, 0, false)]
 [ProvideBindingPath]

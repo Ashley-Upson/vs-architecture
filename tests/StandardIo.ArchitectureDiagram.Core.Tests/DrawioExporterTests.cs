@@ -179,6 +179,66 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_keeps_project_containers_horizontally_separated()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_controller", "project_api", "Controller", "Api.Controller", "Class"),
+                    new TypeNode("type_worker", "project_api", "Worker", "Api.Worker", "Class")
+                }),
+                new ProjectContainer("project_domain", "Domain", new[]
+                {
+                    new TypeNode("type_domain_service", "project_domain", "DomainService", "Domain.DomainService", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_worker", "internal"),
+                new DependencyEdge("edge_2", "type_worker", "type_domain_service", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var api = Rect(document, "project_api");
+        var domain = Rect(document, "project_domain");
+
+        Assert.True(domain.X >= api.X + api.Width + settings.Layout.HorizontalSpacing);
+    }
+
+    [Fact]
+    public void Export_keeps_cycles_on_bounded_vertical_layers()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_a", "project_api", "A", "Api.A", "Class"),
+                    new TypeNode("type_b", "project_api", "B", "Api.B", "Class"),
+                    new TypeNode("type_c", "project_api", "C", "Api.C", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_a", "type_b", "internal"),
+                new DependencyEdge("edge_2", "type_b", "type_c", "internal"),
+                new DependencyEdge("edge_3", "type_c", "type_a", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var maxY = new[] { "type_a", "type_b", "type_c" }.Max(id => AbsoluteY(document, id));
+        var minY = new[] { "type_a", "type_b", "type_c" }.Min(id => AbsoluteY(document, id));
+
+        Assert.True(maxY - minY <= settings.Layout.NodeHeight + settings.Layout.VerticalSpacing);
+    }
+
+    [Fact]
     public void Export_reuses_shared_dependency_nodes()
     {
         var graph = new ArchitectureGraph(
@@ -271,10 +331,21 @@ public sealed class DrawioExporterTests
         return y + Geometry(document, parentId, "y");
     }
 
+    private static RectInfo Rect(XDocument document, string id)
+    {
+        return new RectInfo(
+            Geometry(document, id, "x"),
+            Geometry(document, id, "y"),
+            Geometry(document, id, "width"),
+            Geometry(document, id, "height"));
+    }
+
     private static int Geometry(XDocument document, string id, string attributeName)
     {
         var cell = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == id);
         var geometry = cell.Element("mxGeometry")!;
         return int.Parse((string)geometry.Attribute(attributeName)!);
     }
+
+    private readonly record struct RectInfo(int X, int Y, int Width, int Height);
 }
