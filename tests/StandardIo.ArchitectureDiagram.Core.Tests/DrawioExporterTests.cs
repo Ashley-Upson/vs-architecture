@@ -38,6 +38,32 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_can_omit_project_containers()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.ShowProjectContainers = false;
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_controller", "project_a", "HomeController", "App.HomeController", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>());
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var projectCells = document.Descendants("mxCell")
+            .Where(e => (string?)e.Attribute("id") == "project_a")
+            .ToList();
+        var typeCell = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == "type_controller");
+
+        Assert.Empty(projectCells);
+        Assert.Equal("1", (string?)typeCell.Attribute("parent"));
+    }
+
+    [Fact]
     public void Export_emits_special_shape_styles()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -539,6 +565,33 @@ public sealed class DrawioExporterTests
         Assert.True(Geometry(document, "type_source", "width") > settings.Layout.NodeWidth);
         Assert.True(Y(document, "type_target_0") - Y(document, "type_source") > settings.Layout.NodeHeight + settings.Layout.VerticalSpacing);
     }
+
+    [Fact]
+    public void Export_caps_dense_edge_row_height_growth()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var types = new List<TypeNode>
+        {
+            new("type_source", "project_api", "Source", "Api.Source", "Class")
+        };
+        var edges = new List<DependencyEdge>();
+        for (var i = 0; i < 120; i++)
+        {
+            types.Add(new TypeNode($"type_target_{i}", "project_api", $"Target{i}", $"Api.Target{i}", "Class"));
+            edges.Add(new DependencyEdge($"edge_{i}", "type_source", $"type_target_{i}", "internal"));
+        }
+
+        var graph = new ArchitectureGraph(
+            new[] { new ProjectContainer("project_api", "Api", types) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges);
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var rowDistance = Y(document, "type_target_0") - Y(document, "type_source");
+
+        Assert.InRange(rowDistance, settings.Layout.NodeHeight + settings.Layout.VerticalSpacing + 1, 400);
+    }
+
 
     [Fact]
     public void Export_expands_node_width_for_long_text()

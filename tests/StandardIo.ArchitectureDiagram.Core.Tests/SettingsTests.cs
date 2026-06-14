@@ -15,6 +15,7 @@ public sealed class SettingsTests
 
         Assert.Equal(settings.StyleRules.Count, imported.StyleRules.Count);
         Assert.Equal(settings.Canvas.BackgroundColor, imported.Canvas.BackgroundColor);
+        Assert.Equal(settings.ShowProjectContainers, imported.ShowProjectContainers);
         Assert.Equal(settings.ExternalDependencyStyle.Shape, imported.ExternalDependencyStyle.Shape);
     }
 

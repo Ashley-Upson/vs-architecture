@@ -104,6 +104,7 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly NumericUpDown _horizontalSpacing = NumberBox(0, 600);
     private readonly NumericUpDown _verticalSpacing = NumberBox(0, 600);
     private readonly NumericUpDown _containerPadding = NumberBox(0, 300);
+    private readonly CheckBox _showProjectContainers = new() { Text = "Show project containers", AutoSize = true };
     private readonly TextBox _connectorColor = TextBox();
     private readonly NumericUpDown _connectorWidth = NumberBox(1, 20);
     private readonly CheckBox _connectorRounded = new() { Text = "Rounded connectors", AutoSize = true };
@@ -143,6 +144,7 @@ internal sealed class DiagramOptionsControl : UserControl
         _horizontalSpacing.Value = Clamp(settings.Layout.HorizontalSpacing, _horizontalSpacing);
         _verticalSpacing.Value = Clamp(settings.Layout.VerticalSpacing, _verticalSpacing);
         _containerPadding.Value = Clamp(settings.Layout.ContainerPadding, _containerPadding);
+        _showProjectContainers.Checked = settings.ShowProjectContainers;
         _connectorColor.Text = settings.Connector.StrokeColor;
         _connectorWidth.Value = Clamp(settings.Connector.StrokeWidth, _connectorWidth);
         _connectorRounded.Checked = settings.Connector.Rounded;
@@ -184,6 +186,7 @@ internal sealed class DiagramOptionsControl : UserControl
             ExcludedNames = Lines(_excludedNames),
             StyleRules = ReadRules(),
             Overrides = ReadOverrides(),
+            ShowProjectContainers = _showProjectContainers.Checked,
             ProjectContainerStyle = _projectStyle.ToStyle(),
             ExternalDependencyStyle = _externalStyle.ToStyle()
         };
@@ -220,6 +223,7 @@ internal sealed class DiagramOptionsControl : UserControl
         AddRow(panel, "Horizontal spacing", _horizontalSpacing);
         AddRow(panel, "Vertical spacing", _verticalSpacing);
         AddRow(panel, "Container padding", _containerPadding);
+        AddRow(panel, string.Empty, _showProjectContainers);
         AddRow(panel, "Connector color", _connectorColor);
         AddRow(panel, "Connector width", _connectorWidth);
         AddRow(panel, string.Empty, _connectorRounded);

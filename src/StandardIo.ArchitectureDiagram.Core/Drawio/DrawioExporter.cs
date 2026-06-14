@@ -25,31 +25,40 @@ public sealed class DrawioExporter
         foreach (var project in graph.Projects)
         {
             var projectPosition = positions[project.Id];
-            root.Add(new XElement("mxCell",
-                new XAttribute("id", project.Id),
-                new XAttribute("value", project.Name),
-                new XAttribute("style", BuildNodeStyle(settings.ProjectContainerStyle)),
-                new XAttribute("vertex", "1"),
-                new XAttribute("parent", "1"),
-                new XElement("mxGeometry",
-                    new XAttribute("x", projectPosition.X),
-                    new XAttribute("y", projectPosition.Y),
-                    new XAttribute("width", projectPosition.Width),
-                    new XAttribute("height", projectPosition.Height),
-                    new XAttribute("as", "geometry"))));
+            if (settings.ShowProjectContainers)
+            {
+                root.Add(new XElement("mxCell",
+                    new XAttribute("id", project.Id),
+                    new XAttribute("value", project.Name),
+                    new XAttribute("style", BuildNodeStyle(settings.ProjectContainerStyle)),
+                    new XAttribute("vertex", "1"),
+                    new XAttribute("parent", "1"),
+                    new XElement("mxGeometry",
+                        new XAttribute("x", projectPosition.X),
+                        new XAttribute("y", projectPosition.Y),
+                        new XAttribute("width", projectPosition.Width),
+                        new XAttribute("height", projectPosition.Height),
+                        new XAttribute("as", "geometry"))));
+            }
 
             foreach (var type in project.Types)
             {
                 var typePosition = positions[type.Id];
+                var x = settings.ShowProjectContainers
+                    ? typePosition.X - projectPosition.X
+                    : typePosition.X;
+                var y = settings.ShowProjectContainers
+                    ? typePosition.Y - projectPosition.Y
+                    : typePosition.Y;
                 root.Add(new XElement("mxCell",
                     new XAttribute("id", type.Id),
                     new XAttribute("value", type.Name),
                     new XAttribute("style", BuildNodeStyle(resolver.Resolve(type))),
                     new XAttribute("vertex", "1"),
-                    new XAttribute("parent", project.Id),
+                    new XAttribute("parent", settings.ShowProjectContainers ? project.Id : "1"),
                     new XElement("mxGeometry",
-                        new XAttribute("x", typePosition.X - projectPosition.X),
-                        new XAttribute("y", typePosition.Y - projectPosition.Y),
+                        new XAttribute("x", x),
+                        new XAttribute("y", y),
                         new XAttribute("width", typePosition.Width),
                         new XAttribute("height", typePosition.Height),
                         new XAttribute("as", "geometry"))));
@@ -659,7 +668,7 @@ public sealed class DrawioExporter
         HashSet<string> nodeIds,
         LayoutSettings layout)
     {
-        var bandCounts = new Dictionary<int, int>();
+        var bandGroups = new Dictionary<int, Dictionary<string, int>>();
         foreach (var edge in edges.Where(e => nodeIds.Contains(e.SourceId) && nodeIds.Contains(e.TargetId)))
         {
             if (!depths.TryGetValue(edge.SourceId, out var sourceDepth) ||
@@ -670,25 +679,16 @@ public sealed class DrawioExporter
 
             var upperDepth = System.Math.Min(sourceDepth, targetDepth);
             var lowerDepth = System.Math.Max(sourceDepth, targetDepth);
+            var groupKey = $"{sourceDepth}:{targetDepth}";
             if (upperDepth == lowerDepth)
             {
-                if (!bandCounts.ContainsKey(upperDepth))
-                {
-                    bandCounts[upperDepth] = 0;
-                }
-
-                bandCounts[upperDepth]++;
+                IncrementBandGroup(bandGroups, upperDepth, groupKey);
                 continue;
             }
 
             for (var depth = upperDepth; depth < lowerDepth; depth++)
             {
-                if (!bandCounts.ContainsKey(depth))
-                {
-                    bandCounts[depth] = 0;
-                }
-
-                bandCounts[depth]++;
+                IncrementBandGroup(bandGroups, depth, groupKey);
             }
         }
 
@@ -697,15 +697,32 @@ public sealed class DrawioExporter
         var cumulativeOffset = 0;
         for (var depth = 0; depth <= maxDepth; depth++)
         {
-            var requiredBandHeight = bandCounts.TryGetValue(depth, out var count)
-                ? SafeAdd(SafeMultiply(count, EdgeSpacing), EdgePadding * 4)
+            var busiestAdjacentLines = bandGroups.TryGetValue(depth, out var groups)
+                ? groups.Values.DefaultIfEmpty(0).Max()
                 : 0;
-            var extraBandHeight = System.Math.Max(0, SafeSubtract(requiredBandHeight, layout.VerticalSpacing));
+            var requiredBandHeight = busiestAdjacentLines > 0
+                ? SafeAdd(SafeMultiply(busiestAdjacentLines, EdgeSpacing), EdgePadding * 4)
+                : 0;
+            var maximumExtraBandHeight = System.Math.Max(layout.VerticalSpacing, SafeMultiply(layout.VerticalSpacing, 2));
+            var extraBandHeight = System.Math.Min(
+                maximumExtraBandHeight,
+                System.Math.Max(0, SafeSubtract(requiredBandHeight, layout.VerticalSpacing)));
             cumulativeOffset = SafeAdd(cumulativeOffset, extraBandHeight);
             offsets[SafeAdd(depth, 1)] = cumulativeOffset;
         }
 
         return offsets;
+
+        static void IncrementBandGroup(Dictionary<int, Dictionary<string, int>> bands, int depth, string key)
+        {
+            if (!bands.TryGetValue(depth, out var groups))
+            {
+                groups = new Dictionary<string, int>();
+                bands[depth] = groups;
+            }
+
+            groups[key] = groups.TryGetValue(key, out var count) ? count + 1 : 1;
+        }
     }
 
     private static int NodeTop(
