@@ -217,16 +217,39 @@ public sealed class RoslynDependencyAnalyzer
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var ordered = new List<INamedTypeSymbol>();
 
+        foreach (var parameter in GetPrimaryConstructorParameters(declaration))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (parameter.Type is not null)
+            {
+                AddType(model.GetTypeInfo(parameter.Type, cancellationToken).Type);
+            }
+        }
+
         foreach (var constructor in declaration.Members.OfType<ConstructorDeclarationSyntax>())
         {
             foreach (var parameter in constructor.ParameterList.Parameters)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                AddType(model.GetTypeInfo(parameter.Type!, cancellationToken).Type);
+                if (parameter.Type is not null)
+                {
+                    AddType(model.GetTypeInfo(parameter.Type, cancellationToken).Type);
+                }
             }
         }
 
         return ordered;
+
+        static IEnumerable<ParameterSyntax> GetPrimaryConstructorParameters(TypeDeclarationSyntax typeDeclaration)
+        {
+            return typeDeclaration switch
+            {
+                ClassDeclarationSyntax { ParameterList: not null } classDeclaration => classDeclaration.ParameterList.Parameters,
+                StructDeclarationSyntax { ParameterList: not null } structDeclaration => structDeclaration.ParameterList.Parameters,
+                RecordDeclarationSyntax { ParameterList: not null } recordDeclaration => recordDeclaration.ParameterList.Parameters,
+                _ => Enumerable.Empty<ParameterSyntax>()
+            };
+        }
 
         void AddType(ITypeSymbol? type)
         {

@@ -143,6 +143,64 @@ public sealed class RoslynDependencyAnalyzerTests
     }
 
     [Fact]
+    public async Task Analyze_detects_primary_constructor_dependencies()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class Dependency {}
+                    public class HomeController(Dependency dependency) {}
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var controller = project.Types.Single(t => t.Name == "HomeController");
+        var dependency = project.Types.Single(t => t.Name == "Dependency");
+
+        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == dependency.Id);
+    }
+
+    [Fact]
+    public async Task Analyze_detects_record_primary_constructor_dependencies()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class Dependency {}
+                    public record HomeController(Dependency Dependency);
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var controller = project.Types.Single(t => t.Name == "HomeController");
+        var dependency = project.Types.Single(t => t.Name == "Dependency");
+
+        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == dependency.Id);
+    }
+
+    [Fact]
     public async Task Analyze_never_emits_core_library_dependencies()
     {
         using var workspace = new AdhocWorkspace();

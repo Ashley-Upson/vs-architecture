@@ -376,28 +376,62 @@ public sealed class DrawioExporter
             return directPoints;
         }
 
-        var bandTop = System.Math.Min(source.Y, target.Y);
-        var bandBottom = System.Math.Max(source.Bottom, target.Bottom);
-        var laneX = obstacles
-            .Where(o => o.Bottom >= bandTop && o.Y <= bandBottom)
-            .Select(o => o.Right)
-            .DefaultIfEmpty(System.Math.Max(source.Right, target.Right))
-            .Max();
-        laneX = SafeAdd(laneX, layout.HorizontalSpacing);
-
         var sourceLaneY = targetIsBelowSource
             ? SafeAdd(source.Bottom, gap)
             : SafeSubtract(source.Y, gap);
         var targetLaneY = targetIsBelowSource
             ? SafeSubtract(target.Y, gap)
             : SafeAdd(target.Bottom, gap);
+        foreach (var laneX in CandidateLaneXs(source, target, obstacles, layout)
+            .Distinct()
+            .OrderBy(x => System.Math.Abs(x - ((source.CenterX + target.CenterX) / 2))))
+        {
+            var candidate = new List<Point>
+            {
+                new(sourcePoint.X, sourceLaneY),
+                new(laneX, sourceLaneY),
+                new(laneX, targetLaneY),
+                new(targetPoint.X, targetLaneY)
+            };
+
+            if (!RouteIntersects(sourcePoint, targetPoint, candidate, obstacles))
+            {
+                return candidate;
+            }
+        }
+
+        var fallbackLaneX = SafeAdd(
+            obstacles
+                .Select(o => o.Right)
+                .DefaultIfEmpty(System.Math.Max(source.Right, target.Right))
+                .Max(),
+            layout.HorizontalSpacing);
         return new List<Point>
         {
             new(sourcePoint.X, sourceLaneY),
-            new(laneX, sourceLaneY),
-            new(laneX, targetLaneY),
+            new(fallbackLaneX, sourceLaneY),
+            new(fallbackLaneX, targetLaneY),
             new(targetPoint.X, targetLaneY)
         };
+    }
+
+    private static IEnumerable<int> CandidateLaneXs(
+        Rect source,
+        Rect target,
+        List<Rect> obstacles,
+        LayoutSettings layout)
+    {
+        var minimumGap = System.Math.Max(12, layout.HorizontalSpacing / 4);
+        var bandTop = System.Math.Min(source.Y, target.Y);
+        var bandBottom = System.Math.Max(source.Bottom, target.Bottom);
+        yield return source.CenterX;
+        yield return target.CenterX;
+
+        foreach (var obstacle in obstacles.Where(o => o.Bottom >= bandTop && o.Y <= bandBottom))
+        {
+            yield return SafeSubtract(obstacle.X, minimumGap);
+            yield return SafeAdd(obstacle.Right, minimumGap);
+        }
     }
 
     private static bool RouteIntersects(Point source, Point target, List<Point> points, List<Rect> obstacles)
