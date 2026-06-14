@@ -3,7 +3,7 @@
 		<TargetFramework>net472</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
-		<Version>0.1.33</Version>
+		<Version>0.1.34</Version>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
 		<GeneratePkgDefFile>true</GeneratePkgDefFile>

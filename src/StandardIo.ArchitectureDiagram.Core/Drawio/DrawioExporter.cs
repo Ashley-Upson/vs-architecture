@@ -13,6 +13,7 @@ public sealed class DrawioExporter
     private const int EdgeSpacing = 5;
     private const int EdgePadding = 10;
     private const int ObstaclePadding = 8;
+    private const int MaxDirectLaneCandidates = 40;
     private const int ApproximateTextWidth = 8;
 
     public string Export(ArchitectureGraph graph, DiagramSettings settings)
@@ -456,10 +457,9 @@ public sealed class DrawioExporter
             return directPoints;
         }
 
-        var routedPoints = FindShortestOrthogonalRoute(sourceExit, targetEntry, source, target, routingObstacles, nearbyOccupiedSegments, route, layout);
-        if (routedPoints.Count > 0)
+        if (TryBuildBoundedObstacleRoute(sourceExit, targetEntry, source, target, route, routingObstacles, nearbyOccupiedSegments, layout, out var routedPoints))
         {
-            return SimplifyPoints(new[] { sourceExit }.Concat(routedPoints).Concat(new[] { targetEntry }).ToList());
+            return routedPoints;
         }
 
         var fallbackLaneX = SafeAdd(
@@ -528,18 +528,21 @@ public sealed class DrawioExporter
 
         preferredY = System.Math.Max(minY, System.Math.Min(maxY, preferredY));
         yield return preferredY;
-        for (var offset = EdgeSpacing; offset <= SafeSubtract(maxY, minY); offset = SafeAdd(offset, EdgeSpacing))
+        var yielded = 1;
+        for (var offset = EdgeSpacing; offset <= SafeSubtract(maxY, minY) && yielded < MaxDirectLaneCandidates; offset = SafeAdd(offset, EdgeSpacing))
         {
             var above = SafeSubtract(preferredY, offset);
             if (above >= minY)
             {
                 yield return above;
+                yielded++;
             }
 
             var below = SafeAdd(preferredY, offset);
-            if (below <= maxY)
+            if (below <= maxY && yielded < MaxDirectLaneCandidates)
             {
                 yield return below;
+                yielded++;
             }
         }
     }
@@ -584,287 +587,133 @@ public sealed class DrawioExporter
         return true;
     }
 
-    private static List<Point> FindShortestOrthogonalRoute(
-        Point start,
-        Point end,
+    private static bool TryBuildBoundedObstacleRoute(
+        Point sourceExit,
+        Point targetEntry,
         Rect source,
         Rect target,
+        EdgeRoute route,
         List<Rect> obstacles,
         List<LineSegment> occupiedSegments,
-        EdgeRoute route,
-        LayoutSettings layout)
+        LayoutSettings layout,
+        out List<Point> points)
     {
-        var xs = CandidateLaneXs(start, end, source, target, obstacles, occupiedSegments, route, layout)
-            .Distinct()
-            .OrderBy(x => x)
-            .ToList();
-        var ys = CandidateLaneYs(start, end, source, target, obstacles, occupiedSegments, route, layout)
-            .Distinct()
-            .OrderBy(y => y)
-            .ToList();
-        var points = xs
-            .SelectMany(x => ys.Select(y => new Point(x, y)))
-            .Where(p => !PointInsideAnyObstacle(p, obstacles))
-            .Distinct()
+        points = new List<Point>();
+        var candidates = CandidateBoundedRoutes(sourceExit, targetEntry, source, target, route, obstacles, layout)
+            .Select(SimplifyPoints)
+            .OrderBy(RouteLength)
             .ToList();
 
-        if (!points.Contains(start))
+        foreach (var candidate in candidates)
         {
-            points.Add(start);
-        }
-
-        if (!points.Contains(end))
-        {
-            points.Add(end);
-        }
-
-        var startIndex = points.IndexOf(start);
-        var endIndex = points.IndexOf(end);
-        var pointIndexes = points
-            .Select((point, index) => new { point, index })
-            .ToDictionary(x => x.point, x => x.index);
-        var xIndexes = xs
-            .Select((x, index) => new { x, index })
-            .ToDictionary(x => x.x, x => x.index);
-        var yIndexes = ys
-            .Select((y, index) => new { y, index })
-            .ToDictionary(y => y.y, y => y.index);
-        var states = new List<RouteState>();
-        var bestCosts = new List<int>();
-        var previous = new List<int>();
-        var visited = new List<bool>();
-        var pending = new SortedDictionary<int, Queue<int>>();
-        AddState(startIndex, Direction.None, 0, -1);
-
-        while (true)
-        {
-            var currentStateIndex = SelectNextState();
-            if (currentStateIndex < 0)
+            if (RouteIsClear(candidate, obstacles, occupiedSegments))
             {
-                break;
-            }
-
-            if (states[currentStateIndex].PointIndex == endIndex)
-            {
-                return Reconstruct(currentStateIndex);
-            }
-
-            visited[currentStateIndex] = true;
-            var current = points[states[currentStateIndex].PointIndex];
-            foreach (var nextPointIndex in NeighborPointIndexes(current))
-            {
-                var next = points[nextPointIndex];
-                var direction = DirectionBetween(current, next);
-                if (direction == Direction.None ||
-                    !SegmentIsClear(current, next, obstacles, occupiedSegments))
-                {
-                    continue;
-                }
-
-                var bendPenalty = states[currentStateIndex].Direction != Direction.None &&
-                    states[currentStateIndex].Direction != direction
-                        ? 20
-                        : 0;
-                var cost = SafeAdd(
-                    bestCosts[currentStateIndex],
-                    ManhattanDistance(current, next),
-                    bendPenalty);
-                AddState(nextPointIndex, direction, cost, currentStateIndex);
+                points = candidate;
+                return true;
             }
         }
 
-        return new List<Point>();
-
-        void AddState(int pointIndex, Direction direction, int cost, int previousState)
+        foreach (var candidate in candidates)
         {
-            for (var i = 0; i < states.Count; i++)
+            if (RouteAvoidsObstacles(candidate, obstacles))
             {
-                if (states[i].PointIndex != pointIndex || states[i].Direction != direction)
-                {
-                    continue;
-                }
-
-                if (cost < bestCosts[i])
-                {
-                    bestCosts[i] = cost;
-                    previous[i] = previousState;
-                    EnqueueState(i, cost);
-                }
-
-                return;
-            }
-
-            states.Add(new RouteState(pointIndex, direction));
-            bestCosts.Add(cost);
-            previous.Add(previousState);
-            visited.Add(false);
-            EnqueueState(states.Count - 1, cost);
-        }
-
-        int SelectNextState()
-        {
-            while (pending.Count > 0)
-            {
-                var pair = pending.First();
-                var stateIndex = pair.Value.Dequeue();
-                if (pair.Value.Count == 0)
-                {
-                    pending.Remove(pair.Key);
-                }
-
-                if (!visited[stateIndex] && bestCosts[stateIndex] == pair.Key)
-                {
-                    return stateIndex;
-                }
-            }
-
-            return -1;
-        }
-
-        void EnqueueState(int stateIndex, int cost)
-        {
-            if (!pending.TryGetValue(cost, out var queue))
-            {
-                queue = new Queue<int>();
-                pending[cost] = queue;
-            }
-
-            queue.Enqueue(stateIndex);
-        }
-
-        IEnumerable<int> NeighborPointIndexes(Point point)
-        {
-            var xIndex = xIndexes[point.X];
-            var yIndex = yIndexes[point.Y];
-            if (TryGetPointIndex(xIndex - 1, yIndex, out var left))
-            {
-                yield return left;
-            }
-
-            if (TryGetPointIndex(xIndex + 1, yIndex, out var right))
-            {
-                yield return right;
-            }
-
-            if (TryGetPointIndex(xIndex, yIndex - 1, out var up))
-            {
-                yield return up;
-            }
-
-            if (TryGetPointIndex(xIndex, yIndex + 1, out var down))
-            {
-                yield return down;
+                points = candidate;
+                return true;
             }
         }
 
-        bool TryGetPointIndex(int xIndex, int yIndex, out int pointIndex)
-        {
-            if (xIndex < 0 || xIndex >= xs.Count || yIndex < 0 || yIndex >= ys.Count)
-            {
-                pointIndex = -1;
-                return false;
-            }
-
-            return pointIndexes.TryGetValue(new Point(xs[xIndex], ys[yIndex]), out pointIndex);
-        }
-
-        List<Point> Reconstruct(int stateIndex)
-        {
-            var path = new List<Point>();
-            var current = stateIndex;
-            while (current >= 0)
-            {
-                path.Add(points[states[current].PointIndex]);
-                current = previous[current];
-            }
-
-            path.Reverse();
-            if (path.Count > 0 && path[0] == start)
-            {
-                path.RemoveAt(0);
-            }
-
-            if (path.Count > 0 && path[path.Count - 1] == end)
-            {
-                path.RemoveAt(path.Count - 1);
-            }
-
-            return SimplifyPoints(path);
-        }
+        return false;
     }
 
-    private static IEnumerable<int> CandidateLaneXs(
-        Point start,
-        Point end,
+    private static IEnumerable<List<Point>> CandidateBoundedRoutes(
+        Point sourceExit,
+        Point targetEntry,
         Rect source,
         Rect target,
-        List<Rect> obstacles,
-        List<LineSegment> occupiedSegments,
         EdgeRoute route,
+        List<Rect> obstacles,
         LayoutSettings layout)
     {
-        var minimumGap = System.Math.Max(EdgePadding, layout.HorizontalSpacing / 4);
+        var laneGap = System.Math.Max(EdgePadding, layout.HorizontalSpacing / 4);
         var laneOffset = route.LaneOffset;
-        yield return start.X;
-        yield return end.X;
-        yield return SafeSubtract(System.Math.Min(source.X, target.X), minimumGap, System.Math.Abs(laneOffset));
-        yield return SafeAdd(System.Math.Max(source.Right, target.Right), minimumGap, System.Math.Abs(laneOffset));
-        yield return SafeSubtract(source.X, minimumGap, laneOffset);
-        yield return SafeAdd(source.Right, minimumGap, laneOffset);
-        yield return SafeSubtract(target.X, minimumGap, laneOffset);
-        yield return SafeAdd(target.Right, minimumGap, laneOffset);
+        var bandTop = System.Math.Min(source.Y, target.Y);
+        var bandBottom = System.Math.Max(source.Bottom, target.Bottom);
+        var sideLanes = CandidateSideLaneXs(source, target, obstacles, laneGap, laneOffset, bandTop, bandBottom)
+            .Distinct()
+            .OrderBy(x => System.Math.Abs(x - ((source.CenterX + target.CenterX) / 2)))
+            .Take(16)
+            .ToList();
+        var sourceLaneY = SafeAdd(source.Bottom, EdgePadding, System.Math.Max(0, laneOffset));
+        var targetLaneY = SafeSubtract(target.Y, EdgePadding, System.Math.Max(0, -laneOffset));
+        var bottomLoopY = SafeAdd(System.Math.Max(source.Bottom, target.Bottom), layout.VerticalSpacing / 2, System.Math.Abs(laneOffset));
+        var topLoopY = SafeSubtract(System.Math.Min(source.Y, target.Y), layout.VerticalSpacing / 2, System.Math.Abs(laneOffset));
 
-        foreach (var obstacle in obstacles)
+        foreach (var laneX in sideLanes)
         {
-            yield return SafeSubtract(obstacle.X, minimumGap, laneOffset);
-            yield return SafeAdd(obstacle.Right, minimumGap, laneOffset);
-        }
+            yield return new List<Point>
+            {
+                sourceExit,
+                new(sourceExit.X, sourceLaneY),
+                new(laneX, sourceLaneY),
+                new(laneX, targetLaneY),
+                new(targetEntry.X, targetLaneY),
+                targetEntry
+            };
 
-        foreach (var segment in occupiedSegments.Where(s => s.IsVertical))
-        {
-            yield return SafeSubtract(segment.Start.X, EdgeSpacing);
-            yield return SafeAdd(segment.Start.X, EdgeSpacing);
+            yield return new List<Point>
+            {
+                sourceExit,
+                new(sourceExit.X, bottomLoopY),
+                new(laneX, bottomLoopY),
+                new(laneX, targetLaneY),
+                new(targetEntry.X, targetLaneY),
+                targetEntry
+            };
+
+            yield return new List<Point>
+            {
+                sourceExit,
+                new(sourceExit.X, sourceLaneY),
+                new(laneX, sourceLaneY),
+                new(laneX, topLoopY),
+                new(targetEntry.X, topLoopY),
+                targetEntry
+            };
         }
     }
 
-    private static IEnumerable<int> CandidateLaneYs(
-        Point start,
-        Point end,
+    private static IEnumerable<int> CandidateSideLaneXs(
         Rect source,
         Rect target,
         List<Rect> obstacles,
-        List<LineSegment> occupiedSegments,
-        EdgeRoute route,
-        LayoutSettings layout)
+        int laneGap,
+        int laneOffset,
+        int bandTop,
+        int bandBottom)
     {
-        var minimumGap = System.Math.Max(EdgePadding, layout.VerticalSpacing / 4);
-        var laneOffset = route.LaneOffset;
-        yield return start.Y;
-        yield return end.Y;
-        yield return SafeAdd(System.Math.Min(start.Y, end.Y), SafeSubtract(System.Math.Max(start.Y, end.Y), System.Math.Min(start.Y, end.Y)) / 2, laneOffset);
-        yield return SafeSubtract(System.Math.Min(source.Y, target.Y), minimumGap, System.Math.Abs(laneOffset));
-        yield return SafeAdd(System.Math.Max(source.Bottom, target.Bottom), minimumGap, System.Math.Abs(laneOffset));
+        yield return SafeSubtract(System.Math.Min(source.X, target.X), laneGap, System.Math.Abs(laneOffset));
+        yield return SafeAdd(System.Math.Max(source.Right, target.Right), laneGap, System.Math.Abs(laneOffset));
+        yield return SafeSubtract(source.X, laneGap, laneOffset);
+        yield return SafeAdd(source.Right, laneGap, laneOffset);
+        yield return SafeSubtract(target.X, laneGap, laneOffset);
+        yield return SafeAdd(target.Right, laneGap, laneOffset);
 
-        foreach (var obstacle in obstacles)
+        foreach (var obstacle in obstacles.Where(o => o.Bottom >= bandTop && o.Y <= bandBottom).Take(24))
         {
-            yield return SafeSubtract(obstacle.Y, minimumGap, laneOffset);
-            yield return SafeAdd(obstacle.Bottom, minimumGap, laneOffset);
-        }
-
-        foreach (var segment in occupiedSegments.Where(s => s.IsHorizontal))
-        {
-            yield return SafeSubtract(segment.Start.Y, EdgeSpacing);
-            yield return SafeAdd(segment.Start.Y, EdgeSpacing);
+            yield return SafeSubtract(obstacle.X, laneGap, laneOffset);
+            yield return SafeAdd(obstacle.Right, laneGap, laneOffset);
         }
     }
 
-    private static bool PointInsideAnyObstacle(Point point, List<Rect> obstacles)
+    private static int RouteLength(List<Point> points)
     {
-        return obstacles.Any(o =>
-            point.X > o.X &&
-            point.X < o.Right &&
-            point.Y > o.Y &&
-            point.Y < o.Bottom);
+        var length = 0;
+        for (var i = 0; i < points.Count - 1; i++)
+        {
+            length = SafeAdd(length, ManhattanDistance(points[i], points[i + 1]));
+        }
+
+        return length;
     }
 
     private static bool SegmentIsClear(
@@ -926,21 +775,6 @@ public sealed class DrawioExporter
         }
 
         return result;
-    }
-
-    private static Direction DirectionBetween(Point start, Point end)
-    {
-        if (start.X == end.X && start.Y != end.Y)
-        {
-            return end.Y > start.Y ? Direction.Down : Direction.Up;
-        }
-
-        if (start.Y == end.Y && start.X != end.X)
-        {
-            return end.X > start.X ? Direction.Right : Direction.Left;
-        }
-
-        return Direction.None;
     }
 
     private static int ManhattanDistance(Point start, Point end)
@@ -1719,16 +1553,6 @@ public sealed class DrawioExporter
                 MinY <= rect.Bottom &&
                 MaxY >= rect.Y;
         }
-    }
-
-    private readonly record struct RouteState(int PointIndex, Direction Direction);
-    private enum Direction
-    {
-        None,
-        Up,
-        Down,
-        Left,
-        Right
     }
 
     private readonly record struct EdgeRoute(

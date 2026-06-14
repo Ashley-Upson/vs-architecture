@@ -747,6 +747,46 @@ public sealed class DrawioExporterTests
         Assert.Contains("type_31_b", xml);
     }
 
+    [Fact]
+    public void Export_routes_large_layered_graph_quickly()
+    {
+        var types = new List<TypeNode>();
+        var edges = new List<DependencyEdge>();
+        for (var layer = 0; layer < 12; layer++)
+        {
+            for (var index = 0; index < 12; index++)
+            {
+                types.Add(new TypeNode($"type_{layer}_{index}", "project_a", $"Type{layer}_{index}", $"App.Type{layer}_{index}", "Class"));
+            }
+        }
+
+        for (var layer = 0; layer < 11; layer++)
+        {
+            for (var index = 0; index < 12; index++)
+            {
+                edges.Add(new DependencyEdge($"edge_{layer}_{index}_down", $"type_{layer}_{index}", $"type_{layer + 1}_{index}", "internal"));
+                edges.Add(new DependencyEdge($"edge_{layer}_{index}_cross", $"type_{layer}_{index}", $"type_{layer + 1}_{(index + 3) % 12}", "internal"));
+            }
+        }
+
+        for (var index = 0; index < 12; index++)
+        {
+            edges.Add(new DependencyEdge($"edge_back_{index}", $"type_11_{index}", $"type_0_{(index + 5) % 12}", "internal"));
+        }
+
+        var graph = new ArchitectureGraph(
+            new[] { new ProjectContainer("project_a", "App", types) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var xml = new DrawioExporter().Export(graph, DiagramSettings.CreateDefault());
+
+        stopwatch.Stop();
+        Assert.Contains("type_11_11", xml);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"Export took {stopwatch.Elapsed}.");
+    }
+
     private static int X(XDocument document, string id)
     {
         return Geometry(document, id, "x");
