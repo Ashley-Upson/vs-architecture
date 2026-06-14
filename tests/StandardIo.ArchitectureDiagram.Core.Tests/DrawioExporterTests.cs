@@ -404,6 +404,35 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_routes_upward_edges_to_target_bottom()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_top", "project_api", "Top", "Api.Top", "Class"),
+                    new TypeNode("type_middle", "project_api", "Middle", "Api.Middle", "Class"),
+                    new TypeNode("type_bottom", "project_api", "Bottom", "Api.Bottom", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_down_1", "type_top", "type_middle", "internal"),
+                new DependencyEdge("edge_down_2", "type_middle", "type_bottom", "internal"),
+                new DependencyEdge("edge_up", "type_bottom", "type_top", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+        var edge = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == "edge_up");
+        var style = (string)edge.Attribute("style")!;
+
+        Assert.Contains("exitX=0.5;exitY=0", style);
+        Assert.Contains("entryX=0.5;entryY=1", style);
+    }
+
+    [Fact]
     public void Export_keeps_cycles_on_bounded_vertical_layers()
     {
         var settings = DiagramSettings.CreateDefault();

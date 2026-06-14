@@ -75,9 +75,11 @@ public sealed class DrawioExporter
 
         foreach (var edge in graph.Edges)
         {
+            positions.TryGetValue(edge.SourceId, out var sourcePosition);
+            positions.TryGetValue(edge.TargetId, out var targetPosition);
             root.Add(new XElement("mxCell",
                 new XAttribute("id", edge.Id),
-                new XAttribute("style", BuildConnectorStyle(settings.Connector)),
+                new XAttribute("style", BuildConnectorStyle(settings.Connector, sourcePosition, targetPosition)),
                 new XAttribute("edge", "1"),
                 new XAttribute("parent", "1"),
                 new XAttribute("source", edge.SourceId),
@@ -352,12 +354,17 @@ public sealed class DrawioExporter
         List<Rect> obstacles,
         LayoutSettings layout)
     {
-        var sourcePoint = new Point(source.CenterX, source.Bottom);
-        var targetPoint = new Point(target.CenterX, target.Y);
+        var targetIsBelowSource = target.Y >= source.Bottom;
+        var sourcePoint = targetIsBelowSource
+            ? new Point(source.CenterX, source.Bottom)
+            : new Point(source.CenterX, source.Y);
+        var targetPoint = targetIsBelowSource
+            ? new Point(target.CenterX, target.Y)
+            : new Point(target.CenterX, target.Bottom);
         var gap = System.Math.Max(20, layout.VerticalSpacing / 2);
-        var midY = target.Y >= source.Bottom
+        var midY = targetIsBelowSource
             ? SafeAdd(source.Bottom, System.Math.Max(gap, SafeSubtract(target.Y, source.Bottom) / 2))
-            : SafeAdd(System.Math.Max(source.Bottom, target.Bottom), gap);
+            : SafeSubtract(source.Y, System.Math.Max(gap, SafeSubtract(source.Y, target.Bottom) / 2));
         var directPoints = new List<Point>
         {
             new(sourcePoint.X, midY),
@@ -378,8 +385,12 @@ public sealed class DrawioExporter
             .Max();
         laneX = SafeAdd(laneX, layout.HorizontalSpacing);
 
-        var sourceLaneY = SafeAdd(source.Bottom, gap);
-        var targetLaneY = SafeSubtract(target.Y, gap);
+        var sourceLaneY = targetIsBelowSource
+            ? SafeAdd(source.Bottom, gap)
+            : SafeSubtract(source.Y, gap);
+        var targetLaneY = targetIsBelowSource
+            ? SafeSubtract(target.Y, gap)
+            : SafeAdd(target.Bottom, gap);
         return new List<Point>
         {
             new(sourcePoint.X, sourceLaneY),
@@ -776,9 +787,12 @@ public sealed class DrawioExporter
         return $"{shape}fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};shadow={(style.Shadow ? 1 : 0)};{style.ExtraStyle}";
     }
 
-    private static string BuildConnectorStyle(ConnectorStyle style)
+    private static string BuildConnectorStyle(ConnectorStyle style, Rect source, Rect target)
     {
-        return $"edgeStyle=orthogonalEdgeStyle;rounded={(style.Rounded ? 1 : 0)};orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};";
+        var targetIsBelowSource = target.Y >= source.Bottom;
+        var exitY = targetIsBelowSource ? "1" : "0";
+        var entryY = targetIsBelowSource ? "0" : "1";
+        return $"edgeStyle=orthogonalEdgeStyle;rounded={(style.Rounded ? 1 : 0)};orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY={exitY};exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY={entryY};entryDx=0;entryDy=0;entryPerimeter=0;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};";
     }
 
     private static bool TryFindOverlappingRect(Rect rect, List<Rect> candidates, out Rect overlap)

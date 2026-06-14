@@ -127,7 +127,7 @@ public sealed class RoslynDependencyAnalyzer
 
                     sourceNode = ResolveVisibleNode(sourceNode, implementedInterfaceNodes);
 
-                    foreach (var dependency in CollectDependencies(declaration, model, cancellationToken))
+                    foreach (var dependency in CollectConstructorDependencies(declaration, model, cancellationToken))
                     {
                         if (SymbolEqualityComparer.Default.Equals(dependency, sourceSymbol))
                         {
@@ -209,7 +209,7 @@ public sealed class RoslynDependencyAnalyzer
         }
     }
 
-    private static IEnumerable<INamedTypeSymbol> CollectDependencies(
+    private static IEnumerable<INamedTypeSymbol> CollectConstructorDependencies(
         TypeDeclarationSyntax declaration,
         SemanticModel model,
         CancellationToken cancellationToken)
@@ -217,23 +217,12 @@ public sealed class RoslynDependencyAnalyzer
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var ordered = new List<INamedTypeSymbol>();
 
-        foreach (var baseType in declaration.BaseList?.Types ?? Enumerable.Empty<BaseTypeSyntax>())
+        foreach (var constructor in declaration.Members.OfType<ConstructorDeclarationSyntax>())
         {
-            AddType(model.GetTypeInfo(baseType.Type, cancellationToken).Type);
-        }
-
-        foreach (var node in declaration.DescendantNodes())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            switch (node)
+            foreach (var parameter in constructor.ParameterList.Parameters)
             {
-                case ObjectCreationExpressionSyntax creation:
-                    AddType(model.GetTypeInfo(creation, cancellationToken).Type);
-                    break;
-                case TypeSyntax typeSyntax:
-                    AddType(model.GetTypeInfo(typeSyntax, cancellationToken).Type);
-                    break;
+                cancellationToken.ThrowIfCancellationRequested();
+                AddType(model.GetTypeInfo(parameter.Type!, cancellationToken).Type);
             }
         }
 

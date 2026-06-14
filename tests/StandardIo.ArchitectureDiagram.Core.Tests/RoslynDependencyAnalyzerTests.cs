@@ -57,7 +57,7 @@ public sealed class RoslynDependencyAnalyzerTests
                 "Api",
                 LanguageNames.CSharp,
                 metadataReferences: BasicReferences()))
-            .AddDocument(DocumentId.CreateNewId(projectId), "Controller.cs", SourceText.From("using System.Text.Json; namespace Api { public class HomeController { public JsonDocument? Document { get; set; } } }"));
+            .AddDocument(DocumentId.CreateNewId(projectId), "Controller.cs", SourceText.From("using System.Text.Json; namespace Api { public class HomeController { public HomeController(JsonDocument document) {} } }"));
 
         var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
 
@@ -96,6 +96,50 @@ public sealed class RoslynDependencyAnalyzerTests
 
         Assert.DoesNotContain(graph.ExternalDependencies, e => e.AssemblyName.StartsWith("System"));
         Assert.DoesNotContain(graph.ExternalDependencies, e => e.AssemblyName.StartsWith("Microsoft"));
+    }
+
+    [Fact]
+    public async Task Analyze_ignores_base_types_and_method_body_types()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class EntityBase {}
+                    public class MethodOnlyDependency {}
+                    public class ConstructorDependency {}
+
+                    public class HomeController : EntityBase
+                    {
+                        public HomeController(ConstructorDependency dependency) {}
+
+                        public MethodOnlyDependency Build()
+                        {
+                            return new MethodOnlyDependency();
+                        }
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var controller = project.Types.Single(t => t.Name == "HomeController");
+        var constructorDependency = project.Types.Single(t => t.Name == "ConstructorDependency");
+        var entityBase = project.Types.Single(t => t.Name == "EntityBase");
+        var methodOnlyDependency = project.Types.Single(t => t.Name == "MethodOnlyDependency");
+
+        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == constructorDependency.Id);
+        Assert.DoesNotContain(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == entityBase.Id);
+        Assert.DoesNotContain(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == methodOnlyDependency.Id);
     }
 
     [Fact]
