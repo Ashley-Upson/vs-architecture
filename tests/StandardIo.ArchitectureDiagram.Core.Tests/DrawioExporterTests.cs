@@ -527,16 +527,16 @@ public sealed class DrawioExporterTests
             StyleDouble(edge2, "exitX"),
             StyleDouble(edge3, "exitX")
         };
-        var firstLaneYs = new[]
+        var horizontalLaneYs = new[]
         {
-            FirstPointY(edge1),
-            FirstPointY(edge2),
-            FirstPointY(edge3)
+            PointY(edge1, 1),
+            PointY(edge2, 1),
+            PointY(edge3, 1)
         };
 
         Assert.Equal(3, exitXs.Distinct().Count());
-        Assert.Equal(3, firstLaneYs.Distinct().Count());
-        Assert.True(firstLaneYs.OrderBy(y => y).Zip(firstLaneYs.OrderBy(y => y).Skip(1), (left, right) => right - left).All(delta => delta >= 10));
+        Assert.Equal(3, horizontalLaneYs.Distinct().Count());
+        Assert.True(horizontalLaneYs.OrderBy(y => y).Zip(horizontalLaneYs.OrderBy(y => y).Skip(1), (left, right) => right - left).All(delta => delta >= 5));
     }
 
     [Fact]
@@ -567,6 +567,7 @@ public sealed class DrawioExporterTests
         Assert.Equal("0", StyleValue(edge, "entryY"));
         Assert.True(FirstPointY(edge) > AbsoluteBottom(document, "type_bottom"));
         Assert.True(LastPointY(edge) < AbsoluteY(document, "type_top"));
+        Assert.DoesNotContain(RouteSegments(edge), segment => SegmentIntersects(segment, AbsoluteRect(document, "type_middle")));
     }
 
     [Fact]
@@ -590,7 +591,7 @@ public sealed class DrawioExporterTests
             edges);
 
         var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
-        var expectedWidth = 40 * 10 + 20;
+        var expectedWidth = 40 * 5 + 20;
 
         Assert.True(Geometry(document, "type_source", "width") >= expectedWidth);
         Assert.True(Geometry(document, "type_source", "width") > settings.Layout.NodeWidth);
@@ -796,6 +797,21 @@ public sealed class DrawioExporterTests
             Geometry(document, id, "height"));
     }
 
+    private static RectInfo AbsoluteRect(XDocument document, string id)
+    {
+        var cell = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == id);
+        var x = Geometry(document, id, "x");
+        var y = Geometry(document, id, "y");
+        var parentId = (string?)cell.Attribute("parent");
+        if (!string.IsNullOrWhiteSpace(parentId) && parentId != "1")
+        {
+            x += Geometry(document, parentId, "x");
+            y += Geometry(document, parentId, "y");
+        }
+
+        return new RectInfo(x, y, Geometry(document, id, "width"), Geometry(document, id, "height"));
+    }
+
     private static int Geometry(XDocument document, string id, string attributeName)
     {
         var cell = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == id);
@@ -825,6 +841,47 @@ public sealed class DrawioExporterTests
         return int.Parse((string)point.Attribute("y")!);
     }
 
+    private static int PointY(XElement edge, int index)
+    {
+        var point = edge.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint").ElementAt(index);
+        return int.Parse((string)point.Attribute("y")!);
+    }
+
+    private static IEnumerable<SegmentInfo> RouteSegments(XElement edge)
+    {
+        var points = edge.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint")
+            .Select(p => new PointInfo(
+                int.Parse((string)p.Attribute("x")!),
+                int.Parse((string)p.Attribute("y")!)))
+            .ToArray();
+
+        for (var i = 0; i < points.Length - 1; i++)
+        {
+            yield return new SegmentInfo(points[i], points[i + 1]);
+        }
+    }
+
+    private static bool SegmentIntersects(SegmentInfo segment, RectInfo rect)
+    {
+        if (segment.Start.X == segment.End.X)
+        {
+            return segment.Start.X >= rect.X &&
+                segment.Start.X <= rect.X + rect.Width &&
+                Math.Max(segment.Start.Y, segment.End.Y) >= rect.Y &&
+                Math.Min(segment.Start.Y, segment.End.Y) <= rect.Y + rect.Height;
+        }
+
+        if (segment.Start.Y == segment.End.Y)
+        {
+            return segment.Start.Y >= rect.Y &&
+                segment.Start.Y <= rect.Y + rect.Height &&
+                Math.Max(segment.Start.X, segment.End.X) >= rect.X &&
+                Math.Min(segment.Start.X, segment.End.X) <= rect.X + rect.Width;
+        }
+
+        return false;
+    }
+
     private static string StyleValue(XElement edge, string key)
     {
         var style = (string)edge.Attribute("style")!;
@@ -835,4 +892,6 @@ public sealed class DrawioExporterTests
     }
 
     private readonly record struct RectInfo(int X, int Y, int Width, int Height);
+    private readonly record struct PointInfo(int X, int Y);
+    private readonly record struct SegmentInfo(PointInfo Start, PointInfo End);
 }
