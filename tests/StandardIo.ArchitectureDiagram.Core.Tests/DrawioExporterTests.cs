@@ -228,6 +228,40 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_lays_out_multiple_roots_as_separate_dependency_groups()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_coordination_a", "project_a", "OrderCoordinationService", "App.Services.Coordination.OrderCoordinationService", "Class"),
+                    new TypeNode("type_orchestration_a", "project_a", "OrderOrchestrationService", "App.Services.Orchestration.OrderOrchestrationService", "Class"),
+                    new TypeNode("type_processing_a", "project_a", "OrderProcessingService", "App.Services.Processing.OrderProcessingService", "Class"),
+                    new TypeNode("type_coordination_b", "project_a", "PaymentCoordinationService", "App.Services.Coordination.PaymentCoordinationService", "Class"),
+                    new TypeNode("type_orchestration_b", "project_a", "PaymentOrchestrationService", "App.Services.Orchestration.PaymentOrchestrationService", "Class"),
+                    new TypeNode("type_processing_b", "project_a", "PaymentProcessingService", "App.Services.Processing.PaymentProcessingService", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_coordination_a", "type_orchestration_a", "internal"),
+                new DependencyEdge("edge_2", "type_orchestration_a", "type_processing_a", "internal"),
+                new DependencyEdge("edge_3", "type_coordination_b", "type_orchestration_b", "internal"),
+                new DependencyEdge("edge_4", "type_orchestration_b", "type_processing_b", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var expectedGroupGap = settings.Layout.NodeWidth + settings.Layout.HorizontalSpacing;
+
+        Assert.Equal(CenterX(document, "type_processing_a"), CenterX(document, "type_coordination_a"));
+        Assert.Equal(CenterX(document, "type_processing_b"), CenterX(document, "type_coordination_b"));
+        Assert.True(X(document, "type_coordination_b") - X(document, "type_coordination_a") > expectedGroupGap);
+    }
+
+    [Fact]
     public void Export_starts_dependent_project_nodes_below_the_depending_layer()
     {
         var graph = new ArchitectureGraph(

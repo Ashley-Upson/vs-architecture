@@ -182,14 +182,13 @@ public sealed class DrawioExporter
 
                 foreach (var layerGroup in projectLayout.Layers)
                 {
-                    var y = SafeAdd(
-                        originTop,
-                        SafeMultiply(layerGroup.Depth, layout.NodeHeight + layout.VerticalSpacing),
-                        rowVerticalOffset);
-
                     foreach (var node in layerGroup.Nodes)
                     {
                         var x = SafeAdd(projectLeft, layout.ContainerPadding, node.X);
+                        var y = SafeAdd(
+                            originTop,
+                            SafeMultiply(node.Depth, layout.NodeHeight + layout.VerticalSpacing),
+                            rowVerticalOffset);
                         result[node.Type.Id] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
                     }
                 }
@@ -246,69 +245,105 @@ public sealed class DrawioExporter
         LayoutSettings layout)
     {
         var projectTypeIds = new HashSet<string>(projectTypes.Select(t => t.Id));
-        var relativePositions = new Dictionary<string, int>();
-        var layers = projectTypes
-            .GroupBy(t => depths.TryGetValue(t.Id, out var depth) ? depth : 0)
-            .OrderByDescending(g => g.Key)
+        var projectTypeOrder = projectTypes
+            .Select((type, index) => new { type.Id, index })
+            .ToDictionary(x => x.Id, x => x.index);
+        var incoming = new HashSet<string>(outgoing
+            .SelectMany(kv => kv.Value
+                .Where(projectTypeIds.Contains)
+                .Select(targetId => new { SourceId = kv.Key, TargetId = targetId }))
+            .Where(edge => projectTypeIds.Contains(edge.SourceId))
+            .Select(edge => edge.TargetId));
+        var roots = projectTypes
+            .Where(t => !incoming.Contains(t.Id))
+            .OrderBy(t => depths.TryGetValue(t.Id, out var depth) ? depth : 0)
+            .ThenBy(t => projectTypeOrder[t.Id])
             .ToList();
+        var assigned = new HashSet<string>();
+        var positionedNodes = new List<PositionedNode>();
+        var nextGroupX = 0;
+        var groupSpacing = SafeMultiply(layout.HorizontalSpacing, 2);
 
-        foreach (var layerGroup in layers)
+        foreach (var root in roots.Concat(projectTypes.Where(t => !assigned.Contains(t.Id))))
         {
-            var layerNodes = layerGroup.ToList();
-            var desiredPositions = new Dictionary<string, int>();
-            foreach (var node in layerNodes)
+            if (assigned.Contains(root.Id))
             {
-                var childCenters = outgoing.TryGetValue(node.Id, out var targets)
-                    ? targets
-                        .Where(targetId => projectTypeIds.Contains(targetId) &&
-                            depths.TryGetValue(targetId, out var targetDepth) &&
-                            targetDepth > layerGroup.Key &&
-                            relativePositions.ContainsKey(targetId))
-                        .Select(targetId => SafeAdd(relativePositions[targetId], layout.NodeWidth / 2))
-                        .ToList()
-                    : new List<int>();
-
-                desiredPositions[node.Id] = childCenters.Count == 0
-                    ? int.MinValue
-                    : SafeSubtract((int)childCenters.Average(), layout.NodeWidth / 2);
+                continue;
             }
 
-            var nextX = 0;
-            foreach (var node in layerNodes)
-            {
-                var desiredX = desiredPositions[node.Id] == int.MinValue
-                    ? nextX
-                    : desiredPositions[node.Id];
-                var x = System.Math.Max(desiredX, nextX);
-                relativePositions[node.Id] = x;
-                nextX = SafeAdd(x, layout.NodeWidth, layout.HorizontalSpacing);
-            }
+            var rootDepth = depths.TryGetValue(root.Id, out var depth) ? depth : 0;
+            var group = BuildSubtree(root, rootDepth, new HashSet<string>());
+            positionedNodes.AddRange(group.Nodes.Select(n => n with { X = SafeAdd(n.X, nextGroupX) }));
+            nextGroupX = SafeAdd(nextGroupX, group.Width, groupSpacing);
         }
 
-        var minX = relativePositions.Values.DefaultIfEmpty(0).Min();
+        var minX = positionedNodes.Select(n => n.X).DefaultIfEmpty(0).Min();
         if (minX != 0)
         {
-            foreach (var id in relativePositions.Keys.ToList())
-            {
-                relativePositions[id] = SafeSubtract(relativePositions[id], minX);
-            }
+            positionedNodes = positionedNodes
+                .Select(n => n with { X = SafeSubtract(n.X, minX) })
+                .ToList();
         }
 
-        var positionedLayers = projectTypes
-            .GroupBy(t => depths.TryGetValue(t.Id, out var depth) ? depth : 0)
+        var positionedLayers = positionedNodes
+            .GroupBy(n => n.Depth)
             .OrderBy(g => g.Key)
-            .Select(g => new ProjectLayer(
-                g.Key,
-                g.Select(t => new PositionedNode(t, relativePositions[t.Id]))
-                    .OrderBy(n => n.X)
-                    .ToList()))
+            .Select(g => new ProjectLayer(g.Key, g.OrderBy(n => n.X).ToList()))
             .ToList();
         var width = SafeAdd(
             SafeMultiply(layout.ContainerPadding, 2),
-            relativePositions.Values.DefaultIfEmpty(0).Max(),
+            positionedNodes.Select(n => n.X).DefaultIfEmpty(0).Max(),
             layout.NodeWidth);
 
         return new ProjectLayout(project, positionedLayers, width);
+
+        SubtreeLayout BuildSubtree(TypeNode node, int depth, HashSet<string> active)
+        {
+            assigned.Add(node.Id);
+            active.Add(node.Id);
+
+            var childLayouts = outgoing.TryGetValue(node.Id, out var targets)
+                ? targets
+                    .Where(projectTypeIds.Contains)
+                    .Where(targetId =>
+                        depths.TryGetValue(targetId, out var targetDepth) &&
+                        depths.TryGetValue(node.Id, out var sourceDepth) &&
+                        targetDepth > sourceDepth)
+                    .Where(targetId => !assigned.Contains(targetId))
+                    .Where(targetId => !active.Contains(targetId))
+                    .Select(targetId => BuildSubtree(
+                        projectTypes[projectTypeOrder[targetId]],
+                        SafeAdd(depth, 1),
+                        new HashSet<string>(active)))
+                    .ToList()
+                : new List<SubtreeLayout>();
+            active.Remove(node.Id);
+
+            if (childLayouts.Count == 0)
+            {
+                return new SubtreeLayout(
+                    layout.NodeWidth,
+                    new List<PositionedNode> { new(node, 0, depth) });
+            }
+
+            var childSpan = SafeAdd(
+                childLayouts.Sum(child => child.Width),
+                SafeMultiply(System.Math.Max(0, childLayouts.Count - 1), layout.HorizontalSpacing));
+            var width = System.Math.Max(layout.NodeWidth, childSpan);
+            var childX = SafeSubtract(width, childSpan) / 2;
+            var nodes = new List<PositionedNode>
+            {
+                new(node, SafeSubtract(width, layout.NodeWidth) / 2, depth)
+            };
+
+            foreach (var child in childLayouts)
+            {
+                nodes.AddRange(child.Nodes.Select(n => n with { X = SafeAdd(n.X, childX) }));
+                childX = SafeAdd(childX, child.Width, layout.HorizontalSpacing);
+            }
+
+            return new SubtreeLayout(width, nodes);
+        }
     }
 
     private static XElement BuildEdgeGeometry(
@@ -892,5 +927,6 @@ public sealed class DrawioExporter
     }
 
     private sealed record ProjectLayer(int Depth, List<PositionedNode> Nodes);
-    private sealed record PositionedNode(TypeNode Type, int X);
+    private sealed record PositionedNode(TypeNode Type, int X, int Depth);
+    private sealed record SubtreeLayout(int Width, List<PositionedNode> Nodes);
 }
