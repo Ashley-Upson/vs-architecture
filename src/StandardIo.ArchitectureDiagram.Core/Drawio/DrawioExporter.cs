@@ -10,7 +10,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Drawio;
 public sealed class DrawioExporter
 {
     private const int MaxGeometryValue = 1_000_000_000;
-    private const int EdgeSpacing = 5;
+    private const int EdgeSpacing = 10;
     private const int EdgePadding = 10;
     private const int ApproximateTextWidth = 8;
 
@@ -142,6 +142,7 @@ public sealed class DrawioExporter
                     .OrderBy(id => nodeOrder.TryGetValue(id, out var index) ? index : int.MaxValue)
                     .ToList());
         var depths = CalculateDepths(graph, types, nodeIds, orderedNodeIds, outgoing);
+        var depthOffsets = CalculateDepthOffsets(graph.Edges, depths, nodeIds, layout);
         var originTop = layout.ContainerPadding * 2 + 40;
         var originLeft = layout.ContainerPadding * 2;
         var projectLayouts = new List<ProjectLayout>();
@@ -166,7 +167,7 @@ public sealed class DrawioExporter
             .GroupBy(p => p.FirstDepth)
             .OrderBy(g => g.Key))
         {
-            var naturalRowTop = projectRow.Min(p => p.NaturalTop(originTop, layout));
+            var naturalRowTop = projectRow.Min(p => p.NaturalTop(originTop, layout, depthOffsets));
             var rowTop = previousProjectRowBottom == int.MinValue
                 ? naturalRowTop
                 : System.Math.Max(naturalRowTop, SafeAdd(previousProjectRowBottom, layout.VerticalSpacing));
@@ -176,8 +177,8 @@ public sealed class DrawioExporter
 
             foreach (var projectLayout in projectRow)
             {
-                var projectTop = SafeAdd(projectLayout.NaturalTop(originTop, layout), rowVerticalOffset);
-                var projectBottom = SafeAdd(projectLayout.NaturalBottom(originTop, layout), rowVerticalOffset);
+                var projectTop = SafeAdd(projectLayout.NaturalTop(originTop, layout, depthOffsets), rowVerticalOffset);
+                var projectBottom = SafeAdd(projectLayout.NaturalBottom(originTop, layout, depthOffsets), rowVerticalOffset);
                 result[projectLayout.Project.Id] = new Rect(
                     projectLeft,
                     projectTop,
@@ -191,8 +192,7 @@ public sealed class DrawioExporter
                     {
                         var x = SafeAdd(projectLeft, layout.ContainerPadding, node.X);
                         var y = SafeAdd(
-                            originTop,
-                            SafeMultiply(node.Depth, layout.NodeHeight + layout.VerticalSpacing),
+                            NodeTop(originTop, node.Depth, layout, depthOffsets),
                             rowVerticalOffset);
                         result[node.Type.Id] = new Rect(x, y, node.Width, layout.NodeHeight);
                     }
@@ -217,8 +217,7 @@ public sealed class DrawioExporter
                 .ToList();
             var layer = externalLayer.ToList();
             var y = SafeAdd(
-                originTop,
-                SafeMultiply(externalLayer.Key, layout.NodeHeight + layout.VerticalSpacing),
+                NodeTop(originTop, externalLayer.Key, layout, depthOffsets),
                 rowVerticalOffsets.TryGetValue(externalLayer.Key, out var rowOffset) ? rowOffset : 0);
             var externalLeft = rowNextLeft.TryGetValue(externalLayer.Key, out var rowLeft)
                 ? rowLeft
@@ -402,31 +401,31 @@ public sealed class DrawioExporter
         List<Rect> obstacles,
         LayoutSettings layout)
     {
-        var targetIsBelowSource = route.SourcePoint.Y <= route.TargetPoint.Y;
         var sourcePoint = route.SourcePoint;
         var targetPoint = route.TargetPoint;
         var gap = System.Math.Max(20, layout.VerticalSpacing / 2);
-        var midY = targetIsBelowSource
-            ? SafeAdd(source.Bottom, System.Math.Max(gap, SafeSubtract(target.Y, source.Bottom) / 2))
-            : SafeSubtract(source.Y, System.Math.Max(gap, SafeSubtract(source.Y, target.Bottom) / 2));
-        midY = SafeAdd(midY, route.LaneOffset);
-        var directPoints = new List<Point>
-        {
-            new(sourcePoint.X, midY),
-            new(targetPoint.X, midY)
-        };
+        var sourceLaneY = System.Math.Max(
+            SafeAdd(source.Bottom, EdgePadding),
+            SafeAdd(source.Bottom, gap, route.LaneOffset));
+        var targetLaneY = System.Math.Min(
+            SafeSubtract(target.Y, EdgePadding),
+            SafeAdd(SafeSubtract(target.Y, gap), route.LaneOffset));
 
-        if (!RouteIntersects(sourcePoint, targetPoint, directPoints, obstacles))
+        if (sourceLaneY < targetLaneY)
         {
-            return directPoints;
+            var midY = SafeAdd(sourceLaneY, SafeSubtract(targetLaneY, sourceLaneY) / 2);
+            var directPoints = new List<Point>
+            {
+                new(sourcePoint.X, midY),
+                new(targetPoint.X, midY)
+            };
+
+            if (!RouteIntersects(sourcePoint, targetPoint, directPoints, obstacles))
+            {
+                return directPoints;
+            }
         }
 
-        var sourceLaneY = targetIsBelowSource
-            ? SafeAdd(source.Bottom, gap, route.LaneOffset)
-            : SafeSubtract(source.Y, SafeSubtract(gap, route.LaneOffset));
-        var targetLaneY = targetIsBelowSource
-            ? SafeSubtract(target.Y, SafeSubtract(gap, route.LaneOffset))
-            : SafeAdd(target.Bottom, gap, route.LaneOffset);
         foreach (var laneX in CandidateLaneXs(source, target, obstacles, layout)
             .Distinct()
             .OrderBy(x => System.Math.Abs(x - ((source.CenterX + target.CenterX) / 2))))
@@ -469,8 +468,12 @@ public sealed class DrawioExporter
         var minimumGap = System.Math.Max(12, layout.HorizontalSpacing / 4);
         var bandTop = System.Math.Min(source.Y, target.Y);
         var bandBottom = System.Math.Max(source.Bottom, target.Bottom);
-        yield return source.CenterX;
-        yield return target.CenterX;
+        yield return SafeSubtract(System.Math.Min(source.X, target.X), minimumGap);
+        yield return SafeAdd(System.Math.Max(source.Right, target.Right), minimumGap);
+        yield return SafeSubtract(source.X, minimumGap);
+        yield return SafeAdd(source.Right, minimumGap);
+        yield return SafeSubtract(target.X, minimumGap);
+        yield return SafeAdd(target.Right, minimumGap);
 
         foreach (var obstacle in obstacles.Where(o => o.Bottom >= bandTop && o.Y <= bandBottom))
         {
@@ -648,6 +651,73 @@ public sealed class DrawioExporter
                 : 0;
             return System.Math.Max(layout.NodeWidth, System.Math.Max(textWidth, portWidth));
         }
+    }
+
+    private static Dictionary<int, int> CalculateDepthOffsets(
+        IReadOnlyList<DependencyEdge> edges,
+        Dictionary<string, int> depths,
+        HashSet<string> nodeIds,
+        LayoutSettings layout)
+    {
+        var bandCounts = new Dictionary<int, int>();
+        foreach (var edge in edges.Where(e => nodeIds.Contains(e.SourceId) && nodeIds.Contains(e.TargetId)))
+        {
+            if (!depths.TryGetValue(edge.SourceId, out var sourceDepth) ||
+                !depths.TryGetValue(edge.TargetId, out var targetDepth))
+            {
+                continue;
+            }
+
+            var upperDepth = System.Math.Min(sourceDepth, targetDepth);
+            var lowerDepth = System.Math.Max(sourceDepth, targetDepth);
+            if (upperDepth == lowerDepth)
+            {
+                if (!bandCounts.ContainsKey(upperDepth))
+                {
+                    bandCounts[upperDepth] = 0;
+                }
+
+                bandCounts[upperDepth]++;
+                continue;
+            }
+
+            for (var depth = upperDepth; depth < lowerDepth; depth++)
+            {
+                if (!bandCounts.ContainsKey(depth))
+                {
+                    bandCounts[depth] = 0;
+                }
+
+                bandCounts[depth]++;
+            }
+        }
+
+        var maxDepth = depths.Values.DefaultIfEmpty(0).Max();
+        var offsets = new Dictionary<int, int> { [0] = 0 };
+        var cumulativeOffset = 0;
+        for (var depth = 0; depth <= maxDepth; depth++)
+        {
+            var requiredBandHeight = bandCounts.TryGetValue(depth, out var count)
+                ? SafeAdd(SafeMultiply(count, EdgeSpacing), EdgePadding * 4)
+                : 0;
+            var extraBandHeight = System.Math.Max(0, SafeSubtract(requiredBandHeight, layout.VerticalSpacing));
+            cumulativeOffset = SafeAdd(cumulativeOffset, extraBandHeight);
+            offsets[SafeAdd(depth, 1)] = cumulativeOffset;
+        }
+
+        return offsets;
+    }
+
+    private static int NodeTop(
+        int originTop,
+        int depth,
+        LayoutSettings layout,
+        Dictionary<int, int> depthOffsets)
+    {
+        return SafeAdd(
+            originTop,
+            SafeMultiply(depth, layout.NodeHeight + layout.VerticalSpacing),
+            depthOffsets.TryGetValue(depth, out var offset) ? offset : 0);
     }
 
     private static Dictionary<string, int> CalculatePortOffsets(Dictionary<string, List<DependencyEdge>> groups)
@@ -1086,18 +1156,23 @@ public sealed class DrawioExporter
         public int FirstDepth { get; } = Layers.Min(l => l.Depth);
         public int LastDepth { get; } = Layers.Max(l => l.Depth);
 
-        public int NaturalTop(int originTop, LayoutSettings layout)
+        public int NaturalTop(
+            int originTop,
+            LayoutSettings layout,
+            Dictionary<int, int> depthOffsets)
         {
             return SafeSubtract(
-                SafeAdd(originTop, SafeMultiply(FirstDepth, layout.NodeHeight + layout.VerticalSpacing)),
+                NodeTop(originTop, FirstDepth, layout, depthOffsets),
                 layout.ContainerPadding);
         }
 
-        public int NaturalBottom(int originTop, LayoutSettings layout)
+        public int NaturalBottom(
+            int originTop,
+            LayoutSettings layout,
+            Dictionary<int, int> depthOffsets)
         {
             return SafeAdd(
-                originTop,
-                SafeMultiply(LastDepth, layout.NodeHeight + layout.VerticalSpacing),
+                NodeTop(originTop, LastDepth, layout, depthOffsets),
                 layout.NodeHeight,
                 layout.ContainerPadding);
         }

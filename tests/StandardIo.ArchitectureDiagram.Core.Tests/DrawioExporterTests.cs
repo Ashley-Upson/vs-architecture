@@ -479,6 +479,7 @@ public sealed class DrawioExporterTests
 
         Assert.Equal(3, exitXs.Distinct().Count());
         Assert.Equal(3, firstLaneYs.Distinct().Count());
+        Assert.True(firstLaneYs.OrderBy(y => y).Zip(firstLaneYs.OrderBy(y => y).Skip(1), (left, right) => right - left).All(delta => delta >= 10));
     }
 
     [Fact]
@@ -507,6 +508,8 @@ public sealed class DrawioExporterTests
 
         Assert.Equal("1", StyleValue(edge, "exitY"));
         Assert.Equal("0", StyleValue(edge, "entryY"));
+        Assert.True(FirstPointY(edge) > AbsoluteBottom(document, "type_bottom"));
+        Assert.True(LastPointY(edge) < AbsoluteY(document, "type_top"));
     }
 
     [Fact]
@@ -530,10 +533,11 @@ public sealed class DrawioExporterTests
             edges);
 
         var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
-        var expectedWidth = 40 * 5 + 20;
+        var expectedWidth = 40 * 10 + 20;
 
         Assert.True(Geometry(document, "type_source", "width") >= expectedWidth);
         Assert.True(Geometry(document, "type_source", "width") > settings.Layout.NodeWidth);
+        Assert.True(Y(document, "type_target_0") - Y(document, "type_source") > settings.Layout.NodeHeight + settings.Layout.VerticalSpacing);
     }
 
     [Fact]
@@ -681,6 +685,11 @@ public sealed class DrawioExporterTests
         return y + Geometry(document, parentId, "y");
     }
 
+    private static int AbsoluteBottom(XDocument document, string id)
+    {
+        return AbsoluteY(document, id) + Geometry(document, id, "height");
+    }
+
     private static int CenterX(XDocument document, string id)
     {
         return X(document, id) + Geometry(document, id, "width") / 2;
@@ -723,6 +732,12 @@ public sealed class DrawioExporterTests
     private static int FirstPointY(XElement edge)
     {
         var point = edge.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint").First();
+        return int.Parse((string)point.Attribute("y")!);
+    }
+
+    private static int LastPointY(XElement edge)
+    {
+        var point = edge.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint").Last();
         return int.Parse((string)point.Attribute("y")!);
     }
 
