@@ -1,6 +1,7 @@
 using StandardIo.ArchitectureDiagram.Core.Drawio;
 using StandardIo.ArchitectureDiagram.Core.Graph;
 using StandardIo.ArchitectureDiagram.Core.Settings;
+using System.Globalization;
 using System.Xml.Linq;
 using Xunit;
 
@@ -438,6 +439,49 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_separates_edge_ports_on_same_node_side()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_controller", "project_api", "Controller", "Api.Controller", "Class"),
+                    new TypeNode("type_cache", "project_api", "Cache", "Api.Cache", "Class"),
+                    new TypeNode("type_repository", "project_api", "Repository", "Api.Repository", "Class"),
+                    new TypeNode("type_service", "project_api", "Service", "Api.Service", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_controller", "type_cache", "internal"),
+                new DependencyEdge("edge_2", "type_controller", "type_repository", "internal"),
+                new DependencyEdge("edge_3", "type_controller", "type_service", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+        var edge1 = Edge(document, "edge_1");
+        var edge2 = Edge(document, "edge_2");
+        var edge3 = Edge(document, "edge_3");
+        var exitXs = new[]
+        {
+            StyleDouble(edge1, "exitX"),
+            StyleDouble(edge2, "exitX"),
+            StyleDouble(edge3, "exitX")
+        };
+        var firstLaneYs = new[]
+        {
+            FirstPointY(edge1),
+            FirstPointY(edge2),
+            FirstPointY(edge3)
+        };
+
+        Assert.Equal(3, exitXs.Distinct().Count());
+        Assert.Equal(3, firstLaneYs.Distinct().Count());
+    }
+
+    [Fact]
     public void Export_routes_upward_edges_to_target_bottom()
     {
         var graph = new ArchitectureGraph(
@@ -615,6 +659,31 @@ public sealed class DrawioExporterTests
         var cell = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == id);
         var geometry = cell.Element("mxGeometry")!;
         return int.Parse((string)geometry.Attribute(attributeName)!);
+    }
+
+    private static XElement Edge(XDocument document, string id)
+    {
+        return document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == id);
+    }
+
+    private static double StyleDouble(XElement edge, string key)
+    {
+        return double.Parse(StyleValue(edge, key), CultureInfo.InvariantCulture);
+    }
+
+    private static int FirstPointY(XElement edge)
+    {
+        var point = edge.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint").First();
+        return int.Parse((string)point.Attribute("y")!);
+    }
+
+    private static string StyleValue(XElement edge, string key)
+    {
+        var style = (string)edge.Attribute("style")!;
+        var prefix = key + "=";
+        return style.Split(';')
+            .Single(part => part.StartsWith(prefix, StringComparison.Ordinal))
+            .Substring(prefix.Length);
     }
 
     private readonly record struct RectInfo(int X, int Y, int Width, int Height);

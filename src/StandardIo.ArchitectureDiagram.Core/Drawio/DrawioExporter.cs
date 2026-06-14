@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Graph;
@@ -9,6 +10,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Drawio;
 public sealed class DrawioExporter
 {
     private const int MaxGeometryValue = 1_000_000_000;
+    private const int EdgeSpacing = 5;
 
     public string Export(ArchitectureGraph graph, DiagramSettings settings)
     {
@@ -72,19 +74,19 @@ public sealed class DrawioExporter
         var routeObstacleIds = new HashSet<string>(
             graph.Projects.SelectMany(p => p.Types.Select(t => t.Id))
                 .Concat(graph.ExternalDependencies.Select(e => e.Id)));
+        var edgeRoutes = BuildEdgeRoutes(graph.Edges, positions);
 
         foreach (var edge in graph.Edges)
         {
-            positions.TryGetValue(edge.SourceId, out var sourcePosition);
-            positions.TryGetValue(edge.TargetId, out var targetPosition);
+            edgeRoutes.TryGetValue(edge.Id, out var edgeRoute);
             root.Add(new XElement("mxCell",
                 new XAttribute("id", edge.Id),
-                new XAttribute("style", BuildConnectorStyle(settings.Connector, sourcePosition, targetPosition)),
+                new XAttribute("style", BuildConnectorStyle(settings.Connector, edgeRoute)),
                 new XAttribute("edge", "1"),
                 new XAttribute("parent", "1"),
                 new XAttribute("source", edge.SourceId),
                 new XAttribute("target", edge.TargetId),
-                BuildEdgeGeometry(edge, positions, routeObstacleIds, settings.Layout)));
+                BuildEdgeGeometry(edge, positions, edgeRoute, routeObstacleIds, settings.Layout)));
         }
 
         var model = new XElement("mxGraphModel",
@@ -349,6 +351,7 @@ public sealed class DrawioExporter
     private static XElement BuildEdgeGeometry(
         DependencyEdge edge,
         Dictionary<string, Rect> positions,
+        EdgeRoute route,
         HashSet<string> routeObstacleIds,
         LayoutSettings layout)
     {
@@ -368,7 +371,7 @@ public sealed class DrawioExporter
                 kv.Key != edge.TargetId)
             .Select(kv => kv.Value.Expand(8))
             .ToList();
-        var points = RouteEdge(source, target, obstacles, layout);
+        var points = RouteEdge(source, target, route, obstacles, layout);
         if (points.Count == 0)
         {
             return geometry;
@@ -386,20 +389,18 @@ public sealed class DrawioExporter
     private static List<Point> RouteEdge(
         Rect source,
         Rect target,
+        EdgeRoute route,
         List<Rect> obstacles,
         LayoutSettings layout)
     {
-        var targetIsBelowSource = target.Y >= source.Bottom;
-        var sourcePoint = targetIsBelowSource
-            ? new Point(source.CenterX, source.Bottom)
-            : new Point(source.CenterX, source.Y);
-        var targetPoint = targetIsBelowSource
-            ? new Point(target.CenterX, target.Y)
-            : new Point(target.CenterX, target.Bottom);
+        var targetIsBelowSource = route.SourcePoint.Y <= route.TargetPoint.Y;
+        var sourcePoint = route.SourcePoint;
+        var targetPoint = route.TargetPoint;
         var gap = System.Math.Max(20, layout.VerticalSpacing / 2);
         var midY = targetIsBelowSource
             ? SafeAdd(source.Bottom, System.Math.Max(gap, SafeSubtract(target.Y, source.Bottom) / 2))
             : SafeSubtract(source.Y, System.Math.Max(gap, SafeSubtract(source.Y, target.Bottom) / 2));
+        midY = SafeAdd(midY, route.LaneOffset);
         var directPoints = new List<Point>
         {
             new(sourcePoint.X, midY),
@@ -412,11 +413,11 @@ public sealed class DrawioExporter
         }
 
         var sourceLaneY = targetIsBelowSource
-            ? SafeAdd(source.Bottom, gap)
-            : SafeSubtract(source.Y, gap);
+            ? SafeAdd(source.Bottom, gap, route.LaneOffset)
+            : SafeSubtract(source.Y, SafeSubtract(gap, route.LaneOffset));
         var targetLaneY = targetIsBelowSource
-            ? SafeSubtract(target.Y, gap)
-            : SafeAdd(target.Bottom, gap);
+            ? SafeSubtract(target.Y, SafeSubtract(gap, route.LaneOffset))
+            : SafeAdd(target.Bottom, gap, route.LaneOffset);
         foreach (var laneX in CandidateLaneXs(source, target, obstacles, layout)
             .Distinct()
             .OrderBy(x => System.Math.Abs(x - ((source.CenterX + target.CenterX) / 2))))
@@ -508,6 +509,100 @@ public sealed class DrawioExporter
         }
 
         return false;
+    }
+
+    private static Dictionary<string, EdgeRoute> BuildEdgeRoutes(
+        IReadOnlyList<DependencyEdge> edges,
+        Dictionary<string, Rect> positions)
+    {
+        var sourceGroups = new Dictionary<string, List<DependencyEdge>>();
+        var targetGroups = new Dictionary<string, List<DependencyEdge>>();
+
+        foreach (var edge in edges)
+        {
+            if (!positions.TryGetValue(edge.SourceId, out var source) ||
+                !positions.TryGetValue(edge.TargetId, out var target))
+            {
+                continue;
+            }
+
+            var targetIsBelowSource = target.Y >= source.Bottom;
+            AddToGroup(sourceGroups, PortKey(edge.SourceId, targetIsBelowSource ? "bottom" : "top"), edge);
+            AddToGroup(targetGroups, PortKey(edge.TargetId, targetIsBelowSource ? "top" : "bottom"), edge);
+        }
+
+        var sourceOffsets = CalculatePortOffsets(sourceGroups);
+        var targetOffsets = CalculatePortOffsets(targetGroups);
+        var routes = new Dictionary<string, EdgeRoute>();
+        foreach (var edge in edges)
+        {
+            if (!positions.TryGetValue(edge.SourceId, out var source) ||
+                !positions.TryGetValue(edge.TargetId, out var target))
+            {
+                continue;
+            }
+
+            var targetIsBelowSource = target.Y >= source.Bottom;
+            var sourceOffset = sourceOffsets.TryGetValue(edge.Id, out var sourcePortOffset)
+                ? sourcePortOffset
+                : 0;
+            var targetOffset = targetOffsets.TryGetValue(edge.Id, out var targetPortOffset)
+                ? targetPortOffset
+                : 0;
+            var sourceLocalX = PortLocalX(source, sourceOffset);
+            var targetLocalX = PortLocalX(target, targetOffset);
+            var sourcePoint = new Point(SafeAdd(source.X, sourceLocalX), targetIsBelowSource ? source.Bottom : source.Y);
+            var targetPoint = new Point(SafeAdd(target.X, targetLocalX), targetIsBelowSource ? target.Y : target.Bottom);
+
+            routes[edge.Id] = new EdgeRoute(
+                sourcePoint,
+                targetPoint,
+                sourceLocalX / (double)source.Width,
+                targetLocalX / (double)target.Width,
+                targetIsBelowSource ? "1" : "0",
+                targetIsBelowSource ? "0" : "1",
+                sourceOffset);
+        }
+
+        return routes;
+
+        static void AddToGroup(Dictionary<string, List<DependencyEdge>> groups, string key, DependencyEdge edge)
+        {
+            if (!groups.TryGetValue(key, out var group))
+            {
+                group = new List<DependencyEdge>();
+                groups[key] = group;
+            }
+
+            group.Add(edge);
+        }
+
+        static string PortKey(string nodeId, string side)
+        {
+            return $"{nodeId}:{side}";
+        }
+    }
+
+    private static Dictionary<string, int> CalculatePortOffsets(Dictionary<string, List<DependencyEdge>> groups)
+    {
+        var offsets = new Dictionary<string, int>();
+        foreach (var group in groups.Values)
+        {
+            var start = -((group.Count - 1) * EdgeSpacing) / 2;
+            for (var i = 0; i < group.Count; i++)
+            {
+                offsets[group[i].Id] = SafeAdd(start, i * EdgeSpacing);
+            }
+        }
+
+        return offsets;
+    }
+
+    private static int PortLocalX(Rect node, int offset)
+    {
+        var min = System.Math.Min(EdgeSpacing, node.Width / 2);
+        var max = System.Math.Max(min, SafeSubtract(node.Width, min));
+        return System.Math.Min(max, System.Math.Max(min, SafeAdd(node.Width / 2, offset)));
     }
 
     private static Dictionary<string, int> CalculateDepths(
@@ -856,12 +951,19 @@ public sealed class DrawioExporter
         return $"{shape}fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};shadow={(style.Shadow ? 1 : 0)};{style.ExtraStyle}";
     }
 
-    private static string BuildConnectorStyle(ConnectorStyle style, Rect source, Rect target)
+    private static string BuildConnectorStyle(ConnectorStyle style, EdgeRoute route)
     {
-        var targetIsBelowSource = target.Y >= source.Bottom;
-        var exitY = targetIsBelowSource ? "1" : "0";
-        var entryY = targetIsBelowSource ? "0" : "1";
-        return $"edgeStyle=orthogonalEdgeStyle;rounded={(style.Rounded ? 1 : 0)};orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY={exitY};exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY={entryY};entryDx=0;entryDy=0;entryPerimeter=0;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};";
+        if (string.IsNullOrWhiteSpace(route.ExitY) || string.IsNullOrWhiteSpace(route.EntryY))
+        {
+            route = new EdgeRoute(default, default, 0.5, 0.5, "1", "0", 0);
+        }
+
+        return $"edgeStyle=orthogonalEdgeStyle;rounded={(style.Rounded ? 1 : 0)};orthogonalLoop=1;jettySize=auto;html=1;exitX={FormatRatio(route.ExitX)};exitY={route.ExitY};exitDx=0;exitDy=0;exitPerimeter=0;entryX={FormatRatio(route.EntryX)};entryY={route.EntryY};entryDx=0;entryDy=0;entryPerimeter=0;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};";
+    }
+
+    private static string FormatRatio(double value)
+    {
+        return value.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
     private static bool TryFindOverlappingRect(Rect rect, List<Rect> candidates, out Rect overlap)
@@ -904,6 +1006,14 @@ public sealed class DrawioExporter
     }
 
     private readonly record struct Point(int X, int Y);
+    private readonly record struct EdgeRoute(
+        Point SourcePoint,
+        Point TargetPoint,
+        double ExitX,
+        double EntryX,
+        string ExitY,
+        string EntryY,
+        int LaneOffset);
     private sealed record ProjectLayout(ProjectContainer Project, List<ProjectLayer> Layers, int Width)
     {
         public int FirstDepth { get; } = Layers.Min(l => l.Depth);
