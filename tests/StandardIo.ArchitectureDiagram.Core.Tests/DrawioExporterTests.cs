@@ -255,6 +255,37 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
+    public void Export_lays_out_disconnected_architectural_service_chains_hierarchically()
+    {
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_a", "App", new[]
+                {
+                    new TypeNode("type_coordination", "project_a", "TransactionCoordinationService", "App.Services.Coordination.TransactionCoordinationService", "Class"),
+                    new TypeNode("type_transaction_orchestration", "project_a", "TransactionOrchestrationService", "App.Services.Orchestration.TransactionOrchestrationService", "Class"),
+                    new TypeNode("type_remittance_orchestration", "project_a", "RemittanceAdviceOrchestrationService", "App.Services.Orchestration.RemittanceAdviceOrchestrationService", "Class"),
+                    new TypeNode("type_remittance_processing", "project_a", "RemittanceAdviceProcessingService", "App.Services.Processing.RemittanceAdviceProcessingService", "Class"),
+                    new TypeNode("type_remittance_service", "project_a", "RemittanceAdviceService", "App.Services.Foundation.RemittanceAdviceService", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_1", "type_coordination", "type_transaction_orchestration", "internal"),
+                new DependencyEdge("edge_2", "type_remittance_orchestration", "type_remittance_processing", "internal"),
+                new DependencyEdge("edge_3", "type_remittance_processing", "type_remittance_service", "internal")
+            });
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
+
+        Assert.True(Y(document, "type_remittance_orchestration") < Y(document, "type_remittance_processing"));
+        Assert.True(Y(document, "type_remittance_processing") < Y(document, "type_remittance_service"));
+        Assert.Equal(CenterX(document, "type_remittance_orchestration"), CenterX(document, "type_remittance_processing"));
+        Assert.Equal(CenterX(document, "type_remittance_processing"), CenterX(document, "type_remittance_service"));
+    }
+
+    [Fact]
     public void Export_lays_out_multiple_roots_as_separate_dependency_groups()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -319,8 +350,8 @@ public sealed class DrawioExporterTests
         var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
 
         Assert.True(AbsoluteY(document, "type_domain_service") > AbsoluteY(document, "type_worker"));
-        Assert.Equal(AbsoluteY(document, "type_domain_service"), AbsoluteY(document, "type_domain_helper"));
         Assert.True(AbsoluteY(document, "type_domain_helper") > AbsoluteY(document, "type_controller"));
+        Assert.False(Overlaps(Rect(document, "type_domain_service"), Rect(document, "type_domain_helper")));
     }
 
     [Fact]

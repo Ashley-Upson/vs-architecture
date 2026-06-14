@@ -778,6 +778,7 @@ public sealed class DrawioExporter
 
         var componentOutgoing = new Dictionary<int, List<int>>();
         var componentOutgoingSeen = new Dictionary<int, HashSet<int>>();
+        var componentIncoming = new Dictionary<int, HashSet<int>>();
         foreach (var edge in outgoing)
         {
             var sourceComponent = componentByNode[edge.Key];
@@ -800,6 +801,14 @@ public sealed class DrawioExporter
                 {
                     targets.Add(targetComponent);
                 }
+
+                if (!componentIncoming.TryGetValue(targetComponent, out var sources))
+                {
+                    sources = new HashSet<int>();
+                    componentIncoming[targetComponent] = sources;
+                }
+
+                sources.Add(sourceComponent);
             }
         }
 
@@ -859,14 +868,82 @@ public sealed class DrawioExporter
                     continue;
                 }
 
-                if (componentDepths.ContainsKey(targetComponent))
+                var nextDepth = SafeAdd(componentDepths[sourceComponent], 1);
+                if (componentDepths.TryGetValue(targetComponent, out var existingDepth) &&
+                    existingDepth >= nextDepth)
                 {
                     continue;
                 }
 
-                var nextDepth = SafeAdd(componentDepths[sourceComponent], 1);
                 componentDepths[targetComponent] = nextDepth;
                 queue.Enqueue(targetComponent);
+            }
+        }
+
+        var fallbackDepth = componentDepths.Count == 0 ? 0 : SafeAdd(componentDepths.Values.Max(), 1);
+        var unresolvedComponents = components
+            .Select((nodes, index) => new { nodes, index })
+            .Where(component => !componentDepths.ContainsKey(component.index))
+            .ToList();
+        var unresolvedComponentIds = new HashSet<int>(unresolvedComponents.Select(c => c.index));
+        var fallbackRoots = unresolvedComponents
+            .Where(component => !componentIncoming.TryGetValue(component.index, out var sources) ||
+                sources.All(source => !unresolvedComponentIds.Contains(source)))
+            .OrderBy(component => component.nodes
+                .Select(id => types.TryGetValue(id, out var type) ? ArchitecturalPriority(type) : int.MaxValue)
+                .DefaultIfEmpty(int.MaxValue)
+                .Min())
+            .ThenBy(component => component.nodes.Select(id => orderedNodeIds.IndexOf(id)).DefaultIfEmpty(int.MaxValue).Min())
+            .Select(component => component.index)
+            .ToList();
+
+        if (fallbackRoots.Count == 0)
+        {
+            fallbackRoots = unresolvedComponents
+                .Select(component => component.index)
+                .ToList();
+        }
+
+        foreach (var component in fallbackRoots)
+        {
+            if (componentDepths.ContainsKey(component))
+            {
+                continue;
+            }
+
+            var priorityDepth = components[component]
+                .Select(id => types.TryGetValue(id, out var type) ? ArchitecturalPriority(type) : int.MaxValue)
+                .Where(priority => priority != int.MaxValue)
+                .DefaultIfEmpty(fallbackDepth)
+                .Min();
+            componentDepths[component] = priorityDepth;
+            queue.Enqueue(component);
+
+            while (queue.Count > 0)
+            {
+                var sourceComponent = queue.Dequeue();
+                if (!componentOutgoing.TryGetValue(sourceComponent, out var targets))
+                {
+                    continue;
+                }
+
+                foreach (var targetComponent in targets)
+                {
+                    if (!unresolvedComponentIds.Contains(targetComponent))
+                    {
+                        continue;
+                    }
+
+                    var nextDepth = SafeAdd(componentDepths[sourceComponent], 1);
+                    if (componentDepths.TryGetValue(targetComponent, out var existingDepth) &&
+                        existingDepth >= nextDepth)
+                    {
+                        continue;
+                    }
+
+                    componentDepths[targetComponent] = nextDepth;
+                    queue.Enqueue(targetComponent);
+                }
             }
         }
 
@@ -879,7 +956,7 @@ public sealed class DrawioExporter
             }
         }
 
-        var fallbackDepth = componentDepths.Count == 0 ? 0 : SafeAdd(componentDepths.Values.Max(), 1);
+        fallbackDepth = componentDepths.Count == 0 ? 0 : SafeAdd(componentDepths.Values.Max(), 1);
         foreach (var project in graph.Projects)
         {
             var projectTypeIds = project.Types
@@ -957,6 +1034,11 @@ public sealed class DrawioExporter
         }
 
         if (text.Contains("Foundation"))
+        {
+            return 3;
+        }
+
+        if (type.Name.EndsWith("Service", System.StringComparison.Ordinal))
         {
             return 3;
         }
