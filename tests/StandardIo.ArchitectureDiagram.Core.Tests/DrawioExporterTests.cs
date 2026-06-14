@@ -482,7 +482,7 @@ public sealed class DrawioExporterTests
     }
 
     [Fact]
-    public void Export_routes_upward_edges_to_target_bottom()
+    public void Export_routes_all_edges_from_source_bottom_to_target_top()
     {
         var graph = new ArchitectureGraph(
             new[]
@@ -504,10 +504,59 @@ public sealed class DrawioExporterTests
 
         var document = XDocument.Parse(new DrawioExporter().Export(graph, DiagramSettings.CreateDefault()));
         var edge = document.Descendants("mxCell").Single(e => (string?)e.Attribute("id") == "edge_up");
-        var style = (string)edge.Attribute("style")!;
 
-        Assert.Contains("exitX=0.5;exitY=0", style);
-        Assert.Contains("entryX=0.5;entryY=1", style);
+        Assert.Equal("1", StyleValue(edge, "exitY"));
+        Assert.Equal("0", StyleValue(edge, "entryY"));
+    }
+
+    [Fact]
+    public void Export_expands_node_width_for_dense_edge_ports()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var types = new List<TypeNode>
+        {
+            new("type_source", "project_api", "Source", "Api.Source", "Class")
+        };
+        var edges = new List<DependencyEdge>();
+        for (var i = 0; i < 40; i++)
+        {
+            types.Add(new TypeNode($"type_target_{i}", "project_api", $"Target{i}", $"Api.Target{i}", "Class"));
+            edges.Add(new DependencyEdge($"edge_{i}", "type_source", $"type_target_{i}", "internal"));
+        }
+
+        var graph = new ArchitectureGraph(
+            new[] { new ProjectContainer("project_api", "Api", types) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges);
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var expectedWidth = 40 * 5 + 20;
+
+        Assert.True(Geometry(document, "type_source", "width") >= expectedWidth);
+        Assert.True(Geometry(document, "type_source", "width") > settings.Layout.NodeWidth);
+    }
+
+    [Fact]
+    public void Export_expands_node_width_for_long_text()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var longName = "ExtremelyLongCoordinationServiceNameThatMustFitInsideTheNode";
+        var graph = new ArchitectureGraph(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    new TypeNode("type_long", "project_api", longName, $"Api.{longName}", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>());
+
+        var document = XDocument.Parse(new DrawioExporter().Export(graph, settings));
+        var expectedWidth = longName.Length * 7 + 20;
+
+        Assert.True(Geometry(document, "type_long", "width") >= expectedWidth);
+        Assert.True(Geometry(document, "type_long", "width") > settings.Layout.NodeWidth);
     }
 
     [Fact]

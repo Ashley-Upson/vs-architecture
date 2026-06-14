@@ -11,6 +11,8 @@ public sealed class DrawioExporter
 {
     private const int MaxGeometryValue = 1_000_000_000;
     private const int EdgeSpacing = 5;
+    private const int EdgePadding = 10;
+    private const int ApproximateTextWidth = 8;
 
     public string Export(ArchitectureGraph graph, DiagramSettings settings)
     {
@@ -128,6 +130,7 @@ public sealed class DrawioExporter
         var nodeOrder = orderedNodeIds
             .Select((id, index) => new { id, index })
             .ToDictionary(x => x.id, x => x.index);
+        var nodeWidths = CalculateNodeWidths(graph, layout, nodeIds);
 
         var outgoing = graph.Edges
             .Where(e => nodeIds.Contains(e.SourceId) && nodeIds.Contains(e.TargetId))
@@ -153,7 +156,7 @@ public sealed class DrawioExporter
                 continue;
             }
 
-            projectLayouts.Add(BuildProjectLayout(project, projectTypes, depths, outgoing, layout));
+            projectLayouts.Add(BuildProjectLayout(project, projectTypes, depths, outgoing, nodeWidths, layout));
         }
 
         var rowNextLeft = new Dictionary<int, int>();
@@ -191,7 +194,7 @@ public sealed class DrawioExporter
                             originTop,
                             SafeMultiply(node.Depth, layout.NodeHeight + layout.VerticalSpacing),
                             rowVerticalOffset);
-                        result[node.Type.Id] = new Rect(x, y, layout.NodeWidth, layout.NodeHeight);
+                        result[node.Type.Id] = new Rect(x, y, node.Width, layout.NodeHeight);
                     }
                 }
 
@@ -223,7 +226,10 @@ public sealed class DrawioExporter
             var nextExternalLeft = externalLeft;
             for (var i = 0; i < layer.Count; i++)
             {
-                var position = new Rect(nextExternalLeft, y, layout.NodeWidth, layout.NodeHeight);
+                var externalWidth = nodeWidths.TryGetValue(layer[i].Id, out var width)
+                    ? width
+                    : layout.NodeWidth;
+                var position = new Rect(nextExternalLeft, y, externalWidth, layout.NodeHeight);
                 while (TryFindOverlappingRect(position, projectRects, out var overlappingProject))
                 {
                     position = position with { X = SafeAdd(overlappingProject.Right, layout.HorizontalSpacing) };
@@ -244,6 +250,7 @@ public sealed class DrawioExporter
         List<TypeNode> projectTypes,
         Dictionary<string, int> depths,
         Dictionary<string, List<string>> outgoing,
+        Dictionary<string, int> nodeWidths,
         LayoutSettings layout)
     {
         var projectTypeIds = new HashSet<string>(projectTypes.Select(t => t.Id));
@@ -294,8 +301,7 @@ public sealed class DrawioExporter
             .ToList();
         var width = SafeAdd(
             SafeMultiply(layout.ContainerPadding, 2),
-            positionedNodes.Select(n => n.X).DefaultIfEmpty(0).Max(),
-            layout.NodeWidth);
+            positionedNodes.Select(n => SafeAdd(n.X, n.Width)).DefaultIfEmpty(0).Max());
 
         return new ProjectLayout(project, positionedLayers, width);
 
@@ -303,6 +309,9 @@ public sealed class DrawioExporter
         {
             assigned.Add(node.Id);
             active.Add(node.Id);
+            var nodeWidth = nodeWidths.TryGetValue(node.Id, out var width)
+                ? width
+                : layout.NodeWidth;
 
             var childLayouts = outgoing.TryGetValue(node.Id, out var targets)
                 ? targets
@@ -324,18 +333,18 @@ public sealed class DrawioExporter
             if (childLayouts.Count == 0)
             {
                 return new SubtreeLayout(
-                    layout.NodeWidth,
-                    new List<PositionedNode> { new(node, 0, depth) });
+                    nodeWidth,
+                    new List<PositionedNode> { new(node, 0, depth, nodeWidth) });
             }
 
             var childSpan = SafeAdd(
                 childLayouts.Sum(child => child.Width),
                 SafeMultiply(System.Math.Max(0, childLayouts.Count - 1), layout.HorizontalSpacing));
-            var width = System.Math.Max(layout.NodeWidth, childSpan);
-            var childX = SafeSubtract(width, childSpan) / 2;
+            var subtreeWidth = System.Math.Max(nodeWidth, childSpan);
+            var childX = SafeSubtract(subtreeWidth, childSpan) / 2;
             var nodes = new List<PositionedNode>
             {
-                new(node, SafeSubtract(width, layout.NodeWidth) / 2, depth)
+                new(node, SafeSubtract(subtreeWidth, nodeWidth) / 2, depth, nodeWidth)
             };
 
             foreach (var child in childLayouts)
@@ -344,7 +353,7 @@ public sealed class DrawioExporter
                 childX = SafeAdd(childX, child.Width, layout.HorizontalSpacing);
             }
 
-            return new SubtreeLayout(width, nodes);
+            return new SubtreeLayout(subtreeWidth, nodes);
         }
     }
 
@@ -517,6 +526,7 @@ public sealed class DrawioExporter
     {
         var sourceGroups = new Dictionary<string, List<DependencyEdge>>();
         var targetGroups = new Dictionary<string, List<DependencyEdge>>();
+        var laneGroups = new Dictionary<string, List<DependencyEdge>>();
 
         foreach (var edge in edges)
         {
@@ -526,13 +536,14 @@ public sealed class DrawioExporter
                 continue;
             }
 
-            var targetIsBelowSource = target.Y >= source.Bottom;
-            AddToGroup(sourceGroups, PortKey(edge.SourceId, targetIsBelowSource ? "bottom" : "top"), edge);
-            AddToGroup(targetGroups, PortKey(edge.TargetId, targetIsBelowSource ? "top" : "bottom"), edge);
+            AddToGroup(sourceGroups, PortKey(edge.SourceId, "bottom"), edge);
+            AddToGroup(targetGroups, PortKey(edge.TargetId, "top"), edge);
+            AddToGroup(laneGroups, LaneKey(source, target), edge);
         }
 
         var sourceOffsets = CalculatePortOffsets(sourceGroups);
         var targetOffsets = CalculatePortOffsets(targetGroups);
+        var laneOffsets = CalculatePortOffsets(laneGroups);
         var routes = new Dictionary<string, EdgeRoute>();
         foreach (var edge in edges)
         {
@@ -542,26 +553,28 @@ public sealed class DrawioExporter
                 continue;
             }
 
-            var targetIsBelowSource = target.Y >= source.Bottom;
             var sourceOffset = sourceOffsets.TryGetValue(edge.Id, out var sourcePortOffset)
                 ? sourcePortOffset
                 : 0;
             var targetOffset = targetOffsets.TryGetValue(edge.Id, out var targetPortOffset)
                 ? targetPortOffset
                 : 0;
+            var laneOffset = laneOffsets.TryGetValue(edge.Id, out var globalLaneOffset)
+                ? globalLaneOffset
+                : 0;
             var sourceLocalX = PortLocalX(source, sourceOffset);
             var targetLocalX = PortLocalX(target, targetOffset);
-            var sourcePoint = new Point(SafeAdd(source.X, sourceLocalX), targetIsBelowSource ? source.Bottom : source.Y);
-            var targetPoint = new Point(SafeAdd(target.X, targetLocalX), targetIsBelowSource ? target.Y : target.Bottom);
+            var sourcePoint = new Point(SafeAdd(source.X, sourceLocalX), source.Bottom);
+            var targetPoint = new Point(SafeAdd(target.X, targetLocalX), target.Y);
 
             routes[edge.Id] = new EdgeRoute(
                 sourcePoint,
                 targetPoint,
                 sourceLocalX / (double)source.Width,
                 targetLocalX / (double)target.Width,
-                targetIsBelowSource ? "1" : "0",
-                targetIsBelowSource ? "0" : "1",
-                sourceOffset);
+                "1",
+                "0",
+                SafeAdd(sourceOffset, laneOffset));
         }
 
         return routes;
@@ -580,6 +593,60 @@ public sealed class DrawioExporter
         static string PortKey(string nodeId, string side)
         {
             return $"{nodeId}:{side}";
+        }
+
+        static string LaneKey(Rect source, Rect target)
+        {
+            var upper = System.Math.Min(source.Bottom, target.Y);
+            var lower = System.Math.Max(source.Bottom, target.Y);
+            return $"{upper}:{lower}";
+        }
+    }
+
+    private static Dictionary<string, int> CalculateNodeWidths(
+        ArchitectureGraph graph,
+        LayoutSettings layout,
+        HashSet<string> nodeIds)
+    {
+        var maxPortCounts = new Dictionary<string, int>();
+        foreach (var group in graph.Edges
+            .Where(e => nodeIds.Contains(e.SourceId) && nodeIds.Contains(e.TargetId))
+            .GroupBy(e => e.SourceId))
+        {
+            maxPortCounts[group.Key] = System.Math.Max(
+                maxPortCounts.TryGetValue(group.Key, out var count) ? count : 0,
+                group.Count());
+        }
+
+        foreach (var group in graph.Edges
+            .Where(e => nodeIds.Contains(e.SourceId) && nodeIds.Contains(e.TargetId))
+            .GroupBy(e => e.TargetId))
+        {
+            maxPortCounts[group.Key] = System.Math.Max(
+                maxPortCounts.TryGetValue(group.Key, out var count) ? count : 0,
+                group.Count());
+        }
+
+        var widths = new Dictionary<string, int>();
+        foreach (var type in graph.Projects.SelectMany(p => p.Types).Where(t => nodeIds.Contains(t.Id)))
+        {
+            widths[type.Id] = RequiredNodeWidth(type.Name, type.Id);
+        }
+
+        foreach (var external in graph.ExternalDependencies.Where(e => nodeIds.Contains(e.Id)))
+        {
+            widths[external.Id] = RequiredNodeWidth(external.Name, external.Id);
+        }
+
+        return widths;
+
+        int RequiredNodeWidth(string label, string id)
+        {
+            var textWidth = SafeAdd(SafeMultiply(label.Length, ApproximateTextWidth), EdgePadding * 2);
+            var portWidth = maxPortCounts.TryGetValue(id, out var count)
+                ? SafeAdd(SafeMultiply(count, EdgeSpacing), EdgePadding * 2)
+                : 0;
+            return System.Math.Max(layout.NodeWidth, System.Math.Max(textWidth, portWidth));
         }
     }
 
@@ -600,7 +667,7 @@ public sealed class DrawioExporter
 
     private static int PortLocalX(Rect node, int offset)
     {
-        var min = System.Math.Min(EdgeSpacing, node.Width / 2);
+        var min = System.Math.Min(EdgePadding, node.Width / 2);
         var max = System.Math.Max(min, SafeSubtract(node.Width, min));
         return System.Math.Min(max, System.Math.Max(min, SafeAdd(node.Width / 2, offset)));
     }
@@ -1037,6 +1104,6 @@ public sealed class DrawioExporter
     }
 
     private sealed record ProjectLayer(int Depth, List<PositionedNode> Nodes);
-    private sealed record PositionedNode(TypeNode Type, int X, int Depth);
+    private sealed record PositionedNode(TypeNode Type, int X, int Depth, int Width);
     private sealed record SubtreeLayout(int Width, List<PositionedNode> Nodes);
 }
