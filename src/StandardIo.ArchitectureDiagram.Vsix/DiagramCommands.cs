@@ -14,6 +14,7 @@ using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using StandardIo.ArchitectureDiagram.Core.Renderers;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings;
 using StandardIo.ArchitectureDiagram.Core.Settings;
 using RoslynProject = Microsoft.CodeAnalysis.Project;
@@ -58,16 +59,17 @@ internal sealed class DiagramCommands
                     return;
                 }
 
-                var outputPath = PromptForSavePath(target.Name);
+                var settings = SettingsStore.Load();
+                var renderer = new DiagramRendererRegistry().Resolve(settings.OutputRenderer);
+                var outputPath = PromptForSavePath(target.Name, renderer);
                 if (string.IsNullOrWhiteSpace(outputPath))
                 {
                     return;
                 }
 
-                var settings = SettingsStore.Load();
-                var drawio = await new DiagramGenerationProcessingService().GenerateAsync(target.Projects, settings);
-                File.WriteAllText(outputPath, drawio);
-                ShowMessage($"Diagram generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
+                var output = await new DiagramGenerationProcessingService().GenerateAsync(target.Projects, settings);
+                File.WriteAllText(outputPath, output);
+                ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
             }
             catch (Exception ex)
             {
@@ -412,17 +414,18 @@ internal sealed class DiagramCommands
             : Path.GetFileNameWithoutExtension(solutionPath);
     }
 
-    private static string? PromptForSavePath(string projectName)
+    private static string? PromptForSavePath(string projectName, IDiagramRenderer renderer)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
+        renderer ??= new DrawioDiagramRenderer();
 
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Save Draw.io Architecture Diagram",
-            FileName = $"{projectName}.architecture.drawio",
-            Filter = "Draw.io diagram (*.drawio)|*.drawio|XML file (*.xml)|*.xml|All files (*.*)|*.*",
+            Title = $"Save {renderer.DisplayName}",
+            FileName = $"{projectName}.architecture{renderer.FileExtension}",
+            Filter = renderer.FileFilter,
             AddExtension = true,
-            DefaultExt = ".drawio"
+            DefaultExt = renderer.FileExtension
         };
 
         return dialog.ShowDialog() == true ? dialog.FileName : null;

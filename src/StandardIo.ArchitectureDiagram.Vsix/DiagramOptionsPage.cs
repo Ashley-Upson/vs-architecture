@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.VisualStudio.Shell;
+using StandardIo.ArchitectureDiagram.Core.Renderers;
 using StandardIo.ArchitectureDiagram.Core.Settings;
 
 namespace StandardIo.ArchitectureDiagram.Vsix;
@@ -98,6 +99,7 @@ public sealed class DiagramOptionsPage : DialogPage
 internal sealed class DiagramOptionsControl : UserControl
 {
     private readonly TextBox _backgroundColor = TextBox();
+    private readonly ComboBox _outputRenderer = RendererBox();
     private readonly TextBox _defaultFontColor = TextBox();
     private readonly NumericUpDown _nodeWidth = NumberBox(40, 800);
     private readonly NumericUpDown _nodeHeight = NumberBox(30, 400);
@@ -137,6 +139,7 @@ internal sealed class DiagramOptionsControl : UserControl
         DiagnosticLog.Write("DiagramOptionsControl.LoadSettings started.");
         settings = Normalize(settings);
 
+        SetRenderer(settings.OutputRenderer);
         _backgroundColor.Text = settings.Canvas.BackgroundColor;
         _defaultFontColor.Text = settings.Canvas.DefaultFontColor;
         _nodeWidth.Value = Clamp(settings.Layout.NodeWidth, _nodeWidth);
@@ -168,6 +171,7 @@ internal sealed class DiagramOptionsControl : UserControl
                 BackgroundColor = _backgroundColor.Text.Trim(),
                 DefaultFontColor = _defaultFontColor.Text.Trim()
             },
+            OutputRenderer = Convert.ToString(_outputRenderer.SelectedItem)?.Trim() ?? DiagramRendererIds.Drawio,
             Layout = new StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings
             {
                 NodeWidth = (int)_nodeWidth.Value,
@@ -198,6 +202,9 @@ internal sealed class DiagramOptionsControl : UserControl
         settings.Canvas ??= new CanvasSettings();
         settings.Layout ??= new StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings();
         settings.Connector ??= new ConnectorStyle();
+        settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
+            ? DiagramRendererIds.Drawio
+            : settings.OutputRenderer.Trim();
         settings.ExcludedNamespaces ??= new();
         settings.ExcludedNames ??= new();
         settings.StyleRules ??= new();
@@ -216,6 +223,7 @@ internal sealed class DiagramOptionsControl : UserControl
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoScroll = true };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        AddRow(panel, "Output renderer", _outputRenderer);
         AddRow(panel, "Background color", _backgroundColor);
         AddRow(panel, "Default font color", _defaultFontColor);
         AddRow(panel, "Node width", _nodeWidth);
@@ -335,6 +343,27 @@ internal sealed class DiagramOptionsControl : UserControl
     }
 
     private static TextBox TextBox() => new() { BorderStyle = BorderStyle.FixedSingle };
+
+    private static ComboBox RendererBox()
+    {
+        var box = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        box.Items.Add(DiagramRendererIds.Drawio);
+        box.Items.Add(DiagramRendererIds.Json);
+        return box;
+    }
+
+    private void SetRenderer(string rendererId)
+    {
+        if (!_outputRenderer.Items.Contains(rendererId))
+        {
+            _outputRenderer.Items.Add(rendererId);
+        }
+
+        _outputRenderer.SelectedItem = rendererId;
+    }
 
     private static TextBox MultilineTextBox() => new()
     {
