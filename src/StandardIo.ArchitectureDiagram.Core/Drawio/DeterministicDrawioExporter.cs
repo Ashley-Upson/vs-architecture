@@ -342,6 +342,8 @@ public sealed class DeterministicDrawioExporter
             ResolveLayerOverlaps(settings, result);
             ReserveLinkCorridors(graph, settings, result);
             ResolveLayerOverlaps(settings, result);
+            RelaxNonTopDepthAlignment(graph, settings, result);
+            ResolveDepthBandVerticalOverlaps(settings, result);
 
             var standaloneX = result.Count == 0
                 ? settings.Layout.ContainerPadding * 2
@@ -378,6 +380,88 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static void RelaxNonTopDepthAlignment(
+            RenderGraph graph,
+            DiagramSettings settings,
+            Dictionary<string, NodeLayout> nodes)
+        {
+            var connectedNodes = nodes.Values
+                .Where(node => !node.IsStandalone)
+                .ToDictionary(node => node.Node.Id, StringComparer.Ordinal);
+
+            foreach (var node in connectedNodes.Values.Where(node => node.Depth > 0).OrderBy(node => node.Node.Order))
+            {
+                var incidentLinkCount = graph.Links.Count(link =>
+                    string.Equals(link.SourceId, node.Node.Id, StringComparison.Ordinal) ||
+                    string.Equals(link.TargetId, node.Node.Id, StringComparison.Ordinal));
+                var crossingLinkCount = graph.Links.Count(link =>
+                    IsNonIncidentDepthCrossing(link, node, connectedNodes));
+                var pressure = Math.Max(incidentLinkCount, crossingLinkCount);
+                if (pressure <= 1)
+                {
+                    continue;
+                }
+
+                var offset = (pressure - 1) * settings.Layout.ParallelLaneSpacing;
+                nodes[node.Node.Id] = node with { Rect = node.Rect with { Y = node.Rect.Y + offset } };
+            }
+        }
+
+        private static bool IsNonIncidentDepthCrossing(
+            RenderLink link,
+            NodeLayout node,
+            IReadOnlyDictionary<string, NodeLayout> nodes)
+        {
+            if (!nodes.TryGetValue(link.SourceId, out var source) ||
+                !nodes.TryGetValue(link.TargetId, out var target) ||
+                string.Equals(link.SourceId, node.Node.Id, StringComparison.Ordinal) ||
+                string.Equals(link.TargetId, node.Node.Id, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var upperDepth = Math.Min(source.Depth, target.Depth);
+            var lowerDepth = Math.Max(source.Depth, target.Depth);
+            if (node.Depth <= upperDepth || node.Depth >= lowerDepth)
+            {
+                return false;
+            }
+
+            var corridorX = source.Rect.CenterX + (target.Rect.CenterX - source.Rect.CenterX) / 2;
+            return corridorX > node.Rect.X && corridorX < node.Rect.Right;
+        }
+
+        private static void ResolveDepthBandVerticalOverlaps(
+            DiagramSettings settings,
+            Dictionary<string, NodeLayout> nodes)
+        {
+            var previousBottom = 0;
+            foreach (var layer in nodes.Values
+                .Where(node => !node.IsStandalone)
+                .GroupBy(node => node.Depth)
+                .OrderBy(group => group.Key))
+            {
+                var layerNodes = layer.ToArray();
+                if (layer.Key > 0)
+                {
+                    var minTop = layerNodes.Min(node => node.Rect.Y);
+                    var requiredTop = previousBottom + settings.Layout.VerticalSpacing;
+                    if (minTop < requiredTop)
+                    {
+                        var shift = requiredTop - minTop;
+                        foreach (var node in layerNodes)
+                        {
+                            nodes[node.Node.Id] = node with { Rect = node.Rect with { Y = node.Rect.Y + shift } };
+                        }
+
+                        layerNodes = layerNodes.Select(node => nodes[node.Node.Id]).ToArray();
+                    }
+                }
+
+                previousBottom = layerNodes.Max(node => node.Rect.Bottom);
+            }
         }
 
         private static void ReserveLinkCorridors(

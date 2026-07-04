@@ -55,8 +55,40 @@ public sealed class DeterministicDrawioExporterTests
             }));
 
         Assert.True(AbsoluteY(document, "type_controller") < AbsoluteY(document, "type_processing"));
-        Assert.Equal(AbsoluteY(document, "type_processing"), AbsoluteY(document, "type_job"));
         Assert.True(AbsoluteY(document, "type_service") > AbsoluteY(document, "type_processing"));
+    }
+
+    [Fact]
+    public void Render_only_forces_topmost_depth_to_same_horizontal_layer()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "Controller"),
+                    Node("type_job", "project_api", "Job"),
+                    Node("type_busy", "project_api", "BusyProcessing"),
+                    Node("type_quiet", "project_api", "QuietProcessing"),
+                    Node("type_leaf_a", "project_api", "LeafA"),
+                    Node("type_leaf_b", "project_api", "LeafB"),
+                    Node("type_leaf_c", "project_api", "LeafC"),
+                    Node("type_leaf_d", "project_api", "LeafD")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_controller_busy", "type_controller", "type_busy", "internal"),
+                new DependencyEdge("edge_job_quiet", "type_job", "type_quiet", "internal"),
+                new DependencyEdge("edge_busy_leaf_a", "type_busy", "type_leaf_a", "internal"),
+                new DependencyEdge("edge_busy_leaf_b", "type_busy", "type_leaf_b", "internal"),
+                new DependencyEdge("edge_busy_leaf_c", "type_busy", "type_leaf_c", "internal"),
+                new DependencyEdge("edge_quiet_leaf_d", "type_quiet", "type_leaf_d", "internal")
+            }));
+
+        Assert.Equal(AbsoluteY(document, "type_controller"), AbsoluteY(document, "type_job"));
+        Assert.NotEqual(AbsoluteY(document, "type_busy"), AbsoluteY(document, "type_quiet"));
     }
 
     [Fact]
