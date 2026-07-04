@@ -14,8 +14,7 @@ using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using StandardIo.ArchitectureDiagram.Core.Analysis;
-using StandardIo.ArchitectureDiagram.Core.Drawio;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings;
 using StandardIo.ArchitectureDiagram.Core.Settings;
 using RoslynProject = Microsoft.CodeAnalysis.Project;
 using Task = System.Threading.Tasks.Task;
@@ -66,8 +65,7 @@ internal sealed class DiagramCommands
                 }
 
                 var settings = SettingsStore.Load();
-                var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(target.Projects, settings);
-                var drawio = new DrawioExporter().Export(graph, settings);
+                var drawio = await new DiagramGenerationProcessingService().GenerateAsync(target.Projects, settings);
                 File.WriteAllText(outputPath, drawio);
                 ShowMessage($"Diagram generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
             }
