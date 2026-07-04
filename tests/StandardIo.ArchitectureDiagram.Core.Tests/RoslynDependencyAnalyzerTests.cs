@@ -10,7 +10,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class RoslynDependencyAnalyzerTests
 {
     [Fact]
-    public async Task Analyze_detects_internal_project_reference_dependencies()
+    public async Task Analyze_emits_external_boundary_node_for_unselected_project_reference()
     {
         using var workspace = new AdhocWorkspace();
         var referencedId = ProjectId.CreateNewId();
@@ -38,10 +38,14 @@ public sealed class RoslynDependencyAnalyzerTests
 
         var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(selectedProject, DiagramSettings.CreateDefault());
 
-        Assert.Contains(graph.Projects, p => p.Name == "Api");
-        Assert.Contains(graph.Projects, p => p.Name == "Domain");
+        var project = Assert.Single(graph.Projects);
+        Assert.Equal("Api", project.Name);
         Assert.Equal("Api", graph.Projects[0].Name);
-        Assert.Contains(graph.Edges, e => e.Kind == "internal");
+        var external = Assert.Single(graph.ExternalDependencies);
+        Assert.Equal("DomainService", external.Name);
+        Assert.Equal("Domain.DomainService", external.FullName);
+        Assert.Equal("[External]", external.Tag);
+        Assert.Contains(graph.Edges, e => e.Kind == "external" && e.TargetId == external.Id);
     }
 
     [Fact]
@@ -263,7 +267,7 @@ public sealed class RoslynDependencyAnalyzerTests
     }
 
     [Fact]
-    public async Task Analyze_uses_implementation_when_interface_has_solution_implementation()
+    public async Task Analyze_keeps_constructor_interface_even_when_implementation_exists()
     {
         using var workspace = new AdhocWorkspace();
         var projectId = ProjectId.CreateNewId();
@@ -290,10 +294,10 @@ public sealed class RoslynDependencyAnalyzerTests
         var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
         var project = Assert.Single(graph.Projects);
         var controller = project.Types.Single(t => t.Name == "HomeController");
-        var implementation = project.Types.Single(t => t.Name == "PaymentService");
+        var serviceInterface = project.Types.Single(t => t.Name == "IPaymentService");
 
-        Assert.DoesNotContain(project.Types, t => t.Name == "IPaymentService");
-        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == implementation.Id);
+        Assert.Contains(project.Types, t => t.Name == "PaymentService");
+        Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == serviceInterface.Id);
     }
 
     [Fact]
@@ -326,6 +330,104 @@ public sealed class RoslynDependencyAnalyzerTests
         var serviceInterface = project.Types.Single(t => t.Name == "IPaymentService");
 
         Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == serviceInterface.Id);
+    }
+
+    [Fact]
+    public async Task Analyze_generates_unique_node_ids()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class Controller {}
+                    public class Service {}
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var ids = graph.Projects
+            .Select(project => project.UniqueId)
+            .Concat(graph.Projects.SelectMany(project => project.Types.Select(type => type.UniqueId)))
+            .ToArray();
+
+        Assert.All(ids, id => Assert.True(Guid.TryParse(id, out _)));
+        Assert.Equal(ids.Length, ids.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Analyze_preserves_constructor_dependency_order()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class FirstDependency {}
+                    public class SecondDependency {}
+                    public class Controller
+                    {
+                        public Controller(FirstDependency first, SecondDependency second) {}
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var controller = project.Types.Single(t => t.Name == "Controller");
+        var orderedTargets = graph.Edges
+            .Where(edge => edge.SourceId == controller.Id)
+            .Select(edge => project.Types.Single(type => type.Id == edge.TargetId).Name)
+            .ToArray();
+
+        Assert.Equal(new[] { "FirstDependency", "SecondDependency" }, orderedTargets);
+    }
+
+    [Fact]
+    public async Task Analyze_keeps_cycles_finite_with_reused_nodes()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public class A { public A(B b) {} }
+                    public class B { public B(A a) {} }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var a = project.Types.Single(t => t.Name == "A");
+        var b = project.Types.Single(t => t.Name == "B");
+
+        Assert.Equal(2, project.Types.Count);
+        Assert.Contains(graph.Edges, edge => edge.SourceId == a.Id && edge.TargetId == b.Id);
+        Assert.Contains(graph.Edges, edge => edge.SourceId == b.Id && edge.TargetId == a.Id);
     }
 
     private static IEnumerable<MetadataReference> BasicReferences()

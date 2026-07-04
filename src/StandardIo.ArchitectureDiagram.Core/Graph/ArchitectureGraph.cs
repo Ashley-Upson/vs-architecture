@@ -21,19 +21,24 @@ public sealed record DiagramMetadata(
 public sealed record ProjectContainer(
     string Id,
     string Name,
-    IReadOnlyList<TypeNode> Types);
+    IReadOnlyList<TypeNode> Types,
+    string UniqueId = "");
 
 public sealed record TypeNode(
     string Id,
     string ProjectId,
     string Name,
     string FullName,
-    string Kind);
+    string Kind,
+    string UniqueId = "");
 
 public sealed record ExternalDependencyNode(
     string Id,
     string Name,
-    string AssemblyName);
+    string AssemblyName,
+    string UniqueId = "",
+    string FullName = "",
+    string Tag = "");
 
 public sealed record DependencyEdge(
     string Id,

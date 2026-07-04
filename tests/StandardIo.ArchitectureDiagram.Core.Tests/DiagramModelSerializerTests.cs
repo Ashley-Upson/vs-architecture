@@ -30,8 +30,12 @@ public sealed class DiagramModelSerializerTests
         var imported = DiagramModelSerializer.Import(DiagramModelSerializer.Export(diagram));
 
         Assert.Equal("project_a", imported.Projects.Single().Id);
+        Assert.Equal("project-guid", imported.Projects.Single().UniqueId);
         Assert.Equal("type_controller", imported.Projects.Single().Types.First().Id);
+        Assert.Equal("type-guid", imported.Projects.Single().Types.First().UniqueId);
         Assert.Equal("external_sql", imported.ExternalDependencies.Single().Id);
+        Assert.Equal("external-guid", imported.ExternalDependencies.Single().UniqueId);
+        Assert.Equal("[External]", imported.ExternalDependencies.Single().Tag);
         Assert.Equal("edge_controller_sql", imported.Edges.Single().Id);
         Assert.Equal(1, imported.Metadata?.SchemaVersion);
     }
@@ -71,10 +75,10 @@ public sealed class DiagramModelSerializerTests
             {
                 new ProjectContainer("project_a", "App", new[]
                 {
-                    new TypeNode("type_controller", "project_a", "HomeController", "App.HomeController", "Class")
-                })
+                    new TypeNode("type_controller", "project_a", "HomeController", "App.HomeController", "Class", "type-guid")
+                }, "project-guid")
             },
-            new[] { new ExternalDependencyNode("external_sql", "SqlClient", "SqlClient") },
+            new[] { new ExternalDependencyNode("external_sql", "SqlClient", "SqlClient", "external-guid", "System.Data.SqlClient.SqlConnection", "[External]") },
             new[] { new DependencyEdge("edge_controller_sql", "type_controller", "external_sql", "external") },
             new DiagramMetadata());
     }

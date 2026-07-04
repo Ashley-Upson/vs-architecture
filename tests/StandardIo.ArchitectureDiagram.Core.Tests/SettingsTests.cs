@@ -17,6 +17,8 @@ public sealed class SettingsTests
         Assert.Equal(settings.Canvas.BackgroundColor, imported.Canvas.BackgroundColor);
         Assert.Equal(settings.ShowProjectContainers, imported.ShowProjectContainers);
         Assert.Equal(settings.OutputRenderer, imported.OutputRenderer);
+        Assert.Equal(settings.ExternalDependencyTag, imported.ExternalDependencyTag);
+        Assert.Equal(settings.Layout.EdgePortSpacing, imported.Layout.EdgePortSpacing);
         Assert.Equal(settings.ExternalDependencyStyle.Shape, imported.ExternalDependencyStyle.Shape);
     }
 
@@ -64,5 +66,20 @@ public sealed class SettingsTests
         var settings = SettingsSerializer.Import(json);
 
         Assert.Equal("drawio", settings.OutputRenderer);
+    }
+
+    [Fact]
+    public void Import_normalizes_empty_external_dependency_tag()
+    {
+        var json = """
+            {
+              "version": 1,
+              "externalDependencyTag": " "
+            }
+            """;
+
+        var settings = SettingsSerializer.Import(json);
+
+        Assert.Equal("[External]", settings.ExternalDependencyTag);
     }
 }

@@ -13,6 +13,7 @@ public sealed class DiagramSettings
     public List<StyleOverride> Overrides { get; set; } = new();
     public string OutputRenderer { get; set; } = "drawio";
     public bool ShowProjectContainers { get; set; } = true;
+    public string ExternalDependencyTag { get; set; } = "[External]";
     public NodeStyle ProjectContainerStyle { get; set; } = NodeStyle.ProjectContainer();
     public NodeStyle ExternalDependencyStyle { get; set; } = NodeStyle.External();
     public ConnectorStyle Connector { get; set; } = new();
@@ -51,7 +52,8 @@ public sealed class DiagramSettings
                 new() { Match = "*Hub", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } },
                 new() { Match = "*Queue", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } }
             },
-            OutputRenderer = "drawio"
+            OutputRenderer = "drawio",
+            ExternalDependencyTag = "[External]"
         };
     }
 }
@@ -69,6 +71,21 @@ public sealed class LayoutSettings
     public int HorizontalSpacing { get; set; } = 80;
     public int VerticalSpacing { get; set; } = 80;
     public int ContainerPadding { get; set; } = 40;
+    public int EdgePortSpacing { get; set; } = 5;
+    public int ParallelLaneSpacing { get; set; } = 12;
+    public int StandaloneGroupSpacing { get; set; } = 160;
+    public int ProjectHeaderHeight { get; set; } = 34;
+    public int LinkPadding { get; set; } = 10;
+    public int LinkNodeWidthPadding { get; set; } = 20;
+    public List<string> DuplicateHighNoiseNodePatterns { get; set; } = new()
+    {
+        "*DbContext",
+        "*Context",
+        "*EventHub",
+        "*Hub",
+        "*Logger",
+        "ILogger*"
+    };
 }
 
 public sealed class StyleRule

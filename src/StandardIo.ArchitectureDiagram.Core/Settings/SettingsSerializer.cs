@@ -47,9 +47,13 @@ public static class SettingsSerializer
         settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
             ? "drawio"
             : settings.OutputRenderer.Trim();
+        settings.ExternalDependencyTag = string.IsNullOrWhiteSpace(settings.ExternalDependencyTag)
+            ? "[External]"
+            : settings.ExternalDependencyTag.Trim();
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
         settings.ExternalDependencyStyle ??= NodeStyle.External();
         settings.Connector ??= new ConnectorStyle();
+        settings.Layout.DuplicateHighNoiseNodePatterns ??= new();
 
         return settings;
     }
