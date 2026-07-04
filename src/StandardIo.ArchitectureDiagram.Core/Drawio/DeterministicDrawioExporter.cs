@@ -12,7 +12,6 @@ namespace StandardIo.ArchitectureDiagram.Core.Drawio;
 public sealed class DeterministicDrawioExporter
 {
     private const int TextWidth = 8;
-    private const int ExposureTreeLayoutThreshold = 75;
     private const string ExposureTreeIdPrefix = "tree_";
 
     public string Export(DiagramModel diagram, DiagramSettings settings)
@@ -23,7 +22,7 @@ public sealed class DeterministicDrawioExporter
         }
 
         settings ??= DiagramSettings.CreateDefault();
-        var graph = RenderGraph.From(diagram);
+        var graph = RenderGraph.From(diagram, settings);
         var layout = RenderLayout.Build(graph, settings);
 
         return new DrawioXmlWriter(settings).Write(layout);
@@ -118,8 +117,13 @@ public sealed class DeterministicDrawioExporter
                 .Select((edge, order) => new RenderLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, order))
                 .ToArray();
 
-            var graph = new RenderGraph(projects, nodes, links, dataModels);
-            return nodes.Count >= ExposureTreeLayoutThreshold
+            return new RenderGraph(projects, nodes, links, dataModels);
+        }
+
+        public static RenderGraph From(DiagramModel diagram, DiagramSettings settings)
+        {
+            var graph = From(diagram);
+            return graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold
                 ? BuildExposureTreeGraph(graph)
                 : graph;
         }
@@ -491,7 +495,7 @@ public sealed class DeterministicDrawioExporter
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths)
         {
-            if (graph.Nodes.Count >= ExposureTreeLayoutThreshold &&
+            if (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold &&
                 graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
             {
                 return PositionExposureTrees(graph, settings, depths, widths);
@@ -692,7 +696,7 @@ public sealed class DeterministicDrawioExporter
             var childrenHeight = childMeasures.Select(measure => measure.Height).DefaultIfEmpty(0).Max();
             return new SubtreeMeasure(
                 Math.Max(widths[nodeId], childrenWidth),
-                settings.Layout.NodeHeight + Math.Max(100, settings.Layout.VerticalSpacing) + childrenHeight);
+                settings.Layout.NodeHeight + Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing) + childrenHeight);
         }
 
         private static void PlaceExposureSubtree(
@@ -739,7 +743,7 @@ public sealed class DeterministicDrawioExporter
                 .ToArray();
             var rowWidth = childMeasures.Sum(child => child.Measure.Width) + Math.Max(0, childMeasures.Length - 1) * gap;
             var childLeft = left + Math.Max(0, (subtreeWidth - rowWidth) / 2);
-            var childTop = top + settings.Layout.NodeHeight + Math.Max(100, settings.Layout.VerticalSpacing);
+            var childTop = top + settings.Layout.NodeHeight + Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing);
 
             foreach (var child in childMeasures)
             {
@@ -763,7 +767,11 @@ public sealed class DeterministicDrawioExporter
 
         private static int ExposureTreeHorizontalGap(DiagramSettings settings, int depth)
         {
-            return Math.Max(70, settings.Layout.HorizontalSpacing + 20 - depth * 10);
+            return Math.Max(
+                settings.Layout.ExposureTreeMinHorizontalSpacing,
+                settings.Layout.HorizontalSpacing +
+                    settings.Layout.ExposureTreeHorizontalSpacingBonus -
+                    depth * settings.Layout.ExposureTreeDepthSpacingReduction);
         }
 
         private static void AlignBaselineNodes(DiagramSettings settings, Dictionary<string, NodeLayout> nodes)
@@ -1126,7 +1134,7 @@ public sealed class DeterministicDrawioExporter
                     sourcePoint,
                     targetPoint,
                     RoutingObstacles(nodes, link, settings.Layout.LinkPadding),
-                    settings.Layout.LinkPadding);
+                    settings);
 
                 result[link.Id] = new LinkLayout(
                     link,
@@ -1144,9 +1152,9 @@ public sealed class DeterministicDrawioExporter
             Point sourcePoint,
             Point targetPoint,
             IReadOnlyList<Rect> obstacles,
-            int padding)
+            DiagramSettings settings)
         {
-            var direct = DirectExposureTreeRoute(sourcePoint, targetPoint);
+            var direct = DirectExposureTreeRoute(sourcePoint, targetPoint, settings.Layout.ExposureTreeConnectorMinSegment);
             if (!CrossesNode(WithTerminals(sourcePoint, direct, targetPoint), obstacles))
             {
                 return direct;
@@ -1158,10 +1166,12 @@ public sealed class DeterministicDrawioExporter
                 return direct;
             }
 
-            var clearance = Math.Max(20, padding * 3);
+            var clearance = Math.Max(
+                settings.Layout.ExposureTreeConnectorMinSegment,
+                settings.Layout.LinkPadding * settings.Layout.ExposureTreeConnectorClearanceMultiplier);
             var blocked = new HashSet<Rect>(crossedObstacles);
             IReadOnlyList<Point> best = direct;
-            for (var attempt = 0; attempt < 4; attempt++)
+            for (var attempt = 0; attempt < settings.Layout.ExposureTreeConnectorDetourAttempts; attempt++)
             {
                 var topY = Math.Max(sourcePoint.Y + clearance, blocked.Min(obstacle => obstacle.Y) - clearance);
                 var bottomY = Math.Min(targetPoint.Y - clearance, blocked.Max(obstacle => obstacle.Bottom) + clearance);
@@ -1197,14 +1207,14 @@ public sealed class DeterministicDrawioExporter
             return best;
         }
 
-        private static IReadOnlyList<Point> DirectExposureTreeRoute(Point sourcePoint, Point targetPoint)
+        private static IReadOnlyList<Point> DirectExposureTreeRoute(Point sourcePoint, Point targetPoint, int minSegment)
         {
             if (sourcePoint.X == targetPoint.X)
             {
                 return Array.Empty<Point>();
             }
 
-            var midY = sourcePoint.Y + Math.Max(20, (targetPoint.Y - sourcePoint.Y) / 2);
+            var midY = sourcePoint.Y + Math.Max(minSegment, (targetPoint.Y - sourcePoint.Y) / 2);
             return new[]
             {
                 new Point(sourcePoint.X, midY),
@@ -1665,18 +1675,12 @@ public sealed class DeterministicDrawioExporter
                 new XElement("mxCell", new XAttribute("id", "0")),
                 new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")));
             var modelIds = new HashSet<string>(models.Select(model => model.Id), StringComparer.Ordinal);
-            var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
             var orderedModels = models.OrderBy(model => model.FullName, StringComparer.Ordinal).ToArray();
-            var columnWidth = 380;
-            var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(orderedModels.Length)));
+            var rects = PositionDataModelTables(orderedModels, _settings.Layout);
 
-            foreach (var model in orderedModels.Select((model, index) => new { model, index }))
+            foreach (var model in orderedModels)
             {
-                var row = model.index / columns;
-                var column = model.index % columns;
-                var rect = DataModelRect(model.model, column, row, columnWidth);
-                rects[model.model.Id] = rect;
-                AddDataModelTable(root, model.model, rect);
+                AddDataModelTable(root, model, rects[model.Id]);
             }
 
             var edgeOrder = 0;
@@ -1690,16 +1694,26 @@ public sealed class DeterministicDrawioExporter
                 foreach (var property in model.Properties.Where(property => property.TypeId is not null && modelIds.Contains(property.TypeId!)))
                 {
                     var target = rects[property.TypeId!];
-                    var sourcePoint = new Point(source.Right, DataModelPropertyY(source, model, property.Name));
-                    var targetPoint = new Point(target.X, target.Y + 16);
-                    var route = DataModelRoute(sourcePoint, targetPoint, edgeOrder);
+                    var propertyY = DataModelPropertyY(source, model, property.Name);
+                    var terminals = GetDataModelTerminals(source, target, propertyY);
+                    var route = DataModelRoute(
+                        terminals.Source,
+                        terminals.Target,
+                        rects
+                            .Where(item => item.Key != model.Id && item.Key != property.TypeId)
+                            .Select(item => item.Value.Inflate(_settings.Layout.LinkPadding))
+                            .ToArray(),
+                        edgeOrder,
+                        _settings.Layout);
                     var link = new LinkLayout(
                         new RenderLink($"data_model_edge_{edgeOrder++}", DataModelNodeId(model.Id), DataModelNodeId(property.TypeId!), "property", edgeOrder),
-                        sourcePoint,
-                        targetPoint,
+                        terminals.Source,
+                        terminals.Target,
                         route,
-                        1,
-                        0);
+                        Ratio(terminals.Source.X, source),
+                        Ratio(terminals.Target.X, target),
+                        RatioY(terminals.Source.Y, source),
+                        RatioY(terminals.Target.Y, target));
                     root.Add(Edge(link));
                 }
             }
@@ -1707,17 +1721,237 @@ public sealed class DeterministicDrawioExporter
             return root;
         }
 
-        private static Rect DataModelRect(RenderNode model, int column, int row, int columnWidth)
+        private static Dictionary<string, Rect> PositionDataModelTables(
+            IReadOnlyList<RenderNode> models,
+            LayoutSettings layout)
         {
-            var propertyCount = Math.Max(1, model.Properties.Count);
-            return new Rect(
-                80 + column * columnWidth,
-                80 + row * 360,
-                320,
-                32 + propertyCount * 24);
+            var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
+            var modelsById = models.ToDictionary(model => model.Id, StringComparer.Ordinal);
+            var relationships = DataModelRelationships(modelsById);
+            var adjacency = models.ToDictionary(
+                model => model.Id,
+                _ => new HashSet<string>(StringComparer.Ordinal),
+                StringComparer.Ordinal);
+
+            foreach (var relationship in relationships)
+            {
+                adjacency[relationship.SourceId].Add(relationship.TargetId);
+                adjacency[relationship.TargetId].Add(relationship.SourceId);
+            }
+
+            var connectedComponents = DataModelConnectedComponents(models, adjacency)
+                .Where(component => component.Count > 1)
+                .OrderByDescending(component => component.Count)
+                .ThenBy(component => component.Min(model => model.FullName), StringComparer.Ordinal)
+                .ToArray();
+            var connectedIds = new HashSet<string>(connectedComponents.SelectMany(component => component.Select(model => model.Id)), StringComparer.Ordinal);
+            var isolatedModels = models
+                .Where(model => !connectedIds.Contains(model.Id))
+                .OrderBy(model => model.FullName, StringComparer.Ordinal)
+                .ToArray();
+
+            var y = layout.DataModelCanvasMargin;
+            var rowGap = Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2);
+
+            foreach (var component in connectedComponents)
+            {
+                var componentRects = PositionDataModelComponent(component, relationships, layout, layout.DataModelCanvasMargin, y);
+                foreach (var rect in componentRects)
+                {
+                    rects[rect.Key] = rect.Value;
+                }
+
+                y = componentRects.Values.Max(rect => rect.Bottom) + rowGap * 2;
+            }
+
+            if (isolatedModels.Length > 0)
+            {
+                var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(isolatedModels.Length)));
+                foreach (var rowModels in isolatedModels.Select((model, index) => new { model, index }).GroupBy(item => item.index / columns))
+                {
+                    var row = rowModels.ToArray();
+                    var rowHeight = row
+                        .Select(item => DataModelTableHeight(item.model, layout))
+                        .DefaultIfEmpty(0)
+                        .Max();
+
+                    foreach (var item in row)
+                    {
+                        var column = item.index % columns;
+                        rects[item.model.Id] = new Rect(
+                            layout.DataModelCanvasMargin + column * layout.DataModelColumnWidth,
+                            y,
+                            layout.DataModelTableWidth,
+                            DataModelTableHeight(item.model, layout));
+                    }
+
+                    y += rowHeight + rowGap;
+                }
+            }
+
+            return rects;
         }
 
-        private static void AddDataModelTable(XElement root, RenderNode model, Rect rect)
+        private static IReadOnlyList<DataModelRelationship> DataModelRelationships(IReadOnlyDictionary<string, RenderNode> modelsById)
+        {
+            return modelsById.Values
+                .SelectMany(model => model.Properties
+                    .Where(property => property.TypeId is not null && modelsById.ContainsKey(property.TypeId!))
+                    .Select(property => new DataModelRelationship(model.Id, property.TypeId!, property.Name)))
+                .OrderBy(relationship => modelsById[relationship.SourceId].FullName, StringComparer.Ordinal)
+                .ThenBy(relationship => relationship.PropertyName, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static IReadOnlyList<IReadOnlyList<RenderNode>> DataModelConnectedComponents(
+            IReadOnlyList<RenderNode> models,
+            IReadOnlyDictionary<string, HashSet<string>> adjacency)
+        {
+            var modelsById = models.ToDictionary(model => model.Id, StringComparer.Ordinal);
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            var components = new List<IReadOnlyList<RenderNode>>();
+
+            foreach (var model in models.OrderBy(model => model.FullName, StringComparer.Ordinal))
+            {
+                if (!visited.Add(model.Id))
+                {
+                    continue;
+                }
+
+                var queue = new Queue<string>();
+                var component = new List<RenderNode>();
+                queue.Enqueue(model.Id);
+
+                while (queue.Count > 0)
+                {
+                    var id = queue.Dequeue();
+                    component.Add(modelsById[id]);
+
+                    foreach (var relatedId in adjacency[id].OrderBy(id => modelsById[id].FullName, StringComparer.Ordinal))
+                    {
+                        if (visited.Add(relatedId))
+                        {
+                            queue.Enqueue(relatedId);
+                        }
+                    }
+                }
+
+                components.Add(component);
+            }
+
+            return components;
+        }
+
+        private static Dictionary<string, Rect> PositionDataModelComponent(
+            IReadOnlyList<RenderNode> component,
+            IReadOnlyList<DataModelRelationship> relationships,
+            LayoutSettings layout,
+            int x,
+            int y)
+        {
+            var componentIds = new HashSet<string>(component.Select(model => model.Id), StringComparer.Ordinal);
+            var componentRelationships = relationships
+                .Where(relationship => componentIds.Contains(relationship.SourceId) && componentIds.Contains(relationship.TargetId))
+                .ToArray();
+            var modelsById = component.ToDictionary(model => model.Id, StringComparer.Ordinal);
+            var outgoing = componentRelationships
+                .GroupBy(relationship => relationship.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Select(relationship => relationship.TargetId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+            var incoming = componentRelationships
+                .GroupBy(relationship => relationship.TargetId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Select(relationship => relationship.SourceId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+            var root = component
+                .OrderByDescending(model => outgoing.TryGetValue(model.Id, out var outIds) ? outIds.Length : 0)
+                .ThenByDescending(model => (outgoing.TryGetValue(model.Id, out var outDegree) ? outDegree.Length : 0) + (incoming.TryGetValue(model.Id, out var inDegree) ? inDegree.Length : 0))
+                .ThenBy(model => model.FullName, StringComparer.Ordinal)
+                .First();
+
+            var levels = new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                [root.Id] = 0
+            };
+            var queue = new Queue<string>();
+            queue.Enqueue(root.Id);
+
+            while (queue.Count > 0)
+            {
+                var id = queue.Dequeue();
+                var level = levels[id];
+
+                var outgoingIds = outgoing.TryGetValue(id, out var targets)
+                    ? targets
+                    : Array.Empty<string>();
+                foreach (var targetId in outgoingIds.OrderBy(id => modelsById[id].FullName, StringComparer.Ordinal))
+                {
+                    if (!levels.ContainsKey(targetId))
+                    {
+                        levels[targetId] = level + 1;
+                        queue.Enqueue(targetId);
+                    }
+                }
+
+                var incomingIds = incoming.TryGetValue(id, out var sources)
+                    ? sources
+                    : Array.Empty<string>();
+                foreach (var sourceId in incomingIds.OrderBy(id => modelsById[id].FullName, StringComparer.Ordinal))
+                {
+                    if (!levels.ContainsKey(sourceId))
+                    {
+                        levels[sourceId] = level - 1;
+                        queue.Enqueue(sourceId);
+                    }
+                }
+            }
+
+            foreach (var model in component.Where(model => !levels.ContainsKey(model.Id)).OrderBy(model => model.FullName, StringComparer.Ordinal))
+            {
+                levels[model.Id] = levels.Values.DefaultIfEmpty(0).Max() + 1;
+            }
+
+            var minLevel = levels.Values.Min();
+            var normalized = levels.ToDictionary(item => item.Key, item => item.Value - minLevel, StringComparer.Ordinal);
+            var levelGroups = component
+                .GroupBy(model => normalized[model.Id])
+                .OrderBy(group => group.Key)
+                .ToArray();
+            var columnWidth = Math.Max(layout.DataModelColumnWidth, layout.DataModelTableWidth + layout.DataModelRelationshipStubLength * 2);
+            var rowGap = Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2);
+            var columnHeights = levelGroups.ToDictionary(
+                group => group.Key,
+                group => group.Sum(model => DataModelTableHeight(model, layout)) + Math.Max(0, group.Count() - 1) * rowGap);
+            var componentHeight = columnHeights.Values.DefaultIfEmpty(0).Max();
+            var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
+
+            foreach (var levelGroup in levelGroups)
+            {
+                var groupModels = levelGroup
+                    .OrderByDescending(model => (outgoing.TryGetValue(model.Id, out var outDegree) ? outDegree.Length : 0) + (incoming.TryGetValue(model.Id, out var inDegree) ? inDegree.Length : 0))
+                    .ThenBy(model => model.FullName, StringComparer.Ordinal)
+                    .ToArray();
+                var currentY = y + (componentHeight - columnHeights[levelGroup.Key]) / 2;
+
+                foreach (var model in groupModels)
+                {
+                    var height = DataModelTableHeight(model, layout);
+                    rects[model.Id] = new Rect(
+                        x + levelGroup.Key * columnWidth,
+                        currentY,
+                        layout.DataModelTableWidth,
+                        height);
+                    currentY += height + rowGap;
+                }
+            }
+
+            return rects;
+        }
+
+        private static int DataModelTableHeight(RenderNode model, LayoutSettings layout)
+        {
+            return layout.DataModelHeaderHeight +
+                Math.Max(1, model.Properties.Count) * layout.DataModelPropertyRowHeight;
+        }
+
+        private void AddDataModelTable(XElement root, RenderNode model, Rect rect)
         {
             var tableId = DataModelNodeId(model.Id);
             root.Add(Vertex(tableId, string.Empty, DataModelContainerStyle(), "1", rect));
@@ -1726,7 +1960,7 @@ public sealed class DeterministicDrawioExporter
                 model.Name,
                 DataModelHeaderStyle(),
                 tableId,
-                new Rect(0, 0, rect.Width, 32)));
+                new Rect(0, 0, rect.Width, _settings.Layout.DataModelHeaderHeight)));
 
             var properties = model.Properties.Count == 0
                 ? new[] { new TypeProperty("(no public properties)", string.Empty) }
@@ -1739,35 +1973,166 @@ public sealed class DeterministicDrawioExporter
                     DataModelPropertyLabel(property),
                     DataModelRowStyle(index),
                     tableId,
-                    new Rect(0, 32 + index * 24, rect.Width, 24)));
+                    new Rect(
+                        0,
+                        _settings.Layout.DataModelHeaderHeight + index * _settings.Layout.DataModelPropertyRowHeight,
+                        rect.Width,
+                        _settings.Layout.DataModelPropertyRowHeight)));
             }
         }
 
-        private static int DataModelPropertyY(Rect rect, RenderNode model, string propertyName)
+        private int DataModelPropertyY(Rect rect, RenderNode model, string propertyName)
         {
             var index = model.Properties
                 .Select((property, order) => new { property.Name, order })
                 .FirstOrDefault(property => string.Equals(property.Name, propertyName, StringComparison.Ordinal))
                 ?.order ?? 0;
-            return rect.Y + 32 + index * 24 + 12;
+            return rect.Y +
+                _settings.Layout.DataModelHeaderHeight +
+                index * _settings.Layout.DataModelPropertyRowHeight +
+                _settings.Layout.DataModelPropertyRowHeight / 2;
         }
 
-        private static IReadOnlyList<Point> DataModelRoute(Point sourcePoint, Point targetPoint, int order)
+        private static DataModelTerminals GetDataModelTerminals(Rect source, Rect target, int sourcePropertyY)
         {
-            var laneOffset = (order % 4) * 18;
-            if (sourcePoint.X <= targetPoint.X)
+            var dx = target.CenterX - source.CenterX;
+            var dy = target.Y + target.Height / 2 - (source.Y + source.Height / 2);
+
+            if (Math.Abs(dx) >= Math.Abs(dy))
             {
-                var midX = sourcePoint.X + (targetPoint.X - sourcePoint.X) / 2 + laneOffset;
-                return new[] { new Point(midX, sourcePoint.Y), new Point(midX, targetPoint.Y) };
+                return dx >= 0
+                    ? new DataModelTerminals(new Point(source.Right, sourcePropertyY), new Point(target.X, Clamp(sourcePropertyY, target.Y + 12, target.Bottom - 12)))
+                    : new DataModelTerminals(new Point(source.X, sourcePropertyY), new Point(target.Right, Clamp(sourcePropertyY, target.Y + 12, target.Bottom - 12)));
             }
 
-            var sideX = Math.Max(sourcePoint.X, targetPoint.X) + 80 + laneOffset;
-            return new[]
-            {
-                new Point(sideX, sourcePoint.Y),
-                new Point(sideX, targetPoint.Y)
-            };
+            return dy >= 0
+                ? new DataModelTerminals(new Point(Clamp(target.CenterX, source.X + 12, source.Right - 12), source.Bottom), new Point(target.CenterX, target.Y))
+                : new DataModelTerminals(new Point(Clamp(target.CenterX, source.X + 12, source.Right - 12), source.Y), new Point(target.CenterX, target.Bottom));
         }
+
+        private static IReadOnlyList<Point> DataModelRoute(
+            Point sourcePoint,
+            Point targetPoint,
+            IReadOnlyList<Rect> obstacles,
+            int order,
+            LayoutSettings layout)
+        {
+            var sourceStub = StubPoint(sourcePoint, targetPoint, layout.DataModelRelationshipStubLength, awayFromSource: true);
+            var targetStub = StubPoint(targetPoint, sourcePoint, layout.DataModelRelationshipStubLength, awayFromSource: true);
+            var direct = SimplifyRoute(new[] { sourceStub, new Point(sourceStub.X, targetStub.Y), targetStub });
+            if (!DataModelRouteCrossesNode(sourcePoint, direct, targetPoint, obstacles))
+            {
+                return direct;
+            }
+
+            var laneOffset = (order % 4) * layout.DataModelRelationshipLaneSpacing;
+            var sideX = targetPoint.X >= sourcePoint.X
+                ? obstacles.Select(obstacle => obstacle.Right).DefaultIfEmpty(Math.Max(sourcePoint.X, targetPoint.X)).Max() + layout.DataModelRelationshipSideOffset + laneOffset
+                : obstacles.Select(obstacle => obstacle.X).DefaultIfEmpty(Math.Min(sourcePoint.X, targetPoint.X)).Min() - layout.DataModelRelationshipSideOffset - laneOffset;
+            var sideRoute = SimplifyRoute(new[]
+            {
+                sourceStub,
+                new Point(sideX, sourceStub.Y),
+                new Point(sideX, targetStub.Y),
+                targetStub
+            });
+
+            if (!DataModelRouteCrossesNode(sourcePoint, sideRoute, targetPoint, obstacles))
+            {
+                return sideRoute;
+            }
+
+            var sideY = targetPoint.Y >= sourcePoint.Y
+                ? obstacles.Select(obstacle => obstacle.Bottom).DefaultIfEmpty(Math.Max(sourcePoint.Y, targetPoint.Y)).Max() + layout.DataModelRelationshipSideOffset + laneOffset
+                : obstacles.Select(obstacle => obstacle.Y).DefaultIfEmpty(Math.Min(sourcePoint.Y, targetPoint.Y)).Min() - layout.DataModelRelationshipSideOffset - laneOffset;
+
+            return SimplifyRoute(new[]
+            {
+                sourceStub,
+                new Point(sourceStub.X, sideY),
+                new Point(targetStub.X, sideY),
+                targetStub
+            });
+        }
+
+        private static Point StubPoint(Point point, Point toward, int length, bool awayFromSource)
+        {
+            var dx = toward.X - point.X;
+            var dy = toward.Y - point.Y;
+            if (Math.Abs(dx) >= Math.Abs(dy))
+            {
+                var direction = Math.Sign(dx);
+                return new Point(point.X + (awayFromSource ? direction : -direction) * length, point.Y);
+            }
+
+            var verticalDirection = Math.Sign(dy);
+            return new Point(point.X, point.Y + (awayFromSource ? verticalDirection : -verticalDirection) * length);
+        }
+
+        private static bool DataModelRouteCrossesNode(
+            Point sourcePoint,
+            IReadOnlyList<Point> route,
+            Point targetPoint,
+            IReadOnlyList<Rect> obstacles)
+        {
+            var points = new List<Point> { sourcePoint };
+            points.AddRange(route);
+            points.Add(targetPoint);
+            return Segments(points).Any(segment => obstacles.Any(segment.Intersects));
+        }
+
+        private static IEnumerable<Segment> Segments(IReadOnlyList<Point> points)
+        {
+            for (var index = 0; index < points.Count - 1; index++)
+            {
+                yield return new Segment(points[index], points[index + 1]);
+            }
+        }
+
+        private static double Ratio(int x, Rect rect)
+        {
+            return Math.Max(0, Math.Min(1, (x - rect.X) / (double)rect.Width));
+        }
+
+        private static double RatioY(int y, Rect rect)
+        {
+            return Math.Max(0, Math.Min(1, (y - rect.Y) / (double)rect.Height));
+        }
+
+        private static IReadOnlyList<Point> SimplifyRoute(IEnumerable<Point> points)
+        {
+            var result = new List<Point>();
+            foreach (var point in points)
+            {
+                if (result.Count > 0 && result[result.Count - 1] == point)
+                {
+                    continue;
+                }
+
+                if (result.Count >= 2)
+                {
+                    var previous = result[result.Count - 1];
+                    var beforePrevious = result[result.Count - 2];
+                    if ((beforePrevious.X == previous.X && previous.X == point.X) ||
+                        (beforePrevious.Y == previous.Y && previous.Y == point.Y))
+                    {
+                        result[result.Count - 1] = point;
+                        continue;
+                    }
+                }
+
+                result.Add(point);
+            }
+
+            return result;
+        }
+
+        private static int Clamp(int value, int min, int max)
+        {
+            return Math.Max(min, Math.Min(max, value));
+        }
+
+        private readonly record struct DataModelTerminals(Point Source, Point Target);
 
         private XElement GraphModel(XElement root)
         {
@@ -1874,7 +2239,7 @@ public sealed class DeterministicDrawioExporter
         private static string BuildConnectorStyle(ConnectorStyle style, LinkLayout link)
         {
             var rounded = style.Rounded ? "rounded=1;" : "rounded=0;";
-            return $"edgeStyle=orthogonalEdgeStyle;html=1;{rounded}orthogonalLoop=1;jettySize=auto;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(link.ExitX)};exitY=1;entryX={FormatRatio(link.EntryX)};entryY=0;";
+            return $"edgeStyle=orthogonalEdgeStyle;html=1;{rounded}orthogonalLoop=1;jettySize=auto;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(link.ExitX)};exitY={FormatRatio(link.ExitY)};entryX={FormatRatio(link.EntryX)};entryY={FormatRatio(link.EntryY)};";
         }
 
         private static string FormatRatio(double value)
@@ -1899,8 +2264,9 @@ public sealed class DeterministicDrawioExporter
     private sealed record RenderLink(string Id, string SourceId, string TargetId, string Kind, int Order);
     private sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth, bool IsStandalone);
     private sealed record ProjectLayout(RenderProject Project, Rect Rect);
-    private sealed record LinkLayout(RenderLink Link, Point SourcePoint, Point TargetPoint, IReadOnlyList<Point> Points, double ExitX, double EntryX);
+    private sealed record LinkLayout(RenderLink Link, Point SourcePoint, Point TargetPoint, IReadOnlyList<Point> Points, double ExitX, double EntryX, double ExitY = 1, double EntryY = 0);
     private sealed record SubtreeMeasure(int Width, int Height);
+    private sealed record DataModelRelationship(string SourceId, string TargetId, string PropertyName);
 
     private readonly record struct Point(int X, int Y);
 

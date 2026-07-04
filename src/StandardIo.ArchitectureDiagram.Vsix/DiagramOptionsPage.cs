@@ -106,6 +106,29 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly NumericUpDown _horizontalSpacing = NumberBox(0, 600);
     private readonly NumericUpDown _verticalSpacing = NumberBox(0, 600);
     private readonly NumericUpDown _containerPadding = NumberBox(0, 300);
+    private readonly NumericUpDown _edgePortSpacing = NumberBox(0, 100);
+    private readonly NumericUpDown _parallelLaneSpacing = NumberBox(0, 200);
+    private readonly NumericUpDown _standaloneGroupSpacing = NumberBox(0, 2000);
+    private readonly NumericUpDown _projectHeaderHeight = NumberBox(0, 200);
+    private readonly NumericUpDown _linkPadding = NumberBox(0, 200);
+    private readonly NumericUpDown _linkNodeWidthPadding = NumberBox(0, 400);
+    private readonly NumericUpDown _exposureTreeLayoutThreshold = NumberBox(0, 2000);
+    private readonly NumericUpDown _exposureTreeMinVerticalSpacing = NumberBox(0, 1000);
+    private readonly NumericUpDown _exposureTreeMinHorizontalSpacing = NumberBox(0, 1000);
+    private readonly NumericUpDown _exposureTreeHorizontalSpacingBonus = NumberBox(0, 1000);
+    private readonly NumericUpDown _exposureTreeDepthSpacingReduction = NumberBox(0, 200);
+    private readonly NumericUpDown _exposureTreeConnectorMinSegment = NumberBox(0, 300);
+    private readonly NumericUpDown _exposureTreeConnectorClearanceMultiplier = NumberBox(1, 20);
+    private readonly NumericUpDown _exposureTreeConnectorDetourAttempts = NumberBox(1, 20);
+    private readonly NumericUpDown _dataModelTableWidth = NumberBox(100, 1200);
+    private readonly NumericUpDown _dataModelColumnWidth = NumberBox(100, 1600);
+    private readonly NumericUpDown _dataModelRowSpacing = NumberBox(100, 1600);
+    private readonly NumericUpDown _dataModelCanvasMargin = NumberBox(0, 1000);
+    private readonly NumericUpDown _dataModelHeaderHeight = NumberBox(16, 160);
+    private readonly NumericUpDown _dataModelPropertyRowHeight = NumberBox(12, 120);
+    private readonly NumericUpDown _dataModelRelationshipLaneSpacing = NumberBox(0, 200);
+    private readonly NumericUpDown _dataModelRelationshipSideOffset = NumberBox(0, 1000);
+    private readonly NumericUpDown _dataModelRelationshipStubLength = NumberBox(0, 500);
     private readonly TextBox _baselineAlignmentPattern = TextBox();
     private readonly CheckBox _showProjectContainers = new() { Text = "Show project containers", AutoSize = true };
     private readonly TextBox _connectorColor = TextBox();
@@ -127,6 +150,7 @@ internal sealed class DiagramOptionsControl : UserControl
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
         tabs.TabPages.Add(CreateGeneralTab());
+        tabs.TabPages.Add(CreateLayoutTab());
         tabs.TabPages.Add(CreateRulesTab());
         tabs.TabPages.Add(CreateSpecialStylesTab());
         Controls.Add(tabs);
@@ -148,6 +172,29 @@ internal sealed class DiagramOptionsControl : UserControl
         _horizontalSpacing.Value = Clamp(settings.Layout.HorizontalSpacing, _horizontalSpacing);
         _verticalSpacing.Value = Clamp(settings.Layout.VerticalSpacing, _verticalSpacing);
         _containerPadding.Value = Clamp(settings.Layout.ContainerPadding, _containerPadding);
+        _edgePortSpacing.Value = Clamp(settings.Layout.EdgePortSpacing, _edgePortSpacing);
+        _parallelLaneSpacing.Value = Clamp(settings.Layout.ParallelLaneSpacing, _parallelLaneSpacing);
+        _standaloneGroupSpacing.Value = Clamp(settings.Layout.StandaloneGroupSpacing, _standaloneGroupSpacing);
+        _projectHeaderHeight.Value = Clamp(settings.Layout.ProjectHeaderHeight, _projectHeaderHeight);
+        _linkPadding.Value = Clamp(settings.Layout.LinkPadding, _linkPadding);
+        _linkNodeWidthPadding.Value = Clamp(settings.Layout.LinkNodeWidthPadding, _linkNodeWidthPadding);
+        _exposureTreeLayoutThreshold.Value = Clamp(settings.Layout.ExposureTreeLayoutThreshold, _exposureTreeLayoutThreshold);
+        _exposureTreeMinVerticalSpacing.Value = Clamp(settings.Layout.ExposureTreeMinVerticalSpacing, _exposureTreeMinVerticalSpacing);
+        _exposureTreeMinHorizontalSpacing.Value = Clamp(settings.Layout.ExposureTreeMinHorizontalSpacing, _exposureTreeMinHorizontalSpacing);
+        _exposureTreeHorizontalSpacingBonus.Value = Clamp(settings.Layout.ExposureTreeHorizontalSpacingBonus, _exposureTreeHorizontalSpacingBonus);
+        _exposureTreeDepthSpacingReduction.Value = Clamp(settings.Layout.ExposureTreeDepthSpacingReduction, _exposureTreeDepthSpacingReduction);
+        _exposureTreeConnectorMinSegment.Value = Clamp(settings.Layout.ExposureTreeConnectorMinSegment, _exposureTreeConnectorMinSegment);
+        _exposureTreeConnectorClearanceMultiplier.Value = Clamp(settings.Layout.ExposureTreeConnectorClearanceMultiplier, _exposureTreeConnectorClearanceMultiplier);
+        _exposureTreeConnectorDetourAttempts.Value = Clamp(settings.Layout.ExposureTreeConnectorDetourAttempts, _exposureTreeConnectorDetourAttempts);
+        _dataModelTableWidth.Value = Clamp(settings.Layout.DataModelTableWidth, _dataModelTableWidth);
+        _dataModelColumnWidth.Value = Clamp(settings.Layout.DataModelColumnWidth, _dataModelColumnWidth);
+        _dataModelRowSpacing.Value = Clamp(settings.Layout.DataModelRowSpacing, _dataModelRowSpacing);
+        _dataModelCanvasMargin.Value = Clamp(settings.Layout.DataModelCanvasMargin, _dataModelCanvasMargin);
+        _dataModelHeaderHeight.Value = Clamp(settings.Layout.DataModelHeaderHeight, _dataModelHeaderHeight);
+        _dataModelPropertyRowHeight.Value = Clamp(settings.Layout.DataModelPropertyRowHeight, _dataModelPropertyRowHeight);
+        _dataModelRelationshipLaneSpacing.Value = Clamp(settings.Layout.DataModelRelationshipLaneSpacing, _dataModelRelationshipLaneSpacing);
+        _dataModelRelationshipSideOffset.Value = Clamp(settings.Layout.DataModelRelationshipSideOffset, _dataModelRelationshipSideOffset);
+        _dataModelRelationshipStubLength.Value = Clamp(settings.Layout.DataModelRelationshipStubLength, _dataModelRelationshipStubLength);
         _baselineAlignmentPattern.Text = settings.Layout.BaselineAlignmentPattern;
         _showProjectContainers.Checked = settings.ShowProjectContainers;
         _connectorColor.Text = settings.Connector.StrokeColor;
@@ -181,6 +228,29 @@ internal sealed class DiagramOptionsControl : UserControl
                 HorizontalSpacing = (int)_horizontalSpacing.Value,
                 VerticalSpacing = (int)_verticalSpacing.Value,
                 ContainerPadding = (int)_containerPadding.Value,
+                EdgePortSpacing = (int)_edgePortSpacing.Value,
+                ParallelLaneSpacing = (int)_parallelLaneSpacing.Value,
+                StandaloneGroupSpacing = (int)_standaloneGroupSpacing.Value,
+                ProjectHeaderHeight = (int)_projectHeaderHeight.Value,
+                LinkPadding = (int)_linkPadding.Value,
+                LinkNodeWidthPadding = (int)_linkNodeWidthPadding.Value,
+                ExposureTreeLayoutThreshold = (int)_exposureTreeLayoutThreshold.Value,
+                ExposureTreeMinVerticalSpacing = (int)_exposureTreeMinVerticalSpacing.Value,
+                ExposureTreeMinHorizontalSpacing = (int)_exposureTreeMinHorizontalSpacing.Value,
+                ExposureTreeHorizontalSpacingBonus = (int)_exposureTreeHorizontalSpacingBonus.Value,
+                ExposureTreeDepthSpacingReduction = (int)_exposureTreeDepthSpacingReduction.Value,
+                ExposureTreeConnectorMinSegment = (int)_exposureTreeConnectorMinSegment.Value,
+                ExposureTreeConnectorClearanceMultiplier = (int)_exposureTreeConnectorClearanceMultiplier.Value,
+                ExposureTreeConnectorDetourAttempts = (int)_exposureTreeConnectorDetourAttempts.Value,
+                DataModelTableWidth = (int)_dataModelTableWidth.Value,
+                DataModelColumnWidth = (int)_dataModelColumnWidth.Value,
+                DataModelRowSpacing = (int)_dataModelRowSpacing.Value,
+                DataModelCanvasMargin = (int)_dataModelCanvasMargin.Value,
+                DataModelHeaderHeight = (int)_dataModelHeaderHeight.Value,
+                DataModelPropertyRowHeight = (int)_dataModelPropertyRowHeight.Value,
+                DataModelRelationshipLaneSpacing = (int)_dataModelRelationshipLaneSpacing.Value,
+                DataModelRelationshipSideOffset = (int)_dataModelRelationshipSideOffset.Value,
+                DataModelRelationshipStubLength = (int)_dataModelRelationshipStubLength.Value,
                 BaselineAlignmentPattern = string.IsNullOrWhiteSpace(_baselineAlignmentPattern.Text)
                     ? StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings.DefaultBaselineAlignmentPattern
                     : _baselineAlignmentPattern.Text.Trim()
@@ -246,6 +316,41 @@ internal sealed class DiagramOptionsControl : UserControl
         AddRow(panel, string.Empty, _connectorRounded);
         AddRow(panel, "Excluded namespaces", _excludedNamespaces, 90);
         AddRow(panel, "Excluded names", _excludedNames, 90);
+        page.Controls.Add(panel);
+        return page;
+    }
+
+    private TabPage CreateLayoutTab()
+    {
+        var page = new TabPage("Layout");
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoScroll = true };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        AddRow(panel, "Edge port spacing", _edgePortSpacing);
+        AddRow(panel, "Parallel lane spacing", _parallelLaneSpacing);
+        AddRow(panel, "Standalone group spacing", _standaloneGroupSpacing);
+        AddRow(panel, "Project header height", _projectHeaderHeight);
+        AddRow(panel, "Link padding", _linkPadding);
+        AddRow(panel, "Link node width padding", _linkNodeWidthPadding);
+        AddRow(panel, "Exposure tree threshold", _exposureTreeLayoutThreshold);
+        AddRow(panel, "Exposure min vertical spacing", _exposureTreeMinVerticalSpacing);
+        AddRow(panel, "Exposure min horizontal spacing", _exposureTreeMinHorizontalSpacing);
+        AddRow(panel, "Exposure horizontal spacing bonus", _exposureTreeHorizontalSpacingBonus);
+        AddRow(panel, "Exposure depth spacing reduction", _exposureTreeDepthSpacingReduction);
+        AddRow(panel, "Exposure connector min segment", _exposureTreeConnectorMinSegment);
+        AddRow(panel, "Exposure connector clearance multiplier", _exposureTreeConnectorClearanceMultiplier);
+        AddRow(panel, "Exposure connector detour attempts", _exposureTreeConnectorDetourAttempts);
+        AddRow(panel, "Data model table width", _dataModelTableWidth);
+        AddRow(panel, "Data model column width", _dataModelColumnWidth);
+        AddRow(panel, "Data model row spacing", _dataModelRowSpacing);
+        AddRow(panel, "Data model canvas margin", _dataModelCanvasMargin);
+        AddRow(panel, "Data model header height", _dataModelHeaderHeight);
+        AddRow(panel, "Data model property row height", _dataModelPropertyRowHeight);
+        AddRow(panel, "Data model relationship lane spacing", _dataModelRelationshipLaneSpacing);
+        AddRow(panel, "Data model relationship side offset", _dataModelRelationshipSideOffset);
+        AddRow(panel, "Data model relationship stub length", _dataModelRelationshipStubLength);
+
         page.Controls.Add(panel);
         return page;
     }
