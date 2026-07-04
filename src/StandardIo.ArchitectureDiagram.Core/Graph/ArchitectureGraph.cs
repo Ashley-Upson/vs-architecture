@@ -30,7 +30,16 @@ public sealed record TypeNode(
     string Name,
     string FullName,
     string Kind,
-    string UniqueId = "");
+    string UniqueId = "",
+    IReadOnlyList<string>? Interfaces = null,
+    IReadOnlyList<TypeProperty>? Properties = null,
+    int MethodCount = 0);
+
+public sealed record TypeProperty(
+    string Name,
+    string TypeName,
+    string? TypeFullName = null,
+    string? TypeId = null);
 
 public sealed record ExternalDependencyNode(
     string Id,

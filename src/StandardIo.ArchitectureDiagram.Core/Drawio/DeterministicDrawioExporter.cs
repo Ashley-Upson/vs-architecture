@@ -12,6 +12,8 @@ namespace StandardIo.ArchitectureDiagram.Core.Drawio;
 public sealed class DeterministicDrawioExporter
 {
     private const int TextWidth = 8;
+    private const int ExposureTreeLayoutThreshold = 75;
+    private const string ExposureTreeIdPrefix = "tree_";
 
     public string Export(DiagramModel diagram, DiagramSettings settings)
     {
@@ -32,11 +34,13 @@ public sealed class DeterministicDrawioExporter
         private RenderGraph(
             IReadOnlyList<RenderProject> projects,
             IReadOnlyList<RenderNode> nodes,
-            IReadOnlyList<RenderLink> links)
+            IReadOnlyList<RenderLink> links,
+            IReadOnlyList<RenderNode> dataModels)
         {
             Projects = projects;
             Nodes = nodes;
             Links = links;
+            DataModels = dataModels;
         }
 
         public IReadOnlyList<RenderProject> Projects { get; }
@@ -44,6 +48,8 @@ public sealed class DeterministicDrawioExporter
         public IReadOnlyList<RenderNode> Nodes { get; }
 
         public IReadOnlyList<RenderLink> Links { get; }
+
+        public IReadOnlyList<RenderNode> DataModels { get; }
 
         public static RenderGraph From(DiagramModel diagram)
         {
@@ -57,12 +63,23 @@ public sealed class DeterministicDrawioExporter
             {
                 foreach (var type in project.Types)
                 {
+                    if (type.Kind == "Interface" || IsModelType(type))
+                    {
+                        continue;
+                    }
+
                     if (seenNodeIds.Add(type.Id))
                     {
-                        nodes.Add(new RenderNode(type.Id, type.ProjectId, type.Name, type.FullName, type.Kind, false, string.Empty, nodes.Count));
+                        nodes.Add(ToRenderNode(type, nodes.Count));
                     }
                 }
             }
+
+            var dataModels = diagram.Projects
+                .SelectMany(project => project.Types)
+                .Where(type => type.Kind != "Interface" && IsModelType(type))
+                .Select((type, order) => ToRenderNode(type, order))
+                .ToArray();
 
             var knownSourceIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
             var externalById = diagram.ExternalDependencies.ToDictionary(external => external.Id, StringComparer.Ordinal);
@@ -101,14 +118,131 @@ public sealed class DeterministicDrawioExporter
                 .Select((edge, order) => new RenderLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, order))
                 .ToArray();
 
-            return new RenderGraph(projects, nodes, links);
+            var graph = new RenderGraph(projects, nodes, links, dataModels);
+            return nodes.Count >= ExposureTreeLayoutThreshold
+                ? BuildExposureTreeGraph(graph)
+                : graph;
+        }
+
+        private static RenderGraph BuildExposureTreeGraph(RenderGraph graph)
+        {
+            var incoming = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+            var outgoing = graph.Links
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order).ThenBy(link => link.Order).ToArray(),
+                    StringComparer.Ordinal);
+
+            foreach (var link in graph.Links)
+            {
+                if (incoming.ContainsKey(link.TargetId))
+                {
+                    incoming[link.TargetId]++;
+                }
+            }
+
+            var preferredRoots = graph.Nodes
+                .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && IsExposureNode(node))
+                .OrderBy(node => node.Order)
+                .ToArray();
+            var roots = preferredRoots.Length > 0
+                ? preferredRoots
+                : graph.Nodes
+                    .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && incoming[node.Id] == 0)
+                    .OrderBy(node => node.Order)
+                    .ToArray();
+
+            if (roots.Length == 0)
+            {
+                return graph;
+            }
+
+            var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+            var clonedNodes = new List<RenderNode>();
+            var clonedLinks = new List<RenderLink>();
+            var originalNodesInTrees = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var root in roots)
+            {
+                Visit(root.Id, root.Id, SafeId(root.Id), new HashSet<string>(StringComparer.Ordinal));
+
+                string Visit(string originalNodeId, string rootId, string path, HashSet<string> ancestors)
+                {
+                    var cloneId = CloneNodeId(rootId, path, originalNodeId);
+                    if (!ancestors.Add(originalNodeId))
+                    {
+                        return cloneId;
+                    }
+
+                    originalNodesInTrees.Add(originalNodeId);
+                    var original = nodeById[originalNodeId];
+                    clonedNodes.Add(original with { Id = cloneId, Order = clonedNodes.Count });
+
+                    if (!outgoing.TryGetValue(originalNodeId, out var childLinks))
+                    {
+                        return cloneId;
+                    }
+
+                    for (var index = 0; index < childLinks.Length; index++)
+                    {
+                        var link = childLinks[index];
+                        var childPath = $"{path}_{index}_{SafeId(link.TargetId)}";
+                        var childCloneId = Visit(link.TargetId, rootId, childPath, new HashSet<string>(ancestors, StringComparer.Ordinal));
+                        clonedLinks.Add(link with
+                        {
+                            Id = $"{ExposureTreeIdPrefix}{SafeId(rootId)}__{SafeId(path)}__{SafeId(link.Id)}",
+                            SourceId = cloneId,
+                            TargetId = childCloneId,
+                            Order = clonedLinks.Count
+                        });
+                    }
+
+                    return cloneId;
+                }
+            }
+
+            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, graph.DataModels);
+        }
+
+        private static bool IsExposureNode(RenderNode node)
+        {
+            return node.FullName.Contains(".Exposures.", StringComparison.OrdinalIgnoreCase) ||
+                node.Name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsModelType(TypeNode type)
+        {
+            var hasProperties = type.Properties?.Count > 0;
+            return hasProperties && type.MethodCount == 0;
+        }
+
+        private static string CloneNodeId(string rootId, string path, string nodeId)
+        {
+            return $"{ExposureTreeIdPrefix}{SafeId(rootId)}__{SafeId(path)}__{SafeId(nodeId)}";
+        }
+
+        private static RenderNode ToRenderNode(TypeNode type, int order)
+        {
+            return new RenderNode(
+                type.Id,
+                type.ProjectId,
+                type.Name,
+                type.FullName,
+                type.Kind,
+                false,
+                string.Empty,
+                order,
+                type.Interfaces ?? Array.Empty<string>(),
+                type.Properties ?? Array.Empty<TypeProperty>(),
+                type.MethodCount);
         }
 
         private static RenderNode ToRenderNode(ExternalDependencyNode external, string id, int order)
         {
             var fullName = string.IsNullOrWhiteSpace(external.FullName) ? external.Name : external.FullName;
             var tag = string.IsNullOrWhiteSpace(external.Tag) ? "[External]" : external.Tag;
-            return new RenderNode(id, null, external.Name, fullName, "External", true, tag, order);
+            return new RenderNode(id, null, external.Name, fullName, "External", true, tag, order, Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
         }
 
         private static string SafeId(string value)
@@ -357,6 +491,12 @@ public sealed class DeterministicDrawioExporter
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths)
         {
+            if (graph.Nodes.Count >= ExposureTreeLayoutThreshold &&
+                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            {
+                return PositionExposureTrees(graph, settings, depths, widths);
+            }
+
             var incidentIds = new HashSet<string>(
                 graph.Links.SelectMany(link => new[] { link.SourceId, link.TargetId }),
                 StringComparer.Ordinal);
@@ -426,6 +566,204 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static Dictionary<string, NodeLayout> PositionExposureTrees(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, int> depths,
+            IReadOnlyDictionary<string, int> widths)
+        {
+            var result = new Dictionary<string, NodeLayout>(StringComparer.Ordinal);
+            var incoming = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+            var outgoing = graph.Links
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order)
+                        .ThenBy(link => link.Order)
+                        .ToArray(),
+                    StringComparer.Ordinal);
+
+            foreach (var link in graph.Links)
+            {
+                if (incoming.ContainsKey(link.TargetId))
+                {
+                    incoming[link.TargetId]++;
+                }
+            }
+
+            var connectedIds = new HashSet<string>(
+                graph.Links.SelectMany(link => new[] { link.SourceId, link.TargetId }),
+                StringComparer.Ordinal);
+            var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+            var roots = graph.Nodes
+                .Where(node => connectedIds.Contains(node.Id) && incoming[node.Id] == 0)
+                .OrderBy(node => node.Order)
+                .ToArray();
+            var placed = new HashSet<string>(StringComparer.Ordinal);
+            var cursorX = settings.Layout.ContainerPadding * 2;
+            var treeGap = settings.Layout.NodeWidth + settings.Layout.StandaloneGroupSpacing;
+
+            foreach (var root in roots)
+            {
+                var subtree = MeasureExposureSubtree(root.Id, graph, settings, widths, outgoing, new HashSet<string>(StringComparer.Ordinal), 0);
+                PlaceExposureSubtree(
+                    root.Id,
+                    cursorX,
+                    settings.Layout.ContainerPadding * 2,
+                    subtree.Width,
+                    0,
+                    graph,
+                    settings,
+                    widths,
+                    outgoing,
+                    nodeById,
+                    result,
+                    placed,
+                    new HashSet<string>(StringComparer.Ordinal));
+                cursorX += subtree.Width + treeGap;
+            }
+
+            var standaloneNodes = graph.Nodes
+                .Where(node => !placed.Contains(node.Id))
+                .OrderBy(node => depths.TryGetValue(node.Id, out var depth) ? depth : 0)
+                .ThenBy(node => node.Order)
+                .ToArray();
+            var standaloneStartX = result.Values
+                .Select(node => node.Rect.Right)
+                .DefaultIfEmpty(settings.Layout.ContainerPadding * 2)
+                .Max() + settings.Layout.StandaloneGroupSpacing;
+            var standaloneColumnWidth = standaloneNodes
+                .Select(node => widths[node.Id])
+                .DefaultIfEmpty(settings.Layout.NodeWidth)
+                .Max() + settings.Layout.HorizontalSpacing;
+            var standaloneNodesPerRow = standaloneNodes.Length == 0
+                ? 1
+                : (int)Math.Ceiling(Math.Sqrt(standaloneNodes.Length));
+
+            for (var index = 0; index < standaloneNodes.Length; index++)
+            {
+                var node = standaloneNodes[index];
+                var column = index % standaloneNodesPerRow;
+                var row = index / standaloneNodesPerRow;
+                result[node.Id] = new NodeLayout(
+                    node,
+                    new Rect(
+                        standaloneStartX + column * standaloneColumnWidth,
+                        settings.Layout.ContainerPadding * 2 + row * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing),
+                        widths[node.Id],
+                        settings.Layout.NodeHeight),
+                    depths.TryGetValue(node.Id, out var depth) ? depth : 0,
+                    true);
+            }
+
+            return result;
+        }
+
+        private static SubtreeMeasure MeasureExposureSubtree(
+            string nodeId,
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, int> widths,
+            IReadOnlyDictionary<string, RenderLink[]> outgoing,
+            HashSet<string> ancestors,
+            int depth)
+        {
+            if (!ancestors.Add(nodeId))
+            {
+                return new SubtreeMeasure(widths[nodeId], settings.Layout.NodeHeight);
+            }
+
+            var childMeasures = outgoing.TryGetValue(nodeId, out var childLinks)
+                ? childLinks
+                    .Select(link => MeasureExposureSubtree(link.TargetId, graph, settings, widths, outgoing, new HashSet<string>(ancestors, StringComparer.Ordinal), depth + 1))
+                    .ToArray()
+                : Array.Empty<SubtreeMeasure>();
+            if (childMeasures.Length == 0)
+            {
+                return new SubtreeMeasure(widths[nodeId], settings.Layout.NodeHeight);
+            }
+
+            var gap = ExposureTreeHorizontalGap(settings, depth);
+            var childrenWidth = childMeasures.Sum(measure => measure.Width) +
+                Math.Max(0, childMeasures.Length - 1) * gap;
+            var childrenHeight = childMeasures.Select(measure => measure.Height).DefaultIfEmpty(0).Max();
+            return new SubtreeMeasure(
+                Math.Max(widths[nodeId], childrenWidth),
+                settings.Layout.NodeHeight + Math.Max(100, settings.Layout.VerticalSpacing) + childrenHeight);
+        }
+
+        private static void PlaceExposureSubtree(
+            string nodeId,
+            int left,
+            int top,
+            int subtreeWidth,
+            int depth,
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, int> widths,
+            IReadOnlyDictionary<string, RenderLink[]> outgoing,
+            IReadOnlyDictionary<string, RenderNode> nodeById,
+            Dictionary<string, NodeLayout> result,
+            HashSet<string> placed,
+            HashSet<string> ancestors)
+        {
+            if (!ancestors.Add(nodeId))
+            {
+                return;
+            }
+
+            var width = widths[nodeId];
+            var x = left + Math.Max(0, (subtreeWidth - width) / 2);
+            result[nodeId] = new NodeLayout(
+                nodeById[nodeId],
+                new Rect(x, top, width, settings.Layout.NodeHeight),
+                depth,
+                false);
+            placed.Add(nodeId);
+
+            if (!outgoing.TryGetValue(nodeId, out var childLinks) || childLinks.Length == 0)
+            {
+                return;
+            }
+
+            var gap = ExposureTreeHorizontalGap(settings, depth);
+            var childMeasures = childLinks
+                .Select(link => new
+                {
+                    Link = link,
+                    Measure = MeasureExposureSubtree(link.TargetId, graph, settings, widths, outgoing, new HashSet<string>(ancestors, StringComparer.Ordinal), depth + 1)
+                })
+                .ToArray();
+            var rowWidth = childMeasures.Sum(child => child.Measure.Width) + Math.Max(0, childMeasures.Length - 1) * gap;
+            var childLeft = left + Math.Max(0, (subtreeWidth - rowWidth) / 2);
+            var childTop = top + settings.Layout.NodeHeight + Math.Max(100, settings.Layout.VerticalSpacing);
+
+            foreach (var child in childMeasures)
+            {
+                PlaceExposureSubtree(
+                    child.Link.TargetId,
+                    childLeft,
+                    childTop,
+                    child.Measure.Width,
+                    depth + 1,
+                    graph,
+                    settings,
+                    widths,
+                    outgoing,
+                    nodeById,
+                    result,
+                    placed,
+                    new HashSet<string>(ancestors, StringComparer.Ordinal));
+                childLeft += child.Measure.Width + gap;
+            }
+        }
+
+        private static int ExposureTreeHorizontalGap(DiagramSettings settings, int depth)
+        {
+            return Math.Max(70, settings.Layout.HorizontalSpacing + 20 - depth * 10);
         }
 
         private static void AlignBaselineNodes(DiagramSettings settings, Dictionary<string, NodeLayout> nodes)
@@ -729,6 +1067,11 @@ public sealed class DeterministicDrawioExporter
             DiagramSettings settings,
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
+            if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            {
+                return PositionExposureTreeLinks(graph, settings, nodes);
+            }
+
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
             var sourceGroups = graph.Links.GroupBy(link => link.SourceId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var targetGroups = graph.Links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
@@ -759,6 +1102,148 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static Dictionary<string, LinkLayout> PositionExposureTreeLinks(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, NodeLayout> nodes)
+        {
+            var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
+            foreach (var link in graph.Links.OrderBy(link => link.Order))
+            {
+                if (!nodes.TryGetValue(link.SourceId, out var sourceLayout) ||
+                    !nodes.TryGetValue(link.TargetId, out var targetLayout))
+                {
+                    continue;
+                }
+
+                var source = sourceLayout.Rect;
+                var target = targetLayout.Rect;
+                var sourcePoint = new Point(source.CenterX, source.Bottom);
+                var targetPoint = new Point(target.CenterX, target.Y);
+                var points = BuildExposureTreeRoute(
+                    sourcePoint,
+                    targetPoint,
+                    RoutingObstacles(nodes, link, settings.Layout.LinkPadding),
+                    settings.Layout.LinkPadding);
+
+                result[link.Id] = new LinkLayout(
+                    link,
+                    sourcePoint,
+                    targetPoint,
+                    points,
+                    Ratio(sourcePoint.X, source),
+                    Ratio(targetPoint.X, target));
+            }
+
+            return result;
+        }
+
+        private static IReadOnlyList<Point> BuildExposureTreeRoute(
+            Point sourcePoint,
+            Point targetPoint,
+            IReadOnlyList<Rect> obstacles,
+            int padding)
+        {
+            var direct = DirectExposureTreeRoute(sourcePoint, targetPoint);
+            if (!CrossesNode(WithTerminals(sourcePoint, direct, targetPoint), obstacles))
+            {
+                return direct;
+            }
+
+            var crossedObstacles = CrossedObstacles(WithTerminals(sourcePoint, direct, targetPoint), obstacles).ToArray();
+            if (crossedObstacles.Length == 0)
+            {
+                return direct;
+            }
+
+            var clearance = Math.Max(20, padding * 3);
+            var blocked = new HashSet<Rect>(crossedObstacles);
+            IReadOnlyList<Point> best = direct;
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                var topY = Math.Max(sourcePoint.Y + clearance, blocked.Min(obstacle => obstacle.Y) - clearance);
+                var bottomY = Math.Min(targetPoint.Y - clearance, blocked.Max(obstacle => obstacle.Bottom) + clearance);
+                if (bottomY <= topY)
+                {
+                    bottomY = topY + clearance;
+                }
+
+                var leftX = blocked.Min(obstacle => obstacle.X) - clearance;
+                var rightX = blocked.Max(obstacle => obstacle.Right) + clearance;
+                var candidates = new[]
+                {
+                    SideExposureTreeRoute(sourcePoint, targetPoint, leftX, topY, bottomY),
+                    SideExposureTreeRoute(sourcePoint, targetPoint, rightX, topY, bottomY)
+                };
+
+                best = candidates
+                    .OrderBy(route => CrossedObstacles(WithTerminals(sourcePoint, route, targetPoint), obstacles).Count())
+                    .ThenBy(route => RouteScore(WithTerminals(sourcePoint, route, targetPoint), sourcePoint, targetPoint))
+                    .First();
+                var remaining = CrossedObstacles(WithTerminals(sourcePoint, best, targetPoint), obstacles).ToArray();
+                if (remaining.Length == 0)
+                {
+                    return best;
+                }
+
+                foreach (var obstacle in remaining)
+                {
+                    blocked.Add(obstacle);
+                }
+            }
+
+            return best;
+        }
+
+        private static IReadOnlyList<Point> DirectExposureTreeRoute(Point sourcePoint, Point targetPoint)
+        {
+            if (sourcePoint.X == targetPoint.X)
+            {
+                return Array.Empty<Point>();
+            }
+
+            var midY = sourcePoint.Y + Math.Max(20, (targetPoint.Y - sourcePoint.Y) / 2);
+            return new[]
+            {
+                new Point(sourcePoint.X, midY),
+                new Point(targetPoint.X, midY)
+            };
+        }
+
+        private static IReadOnlyList<Point> SideExposureTreeRoute(
+            Point sourcePoint,
+            Point targetPoint,
+            int sideX,
+            int topY,
+            int bottomY)
+        {
+            return new[]
+            {
+                new Point(sourcePoint.X, topY),
+                new Point(sideX, topY),
+                new Point(sideX, bottomY),
+                new Point(targetPoint.X, bottomY)
+            };
+        }
+
+        private static List<Point> WithTerminals(
+            Point sourcePoint,
+            IReadOnlyList<Point> points,
+            Point targetPoint)
+        {
+            var route = new List<Point> { sourcePoint };
+            route.AddRange(points);
+            route.Add(targetPoint);
+            return route;
+        }
+
+        private static IEnumerable<Rect> CrossedObstacles(
+            IReadOnlyList<Point> route,
+            IReadOnlyList<Rect> obstacles)
+        {
+            return obstacles.Where(obstacle => Segments(route).Any(segment => segment.Intersects(obstacle)));
         }
 
         private static Rect[] RoutingObstacles(
@@ -1142,7 +1627,7 @@ public sealed class DeterministicDrawioExporter
 
                     root.Add(Vertex(
                         nodeLayout.Node.Id,
-                        nodeLayout.Node.Name,
+                        NodeLabel(nodeLayout.Node),
                         BuildNodeStyle(_styleResolver.Resolve(ToTypeNode(nodeLayout.Node))),
                         parent,
                         rect));
@@ -1166,7 +1651,127 @@ public sealed class DeterministicDrawioExporter
                 root.Add(Edge(linkLayout));
             }
 
-            var model = new XElement("mxGraphModel",
+            var file = new XElement("mxfile",
+                new XAttribute("host", "StandardIo.ArchitectureDiagram"),
+                new XElement("diagram", new XAttribute("name", "Architecture"), GraphModel(root)),
+                new XElement("diagram", new XAttribute("name", "Data Model"), GraphModel(DataModelRoot(layout.Graph.DataModels))));
+
+            return new XDocument(file).ToString(SaveOptions.DisableFormatting);
+        }
+
+        private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
+        {
+            var root = new XElement("root",
+                new XElement("mxCell", new XAttribute("id", "0")),
+                new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")));
+            var modelIds = new HashSet<string>(models.Select(model => model.Id), StringComparer.Ordinal);
+            var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
+            var orderedModels = models.OrderBy(model => model.FullName, StringComparer.Ordinal).ToArray();
+            var columnWidth = 380;
+            var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(orderedModels.Length)));
+
+            foreach (var model in orderedModels.Select((model, index) => new { model, index }))
+            {
+                var row = model.index / columns;
+                var column = model.index % columns;
+                var rect = DataModelRect(model.model, column, row, columnWidth);
+                rects[model.model.Id] = rect;
+                AddDataModelTable(root, model.model, rect);
+            }
+
+            var edgeOrder = 0;
+            foreach (var model in models)
+            {
+                if (!rects.TryGetValue(model.Id, out var source))
+                {
+                    continue;
+                }
+
+                foreach (var property in model.Properties.Where(property => property.TypeId is not null && modelIds.Contains(property.TypeId!)))
+                {
+                    var target = rects[property.TypeId!];
+                    var sourcePoint = new Point(source.Right, DataModelPropertyY(source, model, property.Name));
+                    var targetPoint = new Point(target.X, target.Y + 16);
+                    var route = DataModelRoute(sourcePoint, targetPoint, edgeOrder);
+                    var link = new LinkLayout(
+                        new RenderLink($"data_model_edge_{edgeOrder++}", DataModelNodeId(model.Id), DataModelNodeId(property.TypeId!), "property", edgeOrder),
+                        sourcePoint,
+                        targetPoint,
+                        route,
+                        1,
+                        0);
+                    root.Add(Edge(link));
+                }
+            }
+
+            return root;
+        }
+
+        private static Rect DataModelRect(RenderNode model, int column, int row, int columnWidth)
+        {
+            var propertyCount = Math.Max(1, model.Properties.Count);
+            return new Rect(
+                80 + column * columnWidth,
+                80 + row * 360,
+                320,
+                32 + propertyCount * 24);
+        }
+
+        private static void AddDataModelTable(XElement root, RenderNode model, Rect rect)
+        {
+            var tableId = DataModelNodeId(model.Id);
+            root.Add(Vertex(tableId, string.Empty, DataModelContainerStyle(), "1", rect));
+            root.Add(Vertex(
+                $"{tableId}_header",
+                model.Name,
+                DataModelHeaderStyle(),
+                tableId,
+                new Rect(0, 0, rect.Width, 32)));
+
+            var properties = model.Properties.Count == 0
+                ? new[] { new TypeProperty("(no public properties)", string.Empty) }
+                : model.Properties;
+            for (var index = 0; index < properties.Count; index++)
+            {
+                var property = properties[index];
+                root.Add(Vertex(
+                    $"{tableId}_row_{index}",
+                    DataModelPropertyLabel(property),
+                    DataModelRowStyle(index),
+                    tableId,
+                    new Rect(0, 32 + index * 24, rect.Width, 24)));
+            }
+        }
+
+        private static int DataModelPropertyY(Rect rect, RenderNode model, string propertyName)
+        {
+            var index = model.Properties
+                .Select((property, order) => new { property.Name, order })
+                .FirstOrDefault(property => string.Equals(property.Name, propertyName, StringComparison.Ordinal))
+                ?.order ?? 0;
+            return rect.Y + 32 + index * 24 + 12;
+        }
+
+        private static IReadOnlyList<Point> DataModelRoute(Point sourcePoint, Point targetPoint, int order)
+        {
+            var laneOffset = (order % 4) * 18;
+            if (sourcePoint.X <= targetPoint.X)
+            {
+                var midX = sourcePoint.X + (targetPoint.X - sourcePoint.X) / 2 + laneOffset;
+                return new[] { new Point(midX, sourcePoint.Y), new Point(midX, targetPoint.Y) };
+            }
+
+            var sideX = Math.Max(sourcePoint.X, targetPoint.X) + 80 + laneOffset;
+            return new[]
+            {
+                new Point(sideX, sourcePoint.Y),
+                new Point(sideX, targetPoint.Y)
+            };
+        }
+
+        private XElement GraphModel(XElement root)
+        {
+            return new XElement("mxGraphModel",
                 new XAttribute("dx", "1200"),
                 new XAttribute("dy", "900"),
                 new XAttribute("grid", "1"),
@@ -1182,12 +1787,38 @@ public sealed class DeterministicDrawioExporter
                 new XAttribute("pageHeight", "1200"),
                 new XAttribute("background", _settings.Canvas.BackgroundColor),
                 root);
+        }
 
-            var file = new XElement("mxfile",
-                new XAttribute("host", "StandardIo.ArchitectureDiagram"),
-                new XElement("diagram", new XAttribute("name", "Architecture"), model));
+        private static string NodeLabel(RenderNode node)
+        {
+            return node.Interfaces.Count == 0
+                ? node.Name
+                : $"{node.Name} ({string.Join(", ", node.Interfaces)})";
+        }
 
-            return new XDocument(file).ToString(SaveOptions.DisableFormatting);
+        private static string DataModelPropertyLabel(TypeProperty property)
+        {
+            return string.IsNullOrWhiteSpace(property.TypeName)
+                ? property.Name
+                : $"{property.TypeName}: {property.Name}";
+        }
+
+        private static string DataModelNodeId(string id) => $"data_model_{id}";
+
+        private static string DataModelContainerStyle()
+        {
+            return "shape=rectangle;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#9fb7d5;strokeWidth=1;";
+        }
+
+        private static string DataModelHeaderStyle()
+        {
+            return "shape=rectangle;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontStyle=1;fontColor=#ffffff;fillColor=#2f5f97;strokeColor=#9fb7d5;";
+        }
+
+        private static string DataModelRowStyle(int index)
+        {
+            var fill = index % 2 == 0 ? "#f7fbff" : "#e6f0fb";
+            return $"shape=rectangle;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontColor=#111111;fillColor={fill};strokeColor=#9fb7d5;";
         }
 
         private static XElement Vertex(string id, string value, string style, string parent, Rect rect)
@@ -1230,7 +1861,7 @@ public sealed class DeterministicDrawioExporter
 
         private static TypeNode ToTypeNode(RenderNode node)
         {
-            return new TypeNode(node.Id, node.ProjectId ?? string.Empty, node.Name, node.FullName, node.Kind);
+            return new TypeNode(node.Id, node.ProjectId ?? string.Empty, node.Name, node.FullName, node.Kind, Interfaces: node.Interfaces, Properties: node.Properties, MethodCount: node.MethodCount);
         }
 
         private static string BuildNodeStyle(NodeStyle style)
@@ -1253,11 +1884,23 @@ public sealed class DeterministicDrawioExporter
     }
 
     private sealed record RenderProject(string Id, string Name, int Order);
-    private sealed record RenderNode(string Id, string? ProjectId, string Name, string FullName, string Kind, bool IsExternal, string Tag, int Order);
+    private sealed record RenderNode(
+        string Id,
+        string? ProjectId,
+        string Name,
+        string FullName,
+        string Kind,
+        bool IsExternal,
+        string Tag,
+        int Order,
+        IReadOnlyList<string> Interfaces,
+        IReadOnlyList<TypeProperty> Properties,
+        int MethodCount);
     private sealed record RenderLink(string Id, string SourceId, string TargetId, string Kind, int Order);
     private sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth, bool IsStandalone);
     private sealed record ProjectLayout(RenderProject Project, Rect Rect);
     private sealed record LinkLayout(RenderLink Link, Point SourcePoint, Point TargetPoint, IReadOnlyList<Point> Points, double ExitX, double EntryX);
+    private sealed record SubtreeMeasure(int Width, int Height);
 
     private readonly record struct Point(int X, int Y);
 
