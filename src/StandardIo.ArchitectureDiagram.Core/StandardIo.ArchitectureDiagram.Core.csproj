@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <VersionMajor>0</VersionMajor>
-    <VersionMinor>1</VersionMinor>
-    <VersionPatch>34</VersionPatch>
+    <VersionMinor>2</VersionMinor>
+    <VersionPatch>1</VersionPatch>
     <Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
   </PropertyGroup>
   <ItemGroup>

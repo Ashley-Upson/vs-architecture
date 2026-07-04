@@ -4,10 +4,11 @@
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
 		<VersionMajor>0</VersionMajor>
-		<VersionMinor>1</VersionMinor>
-		<VersionPatch>34</VersionPatch>
+		<VersionMinor>2</VersionMinor>
+		<VersionPatch>1</VersionPatch>
 		<Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
-		<VsixVersionTimestamp>$([System.DateTime]::UtcNow.ToString('yyyyMMddHHmm'))</VsixVersionTimestamp>
+		<!-- VSIXInstaller parses Version with System.Version, so each segment must fit Int32. yyyyMMddHHmm overflows; yyyyMMdd is the closest installer-safe date stamp. -->
+		<VsixVersionTimestamp>$([System.DateTime]::UtcNow.ToString('yyyyMMdd'))</VsixVersionTimestamp>
 		<VsixManifestVersion>$(Version).$(VsixVersionTimestamp)</VsixManifestVersion>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
