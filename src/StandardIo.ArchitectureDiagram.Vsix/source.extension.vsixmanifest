@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>
-    <Identity Id="StandardIo.ArchitectureDiagram" Version="0.1.34" Language="en-US" Publisher="Standard I/O" />
+    <Identity Id="StandardIo.ArchitectureDiagram" Version="0.1.34" Language="en-US" Publisher="Ashley Upson" />
     <DisplayName>Architecture Diagram Generator</DisplayName>
-    <Description xml:space="preserve">Generates editable Draw.io architecture dependency diagrams from .NET projects.</Description>
+    <Description xml:space="preserve">Generates editable architecture dependency diagrams from .NET projects.</Description>
     <MoreInfo>https://example.local/standard-io-architecture-diagram</MoreInfo>
     <Tags>drawio;architecture;diagram;dependency;roslyn</Tags>
   </Metadata>
