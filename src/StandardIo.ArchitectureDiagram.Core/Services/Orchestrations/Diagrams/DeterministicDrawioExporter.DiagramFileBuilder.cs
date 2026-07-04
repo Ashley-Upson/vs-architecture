@@ -327,17 +327,7 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
             var modelsById = models.ToDictionary(model => model.Id, StringComparer.Ordinal);
             var relationships = DataModelRelationships(modelsById);
-            var adjacency = models.ToDictionary(
-                model => model.Id,
-                _ => new HashSet<string>(StringComparer.Ordinal),
-                StringComparer.Ordinal);
-
-            foreach (var relationship in relationships)
-            {
-                adjacency[relationship.SourceId].Add(relationship.TargetId);
-                adjacency[relationship.TargetId].Add(relationship.SourceId);
-            }
-
+            var adjacency = DataModelAdjacency(models, relationships);
             var connectedComponents = DataModelConnectedComponents(models, adjacency)
                 .Where(component => component.Count > 1)
                 .OrderByDescending(component => component.Count)
@@ -349,23 +339,14 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                 .OrderBy(model => model.FullName, StringComparer.Ordinal)
                 .ToArray();
 
-            var y = layout.DataModelCanvasMargin;
-            var rowGap = Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2);
-
-            foreach (var component in connectedComponents)
-            {
-                var componentRects = PositionDataModelComponent(component, relationships, layout, layout.DataModelCanvasMargin, y);
-                foreach (var rect in componentRects)
-                {
-                    rects[rect.Key] = rect.Value;
-                }
-
-                y = componentRects.Values.Max(rect => rect.Bottom) + rowGap * 2;
-            }
+            PackDataModelComponents(rects, connectedComponents, relationships, layout);
+            var y = rects.Values.Select(rect => rect.Bottom).DefaultIfEmpty(layout.DataModelCanvasMargin).Max();
 
             if (isolatedModels.Length > 0)
             {
+                y += rects.Count == 0 ? 0 : layout.DataModelComponentSpacing;
                 var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(isolatedModels.Length)));
+                var rowGap = Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2);
                 foreach (var rowModels in isolatedModels.Select((model, index) => new { model, index }).GroupBy(item => item.index / columns))
                 {
                     var row = rowModels.ToArray();
@@ -388,7 +369,59 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                 }
             }
 
+            ResolveDataModelTableOverlaps(rects, layout);
             return rects;
+        }
+
+        private static Dictionary<string, HashSet<string>> DataModelAdjacency(
+            IReadOnlyList<RenderNode> models,
+            IReadOnlyList<DataModelRelationship> relationships)
+        {
+            var adjacency = models.ToDictionary(
+                model => model.Id,
+                _ => new HashSet<string>(StringComparer.Ordinal),
+                StringComparer.Ordinal);
+
+            foreach (var relationship in relationships)
+            {
+                adjacency[relationship.SourceId].Add(relationship.TargetId);
+                adjacency[relationship.TargetId].Add(relationship.SourceId);
+            }
+
+            return adjacency;
+        }
+
+        private static void PackDataModelComponents(
+            Dictionary<string, Rect> rects,
+            IReadOnlyList<IReadOnlyList<RenderNode>> components,
+            IReadOnlyList<DataModelRelationship> relationships,
+            LayoutSettings layout)
+        {
+            var x = layout.DataModelCanvasMargin;
+            var y = layout.DataModelCanvasMargin;
+            var rowBottom = y;
+
+            foreach (var component in components)
+            {
+                var componentRects = PositionDataModelComponent(component, relationships, layout);
+                var bounds = DataModelBounds(componentRects.Values);
+                var rowWidth = Math.Max(layout.DataModelComponentRowWidth, layout.DataModelCanvasMargin * 2 + bounds.Width);
+
+                if (x > layout.DataModelCanvasMargin && x + bounds.Width > rowWidth)
+                {
+                    x = layout.DataModelCanvasMargin;
+                    y = rowBottom + layout.DataModelComponentSpacing;
+                    rowBottom = y;
+                }
+
+                foreach (var rect in componentRects)
+                {
+                    rects[rect.Key] = OffsetRect(rect.Value, x - bounds.X, y - bounds.Y);
+                }
+
+                x += bounds.Width + layout.DataModelComponentSpacing;
+                rowBottom = Math.Max(rowBottom, y + bounds.Height);
+            }
         }
 
         private static IReadOnlyList<DataModelRelationship> DataModelRelationships(IReadOnlyDictionary<string, RenderNode> modelsById)
@@ -444,31 +477,74 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
         private static Dictionary<string, Rect> PositionDataModelComponent(
             IReadOnlyList<RenderNode> component,
             IReadOnlyList<DataModelRelationship> relationships,
-            LayoutSettings layout,
-            int x,
-            int y)
+            LayoutSettings layout)
         {
             var componentIds = new HashSet<string>(component.Select(model => model.Id), StringComparer.Ordinal);
             var componentRelationships = relationships
                 .Where(relationship => componentIds.Contains(relationship.SourceId) && componentIds.Contains(relationship.TargetId))
                 .ToArray();
             var modelsById = component.ToDictionary(model => model.Id, StringComparer.Ordinal);
+            var adjacency = DataModelAdjacency(component, componentRelationships);
             var outgoing = componentRelationships
                 .GroupBy(relationship => relationship.SourceId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Select(relationship => relationship.TargetId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
             var incoming = componentRelationships
                 .GroupBy(relationship => relationship.TargetId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Select(relationship => relationship.SourceId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
-            var root = component
-                .OrderByDescending(model => (outgoing.TryGetValue(model.Id, out var outDegree) ? outDegree.Length : 0) + (incoming.TryGetValue(model.Id, out var inDegree) ? inDegree.Length : 0))
+            var root = SelectDataModelHub(component, outgoing, incoming);
+            var levels = DataModelLevels(root, adjacency, modelsById, out var parents);
+            var ringStep = DataModelRingStep(component, layout);
+            var maxRadius = levels.Values
+                .GroupBy(level => level)
+                .Max(group => DataModelRingRadius(
+                    group.Key,
+                    component.Where(model => levels[model.Id] == group.Key).ToArray(),
+                    ringStep,
+                    layout));
+            var center = new Point(maxRadius + layout.DataModelCanvasMargin, maxRadius + layout.DataModelCanvasMargin);
+            var rects = new Dictionary<string, Rect>(StringComparer.Ordinal)
+            {
+                [root.Id] = CenterDataModelTable(root, center, layout)
+            };
+
+            foreach (var group in DataModelLevelGroups(component, levels))
+            {
+                var groupModels = OrderDataModelRing(group, rects, parents, center, adjacency, modelsById).ToArray();
+                var radius = DataModelRingRadius(levels[groupModels[0].Id], groupModels, ringStep, layout);
+
+                for (var index = 0; index < groupModels.Length; index++)
+                {
+                    var angle = DataModelAngle(index, groupModels.Length);
+                    rects[groupModels[index].Id] = PositionDataModelTable(groupModels[index], center, radius, angle, layout);
+                }
+            }
+
+            return NormalizeDataModelComponent(rects);
+        }
+
+        private static RenderNode SelectDataModelHub(
+            IReadOnlyList<RenderNode> component,
+            IReadOnlyDictionary<string, string[]> outgoing,
+            IReadOnlyDictionary<string, string[]> incoming)
+        {
+            return component
+                .OrderByDescending(model => DataModelDegree(model.Id, outgoing, incoming))
                 .ThenByDescending(model => outgoing.TryGetValue(model.Id, out var outIds) ? outIds.Length : 0)
                 .ThenBy(model => model.FullName, StringComparer.Ordinal)
                 .First();
+        }
 
+        private static Dictionary<string, int> DataModelLevels(
+            RenderNode root,
+            IReadOnlyDictionary<string, HashSet<string>> adjacency,
+            IReadOnlyDictionary<string, RenderNode> modelsById,
+            out Dictionary<string, string> parents)
+        {
             var levels = new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 [root.Id] = 0
             };
+            parents = new Dictionary<string, string>(StringComparer.Ordinal);
             var queue = new Queue<string>();
             queue.Enqueue(root.Id);
 
@@ -477,71 +553,216 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                 var id = queue.Dequeue();
                 var level = levels[id];
 
-                var outgoingIds = outgoing.TryGetValue(id, out var targets)
-                    ? targets
-                    : Array.Empty<string>();
-                foreach (var targetId in outgoingIds.OrderBy(id => modelsById[id].FullName, StringComparer.Ordinal))
+                foreach (var relatedId in adjacency[id].OrderByDescending(adjacencyId => adjacency[adjacencyId].Count).ThenBy(adjacencyId => modelsById[adjacencyId].FullName, StringComparer.Ordinal))
                 {
-                    if (!levels.ContainsKey(targetId))
+                    if (!levels.ContainsKey(relatedId))
                     {
-                        levels[targetId] = level + 1;
-                        queue.Enqueue(targetId);
-                    }
-                }
-
-                var incomingIds = incoming.TryGetValue(id, out var sources)
-                    ? sources
-                    : Array.Empty<string>();
-                foreach (var sourceId in incomingIds.OrderBy(id => modelsById[id].FullName, StringComparer.Ordinal))
-                {
-                    if (!levels.ContainsKey(sourceId))
-                    {
-                        levels[sourceId] = level - 1;
-                        queue.Enqueue(sourceId);
+                        levels[relatedId] = level + 1;
+                        parents[relatedId] = id;
+                        queue.Enqueue(relatedId);
                     }
                 }
             }
 
-            foreach (var model in component.Where(model => !levels.ContainsKey(model.Id)).OrderBy(model => model.FullName, StringComparer.Ordinal))
-            {
-                levels[model.Id] = levels.Values.DefaultIfEmpty(0).Max() + 1;
-            }
+            return levels;
+        }
 
-            var minLevel = levels.Values.Min();
-            var normalized = levels.ToDictionary(item => item.Key, item => item.Value - minLevel, StringComparer.Ordinal);
-            var levelGroups = component
-                .GroupBy(model => normalized[model.Id])
+        private static IEnumerable<IGrouping<int, RenderNode>> DataModelLevelGroups(
+            IReadOnlyList<RenderNode> component,
+            IReadOnlyDictionary<string, int> levels)
+        {
+            return component
+                .Where(model => levels[model.Id] > 0)
+                .GroupBy(model => levels[model.Id])
                 .OrderBy(group => group.Key)
                 .ToArray();
-            var columnWidth = Math.Max(layout.DataModelColumnWidth, layout.DataModelTableWidth + layout.DataModelRelationshipStubLength * 2);
-            var rowGap = Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2);
-            var columnHeights = levelGroups.ToDictionary(
-                group => group.Key,
-                group => group.Sum(model => DataModelTableHeight(model, layout)) + Math.Max(0, group.Count() - 1) * rowGap);
-            var componentHeight = columnHeights.Values.DefaultIfEmpty(0).Max();
-            var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
+        }
 
-            foreach (var levelGroup in levelGroups)
+        private static IEnumerable<RenderNode> OrderDataModelRing(
+            IEnumerable<RenderNode> group,
+            IReadOnlyDictionary<string, Rect> rects,
+            IReadOnlyDictionary<string, string> parents,
+            Point center,
+            IReadOnlyDictionary<string, HashSet<string>> adjacency,
+            IReadOnlyDictionary<string, RenderNode> modelsById)
+        {
+            return group
+                .OrderBy(model => DataModelParentAngle(model.Id, rects, parents, center))
+                .ThenByDescending(model => adjacency[model.Id].Count)
+                .ThenBy(model => modelsById[model.Id].FullName, StringComparer.Ordinal);
+        }
+
+        private static double DataModelParentAngle(
+            string modelId,
+            IReadOnlyDictionary<string, Rect> rects,
+            IReadOnlyDictionary<string, string> parents,
+            Point center)
+        {
+            if (!parents.TryGetValue(modelId, out var parentId) || !rects.TryGetValue(parentId, out var parent))
             {
-                var groupModels = levelGroup
-                    .OrderByDescending(model => (outgoing.TryGetValue(model.Id, out var outDegree) ? outDegree.Length : 0) + (incoming.TryGetValue(model.Id, out var inDegree) ? inDegree.Length : 0))
-                    .ThenBy(model => model.FullName, StringComparer.Ordinal)
-                    .ToArray();
-                var currentY = y + (componentHeight - columnHeights[levelGroup.Key]) / 2;
+                return 0;
+            }
 
-                foreach (var model in groupModels)
+            return Math.Atan2(parent.CenterY - center.Y, parent.CenterX - center.X);
+        }
+
+        private static int DataModelDegree(
+            string id,
+            IReadOnlyDictionary<string, string[]> outgoing,
+            IReadOnlyDictionary<string, string[]> incoming)
+        {
+            return (outgoing.TryGetValue(id, out var outIds) ? outIds.Length : 0) +
+                (incoming.TryGetValue(id, out var inIds) ? inIds.Length : 0);
+        }
+
+        private static int DataModelRingStep(IReadOnlyList<RenderNode> component, LayoutSettings layout)
+        {
+            var maxHeight = component.Max(model => DataModelTableHeight(model, layout));
+            var minimum = Math.Max(layout.DataModelTableWidth, maxHeight) +
+                layout.DataModelRowSpacing +
+                layout.DataModelRelationshipStubLength * 2;
+            return Math.Max(layout.DataModelRadialRingSpacing, minimum);
+        }
+
+        private static int DataModelRingRadius(
+            int level,
+            IReadOnlyList<RenderNode> ringModels,
+            int ringStep,
+            LayoutSettings layout)
+        {
+            var count = ringModels.Count;
+            var maxHeight = ringModels.Select(model => DataModelTableHeight(model, layout)).DefaultIfEmpty(0).Max();
+            var minimum = Math.Max(layout.DataModelRadialMinimumRadius, level * ringStep);
+            var diagonalRadius = (int)Math.Ceiling(Math.Sqrt(
+                layout.DataModelTableWidth * layout.DataModelTableWidth +
+                maxHeight * maxHeight)) + layout.DataModelRowSpacing;
+            var circumferenceRadius = (int)Math.Ceiling(count *
+                (layout.DataModelTableWidth + layout.DataModelRowSpacing) /
+                (Math.PI * 2));
+            return Math.Max(Math.Max(minimum, diagonalRadius), circumferenceRadius);
+        }
+
+        private static double DataModelAngle(int index, int count)
+        {
+            if (count == 1)
+            {
+                return 0;
+            }
+
+            return count switch
+            {
+                2 => index == 0 ? 0 : Math.PI,
+                3 => new[] { -Math.PI / 2, 0, Math.PI }[index],
+                4 => new[] { -Math.PI / 2, 0, Math.PI / 2, Math.PI }[index],
+                _ => -Math.PI / 2 + index * (Math.PI * 2 / count)
+            };
+        }
+
+        private static Rect PositionDataModelTable(
+            RenderNode model,
+            Point center,
+            int radius,
+            double angle,
+            LayoutSettings layout)
+        {
+            var tableCenter = new Point(
+                center.X + (int)Math.Round(Math.Cos(angle) * radius),
+                center.Y + (int)Math.Round(Math.Sin(angle) * radius));
+            return CenterDataModelTable(model, tableCenter, layout);
+        }
+
+        private static Rect CenterDataModelTable(RenderNode model, Point center, LayoutSettings layout)
+        {
+            var height = DataModelTableHeight(model, layout);
+            return new Rect(
+                center.X - layout.DataModelTableWidth / 2,
+                center.Y - height / 2,
+                layout.DataModelTableWidth,
+                height);
+        }
+
+        private static Dictionary<string, Rect> NormalizeDataModelComponent(Dictionary<string, Rect> rects)
+        {
+            var bounds = DataModelBounds(rects.Values);
+            return rects.ToDictionary(
+                rect => rect.Key,
+                rect => OffsetRect(rect.Value, -bounds.X, -bounds.Y),
+                StringComparer.Ordinal);
+        }
+
+        private static Rect DataModelBounds(IEnumerable<Rect> rects)
+        {
+            var array = rects.ToArray();
+            var left = array.Min(rect => rect.X);
+            var top = array.Min(rect => rect.Y);
+            var right = array.Max(rect => rect.Right);
+            var bottom = array.Max(rect => rect.Bottom);
+            return new Rect(left, top, right - left, bottom - top);
+        }
+
+        private static Rect OffsetRect(Rect rect, int dx, int dy)
+        {
+            return rect with { X = rect.X + dx, Y = rect.Y + dy };
+        }
+
+        private static void ResolveDataModelTableOverlaps(
+            Dictionary<string, Rect> rects,
+            LayoutSettings layout)
+        {
+            var gap = Math.Max(layout.LinkPadding * 2, layout.DataModelRelationshipLaneSpacing);
+            for (var attempt = 0; attempt < rects.Count * rects.Count; attempt++)
+            {
+                if (!PushFirstDataModelOverlap(rects, gap))
                 {
-                    var height = DataModelTableHeight(model, layout);
-                    rects[model.Id] = new Rect(
-                        x + levelGroup.Key * columnWidth,
-                        currentY,
-                        layout.DataModelTableWidth,
-                        height);
-                    currentY += height + rowGap;
+                    return;
+                }
+            }
+        }
+
+        private static bool PushFirstDataModelOverlap(Dictionary<string, Rect> rects, int gap)
+        {
+            var ids = rects.Keys.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            for (var leftIndex = 0; leftIndex < ids.Length; leftIndex++)
+            {
+                for (var rightIndex = leftIndex + 1; rightIndex < ids.Length; rightIndex++)
+                {
+                    if (PushDataModelOverlap(rects, ids[leftIndex], ids[rightIndex], gap))
+                    {
+                        return true;
+                    }
                 }
             }
 
-            return rects;
+            return false;
+        }
+
+        private static bool PushDataModelOverlap(
+            Dictionary<string, Rect> rects,
+            string leftId,
+            string rightId,
+            int gap)
+        {
+            var left = rects[leftId];
+            var right = rects[rightId];
+            if (!DataModelRectsOverlap(left, right))
+            {
+                return false;
+            }
+
+            var overlapX = Math.Min(left.Right, right.Right) - Math.Max(left.X, right.X);
+            var overlapY = Math.Min(left.Bottom, right.Bottom) - Math.Max(left.Y, right.Y);
+            rects[rightId] = overlapX <= overlapY
+                ? OffsetRect(right, overlapX + gap, 0)
+                : OffsetRect(right, 0, overlapY + gap);
+            return true;
+        }
+
+        private static bool DataModelRectsOverlap(Rect left, Rect right)
+        {
+            return left.X < right.Right &&
+                left.Right > right.X &&
+                left.Y < right.Bottom &&
+                left.Bottom > right.Y;
         }
 
         private static int DataModelTableHeight(RenderNode model, LayoutSettings layout)

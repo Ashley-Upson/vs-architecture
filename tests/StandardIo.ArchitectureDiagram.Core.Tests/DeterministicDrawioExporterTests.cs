@@ -583,6 +583,55 @@ public sealed class DeterministicDrawioExporterTests
         Assert.Equal("project_api", (string?)Cell(document, "type_controller").Attribute("parent"));
     }
 
+    [Fact]
+    public void Render_places_data_model_relationships_around_highest_connected_model()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Model("type_session", "Session", ("App", "App", "type_app"), ("Request", "Request", "type_request"), ("Page", "Page", "type_page"), ("User", "User", "type_user")),
+                    Model("type_app", "App"),
+                    Model("type_request", "Request"),
+                    Model("type_page", "Page"),
+                    Model("type_user", "User")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>()));
+        var hub = NodeRect(document, "data_model_type_session");
+        var related = new[] { "data_model_type_app", "data_model_type_request", "data_model_type_page", "data_model_type_user" }
+            .Select(id => NodeRect(document, id))
+            .ToArray();
+
+        Assert.Contains(related, rect => rect.X > hub.X + hub.Width);
+        Assert.Contains(related, rect => rect.X + rect.Width < hub.X);
+        Assert.Contains(related, rect => rect.Y + rect.Height < hub.Y);
+        Assert.Contains(related, rect => rect.Y > hub.Y + hub.Height);
+    }
+
+    [Fact]
+    public void Render_prevents_data_model_table_overlaps_after_radial_layout()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Model("type_hub", "Hub", ("First", "First", "type_first"), ("Second", "Second", "type_second"), ("Third", "Third", "type_third"), ("Fourth", "Fourth", "type_fourth")),
+                    TallModel("type_first", "First"),
+                    TallModel("type_second", "Second"),
+                    TallModel("type_third", "Third"),
+                    TallModel("type_fourth", "Fourth")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>()));
+
+        AssertNoDataModelTableOverlaps(document);
+    }
+
     private static XDocument Render(DiagramModel diagram, DiagramSettings? settings = null)
     {
         return XDocument.Parse(new DrawioDiagramRenderer().Render(diagram, settings ?? DiagramSettings.CreateDefault()));
@@ -591,6 +640,22 @@ public sealed class DeterministicDrawioExporterTests
     private static TypeNode Node(string id, string projectId, string name)
     {
         return new TypeNode(id, projectId, name, $"Api.{name}", "Class");
+    }
+
+    private static TypeNode Model(string id, string name, params (string Name, string TypeName, string TypeId)[] properties)
+    {
+        var modelProperties = properties.Length == 0
+            ? new[] { new TypeProperty("Id", "int") }
+            : properties.Select(property => new TypeProperty(property.Name, property.TypeName, TypeId: property.TypeId)).ToArray();
+        return new TypeNode(id, "project_api", name, $"Api.{name}", "Class", Properties: modelProperties);
+    }
+
+    private static TypeNode TallModel(string id, string name)
+    {
+        var properties = Enumerable.Range(0, 18)
+            .Select(index => new TypeProperty($"Property{index}", "string"))
+            .ToArray();
+        return new TypeNode(id, "project_api", name, $"Api.{name}", "Class", Properties: properties);
     }
 
     private static XElement Cell(XDocument document, string id)
@@ -672,6 +737,24 @@ public sealed class DeterministicDrawioExporterTests
         }
     }
 
+    private static void AssertNoDataModelTableOverlaps(XDocument document)
+    {
+        var rects = document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("vertex") == "1" &&
+                (string?)cell.Attribute("parent") == "1" &&
+                (((string?)cell.Attribute("id")) ?? string.Empty).StartsWith("data_model_", StringComparison.Ordinal))
+            .Select(cell => NodeRect(document, (string)cell.Attribute("id")!))
+            .ToArray();
+
+        for (var left = 0; left < rects.Length; left++)
+        {
+            for (var right = left + 1; right < rects.Length; right++)
+            {
+                Assert.False(Overlaps(rects[left], rects[right]));
+            }
+        }
+    }
+
     private static (int X, int Y, int Width, int Height) NodeRect(XDocument document, string id)
     {
         return (AbsoluteX(document, id), AbsoluteY(document, id), Geometry(document, id, "width"), Geometry(document, id, "height"));
@@ -698,6 +781,16 @@ public sealed class DeterministicDrawioExporterTests
         }
 
         return false;
+    }
+
+    private static bool Overlaps(
+        (int X, int Y, int Width, int Height) left,
+        (int X, int Y, int Width, int Height) right)
+    {
+        return left.X < right.X + right.Width &&
+            left.X + left.Width > right.X &&
+            left.Y < right.Y + right.Height &&
+            left.Y + left.Height > right.Y;
     }
 
     private static void AssertParallelSegmentsSeparated(
