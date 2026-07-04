@@ -33,6 +33,33 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_layers_nodes_by_distance_from_exit_layer()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "Controller"),
+                    Node("type_processing", "project_api", "Processing"),
+                    Node("type_service", "project_api", "Service"),
+                    Node("type_job", "project_api", "Job")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_controller_processing", "type_controller", "type_processing", "internal"),
+                new DependencyEdge("edge_processing_service", "type_processing", "type_service", "internal"),
+                new DependencyEdge("edge_job_service", "type_job", "type_service", "internal")
+            }));
+
+        Assert.True(AbsoluteY(document, "type_controller") < AbsoluteY(document, "type_processing"));
+        Assert.Equal(AbsoluteY(document, "type_processing"), AbsoluteY(document, "type_job"));
+        Assert.True(AbsoluteY(document, "type_service") > AbsoluteY(document, "type_processing"));
+    }
+
+    [Fact]
     public void Render_reuses_shared_dependency_node()
     {
         var document = Render(new DiagramModel(

@@ -141,34 +141,47 @@ public sealed class DeterministicDrawioExporter
                 incoming[target]++;
             }
 
-            var depthByComponent = components
-                .Select((_, index) => new { index, depth = 0 })
-                .ToDictionary(item => item.index, item => item.depth);
+            var incomingForTopologicalSort = incoming.ToArray();
             var queue = new Queue<int>(incoming
                 .Select((count, index) => new { count, index })
                 .Where(item => item.count == 0)
                 .Select(item => item.index));
-            if (queue.Count == 0)
-            {
-                foreach (var index in Enumerable.Range(0, components.Count))
-                {
-                    queue.Enqueue(index);
-                }
-            }
+            var topologicalOrder = new List<int>();
 
             while (queue.Count > 0)
             {
                 var component = queue.Dequeue();
+                topologicalOrder.Add(component);
                 foreach (var target in outgoing[component])
                 {
-                    depthByComponent[target] = Math.Max(depthByComponent[target], depthByComponent[component] + 1);
-                    incoming[target]--;
-                    if (incoming[target] == 0)
+                    incomingForTopologicalSort[target]--;
+                    if (incomingForTopologicalSort[target] == 0)
                     {
                         queue.Enqueue(target);
                     }
                 }
             }
+
+            var distanceToExitByComponent = components
+                .Select((_, index) => new { index, distance = 0 })
+                .ToDictionary(item => item.index, item => item.distance);
+
+            foreach (var component in topologicalOrder.AsEnumerable().Reverse())
+            {
+                if (outgoing[component].Count == 0)
+                {
+                    continue;
+                }
+
+                distanceToExitByComponent[component] = outgoing[component]
+                    .Select(target => distanceToExitByComponent[target] + 1)
+                    .Max();
+            }
+
+            var maxDistanceToExit = distanceToExitByComponent.Values.DefaultIfEmpty(0).Max();
+            var depthByComponent = distanceToExitByComponent.ToDictionary(
+                item => item.Key,
+                item => maxDistanceToExit - item.Value);
 
             return graph.Nodes.ToDictionary(
                 node => node.Id,

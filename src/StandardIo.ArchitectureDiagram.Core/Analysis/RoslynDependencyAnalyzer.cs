@@ -30,6 +30,7 @@ public sealed class RoslynDependencyAnalyzer
         var resolver = new StyleResolver(settings);
         var typeBySymbol = new Dictionary<ISymbol, TypeNode>(SymbolEqualityComparer.Default);
         var typeByFullName = new Dictionary<string, TypeNode>();
+        var registeredImplementationByService = new Dictionary<ISymbol, INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var projectTypes = new List<(Project Project, string ProjectId, List<TypeNode> Types)>();
 
         foreach (var project in projects)
@@ -73,6 +74,24 @@ public sealed class RoslynDependencyAnalyzer
             }
 
             projectTypes.Add((project, StableId.From("project", project.Id.Id.ToString()), types));
+        }
+
+        foreach (var project in projects)
+        {
+            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            if (compilation is null)
+            {
+                continue;
+            }
+
+            foreach (var registration in await CollectServiceRegistrationsAsync(project, compilation, cancellationToken).ConfigureAwait(false))
+            {
+                if (!SymbolEqualityComparer.Default.Equals(registration.Service.OriginalDefinition, registration.Implementation.OriginalDefinition) &&
+                    !registeredImplementationByService.ContainsKey(registration.Service.OriginalDefinition))
+                {
+                    registeredImplementationByService[registration.Service.OriginalDefinition] = registration.Implementation.OriginalDefinition;
+                }
+            }
         }
 
         var projectContainers = projectTypes
@@ -128,18 +147,19 @@ public sealed class RoslynDependencyAnalyzer
 
                     foreach (var dependency in CollectConstructorDependencies(declaration, model, cancellationToken))
                     {
-                        if (SymbolEqualityComparer.Default.Equals(dependency, sourceSymbol))
+                        var resolvedDependency = ResolveRegisteredImplementation(dependency, registeredImplementationByService);
+                        if (SymbolEqualityComparer.Default.Equals(resolvedDependency, sourceSymbol))
                         {
                             continue;
                         }
 
-                        if (TryFindInternalNode(dependency, typeBySymbol, typeByFullName, out var targetNode))
+                        if (TryFindInternalNode(resolvedDependency, typeBySymbol, typeByFullName, out var targetNode))
                         {
                             AddEdge(edges, edgeIds, sourceNode.Id, targetNode.Id, "internal");
                             continue;
                         }
 
-                        var external = GetExternalDependency(dependency, externalDependencies, orderedExternalDependencies, usingNamespaces, settings);
+                        var external = GetExternalDependency(resolvedDependency, externalDependencies, orderedExternalDependencies, usingNamespaces, settings);
                         if (external is not null)
                         {
                             AddEdge(edges, edgeIds, sourceNode.Id, external.Id, "external");
@@ -173,6 +193,80 @@ public sealed class RoslynDependencyAnalyzer
                 yield return namedType;
             }
         }
+    }
+
+    private static async Task<IEnumerable<ServiceRegistration>> CollectServiceRegistrationsAsync(
+        Project project,
+        Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        var registrations = new List<ServiceRegistration>();
+        foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree))
+        {
+            var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+            if (root is null)
+            {
+                continue;
+            }
+
+            var model = compilation.GetSemanticModel(root.SyntaxTree);
+            foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!TryGetServiceRegistrationTypeSyntax(invocation, out var serviceType, out var implementationType))
+                {
+                    continue;
+                }
+
+                if (model.GetTypeInfo(serviceType, cancellationToken).Type is INamedTypeSymbol service &&
+                    model.GetTypeInfo(implementationType, cancellationToken).Type is INamedTypeSymbol implementation)
+                {
+                    registrations.Add(new ServiceRegistration(service.OriginalDefinition, implementation.OriginalDefinition));
+                }
+            }
+        }
+
+        return registrations;
+    }
+
+    private static bool TryGetServiceRegistrationTypeSyntax(
+        InvocationExpressionSyntax invocation,
+        out TypeSyntax serviceType,
+        out TypeSyntax implementationType)
+    {
+        serviceType = null!;
+        implementationType = null!;
+
+        if (GetInvokedName(invocation.Expression) is not GenericNameSyntax genericName ||
+            genericName.TypeArgumentList.Arguments.Count != 2 ||
+            genericName.Identifier.ValueText is not ("AddScoped" or "AddTransient" or "AddSingleton"))
+        {
+            return false;
+        }
+
+        serviceType = genericName.TypeArgumentList.Arguments[0];
+        implementationType = genericName.TypeArgumentList.Arguments[1];
+        return true;
+
+        static SimpleNameSyntax? GetInvokedName(ExpressionSyntax expression)
+        {
+            return expression switch
+            {
+                MemberAccessExpressionSyntax memberAccess => memberAccess.Name,
+                MemberBindingExpressionSyntax memberBinding => memberBinding.Name,
+                SimpleNameSyntax simpleName => simpleName,
+                _ => null
+            };
+        }
+    }
+
+    private static INamedTypeSymbol ResolveRegisteredImplementation(
+        INamedTypeSymbol dependency,
+        Dictionary<ISymbol, INamedTypeSymbol> registeredImplementationByService)
+    {
+        return registeredImplementationByService.TryGetValue(dependency.OriginalDefinition, out var implementation)
+            ? implementation
+            : dependency;
     }
 
     private static IEnumerable<INamedTypeSymbol> CollectConstructorDependencies(
@@ -365,4 +459,6 @@ public sealed class RoslynDependencyAnalyzer
     {
         return System.Guid.NewGuid().ToString("D");
     }
+
+    private sealed record ServiceRegistration(INamedTypeSymbol Service, INamedTypeSymbol Implementation);
 }

@@ -267,7 +267,7 @@ public sealed class RoslynDependencyAnalyzerTests
     }
 
     [Fact]
-    public async Task Analyze_keeps_constructor_interface_even_when_implementation_exists()
+    public async Task Analyze_keeps_constructor_interface_when_implementation_is_not_registered()
     {
         using var workspace = new AdhocWorkspace();
         var projectId = ProjectId.CreateNewId();
@@ -298,6 +298,49 @@ public sealed class RoslynDependencyAnalyzerTests
 
         Assert.Contains(project.Types, t => t.Name == "PaymentService");
         Assert.Contains(graph.Edges, e => e.SourceId == controller.Id && e.TargetId == serviceInterface.Id);
+    }
+
+    [Fact]
+    public async Task Analyze_resolves_registered_constructor_interface_to_implementation()
+    {
+        using var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                projectId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(projectId), "Services.cs", SourceText.From("""
+                namespace Api
+                {
+                    public interface ICultureService {}
+                    public class CultureService : ICultureService {}
+                    public class CultureProcessingService
+                    {
+                        public CultureProcessingService(ICultureService service) {}
+                    }
+
+                    public class Startup
+                    {
+                        public void ConfigureServices(dynamic services)
+                        {
+                            services.AddScoped<ICultureService, CultureService>();
+                        }
+                    }
+                }
+                """));
+
+        var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
+        var project = Assert.Single(graph.Projects);
+        var processing = project.Types.Single(t => t.Name == "CultureProcessingService");
+        var serviceInterface = project.Types.Single(t => t.Name == "ICultureService");
+        var serviceImplementation = project.Types.Single(t => t.Name == "CultureService");
+
+        Assert.Contains(graph.Edges, e => e.SourceId == processing.Id && e.TargetId == serviceImplementation.Id);
+        Assert.DoesNotContain(graph.Edges, e => e.SourceId == processing.Id && e.TargetId == serviceInterface.Id);
     }
 
     [Fact]
