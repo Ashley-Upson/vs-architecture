@@ -14,9 +14,12 @@ using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using StandardIo.ArchitectureDiagram.Core.Renderers;
-using StandardIo.ArchitectureDiagram.Core.Services.Processings;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using Microsoft.Extensions.DependencyInjection;
+using StandardIo.ArchitectureDiagram.Core;
+using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
+using StandardIo.ArchitectureDiagram.Core.Exposures.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Models;
 using RoslynProject = Microsoft.CodeAnalysis.Project;
 using Task = System.Threading.Tasks.Task;
 
@@ -60,15 +63,24 @@ internal sealed class DiagramCommands
                 }
 
                 var settings = SettingsStore.Load();
-                var renderer = new DiagramRendererRegistry().Resolve(settings.OutputRenderer);
+                using var provider = new ServiceCollection()
+                    .AddArchitectureDiagram()
+                    .BuildServiceProvider();
+                var renderer = provider
+                    .GetRequiredService<IDiagramRendererRegistry>()
+                    .Resolve(settings.OutputRenderer);
                 var outputPath = PromptForSavePath(target.Name, renderer);
                 if (string.IsNullOrWhiteSpace(outputPath))
                 {
                     return;
                 }
 
-                var output = await new DiagramGenerationProcessingService().GenerateAsync(target.Projects, settings);
-                File.WriteAllText(outputPath, output);
+                var output = await provider
+                    .GetRequiredService<IDiagramGenerationExposure>()
+                    .GenerateAsync(target.Projects, settings);
+                await provider
+                    .GetRequiredService<IDiagramFileBroker>()
+                    .WriteTextAsync(outputPath!, output);
                 ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
             }
             catch (Exception ex)
@@ -466,7 +478,7 @@ internal sealed class DiagramCommands
         ThreadHelper.ThrowIfNotOnUIThread();
 
         VsShellUtilities.ShowMessageBox(
-            ServiceProvider.GlobalProvider,
+            Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider,
             message,
             "Architecture Diagram Generator",
             icon,

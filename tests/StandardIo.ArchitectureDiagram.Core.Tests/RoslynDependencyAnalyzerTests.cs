@@ -1,8 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
-using StandardIo.ArchitectureDiagram.Core.Analysis;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
+using StandardIo.ArchitectureDiagram.Core.Models;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;

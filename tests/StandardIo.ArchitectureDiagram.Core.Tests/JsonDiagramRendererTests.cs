@@ -1,9 +1,8 @@
 using System;
 using System.Linq;
 using System.Text.Json;
-using StandardIo.ArchitectureDiagram.Core.Graph;
-using StandardIo.ArchitectureDiagram.Core.Renderers;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;

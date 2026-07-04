@@ -1,8 +1,11 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.Core.Services.Processings;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using Microsoft.Extensions.DependencyInjection;
+using StandardIo.ArchitectureDiagram.Core;
+using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
+using StandardIo.ArchitectureDiagram.Core.Exposures.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Cli;
 
@@ -28,11 +31,17 @@ public static class Program
                 settings.OutputRenderer = options.RendererId;
             }
 
-            var result = await new DiagramPathGenerationProcessingService()
+            using var provider = new ServiceCollection()
+                .AddArchitectureDiagram()
+                .BuildServiceProvider();
+            var result = await provider
+                .GetRequiredService<IDiagramGenerationExposure>()
                 .GenerateAsync(options.InputPath!, settings, options.OutputPath, options.ProjectFilter)
                 .ConfigureAwait(false);
-            Directory.CreateDirectory(Path.GetDirectoryName(result.OutputPath)!);
-            File.WriteAllText(result.OutputPath, result.Content);
+            await provider
+                .GetRequiredService<IDiagramFileBroker>()
+                .WriteTextAsync(result.OutputPath, result.Content)
+                .ConfigureAwait(false);
             Console.WriteLine(result.OutputPath);
             return 0;
         }
