@@ -9,7 +9,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Brokers.Roslyn;
 
 public interface IRoslynBroker
 {
-    Task<ArchitectureGraph> AnalyzeAsync(
+    Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
         CancellationToken cancellationToken = default);

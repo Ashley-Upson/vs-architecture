@@ -22,7 +22,7 @@ public sealed class RoslynBroker : IRoslynBroker
         _analyzer = analyzer ?? throw new System.ArgumentNullException(nameof(analyzer));
     }
 
-    public Task<ArchitectureGraph> AnalyzeAsync(
+    public Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
         CancellationToken cancellationToken = default)

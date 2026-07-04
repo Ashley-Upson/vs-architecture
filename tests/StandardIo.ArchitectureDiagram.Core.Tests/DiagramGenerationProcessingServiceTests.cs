@@ -15,10 +15,11 @@ public sealed class DiagramGenerationProcessingServiceTests
     public async Task GenerateAsync_analyzes_projects_then_exports_drawio()
     {
         var settings = DiagramSettings.CreateDefault();
-        var graph = new ArchitectureGraph(
+        var graph = new DiagramModel(
             new[] { new ProjectContainer("project_a", "App", System.Array.Empty<TypeNode>()) },
             System.Array.Empty<ExternalDependencyNode>(),
-            System.Array.Empty<DependencyEdge>());
+            System.Array.Empty<DependencyEdge>(),
+            new DiagramMetadata());
         var analysisProcessingService = new FakeAnalysisProcessingService(graph);
         var renderingProcessingService = new FakeRenderingProcessingService("drawio");
         var service = new DiagramGenerationProcessingService(analysisProcessingService, renderingProcessingService);
@@ -33,16 +34,16 @@ public sealed class DiagramGenerationProcessingServiceTests
 
     private sealed class FakeAnalysisProcessingService : IDiagramAnalysisProcessingService
     {
-        private readonly ArchitectureGraph _graph;
+        private readonly DiagramModel _graph;
 
-        public FakeAnalysisProcessingService(ArchitectureGraph graph)
+        public FakeAnalysisProcessingService(DiagramModel graph)
         {
             _graph = graph;
         }
 
         public DiagramSettings? Settings { get; private set; }
 
-        public Task<ArchitectureGraph> AnalyzeAsync(
+        public Task<DiagramModel> AnalyzeAsync(
             IEnumerable<Project> selectedProjects,
             DiagramSettings settings,
             CancellationToken cancellationToken = default)
@@ -61,11 +62,11 @@ public sealed class DiagramGenerationProcessingServiceTests
             _drawio = drawio;
         }
 
-        public ArchitectureGraph? Graph { get; private set; }
+        public DiagramModel? Graph { get; private set; }
 
         public DiagramSettings? Settings { get; private set; }
 
-        public string Render(ArchitectureGraph graph, DiagramSettings settings)
+        public string Render(DiagramModel graph, DiagramSettings settings)
         {
             Graph = graph;
             Settings = settings;

@@ -9,7 +9,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Processings;
 
 public interface IDiagramAnalysisProcessingService
 {
-    Task<ArchitectureGraph> AnalyzeAsync(
+    Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
         CancellationToken cancellationToken = default);

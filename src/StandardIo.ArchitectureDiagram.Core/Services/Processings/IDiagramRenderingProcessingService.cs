@@ -5,5 +5,5 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Processings;
 
 public interface IDiagramRenderingProcessingService
 {
-    string Render(ArchitectureGraph graph, DiagramSettings settings);
+    string Render(DiagramModel diagram, DiagramSettings settings);
 }

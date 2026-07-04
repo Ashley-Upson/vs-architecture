@@ -18,8 +18,8 @@ public sealed class DiagramRenderingProcessingService : IDiagramRenderingProcess
         _drawioBroker = drawioBroker ?? throw new System.ArgumentNullException(nameof(drawioBroker));
     }
 
-    public string Render(ArchitectureGraph graph, DiagramSettings settings)
+    public string Render(DiagramModel diagram, DiagramSettings settings)
     {
-        return _drawioBroker.Export(graph, settings);
+        return _drawioBroker.Export(diagram, settings);
     }
 }

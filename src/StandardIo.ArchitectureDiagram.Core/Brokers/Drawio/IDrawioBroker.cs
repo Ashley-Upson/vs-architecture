@@ -5,5 +5,5 @@ namespace StandardIo.ArchitectureDiagram.Core.Brokers.Drawio;
 
 public interface IDrawioBroker
 {
-    string Export(ArchitectureGraph graph, DiagramSettings settings);
+    string Export(DiagramModel diagram, DiagramSettings settings);
 }

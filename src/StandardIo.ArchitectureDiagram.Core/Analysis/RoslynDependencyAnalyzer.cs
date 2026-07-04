@@ -12,7 +12,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Analysis;
 
 public sealed class RoslynDependencyAnalyzer
 {
-    public async Task<ArchitectureGraph> AnalyzeAsync(
+    public async Task<DiagramModel> AnalyzeAsync(
         Project selectedProject,
         DiagramSettings settings,
         CancellationToken cancellationToken = default)
@@ -20,7 +20,7 @@ public sealed class RoslynDependencyAnalyzer
         return await AnalyzeAsync(new[] { selectedProject }, settings, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<ArchitectureGraph> AnalyzeAsync(
+    public async Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
         CancellationToken cancellationToken = default)
@@ -152,10 +152,11 @@ public sealed class RoslynDependencyAnalyzer
             }
         }
 
-        return new ArchitectureGraph(
+        return new DiagramModel(
             projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
             externalDependencies.Values.ToImmutableArray(),
-            edges.Values.ToImmutableArray());
+            edges.Values.ToImmutableArray(),
+            new DiagramMetadata());
     }
 
     private static IReadOnlyList<Project> CollectSelectedAndReferencedProjects(IEnumerable<Project> selectedProjects)

@@ -16,7 +16,7 @@ public sealed class DrawioExporter
     private const int MaxDirectLaneCandidates = 40;
     private const int ApproximateTextWidth = 8;
 
-    public string Export(ArchitectureGraph graph, DiagramSettings settings)
+    public string Export(DiagramModel graph, DiagramSettings settings)
     {
         var positions = Layout(graph, settings);
         var resolver = new StyleResolver(settings);
@@ -129,7 +129,7 @@ public sealed class DrawioExporter
         return new XDocument(file).ToString(SaveOptions.DisableFormatting);
     }
 
-    private static Dictionary<string, Rect> Layout(ArchitectureGraph graph, DiagramSettings settings)
+    private static Dictionary<string, Rect> Layout(DiagramModel graph, DiagramSettings settings)
     {
         var layout = settings.Layout;
         var result = new Dictionary<string, Rect>();
@@ -902,7 +902,7 @@ public sealed class DrawioExporter
     }
 
     private static Dictionary<string, int> CalculateNodeWidths(
-        ArchitectureGraph graph,
+        DiagramModel graph,
         LayoutSettings layout,
         HashSet<string> nodeIds)
     {
@@ -1046,7 +1046,7 @@ public sealed class DrawioExporter
     }
 
     private static Dictionary<string, int> CalculateDepths(
-        ArchitectureGraph graph,
+        DiagramModel graph,
         Dictionary<string, TypeNode> types,
         HashSet<string> nodeIds,
         List<string> orderedNodeIds,

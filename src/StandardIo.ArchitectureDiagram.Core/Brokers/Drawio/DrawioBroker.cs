@@ -18,8 +18,8 @@ public sealed class DrawioBroker : IDrawioBroker
         _exporter = exporter ?? throw new System.ArgumentNullException(nameof(exporter));
     }
 
-    public string Export(ArchitectureGraph graph, DiagramSettings settings)
+    public string Export(DiagramModel diagram, DiagramSettings settings)
     {
-        return _exporter.Export(graph, settings);
+        return _exporter.Export(diagram, settings);
     }
 }
