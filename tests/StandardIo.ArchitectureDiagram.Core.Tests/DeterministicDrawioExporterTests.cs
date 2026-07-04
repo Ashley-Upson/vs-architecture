@@ -92,13 +92,15 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
-    public void Render_aligns_default_orchestration_service_baseline()
+    public void Render_aligns_default_higher_order_service_baseline()
     {
         var document = Render(new DiagramModel(
             new[]
             {
                 new ProjectContainer("project_api", "Api", new[]
                 {
+                    Node("type_aggregation", "project_api", "ContentAggregationService"),
+                    Node("type_coordination", "project_api", "ContentCoordinationService"),
                     Node("type_template_orchestration", "project_api", "TemplateRenderOrchestrationService"),
                     Node("type_component_orchestration", "project_api", "ComponentRenderOrchestrationService"),
                     Node("type_processing", "project_api", "TemplateRenderProcessingService"),
@@ -108,14 +110,50 @@ public sealed class DeterministicDrawioExporterTests
             Array.Empty<ExternalDependencyNode>(),
             new[]
             {
+                new DependencyEdge("edge_aggregation_template", "type_aggregation", "type_template_orchestration", "internal"),
+                new DependencyEdge("edge_coordination_component", "type_coordination", "type_component_orchestration", "internal"),
                 new DependencyEdge("edge_template_processing", "type_template_orchestration", "type_processing", "internal"),
                 new DependencyEdge("edge_processing_foundation", "type_processing", "type_foundation", "internal"),
                 new DependencyEdge("edge_component_foundation", "type_component_orchestration", "type_foundation", "internal")
             }));
+        var baselineY = AbsoluteY(document, "type_template_orchestration");
 
-        Assert.Equal(
-            AbsoluteY(document, "type_template_orchestration"),
-            AbsoluteY(document, "type_component_orchestration"));
+        Assert.Equal(baselineY, AbsoluteY(document, "type_component_orchestration"));
+        Assert.Equal(baselineY, AbsoluteY(document, "type_aggregation"));
+        Assert.Equal(baselineY, AbsoluteY(document, "type_coordination"));
+    }
+
+    [Fact]
+    public void Render_does_not_vertically_shift_matched_baseline_nodes_under_link_pressure()
+    {
+        var nodes = Enumerable.Range(0, 4)
+            .SelectMany(index => new[]
+            {
+                Node($"type_processing_{index}", "project_api", $"Processing{index}Service"),
+                Node($"type_leaf_{index}", "project_api", $"Leaf{index}")
+            })
+            .ToArray();
+        var edges = Enumerable.Range(0, 4)
+            .SelectMany(index => new[]
+            {
+                new DependencyEdge($"edge_orchestration_processing_{index}", "type_orchestration", $"type_processing_{index}", "internal"),
+                new DependencyEdge($"edge_processing_leaf_{index}", $"type_processing_{index}", $"type_leaf_{index}", "internal")
+            })
+            .Concat(new[] { new DependencyEdge("edge_coordination_leaf", "type_coordination", "type_leaf_0", "internal") })
+            .ToArray();
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_orchestration", "project_api", "TemplateRenderOrchestrationService"),
+                    Node("type_coordination", "project_api", "TemplateRenderCoordinationService")
+                }.Concat(nodes).ToArray())
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            edges));
+
+        Assert.Equal(AbsoluteY(document, "type_orchestration"), AbsoluteY(document, "type_coordination"));
     }
 
     [Fact]
@@ -495,6 +533,40 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_routes_waypoints_around_non_endpoint_nodes_including_external_nodes()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "Controller"),
+                    Node("type_job", "project_api", "Job"),
+                    Node("type_orchestration", "project_api", "TemplateRenderOrchestrationService"),
+                    Node("type_processing", "project_api", "TemplateRenderProcessingService"),
+                    Node("type_foundation", "project_api", "TemplateRenderFoundationService")
+                })
+            },
+            new[]
+            {
+                new ExternalDependencyNode("external_logger", "ILogger", "Microsoft.Extensions.Logging", "external-logger", "Microsoft.Extensions.Logging.ILogger", "[External]"),
+                new ExternalDependencyNode("external_clock", "IClock", "System", "external-clock", "System.IClock", "[External]")
+            },
+            new[]
+            {
+                new DependencyEdge("edge_controller_orchestration", "type_controller", "type_orchestration", "internal"),
+                new DependencyEdge("edge_job_orchestration", "type_job", "type_orchestration", "internal"),
+                new DependencyEdge("edge_orchestration_processing", "type_orchestration", "type_processing", "internal"),
+                new DependencyEdge("edge_processing_foundation", "type_processing", "type_foundation", "internal"),
+                new DependencyEdge("edge_controller_logger", "type_controller", "external_logger", "external"),
+                new DependencyEdge("edge_job_logger", "type_job", "external_logger", "external"),
+                new DependencyEdge("edge_orchestration_clock", "type_orchestration", "external_clock", "external")
+            }));
+
+        AssertNoWaypointSegmentsCrossNonEndpointNodes(document);
+    }
+
+    [Fact]
     public void Render_keeps_project_container_as_border_parent()
     {
         var document = Render(new DiagramModel(
@@ -570,6 +642,63 @@ public sealed class DeterministicDrawioExporterTests
                 int.Parse((string)point.Attribute("x")!),
                 int.Parse((string)point.Attribute("y")!)))
             .ToArray();
+    }
+
+    private static void AssertNoWaypointSegmentsCrossNonEndpointNodes(XDocument document)
+    {
+        var nodeRects = document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("vertex") == "1" &&
+                !(((string?)cell.Attribute("id")) ?? string.Empty).StartsWith("project_", StringComparison.Ordinal))
+            .ToDictionary(
+                cell => (string)cell.Attribute("id")!,
+                cell => NodeRect(document, (string)cell.Attribute("id")!),
+                StringComparer.Ordinal);
+
+        foreach (var edge in document.Descendants("mxCell").Where(cell => (string?)cell.Attribute("edge") == "1"))
+        {
+            var edgeId = (string)edge.Attribute("id")!;
+            var sourceId = (string?)edge.Attribute("source");
+            var targetId = (string?)edge.Attribute("target");
+            foreach (var segment in TestSegments(EdgePoints(document, edgeId)))
+            {
+                foreach (var node in nodeRects.Where(node =>
+                    !string.Equals(node.Key, sourceId, StringComparison.Ordinal) &&
+                    !string.Equals(node.Key, targetId, StringComparison.Ordinal)))
+                {
+                    Assert.False(
+                        SegmentIntersects(segment.Start, segment.End, node.Value),
+                        $"{edgeId} crosses {node.Key} between {segment.Start} and {segment.End}.");
+                }
+            }
+        }
+    }
+
+    private static (int X, int Y, int Width, int Height) NodeRect(XDocument document, string id)
+    {
+        return (AbsoluteX(document, id), AbsoluteY(document, id), Geometry(document, id, "width"), Geometry(document, id, "height"));
+    }
+
+    private static bool SegmentIntersects((int X, int Y) start, (int X, int Y) end, (int X, int Y, int Width, int Height) rect)
+    {
+        var right = rect.X + rect.Width;
+        var bottom = rect.Y + rect.Height;
+        if (start.Y == end.Y)
+        {
+            return start.Y > rect.Y &&
+                start.Y < bottom &&
+                Math.Max(start.X, end.X) > rect.X &&
+                Math.Min(start.X, end.X) < right;
+        }
+
+        if (start.X == end.X)
+        {
+            return start.X > rect.X &&
+                start.X < right &&
+                Math.Max(start.Y, end.Y) > rect.Y &&
+                Math.Min(start.Y, end.Y) < bottom;
+        }
+
+        return false;
     }
 
     private static void AssertParallelSegmentsSeparated(

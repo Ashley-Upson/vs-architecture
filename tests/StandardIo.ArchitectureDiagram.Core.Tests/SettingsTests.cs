@@ -45,6 +45,42 @@ public sealed class SettingsTests
     }
 
     [Fact]
+    public void Default_fallback_style_uses_readable_text()
+    {
+        var style = new StyleResolver(DiagramSettings.CreateDefault()).Resolve(new TypeNode(
+            "type1",
+            "project1",
+            "UnmatchedThing",
+            "App.UnmatchedThing",
+            "Class"));
+
+        Assert.Equal("#111111", style.FontColor);
+    }
+
+    [Fact]
+    public void Default_service_styles_use_first_specific_matching_rule()
+    {
+        var resolver = new StyleResolver(DiagramSettings.CreateDefault());
+
+        var coordination = resolver.Resolve(new TypeNode(
+            "type1",
+            "project1",
+            "ComponentRenderCoordinationService",
+            "App.ComponentRenderCoordinationService",
+            "Class"));
+        var generic = resolver.Resolve(new TypeNode(
+            "type2",
+            "project1",
+            "EmailService",
+            "App.EmailService",
+            "Class"));
+
+        Assert.NotEqual(generic.FillColor, coordination.FillColor);
+        Assert.Equal("#2f8f83", coordination.FillColor);
+        Assert.Equal("#dae8fc", generic.FillColor);
+    }
+
+    [Fact]
     public void Exclusion_rules_match_namespace_and_name()
     {
         var settings = DiagramSettings.CreateDefault();

@@ -42,15 +42,18 @@ public sealed class DiagramSettings
             StyleRules = new List<StyleRule>
             {
                 new() { Match = "*Controller", Style = new NodeStyle { FillColor = "#1f57ff", StrokeColor = "#102a86", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
-                new() { Match = "*Orchestration", Style = new NodeStyle { FillColor = "#48aeea", StrokeColor = "#1f6f95", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
-                new() { Match = "*Processing", Style = new NodeStyle { FillColor = "#651fff", StrokeColor = "#35118a", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
-                new() { Match = "*Foundation", Style = new NodeStyle { FillColor = "#2daf11", StrokeColor = "#1a7009", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
-                new() { Match = "*Broker", Style = new NodeStyle { FillColor = "#72bf1e", StrokeColor = "#467914", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
+                new() { Match = "*AggregationService", Style = new NodeStyle { FillColor = "#2f8f83", StrokeColor = "#16564f", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
+                new() { Match = "*CoordinationService", Style = new NodeStyle { FillColor = "#2f8f83", StrokeColor = "#16564f", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
+                new() { Match = "*OrchestrationService", Style = new NodeStyle { FillColor = "#48aeea", StrokeColor = "#1f6f95", FontColor = "#111111", Shape = "rounded", Shadow = true } },
+                new() { Match = "*ProcessingService", Style = new NodeStyle { FillColor = "#651fff", StrokeColor = "#35118a", FontColor = "#ffffff", Shape = "rounded", Shadow = true } },
+                new() { Match = "*FoundationService", Style = new NodeStyle { FillColor = "#2daf11", StrokeColor = "#1a7009", FontColor = "#111111", Shape = "rounded", Shadow = true } },
+                new() { Match = "*Broker", Style = new NodeStyle { FillColor = "#72bf1e", StrokeColor = "#467914", FontColor = "#111111", Shape = "rounded", Shadow = true } },
                 new() { Match = "*Repository", Style = new NodeStyle { FillColor = "#4b0000", StrokeColor = "#ffffff", FontColor = "#ffffff", Shape = "cylinder", Shadow = true } },
                 new() { Match = "*Db", Style = new NodeStyle { FillColor = "#4b0000", StrokeColor = "#ffffff", FontColor = "#ffffff", Shape = "cylinder", Shadow = true } },
                 new() { Match = "*Database", Style = new NodeStyle { FillColor = "#4b0000", StrokeColor = "#ffffff", FontColor = "#ffffff", Shape = "cylinder", Shadow = true } },
                 new() { Match = "*Hub", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } },
-                new() { Match = "*Queue", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } }
+                new() { Match = "*Queue", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } },
+                new() { Match = "*Service", Style = new NodeStyle { FillColor = "#dae8fc", StrokeColor = "#6c8ebf", FontColor = "#111111", Shape = "rounded", Shadow = true } }
             },
             OutputRenderer = "drawio",
             ExternalDependencyTag = "[External]"
@@ -66,7 +69,7 @@ public sealed class CanvasSettings
 
 public sealed class LayoutSettings
 {
-    public const string DefaultBaselineAlignmentPattern = ".*OrchestrationService$";
+    public const string DefaultBaselineAlignmentPattern = ".*(Aggregation|Coordination|Orchestration)Service$";
 
     public int NodeWidth { get; set; } = 200;
     public int NodeHeight { get; set; } = 80;
@@ -107,7 +110,7 @@ public sealed class NodeStyle
 {
     public string FillColor { get; set; } = "#dae8fc";
     public string StrokeColor { get; set; } = "#6c8ebf";
-    public string FontColor { get; set; } = "#ffffff";
+    public string FontColor { get; set; } = "#111111";
     public string Shape { get; set; } = "rounded";
     public bool Shadow { get; set; } = true;
     public string? ExtraStyle { get; set; }

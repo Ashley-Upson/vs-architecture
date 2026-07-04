@@ -389,6 +389,7 @@ public sealed class DeterministicDrawioExporter
             ResolveDepthBandVerticalOverlaps(settings, result);
             AlignBaselineNodes(settings, result);
             PlaceExternalDependencyNodes(graph, settings, result);
+            AlignBaselineNodes(settings, result);
 
             var standaloneX = result.Count == 0
                 ? settings.Layout.ContainerPadding * 2
@@ -743,10 +744,7 @@ public sealed class DeterministicDrawioExporter
                 var targetOffset = PortOffset(targetGroups[link.TargetId], link, settings.Layout.EdgePortSpacing);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
-                var obstacles = nodes.Values
-                    .Where(node => !node.IsStandalone)
-                    .Select(node => node.Rect)
-                    .ToArray();
+                var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
                 var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
                 var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners, occupiedSegments);
                 occupiedSegments.AddRange(Segments(route));
@@ -761,6 +759,19 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static Rect[] RoutingObstacles(
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            RenderLink link,
+            int padding)
+        {
+            return nodes.Values
+                .Where(node => !node.IsStandalone &&
+                    !string.Equals(node.Node.Id, link.SourceId, StringComparison.Ordinal) &&
+                    !string.Equals(node.Node.Id, link.TargetId, StringComparison.Ordinal))
+                .Select(node => node.Rect.Inflate(padding))
+                .ToArray();
         }
 
         private static Dictionary<string, int> CalculateRouteLaneIndexes(
@@ -1261,6 +1272,11 @@ public sealed class DeterministicDrawioExporter
         public bool Contains(Point point)
         {
             return point.X > X && point.X < Right && point.Y > Y && point.Y < Bottom;
+        }
+
+        public Rect Inflate(int padding)
+        {
+            return new Rect(X - padding, Y - padding, Width + padding * 2, Height + padding * 2);
         }
     }
 
