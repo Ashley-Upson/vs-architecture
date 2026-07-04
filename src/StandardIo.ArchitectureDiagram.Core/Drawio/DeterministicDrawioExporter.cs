@@ -295,7 +295,8 @@ public sealed class DeterministicDrawioExporter
                     result[node.Id] = new NodeLayout(
                         node,
                         new Rect(x, NodeY(layer.Key, settings), widths[node.Id], settings.Layout.NodeHeight),
-                        layer.Key);
+                        layer.Key,
+                        false);
                     x += widths[node.Id] + settings.Layout.HorizontalSpacing;
                 }
             }
@@ -305,20 +306,36 @@ public sealed class DeterministicDrawioExporter
 
             var standaloneX = result.Count == 0
                 ? settings.Layout.ContainerPadding * 2
-                : result.Values.Max(node => node.Rect.Right) + settings.Layout.StandaloneGroupSpacing;
-            foreach (var layer in standalone
-                .GroupBy(node => depths[node.Id])
-                .OrderBy(group => group.Key))
+                : result.Values
+                    .Where(node => !node.IsStandalone)
+                    .Select(node => node.Rect.Right)
+                    .DefaultIfEmpty(result.Values.Max(node => node.Rect.Right))
+                    .Max() + settings.Layout.StandaloneGroupSpacing + graph.Links.Count * settings.Layout.ParallelLaneSpacing;
+            var standaloneNodes = standalone
+                .OrderBy(node => depths[node.Id])
+                .ThenBy(node => node.Order)
+                .ToArray();
+            var standaloneNodesPerRow = standaloneNodes.Length == 0
+                ? 1
+                : (int)Math.Ceiling(Math.Sqrt(standaloneNodes.Length));
+            var standaloneColumnWidth = standaloneNodes
+                .Select(node => widths[node.Id])
+                .DefaultIfEmpty(settings.Layout.NodeWidth)
+                .Max() + settings.Layout.HorizontalSpacing;
+            for (var index = 0; index < standaloneNodes.Length; index++)
             {
-                var x = standaloneX;
-                foreach (var node in layer.OrderBy(node => node.Order))
-                {
-                    result[node.Id] = new NodeLayout(
-                        node,
-                        new Rect(x, NodeY(layer.Key, settings), widths[node.Id], settings.Layout.NodeHeight),
-                        layer.Key);
-                    x += widths[node.Id] + settings.Layout.HorizontalSpacing;
-                }
+                var node = standaloneNodes[index];
+                var column = index % standaloneNodesPerRow;
+                var row = index / standaloneNodesPerRow;
+                result[node.Id] = new NodeLayout(
+                    node,
+                    new Rect(
+                        standaloneX + column * standaloneColumnWidth,
+                        settings.Layout.ContainerPadding * 2 + row * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing),
+                        widths[node.Id],
+                        settings.Layout.NodeHeight),
+                    depths[node.Id],
+                    true);
             }
 
             return result;
@@ -414,7 +431,11 @@ public sealed class DeterministicDrawioExporter
                 var targetOffset = PortOffset(targetGroups[link.TargetId], link, settings.Layout.EdgePortSpacing);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
-                var route = BuildRoute(sourcePoint, targetPoint, nodes, settings, link.Order, usedCorners, occupiedSegments);
+                var obstacles = nodes.Values
+                    .Where(node => !node.IsStandalone)
+                    .Select(node => node.Rect)
+                    .ToArray();
+                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, link.Order, usedCorners, occupiedSegments);
                 occupiedSegments.AddRange(Segments(route));
 
                 result[link.Id] = new LinkLayout(
@@ -432,7 +453,7 @@ public sealed class DeterministicDrawioExporter
         private static IReadOnlyList<Point> BuildRoute(
             Point sourcePoint,
             Point targetPoint,
-            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyList<Rect> obstacles,
             DiagramSettings settings,
             int order,
             HashSet<string> usedCorners,
@@ -452,23 +473,92 @@ public sealed class DeterministicDrawioExporter
                 targetEntry
             };
 
-            if (CrossesNode(points, nodes.Values.Select(node => node.Rect).ToArray()))
+            if (CrossesNode(points, obstacles))
             {
-                var sideX = nodes.Values.Max(node => node.Rect.Right) + settings.Layout.HorizontalSpacing + laneOffset;
-                points = new List<Point>
-                {
-                    sourceExit,
-                    new(sourceExit.X, sourceExit.Y + settings.Layout.LinkPadding + laneOffset),
-                    new(sideX, sourceExit.Y + settings.Layout.LinkPadding + laneOffset),
-                    new(sideX, targetEntry.Y - settings.Layout.LinkPadding - laneOffset),
-                    new(targetEntry.X, targetEntry.Y - settings.Layout.LinkPadding - laneOffset),
-                    targetEntry
-                };
+                points = BuildCorridorRoute(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                    ?? BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset);
             }
 
             points = SeparateOverlappingCorners(points, usedCorners, settings.Layout.ParallelLaneSpacing);
             points = SeparateParallelSegments(points, occupiedSegments, settings.Layout.ParallelLaneSpacing);
+            if (CrossesNode(points, obstacles))
+            {
+                points = BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset + settings.Layout.ParallelLaneSpacing);
+            }
+
             return Simplify(points);
+        }
+
+        private static List<Point>? BuildCorridorRoute(
+            Point sourceExit,
+            Point targetEntry,
+            IReadOnlyList<Rect> obstacles,
+            DiagramSettings settings,
+            int laneOffset)
+        {
+            foreach (var corridorX in CorridorCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset))
+            {
+                var route = new List<Point>
+                {
+                    sourceExit,
+                    new(corridorX, sourceExit.Y),
+                    new(corridorX, targetEntry.Y),
+                    targetEntry
+                };
+
+                if (!CrossesNode(route, obstacles))
+                {
+                    return route;
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<int> CorridorCandidates(
+            Point sourceExit,
+            Point targetEntry,
+            IReadOnlyList<Rect> obstacles,
+            DiagramSettings settings,
+            int laneOffset)
+        {
+            var desired = sourceExit.X + (targetEntry.X - sourceExit.X) / 2;
+            var minX = Math.Min(sourceExit.X, targetEntry.X);
+            var maxX = Math.Max(sourceExit.X, targetEntry.X);
+            var padding = settings.Layout.LinkPadding + Math.Abs(laneOffset);
+            var sorted = obstacles.OrderBy(obstacle => obstacle.X).ToArray();
+
+            return sorted
+                .Zip(sorted.Skip(1), (left, right) => new { Left = left.Right + padding, Right = right.X - padding })
+                .Where(gap => gap.Right > gap.Left)
+                .Select(gap => gap.Left + (gap.Right - gap.Left) / 2)
+                .Where(candidate => candidate >= minX - settings.Layout.HorizontalSpacing &&
+                    candidate <= maxX + settings.Layout.HorizontalSpacing)
+                .Distinct()
+                .OrderBy(candidate => Math.Abs(candidate - desired))
+                .ThenBy(candidate => candidate);
+        }
+
+        private static List<Point> BuildOutsideRoute(
+            Point sourceExit,
+            Point targetEntry,
+            IReadOnlyList<Rect> obstacles,
+            DiagramSettings settings,
+            int laneOffset)
+        {
+            var sideX = obstacles
+                .Select(obstacle => obstacle.Right)
+                .DefaultIfEmpty(Math.Max(sourceExit.X, targetEntry.X))
+                .Max() + settings.Layout.HorizontalSpacing + Math.Abs(laneOffset);
+            return new List<Point>
+            {
+                sourceExit,
+                new(sourceExit.X, sourceExit.Y + settings.Layout.LinkPadding + laneOffset),
+                new(sideX, sourceExit.Y + settings.Layout.LinkPadding + laneOffset),
+                new(sideX, targetEntry.Y - settings.Layout.LinkPadding - laneOffset),
+                new(targetEntry.X, targetEntry.Y - settings.Layout.LinkPadding - laneOffset),
+                targetEntry
+            };
         }
 
         private static List<Point> SeparateOverlappingCorners(List<Point> points, HashSet<string> usedCorners, int spacing)
@@ -755,7 +845,7 @@ public sealed class DeterministicDrawioExporter
     private sealed record RenderProject(string Id, string Name, int Order);
     private sealed record RenderNode(string Id, string? ProjectId, string Name, string FullName, string Kind, bool IsExternal, string Tag, int Order);
     private sealed record RenderLink(string Id, string SourceId, string TargetId, string Kind, int Order);
-    private sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth);
+    private sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth, bool IsStandalone);
     private sealed record ProjectLayout(RenderProject Project, Rect Rect);
     private sealed record LinkLayout(RenderLink Link, Point SourcePoint, Point TargetPoint, IReadOnlyList<Point> Points, double ExitX, double EntryX);
 

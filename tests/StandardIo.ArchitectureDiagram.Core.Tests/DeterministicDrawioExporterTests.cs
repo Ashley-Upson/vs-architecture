@@ -190,6 +190,31 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_places_standalone_nodes_in_square_root_grid()
+    {
+        var standaloneNodes = Enumerable.Range(0, 10)
+            .Select(index => Node($"type_standalone_{index}", "project_api", $"Standalone{index}"))
+            .ToArray();
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "Controller"),
+                    Node("type_service", "project_api", "Service")
+                }.Concat(standaloneNodes).ToArray())
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("edge_controller_service", "type_controller", "type_service", "internal") }));
+
+        Assert.Equal(AbsoluteY(document, "type_standalone_0"), AbsoluteY(document, "type_standalone_3"));
+        Assert.Equal(AbsoluteX(document, "type_standalone_0"), AbsoluteX(document, "type_standalone_4"));
+        Assert.True(AbsoluteY(document, "type_standalone_4") > AbsoluteY(document, "type_standalone_0"));
+        Assert.True(AbsoluteX(document, "type_standalone_9") > AbsoluteX(document, "type_standalone_8"));
+        Assert.Equal(AbsoluteY(document, "type_standalone_8"), AbsoluteY(document, "type_standalone_9"));
+    }
+
+    [Fact]
     public void Render_labels_external_boundary_nodes_with_configured_tag()
     {
         var settings = DiagramSettings.CreateDefault();
