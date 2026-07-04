@@ -1,5 +1,4 @@
-using StandardIo.ArchitectureDiagram.Core.Graph;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using StandardIo.ArchitectureDiagram.Core.Models;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;

@@ -5,8 +5,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.VisualStudio.Shell;
-using StandardIo.ArchitectureDiagram.Core.Renderers;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Vsix;
 
@@ -221,7 +221,7 @@ internal sealed class DiagramOptionsControl : UserControl
                 DefaultFontColor = _defaultFontColor.Text.Trim()
             },
             OutputRenderer = Convert.ToString(_outputRenderer.SelectedItem)?.Trim() ?? DiagramRendererIds.Drawio,
-            Layout = new StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings
+            Layout = new StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings
             {
                 NodeWidth = (int)_nodeWidth.Value,
                 NodeHeight = (int)_nodeHeight.Value,
@@ -252,7 +252,7 @@ internal sealed class DiagramOptionsControl : UserControl
                 DataModelRelationshipSideOffset = (int)_dataModelRelationshipSideOffset.Value,
                 DataModelRelationshipStubLength = (int)_dataModelRelationshipStubLength.Value,
                 BaselineAlignmentPattern = string.IsNullOrWhiteSpace(_baselineAlignmentPattern.Text)
-                    ? StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings.DefaultBaselineAlignmentPattern
+                    ? StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings.DefaultBaselineAlignmentPattern
                     : _baselineAlignmentPattern.Text.Trim()
             },
             Connector = new ConnectorStyle
@@ -275,10 +275,10 @@ internal sealed class DiagramOptionsControl : UserControl
     {
         settings ??= DiagramSettings.CreateDefault();
         settings.Canvas ??= new CanvasSettings();
-        settings.Layout ??= new StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings();
+        settings.Layout ??= new StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings();
         settings.Connector ??= new ConnectorStyle();
         settings.Layout.BaselineAlignmentPattern = string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)
-            ? StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings.DefaultBaselineAlignmentPattern
+            ? StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings.DefaultBaselineAlignmentPattern
             : settings.Layout.BaselineAlignmentPattern.Trim();
         settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
             ? DiagramRendererIds.Drawio

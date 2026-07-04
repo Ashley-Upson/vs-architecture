@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using System.Text.Json;
-using StandardIo.ArchitectureDiagram.Core.Graph;
+using StandardIo.ArchitectureDiagram.Core.Models;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;

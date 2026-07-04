@@ -1,8 +1,9 @@
 using System;
-using StandardIo.ArchitectureDiagram.Core.Graph;
-using StandardIo.ArchitectureDiagram.Core.Renderers;
-using StandardIo.ArchitectureDiagram.Core.Services.Processings;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Services.Coordinations.Diagrams;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;

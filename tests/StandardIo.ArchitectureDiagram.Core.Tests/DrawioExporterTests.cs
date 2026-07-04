@@ -1,6 +1,5 @@
-using StandardIo.ArchitectureDiagram.Core.Drawio;
-using StandardIo.ArchitectureDiagram.Core.Graph;
-using StandardIo.ArchitectureDiagram.Core.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models;
 using System.Globalization;
 using System.Xml.Linq;
 using Xunit;
