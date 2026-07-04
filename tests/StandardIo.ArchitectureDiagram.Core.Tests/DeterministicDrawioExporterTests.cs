@@ -381,6 +381,63 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_places_external_dependency_directly_below_constructing_node()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "Controller"),
+                    Node("type_service", "project_api", "Service")
+                })
+            },
+            new[] { new ExternalDependencyNode("external_domain", "DomainService", "Domain", "external-guid", "Domain.DomainService", "[External]") },
+            new[]
+            {
+                new DependencyEdge("edge_controller_service", "type_controller", "type_service", "internal"),
+                new DependencyEdge("edge_controller_external", "type_controller", "external_domain", "external")
+            }),
+            settings);
+
+        Assert.Equal(
+            AbsoluteBottom(document, "type_controller") + settings.Layout.VerticalSpacing,
+            AbsoluteY(document, "external_domain"));
+    }
+
+    [Fact]
+    public void Render_duplicates_shared_external_dependency_per_constructing_node()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "Controller"),
+                    Node("type_job", "project_api", "Job")
+                })
+            },
+            new[] { new ExternalDependencyNode("external_domain", "DomainService", "Domain", "external-guid", "Domain.DomainService", "[External]") },
+            new[]
+            {
+                new DependencyEdge("edge_controller_external", "type_controller", "external_domain", "external"),
+                new DependencyEdge("edge_job_external", "type_job", "external_domain", "external")
+            }));
+        var controllerExternalId = "external_domain__type_controller__edge_controller_external";
+        var jobExternalId = "external_domain__type_job__edge_job_external";
+
+        Assert.Equal(controllerExternalId, (string?)Cell(document, "edge_controller_external").Attribute("target"));
+        Assert.Equal(jobExternalId, (string?)Cell(document, "edge_job_external").Attribute("target"));
+        Assert.Contains("[External]", (string?)Cell(document, controllerExternalId).Attribute("value"));
+        Assert.Contains("[External]", (string?)Cell(document, jobExternalId).Attribute("value"));
+        Assert.True(Math.Abs(AbsoluteX(document, controllerExternalId) - AbsoluteX(document, "type_controller")) <
+            DiagramSettings.CreateDefault().Layout.HorizontalSpacing * 2);
+        Assert.True(Math.Abs(AbsoluteX(document, jobExternalId) - AbsoluteX(document, "type_job")) <
+            DiagramSettings.CreateDefault().Layout.HorizontalSpacing * 2);
+    }
+
+    [Fact]
     public void Render_keeps_project_container_as_border_parent()
     {
         var document = Render(new DiagramModel(

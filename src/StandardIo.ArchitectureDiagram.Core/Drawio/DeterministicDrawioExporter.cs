@@ -63,23 +63,56 @@ public sealed class DeterministicDrawioExporter
                 }
             }
 
-            foreach (var external in diagram.ExternalDependencies)
+            var knownSourceIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
+            var externalById = diagram.ExternalDependencies.ToDictionary(external => external.Id, StringComparer.Ordinal);
+            var externalTargetIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            var externalEdgesByTarget = diagram.Edges
+                .Where(edge => knownSourceIds.Contains(edge.SourceId) && externalById.ContainsKey(edge.TargetId))
+                .GroupBy(edge => edge.TargetId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.OrderBy(edge => edge.Id, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+
+            foreach (var externalGroup in externalEdgesByTarget)
             {
-                if (seenNodeIds.Add(external.Id))
+                var external = externalById[externalGroup.Key];
+                var externalEdges = externalGroup.Value;
+                for (var index = 0; index < externalEdges.Length; index++)
                 {
-                    var fullName = string.IsNullOrWhiteSpace(external.FullName) ? external.Name : external.FullName;
-                    var tag = string.IsNullOrWhiteSpace(external.Tag) ? "[External]" : external.Tag;
-                    nodes.Add(new RenderNode(external.Id, null, external.Name, fullName, "External", true, tag, nodes.Count));
+                    var edge = externalEdges[index];
+                    var renderNodeId = externalEdges.Length == 1
+                        ? external.Id
+                        : $"{external.Id}__{SafeId(edge.SourceId)}__{SafeId(edge.Id)}";
+
+                    if (seenNodeIds.Add(renderNodeId))
+                    {
+                        nodes.Add(ToRenderNode(external, renderNodeId, nodes.Count));
+                    }
+
+                    externalTargetIds[edge.Id] = renderNodeId;
                 }
             }
 
             var nodeIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
             var links = diagram.Edges
+                .Select(edge => externalTargetIds.TryGetValue(edge.Id, out var targetId)
+                    ? new DependencyEdge(edge.Id, edge.SourceId, targetId, edge.Kind)
+                    : edge)
                 .Where(edge => nodeIds.Contains(edge.SourceId) && nodeIds.Contains(edge.TargetId))
                 .Select((edge, order) => new RenderLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, order))
                 .ToArray();
 
             return new RenderGraph(projects, nodes, links);
+        }
+
+        private static RenderNode ToRenderNode(ExternalDependencyNode external, string id, int order)
+        {
+            var fullName = string.IsNullOrWhiteSpace(external.FullName) ? external.Name : external.FullName;
+            var tag = string.IsNullOrWhiteSpace(external.Tag) ? "[External]" : external.Tag;
+            return new RenderNode(id, null, external.Name, fullName, "External", true, tag, order);
+        }
+
+        private static string SafeId(string value)
+        {
+            return string.Concat(value.Select(character => char.IsLetterOrDigit(character) || character == '_' || character == '-' ? character : '_'));
         }
     }
 
@@ -352,6 +385,7 @@ public sealed class DeterministicDrawioExporter
             ResolveLayerOverlaps(settings, result);
             RelaxNonTopDepthAlignment(graph, settings, result);
             ResolveDepthBandVerticalOverlaps(settings, result);
+            PlaceExternalDependencyNodes(graph, settings, result);
 
             var standaloneX = result.Count == 0
                 ? settings.Layout.ContainerPadding * 2
@@ -388,6 +422,42 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static void PlaceExternalDependencyNodes(
+            RenderGraph graph,
+            DiagramSettings settings,
+            Dictionary<string, NodeLayout> nodes)
+        {
+            foreach (var group in graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) &&
+                    nodes.ContainsKey(link.TargetId) &&
+                    nodes[link.TargetId].Node.IsExternal)
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal))
+            {
+                var source = nodes[group.Key];
+                var links = group.OrderBy(link => link.Order).ToArray();
+                var totalWidth = links
+                    .Select(link => nodes[link.TargetId].Rect.Width)
+                    .Sum() + Math.Max(0, links.Length - 1) * settings.Layout.HorizontalSpacing;
+                var x = source.Rect.CenterX - totalWidth / 2;
+                var y = source.Rect.Bottom + settings.Layout.VerticalSpacing;
+
+                foreach (var link in links)
+                {
+                    var target = nodes[link.TargetId];
+                    nodes[link.TargetId] = target with
+                    {
+                        Rect = target.Rect with
+                        {
+                            X = x,
+                            Y = y
+                        },
+                        Depth = source.Depth + 1
+                    };
+                    x += target.Rect.Width + settings.Layout.HorizontalSpacing;
+                }
+            }
         }
 
         private static void RelaxNonTopDepthAlignment(
