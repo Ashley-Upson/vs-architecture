@@ -66,7 +66,13 @@ public sealed class RoslynDependencyAnalyzer
                     type.Name,
                     fullName,
                     type.TypeKind.ToString(),
-                    NewNodeId());
+                    NewNodeId(),
+                    type.Interfaces
+                        .Select(item => item.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat))
+                        .OrderBy(name => name)
+                        .ToImmutableArray(),
+                    CollectProperties(type, typeByFullName),
+                    CountMethods(type));
 
                 types.Add(node);
                 typeBySymbol[type.OriginalDefinition] = node;
@@ -343,6 +349,58 @@ public sealed class RoslynDependencyAnalyzer
                 }
             }
         }
+    }
+
+    private static IReadOnlyList<TypeProperty> CollectProperties(
+        INamedTypeSymbol type,
+        Dictionary<string, TypeNode> typeByFullName)
+    {
+        return type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Where(property => !property.IsStatic && property.DeclaredAccessibility == Accessibility.Public)
+            .Select(property =>
+            {
+                var propertyType = UnwrapPropertyType(property.Type);
+                var fullName = propertyType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                    .Replace("global::", string.Empty);
+                var typeName = propertyType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) ??
+                    property.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var typeId = fullName is not null && typeByFullName.TryGetValue(fullName, out var node)
+                    ? node.Id
+                    : null;
+
+                return new TypeProperty(property.Name, typeName, fullName, typeId);
+            })
+            .OrderBy(property => property.Name)
+            .ToImmutableArray();
+    }
+
+    private static INamedTypeSymbol? UnwrapPropertyType(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol array)
+        {
+            return UnwrapPropertyType(array.ElementType);
+        }
+
+        if (type is INamedTypeSymbol named &&
+            named.TypeArguments.Length == 1 &&
+            named.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic" &&
+            named.Name is "IEnumerable" or "IReadOnlyList" or "IList" or "List" or "ICollection" or "Collection")
+        {
+            return UnwrapPropertyType(named.TypeArguments[0]);
+        }
+
+        return type as INamedTypeSymbol;
+    }
+
+    private static int CountMethods(INamedTypeSymbol type)
+    {
+        return type.GetMembers()
+            .OfType<IMethodSymbol>()
+            .Count(method =>
+                method.MethodKind == MethodKind.Ordinary &&
+                method.DeclaredAccessibility == Accessibility.Public &&
+                !method.IsStatic);
     }
 
     private static bool TryFindInternalNode(
