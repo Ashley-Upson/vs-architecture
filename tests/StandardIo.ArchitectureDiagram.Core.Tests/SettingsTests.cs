@@ -18,6 +18,7 @@ public sealed class SettingsTests
         Assert.Equal(settings.ShowProjectContainers, imported.ShowProjectContainers);
         Assert.Equal(settings.OutputRenderer, imported.OutputRenderer);
         Assert.Equal(settings.ExternalDependencyTag, imported.ExternalDependencyTag);
+        Assert.Equal(settings.Layout.BaselineAlignmentPattern, imported.Layout.BaselineAlignmentPattern);
         Assert.Equal(settings.Layout.EdgePortSpacing, imported.Layout.EdgePortSpacing);
         Assert.Equal(settings.ExternalDependencyStyle.Shape, imported.ExternalDependencyStyle.Shape);
     }
@@ -81,5 +82,22 @@ public sealed class SettingsTests
         var settings = SettingsSerializer.Import(json);
 
         Assert.Equal("[External]", settings.ExternalDependencyTag);
+    }
+
+    [Fact]
+    public void Import_normalizes_empty_baseline_alignment_pattern()
+    {
+        var json = """
+            {
+              "version": 1,
+              "layout": {
+                "baselineAlignmentPattern": " "
+              }
+            }
+            """;
+
+        var settings = SettingsSerializer.Import(json);
+
+        Assert.Equal(LayoutSettings.DefaultBaselineAlignmentPattern, settings.Layout.BaselineAlignmentPattern);
     }
 }

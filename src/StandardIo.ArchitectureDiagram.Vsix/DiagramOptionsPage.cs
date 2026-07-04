@@ -106,6 +106,7 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly NumericUpDown _horizontalSpacing = NumberBox(0, 600);
     private readonly NumericUpDown _verticalSpacing = NumberBox(0, 600);
     private readonly NumericUpDown _containerPadding = NumberBox(0, 300);
+    private readonly TextBox _baselineAlignmentPattern = TextBox();
     private readonly CheckBox _showProjectContainers = new() { Text = "Show project containers", AutoSize = true };
     private readonly TextBox _connectorColor = TextBox();
     private readonly NumericUpDown _connectorWidth = NumberBox(1, 20);
@@ -147,6 +148,7 @@ internal sealed class DiagramOptionsControl : UserControl
         _horizontalSpacing.Value = Clamp(settings.Layout.HorizontalSpacing, _horizontalSpacing);
         _verticalSpacing.Value = Clamp(settings.Layout.VerticalSpacing, _verticalSpacing);
         _containerPadding.Value = Clamp(settings.Layout.ContainerPadding, _containerPadding);
+        _baselineAlignmentPattern.Text = settings.Layout.BaselineAlignmentPattern;
         _showProjectContainers.Checked = settings.ShowProjectContainers;
         _connectorColor.Text = settings.Connector.StrokeColor;
         _connectorWidth.Value = Clamp(settings.Connector.StrokeWidth, _connectorWidth);
@@ -178,7 +180,10 @@ internal sealed class DiagramOptionsControl : UserControl
                 NodeHeight = (int)_nodeHeight.Value,
                 HorizontalSpacing = (int)_horizontalSpacing.Value,
                 VerticalSpacing = (int)_verticalSpacing.Value,
-                ContainerPadding = (int)_containerPadding.Value
+                ContainerPadding = (int)_containerPadding.Value,
+                BaselineAlignmentPattern = string.IsNullOrWhiteSpace(_baselineAlignmentPattern.Text)
+                    ? StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings.DefaultBaselineAlignmentPattern
+                    : _baselineAlignmentPattern.Text.Trim()
             },
             Connector = new ConnectorStyle
             {
@@ -202,6 +207,9 @@ internal sealed class DiagramOptionsControl : UserControl
         settings.Canvas ??= new CanvasSettings();
         settings.Layout ??= new StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings();
         settings.Connector ??= new ConnectorStyle();
+        settings.Layout.BaselineAlignmentPattern = string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)
+            ? StandardIo.ArchitectureDiagram.Core.Settings.LayoutSettings.DefaultBaselineAlignmentPattern
+            : settings.Layout.BaselineAlignmentPattern.Trim();
         settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
             ? DiagramRendererIds.Drawio
             : settings.OutputRenderer.Trim();
@@ -231,6 +239,7 @@ internal sealed class DiagramOptionsControl : UserControl
         AddRow(panel, "Horizontal spacing", _horizontalSpacing);
         AddRow(panel, "Vertical spacing", _verticalSpacing);
         AddRow(panel, "Container padding", _containerPadding);
+        AddRow(panel, "Baseline regex", _baselineAlignmentPattern);
         AddRow(panel, string.Empty, _showProjectContainers);
         AddRow(panel, "Connector color", _connectorColor);
         AddRow(panel, "Connector width", _connectorWidth);

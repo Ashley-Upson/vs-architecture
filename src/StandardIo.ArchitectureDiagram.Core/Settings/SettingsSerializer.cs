@@ -53,6 +53,9 @@ public static class SettingsSerializer
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
         settings.ExternalDependencyStyle ??= NodeStyle.External();
         settings.Connector ??= new ConnectorStyle();
+        settings.Layout.BaselineAlignmentPattern = string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)
+            ? LayoutSettings.DefaultBaselineAlignmentPattern
+            : settings.Layout.BaselineAlignmentPattern.Trim();
         settings.Layout.DuplicateHighNoiseNodePatterns ??= new();
 
         return settings;

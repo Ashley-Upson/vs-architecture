@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Graph;
 using StandardIo.ArchitectureDiagram.Core.Settings;
@@ -383,8 +384,10 @@ public sealed class DeterministicDrawioExporter
             ResolveLayerOverlaps(settings, result);
             ReserveLinkCorridors(graph, settings, result);
             ResolveLayerOverlaps(settings, result);
+            AlignBaselineNodes(settings, result);
             RelaxNonTopDepthAlignment(graph, settings, result);
             ResolveDepthBandVerticalOverlaps(settings, result);
+            AlignBaselineNodes(settings, result);
             PlaceExternalDependencyNodes(graph, settings, result);
 
             var standaloneX = result.Count == 0
@@ -422,6 +425,41 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static void AlignBaselineNodes(DiagramSettings settings, Dictionary<string, NodeLayout> nodes)
+        {
+            var baselineNodes = nodes.Values
+                .Where(node => !node.IsStandalone && IsBaselineNode(node.Node, settings.Layout.BaselineAlignmentPattern))
+                .ToArray();
+            if (baselineNodes.Length == 0)
+            {
+                return;
+            }
+
+            var baselineY = baselineNodes.Min(node => node.Rect.Y);
+            foreach (var node in baselineNodes)
+            {
+                nodes[node.Node.Id] = node with { Rect = node.Rect with { Y = baselineY } };
+            }
+        }
+
+        private static bool IsBaselineNode(RenderNode node, string? baselinePattern)
+        {
+            var pattern = string.IsNullOrWhiteSpace(baselinePattern)
+                ? LayoutSettings.DefaultBaselineAlignmentPattern
+                : baselinePattern;
+
+            try
+            {
+                return Regex.IsMatch(node.Name, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+                    Regex.IsMatch(node.FullName, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+            catch (ArgumentException)
+            {
+                return Regex.IsMatch(node.Name, LayoutSettings.DefaultBaselineAlignmentPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+                    Regex.IsMatch(node.FullName, LayoutSettings.DefaultBaselineAlignmentPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
         }
 
         private static void PlaceExternalDependencyNodes(
@@ -469,7 +507,9 @@ public sealed class DeterministicDrawioExporter
                 .Where(node => !node.IsStandalone)
                 .ToDictionary(node => node.Node.Id, StringComparer.Ordinal);
 
-            foreach (var node in connectedNodes.Values.Where(node => node.Depth > 0).OrderBy(node => node.Node.Order))
+            foreach (var node in connectedNodes.Values
+                .Where(node => node.Depth > 0 && !IsBaselineNode(node.Node, settings.Layout.BaselineAlignmentPattern))
+                .OrderBy(node => node.Node.Order))
             {
                 var incidentLinkCount = graph.Links.Count(link =>
                     string.Equals(link.SourceId, node.Node.Id, StringComparison.Ordinal) ||

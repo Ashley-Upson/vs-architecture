@@ -92,6 +92,63 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_aligns_default_orchestration_service_baseline()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_template_orchestration", "project_api", "TemplateRenderOrchestrationService"),
+                    Node("type_component_orchestration", "project_api", "ComponentRenderOrchestrationService"),
+                    Node("type_processing", "project_api", "TemplateRenderProcessingService"),
+                    Node("type_foundation", "project_api", "TemplateRenderFoundationService")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_template_processing", "type_template_orchestration", "type_processing", "internal"),
+                new DependencyEdge("edge_processing_foundation", "type_processing", "type_foundation", "internal"),
+                new DependencyEdge("edge_component_foundation", "type_component_orchestration", "type_foundation", "internal")
+            }));
+
+        Assert.Equal(
+            AbsoluteY(document, "type_template_orchestration"),
+            AbsoluteY(document, "type_component_orchestration"));
+    }
+
+    [Fact]
+    public void Render_uses_configured_regex_for_baseline_alignment()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.BaselineAlignmentPattern = ".*ProcessingService$";
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_template_orchestration", "project_api", "TemplateRenderOrchestrationService"),
+                    Node("type_template_processing", "project_api", "TemplateRenderProcessingService"),
+                    Node("type_component_processing", "project_api", "ComponentRenderProcessingService"),
+                    Node("type_foundation", "project_api", "TemplateRenderFoundationService")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_template_processing", "type_template_orchestration", "type_template_processing", "internal"),
+                new DependencyEdge("edge_template_foundation", "type_template_processing", "type_foundation", "internal"),
+                new DependencyEdge("edge_component_foundation", "type_component_processing", "type_foundation", "internal")
+            }),
+            settings);
+
+        Assert.Equal(
+            AbsoluteY(document, "type_template_processing"),
+            AbsoluteY(document, "type_component_processing"));
+    }
+
+    [Fact]
     public void Render_reuses_shared_dependency_node()
     {
         var document = Render(new DiagramModel(

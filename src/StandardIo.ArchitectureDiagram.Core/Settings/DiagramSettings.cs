@@ -66,6 +66,8 @@ public sealed class CanvasSettings
 
 public sealed class LayoutSettings
 {
+    public const string DefaultBaselineAlignmentPattern = ".*OrchestrationService$";
+
     public int NodeWidth { get; set; } = 200;
     public int NodeHeight { get; set; } = 80;
     public int HorizontalSpacing { get; set; } = 80;
@@ -77,6 +79,7 @@ public sealed class LayoutSettings
     public int ProjectHeaderHeight { get; set; } = 34;
     public int LinkPadding { get; set; } = 10;
     public int LinkNodeWidthPadding { get; set; } = 20;
+    public string BaselineAlignmentPattern { get; set; } = DefaultBaselineAlignmentPattern;
     public List<string> DuplicateHighNoiseNodePatterns { get; set; } = new()
     {
         "*DbContext",
