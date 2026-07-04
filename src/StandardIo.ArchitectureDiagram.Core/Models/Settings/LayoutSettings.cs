@@ -35,6 +35,8 @@ public sealed class LayoutSettings
     public int DataModelRelationshipLaneSpacing { get; set; } = 18;
     public int DataModelRelationshipSideOffset { get; set; } = 80;
     public int DataModelRelationshipStubLength { get; set; } = 50;
+    public int DataModelRelationshipPortSpacing { get; set; } = 20;
+    public int DataModelMinimumTableGap { get; set; } = 90;
     public int DataModelRadialMinimumRadius { get; set; } = 420;
     public int DataModelRadialRingSpacing { get; set; } = 520;
     public int DataModelComponentSpacing { get; set; } = 260;

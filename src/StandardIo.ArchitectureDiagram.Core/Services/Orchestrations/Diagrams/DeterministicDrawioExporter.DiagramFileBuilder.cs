@@ -244,7 +244,6 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             var modelIds = new HashSet<string>(models.Select(model => model.Id), StringComparer.Ordinal);
             var orderedModels = models.OrderBy(model => model.FullName, StringComparer.Ordinal).ToArray();
             var rects = PositionDataModelTables(orderedModels, _settings.Layout);
-            var incomingPorts = DataModelIncomingPorts(DataModelRelationships(modelsById), rects);
 
             foreach (var model in orderedModels)
             {
@@ -263,11 +262,9 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                 foreach (var property in model.Properties.Where(property => property.TypeId is not null && modelIds.Contains(property.TypeId!)))
                 {
                     var target = rects[property.TypeId!];
-                    var propertyY = DataModelPropertyY(source, model, property.Name);
-                    var incomingPort = incomingPorts[DataModelRelationshipKey(model.Id, property.TypeId!, property.Name)];
-                    var terminals = GetDataModelTerminals(source, target, propertyY, incomingPort.Index, incomingPort.Total);
-                    var route = DataModelRoute(
-                        terminals,
+                    var routedRelationship = RouteDataModelRelationship(
+                        source,
+                        target,
                         rects
                             .Where(item => item.Key != model.Id && item.Key != property.TypeId)
                             .Select(item => item.Value.Inflate(_settings.Layout.LinkPadding))
@@ -277,47 +274,19 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                         _settings.Layout);
                     var link = new LinkLayout(
                         new RenderLink($"data_model_edge_{edgeOrder++}", DataModelNodeId(model.Id), DataModelNodeId(property.TypeId!), "property", edgeOrder),
-                        terminals.Source,
-                        terminals.Target,
-                        route,
-                        Ratio(terminals.Source.X, source),
-                        Ratio(terminals.Target.X, target),
-                        RatioY(terminals.Source.Y, source),
-                        RatioY(terminals.Target.Y, target));
+                        routedRelationship.Terminals.Source,
+                        routedRelationship.Terminals.Target,
+                        routedRelationship.Route,
+                        Ratio(routedRelationship.Terminals.Source.X, source),
+                        Ratio(routedRelationship.Terminals.Target.X, target),
+                        RatioY(routedRelationship.Terminals.Source.Y, source),
+                        RatioY(routedRelationship.Terminals.Target.Y, target));
                     root.Add(Edge(link));
-                    routedSegments.AddRange(Segments(new[] { terminals.Source }.Concat(route).Concat(new[] { terminals.Target }).ToArray()));
+                    routedSegments.AddRange(Segments(new[] { routedRelationship.Terminals.Source }.Concat(routedRelationship.Route).Concat(new[] { routedRelationship.Terminals.Target }).ToArray()));
                 }
             }
 
             return root;
-        }
-
-        private static Dictionary<string, DataModelPort> DataModelIncomingPorts(
-            IReadOnlyList<DataModelRelationship> relationships,
-            IReadOnlyDictionary<string, Rect> rects)
-        {
-            var result = new Dictionary<string, DataModelPort>(StringComparer.Ordinal);
-            foreach (var group in relationships.GroupBy(relationship => relationship.TargetId, StringComparer.Ordinal))
-            {
-                var ordered = group
-                    .OrderBy(relationship => rects.TryGetValue(relationship.SourceId, out var source) ? source.CenterY : 0)
-                    .ThenBy(relationship => relationship.SourceId, StringComparer.Ordinal)
-                    .ThenBy(relationship => relationship.PropertyName, StringComparer.Ordinal)
-                    .ToArray();
-
-                for (var index = 0; index < ordered.Length; index++)
-                {
-                    result[DataModelRelationshipKey(ordered[index].SourceId, ordered[index].TargetId, ordered[index].PropertyName)] =
-                        new DataModelPort(index, ordered.Length);
-                }
-            }
-
-            return result;
-        }
-
-        private static string DataModelRelationshipKey(string sourceId, string targetId, string propertyName)
-        {
-            return $"{sourceId}|{targetId}|{propertyName}";
         }
 
         private static Dictionary<string, Rect> PositionDataModelTables(
@@ -346,7 +315,8 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             {
                 y += rects.Count == 0 ? 0 : layout.DataModelComponentSpacing;
                 var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(isolatedModels.Length)));
-                var rowGap = Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2);
+                var rowGap = DataModelRowGap(layout);
+                var columnWidth = DataModelColumnStep(layout);
                 foreach (var rowModels in isolatedModels.Select((model, index) => new { model, index }).GroupBy(item => item.index / columns))
                 {
                     var row = rowModels.ToArray();
@@ -359,7 +329,7 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                     {
                         var column = item.index % columns;
                         rects[item.model.Id] = new Rect(
-                            layout.DataModelCanvasMargin + column * layout.DataModelColumnWidth,
+                            layout.DataModelCanvasMargin + column * columnWidth,
                             y,
                             layout.DataModelTableWidth,
                             DataModelTableHeight(item.model, layout));
@@ -709,7 +679,7 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             Dictionary<string, Rect> rects,
             LayoutSettings layout)
         {
-            var gap = Math.Max(layout.LinkPadding * 2, layout.DataModelRelationshipLaneSpacing);
+            var gap = Math.Max(layout.DataModelMinimumTableGap, layout.LinkPadding * 2);
             for (var attempt = 0; attempt < rects.Count * rects.Count; attempt++)
             {
                 if (!PushFirstDataModelOverlap(rects, gap))
@@ -744,31 +714,57 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
         {
             var left = rects[leftId];
             var right = rects[rightId];
-            if (!DataModelRectsOverlap(left, right))
+            var push = DataModelPush(left, right, gap);
+            if (push.X == 0 && push.Y == 0)
             {
                 return false;
             }
 
-            var overlapX = Math.Min(left.Right, right.Right) - Math.Max(left.X, right.X);
-            var overlapY = Math.Min(left.Bottom, right.Bottom) - Math.Max(left.Y, right.Y);
-            rects[rightId] = overlapX <= overlapY
-                ? OffsetRect(right, overlapX + gap, 0)
-                : OffsetRect(right, 0, overlapY + gap);
+            rects[rightId] = OffsetRect(right, push.X, push.Y);
             return true;
         }
 
-        private static bool DataModelRectsOverlap(Rect left, Rect right)
+        private static Point DataModelPush(Rect left, Rect right, int gap)
         {
-            return left.X < right.Right &&
-                left.Right > right.X &&
-                left.Y < right.Bottom &&
-                left.Bottom > right.Y;
+            var horizontalGap = Math.Max(left.X, right.X) - Math.Min(left.Right, right.Right);
+            var verticalGap = Math.Max(left.Y, right.Y) - Math.Min(left.Bottom, right.Bottom);
+            var horizontalOverlap = horizontalGap < 0;
+            var verticalOverlap = verticalGap < 0;
+
+            if (horizontalOverlap && verticalOverlap)
+            {
+                return Math.Abs(horizontalGap) <= Math.Abs(verticalGap)
+                    ? new Point(Math.Abs(horizontalGap) + gap, 0)
+                    : new Point(0, Math.Abs(verticalGap) + gap);
+            }
+
+            if (horizontalOverlap && verticalGap < gap)
+            {
+                return new Point(0, gap - verticalGap);
+            }
+
+            if (verticalOverlap && horizontalGap < gap)
+            {
+                return new Point(gap - horizontalGap, 0);
+            }
+
+            return new Point(0, 0);
         }
 
         private static int DataModelTableHeight(RenderNode model, LayoutSettings layout)
         {
             return layout.DataModelHeaderHeight +
                 Math.Max(1, model.Properties.Count) * layout.DataModelPropertyRowHeight;
+        }
+
+        private static int DataModelRowGap(LayoutSettings layout)
+        {
+            return Math.Max(layout.DataModelMinimumTableGap, Math.Max(layout.DataModelRowSpacing, layout.DataModelPropertyRowHeight * 2));
+        }
+
+        private static int DataModelColumnStep(LayoutSettings layout)
+        {
+            return Math.Max(layout.DataModelColumnWidth, layout.DataModelTableWidth + layout.DataModelMinimumTableGap);
         }
 
         private void AddDataModelTable(XElement root, RenderNode model, Rect rect)
@@ -801,69 +797,27 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             }
         }
 
-        private int DataModelPropertyY(Rect rect, RenderNode model, string propertyName)
-        {
-            var index = model.Properties
-                .Select((property, order) => new { property.Name, order })
-                .FirstOrDefault(property => string.Equals(property.Name, propertyName, StringComparison.Ordinal))
-                ?.order ?? 0;
-            return rect.Y +
-                _settings.Layout.DataModelHeaderHeight +
-                index * _settings.Layout.DataModelPropertyRowHeight +
-                _settings.Layout.DataModelPropertyRowHeight / 2;
-        }
-
-        private static DataModelTerminals GetDataModelTerminals(
+        private static DataModelRelationshipRoute RouteDataModelRelationship(
             Rect source,
             Rect target,
-            int sourcePropertyY,
-            int targetPortIndex,
-            int targetPortTotal)
+            IReadOnlyList<Rect> obstacles,
+            IReadOnlyList<Segment> routedSegments,
+            int order,
+            LayoutSettings layout)
         {
-            if (target.X >= source.Right)
-            {
-                return new DataModelTerminals(
-                    new Point(source.Right, sourcePropertyY),
-                    new Point(target.X, DataModelPortY(target, targetPortIndex, targetPortTotal)),
-                    DataModelSide.Right,
-                    DataModelSide.Left);
-            }
-
-            if (target.Right <= source.X)
-            {
-                return new DataModelTerminals(
-                    new Point(source.X, sourcePropertyY),
-                    new Point(target.Right, DataModelPortY(target, targetPortIndex, targetPortTotal)),
-                    DataModelSide.Left,
-                    DataModelSide.Right);
-            }
-
-            var dy = target.Y + target.Height / 2 - (source.Y + source.Height / 2);
-            return dy >= 0
-                ? new DataModelTerminals(
-                    new Point(Clamp(target.CenterX, source.X + 12, source.Right - 12), source.Bottom),
-                    new Point(DataModelPortX(target, targetPortIndex, targetPortTotal), target.Y),
-                    DataModelSide.Bottom,
-                    DataModelSide.Top)
-                : new DataModelTerminals(
-                    new Point(Clamp(target.CenterX, source.X + 12, source.Right - 12), source.Y),
-                    new Point(DataModelPortX(target, targetPortIndex, targetPortTotal), target.Bottom),
-                    DataModelSide.Top,
-                    DataModelSide.Bottom);
-        }
-
-        private static int DataModelPortY(Rect rect, int index, int total)
-        {
-            var top = rect.Y + 16;
-            var span = Math.Max(1, rect.Height - 32);
-            return top + span * (index + 1) / (Math.Max(1, total) + 1);
-        }
-
-        private static int DataModelPortX(Rect rect, int index, int total)
-        {
-            var left = rect.X + 16;
-            var span = Math.Max(1, rect.Width - 32);
-            return left + span * (index + 1) / (Math.Max(1, total) + 1);
+            return DataModelTerminalCandidates(source, target, order, layout)
+                .Select(terminals => new DataModelRelationshipRoute(
+                    terminals,
+                    DataModelRoute(terminals, obstacles, routedSegments, order, layout)))
+                .OrderBy(route => DataModelRouteScore(
+                    route.Terminals.Source,
+                    route.Route,
+                    route.Terminals.Target,
+                    obstacles,
+                    routedSegments,
+                    route.Terminals))
+                .ThenBy(route => RouteLength(route.Terminals.Source, route.Route, route.Terminals.Target))
+                .First();
         }
 
         private static IReadOnlyList<Point> DataModelRoute(
@@ -879,9 +833,69 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             var targetStub = StubPoint(targetPoint, terminals.TargetSide, layout.DataModelRelationshipStubLength);
             return DataModelRouteCandidates(sourceStub, targetStub, obstacles, order, layout)
                 .Select(route => SimplifyRoute(route))
-                .OrderBy(route => DataModelRouteScore(sourcePoint, route, targetPoint, obstacles, routedSegments))
+                .OrderBy(route => DataModelRouteScore(sourcePoint, route, targetPoint, obstacles, routedSegments, terminals))
                 .ThenBy(route => RouteLength(sourcePoint, route, targetPoint))
                 .First();
+        }
+
+        private static IEnumerable<DataModelTerminals> DataModelTerminalCandidates(
+            Rect source,
+            Rect target,
+            int order,
+            LayoutSettings layout)
+        {
+            foreach (var pair in OrderedDataModelSidePairs(source, target))
+            {
+                var sourcePoint = DataModelPort(source, pair.Source, target, order, layout);
+                var targetPoint = DataModelPort(target, pair.Target, source, order, layout);
+                yield return new DataModelTerminals(sourcePoint, targetPoint, pair.Source, pair.Target);
+            }
+        }
+
+        private static IEnumerable<DataModelSidePair> OrderedDataModelSidePairs(Rect source, Rect target)
+        {
+            var dx = target.CenterX - source.CenterX;
+            var dy = target.CenterY - source.CenterY;
+            var horizontal = Math.Abs(dx) >= Math.Abs(dy);
+            var primary = horizontal
+                ? new DataModelSidePair(dx >= 0 ? DataModelSide.Right : DataModelSide.Left, dx >= 0 ? DataModelSide.Left : DataModelSide.Right)
+                : new DataModelSidePair(dy >= 0 ? DataModelSide.Bottom : DataModelSide.Top, dy >= 0 ? DataModelSide.Top : DataModelSide.Bottom);
+            yield return primary;
+
+            var secondary = horizontal
+                ? new DataModelSidePair(dy >= 0 ? DataModelSide.Bottom : DataModelSide.Top, dy >= 0 ? DataModelSide.Top : DataModelSide.Bottom)
+                : new DataModelSidePair(dx >= 0 ? DataModelSide.Right : DataModelSide.Left, dx >= 0 ? DataModelSide.Left : DataModelSide.Right);
+            yield return secondary;
+            yield return new DataModelSidePair(primary.Target, primary.Source);
+            yield return new DataModelSidePair(secondary.Target, secondary.Source);
+        }
+
+        private static Point DataModelPort(
+            Rect rect,
+            DataModelSide side,
+            Rect other,
+            int order,
+            LayoutSettings layout)
+        {
+            var offset = DataModelPortOffset(order, layout.DataModelRelationshipPortSpacing);
+            return side switch
+            {
+                DataModelSide.Left => new Point(rect.X, Clamp(other.CenterY + offset, rect.Y + 20, rect.Bottom - 20)),
+                DataModelSide.Right => new Point(rect.Right, Clamp(other.CenterY + offset, rect.Y + 20, rect.Bottom - 20)),
+                DataModelSide.Top => new Point(Clamp(other.CenterX + offset, rect.X + 20, rect.Right - 20), rect.Y),
+                _ => new Point(Clamp(other.CenterX + offset, rect.X + 20, rect.Right - 20), rect.Bottom)
+            };
+        }
+
+        private static int DataModelPortOffset(int order, int spacing)
+        {
+            if (order == 0)
+            {
+                return 0;
+            }
+
+            var distance = ((order + 1) / 2) * spacing;
+            return order % 2 == 0 ? -distance : distance;
         }
 
         private static Point StubPoint(Point point, DataModelSide side, int length)
@@ -895,18 +909,6 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             };
         }
 
-        private static bool DataModelRouteCrossesNode(
-            Point sourcePoint,
-            IReadOnlyList<Point> route,
-            Point targetPoint,
-            IReadOnlyList<Rect> obstacles)
-        {
-            var points = new List<Point> { sourcePoint };
-            points.AddRange(route);
-            points.Add(targetPoint);
-            return Segments(points).Any(segment => obstacles.Any(segment.Intersects));
-        }
-
         private static IEnumerable<IReadOnlyList<Point>> DataModelRouteCandidates(
             Point sourceStub,
             Point targetStub,
@@ -914,6 +916,7 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             int order,
             LayoutSettings layout)
         {
+            yield return new[] { sourceStub, targetStub };
             yield return new[] { sourceStub, new Point(sourceStub.X, targetStub.Y), targetStub };
             yield return new[] { sourceStub, new Point(targetStub.X, sourceStub.Y), targetStub };
 
@@ -1039,7 +1042,8 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             IReadOnlyList<Point> route,
             Point targetPoint,
             IReadOnlyList<Rect> obstacles,
-            IReadOnlyList<Segment> routedSegments)
+            IReadOnlyList<Segment> routedSegments,
+            DataModelTerminals terminals)
         {
             var points = new List<Point> { sourcePoint };
             points.AddRange(route);
@@ -1048,11 +1052,62 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             var nodeHits = segments.Sum(segment => obstacles.Count(segment.Intersects));
             var overlaps = segments.Sum(segment => routedSegments.Sum(segment.OverlapLength));
             var crossings = segments.Sum(segment => routedSegments.Count(segment.Crosses));
+            var reversals = CountDataModelRouteReversals(points);
+            var sidePenalty = DataModelTerminalSidePenalty(terminals);
             return nodeHits * 1_000_000_000L +
                 overlaps * 500L +
                 crossings * 50_000L +
-                Math.Max(0, route.Count - 2) * 25 +
+                reversals * 250_000L +
+                sidePenalty * 10_000L +
+                Math.Max(0, route.Count - 2) * 8_000L +
                 RouteLength(sourcePoint, route, targetPoint);
+        }
+
+        private static int CountDataModelRouteReversals(IReadOnlyList<Point> points)
+        {
+            var reversals = 0;
+            for (var index = 2; index < points.Count; index++)
+            {
+                var first = Direction(points[index - 2], points[index - 1]);
+                var second = Direction(points[index - 1], points[index]);
+                if (first.Axis != 0 && first.Axis == second.Axis && first.Sign == -second.Sign)
+                {
+                    reversals++;
+                }
+            }
+
+            return reversals;
+        }
+
+        private static int DataModelTerminalSidePenalty(DataModelTerminals terminals)
+        {
+            return OppositeSide(terminals.SourceSide) == terminals.TargetSide ? 0 : 1;
+        }
+
+        private static DataModelSide OppositeSide(DataModelSide side)
+        {
+            return side switch
+            {
+                DataModelSide.Left => DataModelSide.Right,
+                DataModelSide.Right => DataModelSide.Left,
+                DataModelSide.Top => DataModelSide.Bottom,
+                _ => DataModelSide.Top
+            };
+        }
+
+        private static DirectionInfo Direction(Point start, Point end)
+        {
+            if (start.X != end.X)
+            {
+                return new DirectionInfo(1, Math.Sign(end.X - start.X));
+            }
+
+            if (start.Y != end.Y)
+            {
+                return new DirectionInfo(2, Math.Sign(end.Y - start.Y));
+            }
+
+            return new DirectionInfo(0, 0);
         }
 
         private static int RouteLength(Point sourcePoint, IReadOnlyList<Point> route, Point targetPoint)
@@ -1114,9 +1169,13 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             return Math.Max(min, Math.Min(max, value));
         }
 
+        private readonly record struct DataModelRelationshipRoute(DataModelTerminals Terminals, IReadOnlyList<Point> Route);
+
         private readonly record struct DataModelTerminals(Point Source, Point Target, DataModelSide SourceSide, DataModelSide TargetSide);
 
-        private readonly record struct DataModelPort(int Index, int Total);
+        private readonly record struct DataModelSidePair(DataModelSide Source, DataModelSide Target);
+
+        private readonly record struct DirectionInfo(int Axis, int Sign);
 
         private readonly record struct Span(int Start, int End);
 

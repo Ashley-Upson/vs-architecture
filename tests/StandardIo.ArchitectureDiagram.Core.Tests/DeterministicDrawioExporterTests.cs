@@ -614,6 +614,7 @@ public sealed class DeterministicDrawioExporterTests
     [Fact]
     public void Render_prevents_data_model_table_overlaps_after_radial_layout()
     {
+        var settings = DiagramSettings.CreateDefault();
         var document = Render(new DiagramModel(
             new[]
             {
@@ -627,9 +628,11 @@ public sealed class DeterministicDrawioExporterTests
                 })
             },
             Array.Empty<ExternalDependencyNode>(),
-            Array.Empty<DependencyEdge>()));
+            Array.Empty<DependencyEdge>()),
+            settings);
 
         AssertNoDataModelTableOverlaps(document);
+        AssertDataModelTableGap(document, settings.Layout.DataModelMinimumTableGap);
     }
 
     private static XDocument Render(DiagramModel diagram, DiagramSettings? settings = null)
@@ -753,6 +756,46 @@ public sealed class DeterministicDrawioExporterTests
                 Assert.False(Overlaps(rects[left], rects[right]));
             }
         }
+    }
+
+    private static void AssertDataModelTableGap(XDocument document, int minimumGap)
+    {
+        var rects = document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("vertex") == "1" &&
+                (string?)cell.Attribute("parent") == "1" &&
+                (((string?)cell.Attribute("id")) ?? string.Empty).StartsWith("data_model_", StringComparison.Ordinal))
+            .Select(cell => NodeRect(document, (string)cell.Attribute("id")!))
+            .ToArray();
+
+        for (var left = 0; left < rects.Length; left++)
+        {
+            for (var right = left + 1; right < rects.Length; right++)
+            {
+                if (ProjectedGap(rects[left], rects[right]) is { } gap)
+                {
+                    Assert.True(gap >= minimumGap);
+                }
+            }
+        }
+    }
+
+    private static int? ProjectedGap(
+        (int X, int Y, int Width, int Height) left,
+        (int X, int Y, int Width, int Height) right)
+    {
+        var xOverlap = left.X < right.X + right.Width && left.X + left.Width > right.X;
+        var yOverlap = left.Y < right.Y + right.Height && left.Y + left.Height > right.Y;
+        if (xOverlap)
+        {
+            return Math.Max(left.Y, right.Y) - Math.Min(left.Y + left.Height, right.Y + right.Height);
+        }
+
+        if (yOverlap)
+        {
+            return Math.Max(left.X, right.X) - Math.Min(left.X + left.Width, right.X + right.Width);
+        }
+
+        return null;
     }
 
     private static (int X, int Y, int Width, int Height) NodeRect(XDocument document, string id)
