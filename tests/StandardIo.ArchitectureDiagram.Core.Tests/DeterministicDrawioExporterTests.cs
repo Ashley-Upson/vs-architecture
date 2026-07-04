@@ -168,6 +168,10 @@ public sealed class DeterministicDrawioExporterTests
         Assert.Equal("1", StyleValue(cache, "exitY"));
         Assert.Equal("0", StyleValue(cache, "entryY"));
         Assert.NotEqual(StyleValue(cache, "exitX"), StyleValue(repository, "exitX"));
+        AssertParallelSegmentsSeparated(
+            EdgePoints(document, "edge_cache"),
+            EdgePoints(document, "edge_repository"),
+            settings.Layout.ParallelLaneSpacing);
     }
 
     [Fact]
@@ -237,6 +241,45 @@ public sealed class DeterministicDrawioExporterTests
 
         Assert.True(routeRight < farLeft);
         Assert.True(routeRight <= localRight + DiagramSettings.CreateDefault().Layout.HorizontalSpacing);
+    }
+
+    [Fact]
+    public void Render_does_not_let_unrelated_link_density_expand_simple_vertical_gaps()
+    {
+        var unrelatedNodes = Enumerable.Range(0, 10)
+            .SelectMany(index => new[]
+            {
+                Node($"type_unrelated_source_{index}", "project_api", $"UnrelatedSource{index}"),
+                Node($"type_unrelated_target_{index}", "project_api", $"UnrelatedTarget{index}")
+            })
+            .ToArray();
+        var unrelatedEdges = Enumerable.Range(0, 10)
+            .Select(index => new DependencyEdge(
+                $"edge_unrelated_{index}",
+                $"type_unrelated_source_{index}",
+                $"type_unrelated_target_{index}",
+                "internal"))
+            .ToArray();
+        var settings = DiagramSettings.CreateDefault();
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_orchestration", "project_api", "TemplateRenderOrchestrationService"),
+                    Node("type_processing", "project_api", "TemplateRenderProcessingService")
+                }.Concat(unrelatedNodes).ToArray())
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_template", "type_orchestration", "type_processing", "internal")
+            }.Concat(unrelatedEdges).ToArray()),
+            settings);
+
+        var verticalGap = AbsoluteY(document, "type_processing") - AbsoluteBottom(document, "type_orchestration");
+
+        Assert.True(verticalGap <= settings.Layout.VerticalSpacing + settings.Layout.ParallelLaneSpacing);
     }
 
     [Fact]
@@ -395,6 +438,11 @@ public sealed class DeterministicDrawioExporterTests
         return AbsoluteX(document, id) + Geometry(document, id, "width");
     }
 
+    private static int AbsoluteBottom(XDocument document, string id)
+    {
+        return AbsoluteY(document, id) + Geometry(document, id, "height");
+    }
+
     private static int Geometry(XDocument document, string id, string attributeName)
     {
         return int.Parse((string)Cell(document, id).Element("mxGeometry")!.Attribute(attributeName)!);
@@ -408,6 +456,49 @@ public sealed class DeterministicDrawioExporterTests
                 int.Parse((string)point.Attribute("x")!),
                 int.Parse((string)point.Attribute("y")!)))
             .ToArray();
+    }
+
+    private static void AssertParallelSegmentsSeparated(
+        IReadOnlyList<(int X, int Y)> left,
+        IReadOnlyList<(int X, int Y)> right,
+        int spacing)
+    {
+        foreach (var leftSegment in TestSegments(left))
+        {
+            foreach (var rightSegment in TestSegments(right))
+            {
+                if (leftSegment.Start.X == leftSegment.End.X &&
+                    rightSegment.Start.X == rightSegment.End.X &&
+                    RangesOverlap(leftSegment.Start.Y, leftSegment.End.Y, rightSegment.Start.Y, rightSegment.End.Y))
+                {
+                    Assert.True(Math.Abs(leftSegment.Start.X - rightSegment.Start.X) >= spacing);
+                }
+
+                if (leftSegment.Start.Y == leftSegment.End.Y &&
+                    rightSegment.Start.Y == rightSegment.End.Y &&
+                    RangesOverlap(leftSegment.Start.X, leftSegment.End.X, rightSegment.Start.X, rightSegment.End.X))
+                {
+                    Assert.True(Math.Abs(leftSegment.Start.Y - rightSegment.Start.Y) >= spacing);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<((int X, int Y) Start, (int X, int Y) End)> TestSegments(IReadOnlyList<(int X, int Y)> points)
+    {
+        for (var index = 0; index < points.Count - 1; index++)
+        {
+            yield return (points[index], points[index + 1]);
+        }
+    }
+
+    private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd)
+    {
+        var firstMin = Math.Min(firstStart, firstEnd);
+        var firstMax = Math.Max(firstStart, firstEnd);
+        var secondMin = Math.Min(secondStart, secondEnd);
+        var secondMax = Math.Max(secondStart, secondEnd);
+        return firstMin <= secondMax && secondMin <= firstMax;
     }
 
     private static string StyleValue(XElement edge, string key)

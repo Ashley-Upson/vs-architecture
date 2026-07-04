@@ -278,7 +278,7 @@ public sealed class DeterministicDrawioExporter
             DiagramSettings settings,
             IReadOnlyDictionary<string, int> depths)
         {
-            var bandCounts = new Dictionary<int, int>();
+            var bandPressures = new Dictionary<int, Dictionary<string, int>>();
             foreach (var link in graph.Links)
             {
                 var sourceDepth = depths[link.SourceId];
@@ -287,7 +287,14 @@ public sealed class DeterministicDrawioExporter
                 var lower = Math.Max(sourceDepth, targetDepth);
                 for (var depth = upper; depth < lower; depth++)
                 {
-                    bandCounts[depth] = bandCounts.TryGetValue(depth, out var count) ? count + 1 : 1;
+                    if (!bandPressures.TryGetValue(depth, out var pressure))
+                    {
+                        pressure = new Dictionary<string, int>(StringComparer.Ordinal);
+                        bandPressures[depth] = pressure;
+                    }
+
+                    pressure[link.SourceId] = pressure.TryGetValue(link.SourceId, out var sourceCount) ? sourceCount + 1 : 1;
+                    pressure[link.TargetId] = pressure.TryGetValue(link.TargetId, out var targetCount) ? targetCount + 1 : 1;
                 }
             }
 
@@ -297,8 +304,9 @@ public sealed class DeterministicDrawioExporter
             for (var depth = 0; depth <= maxDepth; depth++)
             {
                 offsets[depth] = cumulativeOffset;
-                if (bandCounts.TryGetValue(depth, out var linkCount))
+                if (bandPressures.TryGetValue(depth, out var pressure))
                 {
+                    var linkCount = pressure.Values.DefaultIfEmpty(0).Max();
                     var neededGap = settings.Layout.LinkPadding * 2 +
                         Math.Max(0, linkCount - 1) * settings.Layout.ParallelLaneSpacing;
                     cumulativeOffset += Math.Max(0, neededGap - settings.Layout.VerticalSpacing);
@@ -649,18 +657,28 @@ public sealed class DeterministicDrawioExporter
             RenderGraph graph,
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
-            return graph.Links
+            var sourceIndexes = graph.Links
                 .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
-                .GroupBy(link =>
-                {
-                    var sourceDepth = nodes[link.SourceId].Depth;
-                    var targetDepth = nodes[link.TargetId].Depth;
-                    return $"{Math.Min(sourceDepth, targetDepth)}:{Math.Max(sourceDepth, targetDepth)}";
-                })
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .SelectMany(group => group
                     .OrderBy(link => link.Order)
                     .Select((link, index) => new { link.Id, Index = index }))
                 .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+
+            var targetIndexes = graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
+                .GroupBy(link => link.TargetId, StringComparer.Ordinal)
+                .SelectMany(group => group
+                    .OrderBy(link => link.Order)
+                    .Select((link, index) => new { link.Id, Index = index }))
+                .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+
+            return graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
+                .ToDictionary(
+                    link => link.Id,
+                    link => Math.Max(sourceIndexes[link.Id], targetIndexes[link.Id]),
+                    StringComparer.Ordinal);
         }
 
         private static IReadOnlyList<Point> BuildRoute(
@@ -726,14 +744,16 @@ public sealed class DeterministicDrawioExporter
             yield return new List<Point>
             {
                 sourceExit,
-                new(targetEntry.X, sourceExit.Y),
+                new(sourceExit.X, sourceExit.Y + laneOffset),
+                new(targetEntry.X, sourceExit.Y + laneOffset),
                 targetEntry
             };
 
             yield return new List<Point>
             {
                 sourceExit,
-                new(sourceExit.X, targetEntry.Y),
+                new(sourceExit.X, targetEntry.Y - laneOffset),
+                new(targetEntry.X, targetEntry.Y - laneOffset),
                 targetEntry
             };
 
