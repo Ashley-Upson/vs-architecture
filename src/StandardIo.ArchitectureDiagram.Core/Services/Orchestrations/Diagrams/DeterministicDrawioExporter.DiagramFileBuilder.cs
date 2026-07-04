@@ -480,11 +480,12 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             foreach (var group in DataModelLevelGroups(component, levels))
             {
                 var groupModels = OrderDataModelRing(group, rects, parents, center, adjacency, modelsById).ToArray();
-                var radius = DataModelRingRadius(levels[groupModels[0].Id], groupModels, ringStep, layout);
+                var level = levels[groupModels[0].Id];
+                var radius = DataModelRingRadius(level, groupModels, ringStep, layout);
 
                 for (var index = 0; index < groupModels.Length; index++)
                 {
-                    var angle = DataModelAngle(index, groupModels.Length);
+                    var angle = DataModelAngle(groupModels[index], index, groupModels, level, rects, parents, center);
                     rects[groupModels[index].Id] = PositionDataModelTable(groupModels[index], center, radius, angle, layout);
                 }
             }
@@ -612,7 +613,24 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             return Math.Max(Math.Max(minimum, diagonalRadius), circumferenceRadius);
         }
 
-        private static double DataModelAngle(int index, int count)
+        private static double DataModelAngle(
+            RenderNode model,
+            int index,
+            IReadOnlyList<RenderNode> ringModels,
+            int level,
+            IReadOnlyDictionary<string, Rect> rects,
+            IReadOnlyDictionary<string, string> parents,
+            Point center)
+        {
+            if (level <= 1)
+            {
+                return DataModelRootChildAngle(index, ringModels.Count);
+            }
+
+            return DataModelNestedChildAngle(model, ringModels, rects, parents, center);
+        }
+
+        private static double DataModelRootChildAngle(int index, int count)
         {
             if (count == 1)
             {
@@ -626,6 +644,36 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
                 4 => new[] { -Math.PI / 2, 0, Math.PI / 2, Math.PI }[index],
                 _ => -Math.PI / 2 + index * (Math.PI * 2 / count)
             };
+        }
+
+        private static double DataModelNestedChildAngle(
+            RenderNode model,
+            IReadOnlyList<RenderNode> ringModels,
+            IReadOnlyDictionary<string, Rect> rects,
+            IReadOnlyDictionary<string, string> parents,
+            Point center)
+        {
+            var parentId = parents.TryGetValue(model.Id, out var id) ? id : string.Empty;
+            var siblings = ringModels
+                .Where(item => parents.TryGetValue(item.Id, out var siblingParentId) &&
+                    string.Equals(siblingParentId, parentId, StringComparison.Ordinal))
+                .OrderBy(item => item.FullName, StringComparer.Ordinal)
+                .ToArray();
+            var siblingIndex = Array.FindIndex(siblings, item => string.Equals(item.Id, model.Id, StringComparison.Ordinal));
+            var offset = DataModelSiblingAngleOffset(Math.Max(0, siblingIndex), siblings.Length);
+
+            return DataModelParentAngle(model.Id, rects, parents, center) + offset;
+        }
+
+        private static double DataModelSiblingAngleOffset(int index, int count)
+        {
+            if (count <= 1)
+            {
+                return 0;
+            }
+
+            var step = Math.Min(0.35, 1.2 / Math.Max(1, count - 1));
+            return (index - (count - 1) / 2.0) * step;
         }
 
         private static Rect PositionDataModelTable(
@@ -868,6 +916,45 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             yield return secondary;
             yield return new DataModelSidePair(primary.Target, primary.Source);
             yield return new DataModelSidePair(secondary.Target, secondary.Source);
+
+            foreach (var pair in AllDataModelSidePairs()
+                .OrderBy(pair => DataModelSidePairPenalty(pair, primary, secondary)))
+            {
+                if (pair != primary && pair != secondary)
+                {
+                    yield return pair;
+                }
+            }
+        }
+
+        private static IEnumerable<DataModelSidePair> AllDataModelSidePairs()
+        {
+            var sides = new[] { DataModelSide.Left, DataModelSide.Right, DataModelSide.Top, DataModelSide.Bottom };
+            foreach (var source in sides)
+            {
+                foreach (var target in sides)
+                {
+                    yield return new DataModelSidePair(source, target);
+                }
+            }
+        }
+
+        private static int DataModelSidePairPenalty(
+            DataModelSidePair pair,
+            DataModelSidePair primary,
+            DataModelSidePair secondary)
+        {
+            if (pair == primary)
+            {
+                return 0;
+            }
+
+            if (pair == secondary)
+            {
+                return 1;
+            }
+
+            return OppositeSide(pair.Source) == pair.Target ? 2 : 3;
         }
 
         private static Point DataModelPort(
@@ -880,11 +967,31 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             var offset = DataModelPortOffset(order, layout.DataModelRelationshipPortSpacing);
             return side switch
             {
-                DataModelSide.Left => new Point(rect.X, Clamp(other.CenterY + offset, rect.Y + 20, rect.Bottom - 20)),
-                DataModelSide.Right => new Point(rect.Right, Clamp(other.CenterY + offset, rect.Y + 20, rect.Bottom - 20)),
-                DataModelSide.Top => new Point(Clamp(other.CenterX + offset, rect.X + 20, rect.Right - 20), rect.Y),
-                _ => new Point(Clamp(other.CenterX + offset, rect.X + 20, rect.Right - 20), rect.Bottom)
+                DataModelSide.Left => new Point(rect.X, DataModelVerticalPort(rect, other, offset)),
+                DataModelSide.Right => new Point(rect.Right, DataModelVerticalPort(rect, other, offset)),
+                DataModelSide.Top => new Point(DataModelHorizontalPort(rect, other, offset), rect.Y),
+                _ => new Point(DataModelHorizontalPort(rect, other, offset), rect.Bottom)
             };
+        }
+
+        private static int DataModelVerticalPort(Rect rect, Rect other, int offset)
+        {
+            var top = Math.Max(rect.Y + 20, other.Y + 20);
+            var bottom = Math.Min(rect.Bottom - 20, other.Bottom - 20);
+            var y = top <= bottom
+                ? top + (bottom - top) / 2
+                : other.CenterY;
+            return Clamp(y + offset, rect.Y + 20, rect.Bottom - 20);
+        }
+
+        private static int DataModelHorizontalPort(Rect rect, Rect other, int offset)
+        {
+            var left = Math.Max(rect.X + 20, other.X + 20);
+            var right = Math.Min(rect.Right - 20, other.Right - 20);
+            var x = left <= right
+                ? left + (right - left) / 2
+                : other.CenterX;
+            return Clamp(x + offset, rect.X + 20, rect.Right - 20);
         }
 
         private static int DataModelPortOffset(int order, int spacing)
@@ -916,7 +1023,11 @@ private XElement DataModelRoot(IReadOnlyList<RenderNode> models)
             int order,
             LayoutSettings layout)
         {
-            yield return new[] { sourceStub, targetStub };
+            if (sourceStub.X == targetStub.X || sourceStub.Y == targetStub.Y)
+            {
+                yield return new[] { sourceStub, targetStub };
+            }
+
             yield return new[] { sourceStub, new Point(sourceStub.X, targetStub.Y), targetStub };
             yield return new[] { sourceStub, new Point(targetStub.X, sourceStub.Y), targetStub };
 

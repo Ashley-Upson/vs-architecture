@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
@@ -635,6 +636,53 @@ public sealed class DeterministicDrawioExporterTests
         AssertDataModelTableGap(document, settings.Layout.DataModelMinimumTableGap);
     }
 
+    [Fact]
+    public void Render_keeps_nested_data_model_children_near_parent_side()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Model("type_hub", "Hub", ("Alpha", "Alpha", "type_alpha"), ("Beta", "Beta", "type_beta"), ("Page", "Page", "type_page"), ("Zeta", "Zeta", "type_zeta")),
+                    Model("type_alpha", "Alpha"),
+                    Model("type_beta", "Beta"),
+                    Model("type_page", "Page"),
+                    Model("type_zeta", "Zeta"),
+                    Model("type_page_info", "PageInfo", ("Page", "Page", "type_page"))
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>()));
+        var hub = NodeRect(document, "data_model_type_hub");
+        var page = NodeRect(document, "data_model_type_page");
+        var pageInfo = NodeRect(document, "data_model_type_page_info");
+
+        Assert.Equal(Math.Sign(CenterY(page) - CenterY(hub)), Math.Sign(CenterY(pageInfo) - CenterY(hub)));
+    }
+
+    [Fact]
+    public void Render_routes_data_model_relationships_orthogonally()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Model("type_app", "App", ("Layout", "Layout", "type_layout"), ("Page", "Page", "type_page"), ("Email", "Email", "type_email")),
+                    Model("type_layout", "Layout"),
+                    Model("type_page", "Page"),
+                    Model("type_email", "Email", ("User", "User", "type_user")),
+                    Model("type_user", "User")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>()));
+
+        Assert.All(DataModelRouteSegments(document), segment =>
+            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+    }
+
     private static XDocument Render(DiagramModel diagram, DiagramSettings? settings = null)
     {
         return XDocument.Parse(new DrawioDiagramRenderer().Render(diagram, settings ?? DiagramSettings.CreateDefault()));
@@ -801,6 +849,51 @@ public sealed class DeterministicDrawioExporterTests
     private static (int X, int Y, int Width, int Height) NodeRect(XDocument document, string id)
     {
         return (AbsoluteX(document, id), AbsoluteY(document, id), Geometry(document, id, "width"), Geometry(document, id, "height"));
+    }
+
+    private static int CenterY((int X, int Y, int Width, int Height) rect)
+    {
+        return rect.Y + rect.Height / 2;
+    }
+
+    private static IEnumerable<((int X, int Y) Start, (int X, int Y) End)> DataModelRouteSegments(XDocument document)
+    {
+        foreach (var edge in document.Descendants("mxCell").Where(cell =>
+            (string?)cell.Attribute("edge") == "1" &&
+            (((string?)cell.Attribute("id")) ?? string.Empty).StartsWith("data_model_edge_", StringComparison.Ordinal)))
+        {
+            var points = DataModelRoutePoints(document, edge);
+            foreach (var segment in TestSegments(points))
+            {
+                yield return segment;
+            }
+        }
+    }
+
+    private static IReadOnlyList<(int X, int Y)> DataModelRoutePoints(XDocument document, XElement edge)
+    {
+        var sourceId = (string)edge.Attribute("source")!;
+        var targetId = (string)edge.Attribute("target")!;
+        var source = NodeRect(document, sourceId);
+        var target = NodeRect(document, targetId);
+        var points = new List<(int X, int Y)>
+        {
+            RatioPoint(source, StyleValue(edge, "exitX"), StyleValue(edge, "exitY"))
+        };
+        points.AddRange(EdgePoints(document, (string)edge.Attribute("id")!));
+        points.Add(RatioPoint(target, StyleValue(edge, "entryX"), StyleValue(edge, "entryY")));
+
+        return points;
+    }
+
+    private static (int X, int Y) RatioPoint(
+        (int X, int Y, int Width, int Height) rect,
+        string xRatio,
+        string yRatio)
+    {
+        var x = double.Parse(xRatio, CultureInfo.InvariantCulture);
+        var y = double.Parse(yRatio, CultureInfo.InvariantCulture);
+        return ((int)Math.Round(rect.X + rect.Width * x), (int)Math.Round(rect.Y + rect.Height * y));
     }
 
     private static bool SegmentIntersects((int X, int Y) start, (int X, int Y) end, (int X, int Y, int Width, int Height) rect)
