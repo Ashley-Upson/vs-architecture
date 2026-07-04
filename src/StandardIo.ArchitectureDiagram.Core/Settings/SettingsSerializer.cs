@@ -44,6 +44,9 @@ public static class SettingsSerializer
         settings.ExcludedNames ??= new();
         settings.StyleRules ??= new();
         settings.Overrides ??= new();
+        settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
+            ? "drawio"
+            : settings.OutputRenderer.Trim();
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
         settings.ExternalDependencyStyle ??= NodeStyle.External();
         settings.Connector ??= new ConnectorStyle();

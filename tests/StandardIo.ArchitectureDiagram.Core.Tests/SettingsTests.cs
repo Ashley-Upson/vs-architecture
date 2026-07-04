@@ -16,6 +16,7 @@ public sealed class SettingsTests
         Assert.Equal(settings.StyleRules.Count, imported.StyleRules.Count);
         Assert.Equal(settings.Canvas.BackgroundColor, imported.Canvas.BackgroundColor);
         Assert.Equal(settings.ShowProjectContainers, imported.ShowProjectContainers);
+        Assert.Equal(settings.OutputRenderer, imported.OutputRenderer);
         Assert.Equal(settings.ExternalDependencyStyle.Shape, imported.ExternalDependencyStyle.Shape);
     }
 
@@ -48,5 +49,20 @@ public sealed class SettingsTests
 
         Assert.True(resolver.IsExcluded("InvoiceDesigner", "App.Features.InvoiceDesigner"));
         Assert.True(resolver.IsExcluded("GeneratedThing", "App.Generated.GeneratedThing"));
+    }
+
+    [Fact]
+    public void Import_normalizes_empty_output_renderer_to_drawio()
+    {
+        var json = """
+            {
+              "version": 1,
+              "outputRenderer": " "
+            }
+            """;
+
+        var settings = SettingsSerializer.Import(json);
+
+        Assert.Equal("drawio", settings.OutputRenderer);
     }
 }

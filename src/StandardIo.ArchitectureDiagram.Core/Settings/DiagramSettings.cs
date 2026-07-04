@@ -11,6 +11,7 @@ public sealed class DiagramSettings
     public List<string> ExcludedNames { get; set; } = new();
     public List<StyleRule> StyleRules { get; set; } = new();
     public List<StyleOverride> Overrides { get; set; } = new();
+    public string OutputRenderer { get; set; } = "drawio";
     public bool ShowProjectContainers { get; set; } = true;
     public NodeStyle ProjectContainerStyle { get; set; } = NodeStyle.ProjectContainer();
     public NodeStyle ExternalDependencyStyle { get; set; } = NodeStyle.External();
@@ -49,7 +50,8 @@ public sealed class DiagramSettings
                 new() { Match = "*Database", Style = new NodeStyle { FillColor = "#4b0000", StrokeColor = "#ffffff", FontColor = "#ffffff", Shape = "cylinder", Shadow = true } },
                 new() { Match = "*Hub", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } },
                 new() { Match = "*Queue", Style = new NodeStyle { FillColor = "#f36c21", StrokeColor = "#a43b08", FontColor = "#111111", Shape = "rhombus", Shadow = true } }
-            }
+            },
+            OutputRenderer = "drawio"
         };
     }
 }

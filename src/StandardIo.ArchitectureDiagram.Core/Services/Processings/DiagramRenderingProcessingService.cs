@@ -1,25 +1,26 @@
-using StandardIo.ArchitectureDiagram.Core.Brokers.Drawio;
 using StandardIo.ArchitectureDiagram.Core.Graph;
+using StandardIo.ArchitectureDiagram.Core.Renderers;
 using StandardIo.ArchitectureDiagram.Core.Settings;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Processings;
 
 public sealed class DiagramRenderingProcessingService : IDiagramRenderingProcessingService
 {
-    private readonly IDrawioBroker _drawioBroker;
+    private readonly DiagramRendererRegistry _rendererRegistry;
 
     public DiagramRenderingProcessingService()
-        : this(new DrawioBroker())
+        : this(new DiagramRendererRegistry())
     {
     }
 
-    public DiagramRenderingProcessingService(IDrawioBroker drawioBroker)
+    public DiagramRenderingProcessingService(DiagramRendererRegistry rendererRegistry)
     {
-        _drawioBroker = drawioBroker ?? throw new System.ArgumentNullException(nameof(drawioBroker));
+        _rendererRegistry = rendererRegistry ?? throw new System.ArgumentNullException(nameof(rendererRegistry));
     }
 
     public string Render(DiagramModel diagram, DiagramSettings settings)
     {
-        return _drawioBroker.Export(diagram, settings);
+        settings ??= DiagramSettings.CreateDefault();
+        return _rendererRegistry.Resolve(settings.OutputRenderer).Render(diagram, settings);
     }
 }
