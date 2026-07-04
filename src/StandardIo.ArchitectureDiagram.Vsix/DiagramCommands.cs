@@ -14,6 +14,7 @@ using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
 using StandardIo.ArchitectureDiagram.Core.Renderers;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings;
 using StandardIo.ArchitectureDiagram.Core.Settings;
@@ -68,7 +69,7 @@ internal sealed class DiagramCommands
                 }
 
                 var output = await new DiagramGenerationProcessingService().GenerateAsync(target.Projects, settings);
-                File.WriteAllText(outputPath, output);
+                await new DiagramFileBroker().WriteTextAsync(outputPath!, output);
                 ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
             }
             catch (Exception ex)

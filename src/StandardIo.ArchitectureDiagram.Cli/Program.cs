@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings;
 using StandardIo.ArchitectureDiagram.Core.Settings;
 
@@ -31,8 +32,9 @@ public static class Program
             var result = await new DiagramPathGenerationProcessingService()
                 .GenerateAsync(options.InputPath!, settings, options.OutputPath, options.ProjectFilter)
                 .ConfigureAwait(false);
-            Directory.CreateDirectory(Path.GetDirectoryName(result.OutputPath)!);
-            File.WriteAllText(result.OutputPath, result.Content);
+            await new DiagramFileBroker()
+                .WriteTextAsync(result.OutputPath, result.Content)
+                .ConfigureAwait(false);
             Console.WriteLine(result.OutputPath);
             return 0;
         }
