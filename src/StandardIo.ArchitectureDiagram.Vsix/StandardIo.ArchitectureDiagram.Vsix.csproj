@@ -3,7 +3,12 @@
 		<TargetFramework>net472</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
-		<Version>0.1.34</Version>
+		<VersionMajor>0</VersionMajor>
+		<VersionMinor>1</VersionMinor>
+		<VersionPatch>34</VersionPatch>
+		<Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
+		<VsixVersionTimestamp>$([System.DateTime]::UtcNow.ToString('yyyyMMddHHmm'))</VsixVersionTimestamp>
+		<VsixManifestVersion>$(Version).$(VsixVersionTimestamp)</VsixManifestVersion>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
 		<GeneratePkgDefFile>true</GeneratePkgDefFile>
@@ -52,6 +57,9 @@
 	</Target>
 	<Target Name="CopyCurrentVsixManifest" BeforeTargets="CreateVsixContainer" DependsOnTargets="EnsureVsixIntermediateOutputPath">
 		<Copy SourceFiles="source.extension.vsixmanifest" DestinationFiles="$(IntermediateVsixManifest)" />
+	</Target>
+	<Target Name="StampGeneratedVsixManifestVersion" AfterTargets="CopyCurrentVsixManifest">
+		<XmlPoke XmlInputPath="$(IntermediateVsixManifest)" Query="/*[local-name()='PackageManifest']/*[local-name()='Metadata']/*[local-name()='Identity']/@Version" Value="$(VsixManifestVersion)" />
 	</Target>
 	<Target Name="AddPackageCodeBaseToPkgDef" AfterTargets="GeneratePkgDef">
 		<ItemGroup>
