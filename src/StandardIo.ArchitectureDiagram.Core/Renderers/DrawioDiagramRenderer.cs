@@ -6,14 +6,14 @@ namespace StandardIo.ArchitectureDiagram.Core.Renderers;
 
 public sealed class DrawioDiagramRenderer : IDiagramRenderer
 {
-    private readonly DrawioExporter _exporter;
+    private readonly DeterministicDrawioExporter _exporter;
 
     public DrawioDiagramRenderer()
-        : this(new DrawioExporter())
+        : this(new DeterministicDrawioExporter())
     {
     }
 
-    public DrawioDiagramRenderer(DrawioExporter exporter)
+    public DrawioDiagramRenderer(DeterministicDrawioExporter exporter)
     {
         _exporter = exporter ?? throw new System.ArgumentNullException(nameof(exporter));
     }
