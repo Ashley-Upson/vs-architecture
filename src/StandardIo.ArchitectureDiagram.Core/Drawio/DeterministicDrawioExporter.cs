@@ -776,9 +776,15 @@ public sealed class DeterministicDrawioExporter
 
         private static List<Point> SeparateOverlappingCorners(List<Point> points, HashSet<string> usedCorners, int spacing)
         {
-            var result = new List<Point>();
-            foreach (var point in points)
+            if (points.Count <= 2)
             {
+                return points;
+            }
+
+            var result = new List<Point> { points[0] };
+            for (var index = 1; index < points.Count - 1; index++)
+            {
+                var point = points[index];
                 var adjusted = point;
                 while (!usedCorners.Add($"{adjusted.X}:{adjusted.Y}"))
                 {
@@ -788,12 +794,13 @@ public sealed class DeterministicDrawioExporter
                 result.Add(adjusted);
             }
 
+            result.Add(points[points.Count - 1]);
             return result;
         }
 
         private static List<Point> SeparateParallelSegments(List<Point> points, List<Segment> occupiedSegments, int spacing)
         {
-            for (var index = 0; index < points.Count - 1; index++)
+            for (var index = 1; index < points.Count - 2; index++)
             {
                 var segment = new Segment(points[index], points[index + 1]);
                 if (!occupiedSegments.Any(occupied => ParallelOverlap(segment, occupied, spacing)))

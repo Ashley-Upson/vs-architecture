@@ -211,6 +211,35 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_keeps_nearby_dependency_routes_local()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_orchestration", "project_api", "TemplateRenderOrchestrationService"),
+                    Node("type_processing", "project_api", "TemplateRenderProcessingService"),
+                    Node("type_far_source", "project_api", "FarSource"),
+                    Node("type_far_target", "project_api", "FarTarget")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_template", "type_orchestration", "type_processing", "internal"),
+                new DependencyEdge("edge_far", "type_far_source", "type_far_target", "internal")
+            }));
+
+        var localRight = Math.Max(AbsoluteRight(document, "type_orchestration"), AbsoluteRight(document, "type_processing"));
+        var farLeft = AbsoluteX(document, "type_far_source");
+        var routeRight = EdgePoints(document, "edge_template").Max(point => point.X);
+
+        Assert.True(routeRight < farLeft);
+        Assert.True(routeRight <= localRight + DiagramSettings.CreateDefault().Layout.HorizontalSpacing);
+    }
+
+    [Fact]
     public void Render_separates_overlapping_corners()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -359,6 +388,11 @@ public sealed class DeterministicDrawioExporterTests
         return string.IsNullOrWhiteSpace(parentId) || parentId == "1"
             ? y
             : y + Geometry(document, parentId, "y");
+    }
+
+    private static int AbsoluteRight(XDocument document, string id)
+    {
+        return AbsoluteX(document, id) + Geometry(document, id, "width");
     }
 
     private static int Geometry(XDocument document, string id, string attributeName)
