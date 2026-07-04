@@ -108,8 +108,9 @@ public sealed class DeterministicDrawioExporter
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var depths = CalculateDepths(graph);
+            var depthOffsets = CalculateDepthOffsets(graph, settings, depths);
             var widths = CalculateWidths(graph, settings);
-            var nodes = PositionNodes(graph, settings, depths, widths);
+            var nodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
             var projects = PositionProjects(graph, settings, nodes);
             var links = PositionLinks(graph, settings, nodes);
 
@@ -272,10 +273,46 @@ public sealed class DeterministicDrawioExporter
                 StringComparer.Ordinal);
         }
 
+        private static Dictionary<int, int> CalculateDepthOffsets(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, int> depths)
+        {
+            var bandCounts = new Dictionary<int, int>();
+            foreach (var link in graph.Links)
+            {
+                var sourceDepth = depths[link.SourceId];
+                var targetDepth = depths[link.TargetId];
+                var upper = Math.Min(sourceDepth, targetDepth);
+                var lower = Math.Max(sourceDepth, targetDepth);
+                for (var depth = upper; depth < lower; depth++)
+                {
+                    bandCounts[depth] = bandCounts.TryGetValue(depth, out var count) ? count + 1 : 1;
+                }
+            }
+
+            var offsets = new Dictionary<int, int>();
+            var cumulativeOffset = 0;
+            var maxDepth = depths.Values.DefaultIfEmpty(0).Max();
+            for (var depth = 0; depth <= maxDepth; depth++)
+            {
+                offsets[depth] = cumulativeOffset;
+                if (bandCounts.TryGetValue(depth, out var linkCount))
+                {
+                    var neededGap = settings.Layout.LinkPadding * 2 +
+                        Math.Max(0, linkCount - 1) * settings.Layout.ParallelLaneSpacing;
+                    cumulativeOffset += Math.Max(0, neededGap - settings.Layout.VerticalSpacing);
+                }
+            }
+
+            return offsets;
+        }
+
         private static Dictionary<string, NodeLayout> PositionNodes(
             RenderGraph graph,
             DiagramSettings settings,
             IReadOnlyDictionary<string, int> depths,
+            IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths)
         {
             var incidentIds = new HashSet<string>(
@@ -294,7 +331,7 @@ public sealed class DeterministicDrawioExporter
                 {
                     result[node.Id] = new NodeLayout(
                         node,
-                        new Rect(x, NodeY(layer.Key, settings), widths[node.Id], settings.Layout.NodeHeight),
+                        new Rect(x, NodeY(layer.Key, settings, depthOffsets), widths[node.Id], settings.Layout.NodeHeight),
                         layer.Key,
                         false);
                     x += widths[node.Id] + settings.Layout.HorizontalSpacing;
@@ -302,6 +339,8 @@ public sealed class DeterministicDrawioExporter
             }
 
             CenterParentsOverChildren(graph, settings, result);
+            ResolveLayerOverlaps(settings, result);
+            ReserveLinkCorridors(graph, settings, result);
             ResolveLayerOverlaps(settings, result);
 
             var standaloneX = result.Count == 0
@@ -339,6 +378,76 @@ public sealed class DeterministicDrawioExporter
             }
 
             return result;
+        }
+
+        private static void ReserveLinkCorridors(
+            RenderGraph graph,
+            DiagramSettings settings,
+            Dictionary<string, NodeLayout> nodes)
+        {
+            var corridorClaims = graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
+                .Select(link =>
+                {
+                    var source = nodes[link.SourceId];
+                    var target = nodes[link.TargetId];
+                    var corridorX = source.Rect.CenterX + (target.Rect.CenterX - source.Rect.CenterX) / 2;
+                    return new
+                    {
+                        Link = link,
+                        UpperDepth = Math.Min(source.Depth, target.Depth),
+                        LowerDepth = Math.Max(source.Depth, target.Depth),
+                        CorridorX = corridorX
+                    };
+                })
+                .OrderBy(item => item.Link.Order)
+                .ToArray();
+
+            foreach (var claim in corridorClaims)
+            {
+                for (var depth = claim.UpperDepth; depth <= claim.LowerDepth; depth++)
+                {
+                    ReserveCorridorOnLayer(settings, nodes, depth, claim.CorridorX);
+                }
+            }
+        }
+
+        private static void ReserveCorridorOnLayer(
+            DiagramSettings settings,
+            Dictionary<string, NodeLayout> nodes,
+            int depth,
+            int corridorX)
+        {
+            var clearance = settings.Layout.LinkPadding * 2 + settings.Layout.ParallelLaneSpacing;
+            var layer = nodes.Values
+                .Where(node => !node.IsStandalone && node.Depth == depth)
+                .OrderBy(node => node.Rect.X)
+                .ThenBy(node => node.Node.Order)
+                .ToArray();
+
+            foreach (var node in layer)
+            {
+                if (corridorX <= node.Rect.X - clearance || corridorX >= node.Rect.Right + clearance)
+                {
+                    continue;
+                }
+
+                var shift = node.Rect.Right + clearance - corridorX;
+                ShiftLayerNodes(nodes, layer, node.Rect.X, shift);
+                return;
+            }
+        }
+
+        private static void ShiftLayerNodes(
+            Dictionary<string, NodeLayout> nodes,
+            IReadOnlyList<NodeLayout> layer,
+            int fromX,
+            int shift)
+        {
+            foreach (var node in layer.Where(item => item.Rect.X >= fromX))
+            {
+                nodes[node.Node.Id] = node with { Rect = node.Rect with { X = node.Rect.X + shift } };
+            }
         }
 
         private static void CenterParentsOverChildren(
@@ -422,6 +531,7 @@ public sealed class DeterministicDrawioExporter
             var targetGroups = graph.Links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var usedCorners = new HashSet<string>(StringComparer.Ordinal);
             var occupiedSegments = new List<Segment>();
+            var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
 
             foreach (var link in graph.Links.OrderBy(link => link.Order))
             {
@@ -435,7 +545,8 @@ public sealed class DeterministicDrawioExporter
                     .Where(node => !node.IsStandalone)
                     .Select(node => node.Rect)
                     .ToArray();
-                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, link.Order, usedCorners, occupiedSegments);
+                var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
+                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners, occupiedSegments);
                 occupiedSegments.AddRange(Segments(route));
 
                 result[link.Id] = new LinkLayout(
@@ -450,18 +561,36 @@ public sealed class DeterministicDrawioExporter
             return result;
         }
 
+        private static Dictionary<string, int> CalculateRouteLaneIndexes(
+            RenderGraph graph,
+            IReadOnlyDictionary<string, NodeLayout> nodes)
+        {
+            return graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
+                .GroupBy(link =>
+                {
+                    var sourceDepth = nodes[link.SourceId].Depth;
+                    var targetDepth = nodes[link.TargetId].Depth;
+                    return $"{Math.Min(sourceDepth, targetDepth)}:{Math.Max(sourceDepth, targetDepth)}";
+                })
+                .SelectMany(group => group
+                    .OrderBy(link => link.Order)
+                    .Select((link, index) => new { link.Id, Index = index }))
+                .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+        }
+
         private static IReadOnlyList<Point> BuildRoute(
             Point sourcePoint,
             Point targetPoint,
             IReadOnlyList<Rect> obstacles,
             DiagramSettings settings,
-            int order,
+            int laneIndex,
             HashSet<string> usedCorners,
             List<Segment> occupiedSegments)
         {
             var sourceExit = new Point(sourcePoint.X, sourcePoint.Y + settings.Layout.LinkPadding);
             var targetEntry = new Point(targetPoint.X, targetPoint.Y - settings.Layout.LinkPadding);
-            var laneOffset = order * settings.Layout.ParallelLaneSpacing;
+            var laneOffset = laneIndex * settings.Layout.ParallelLaneSpacing;
             var midY = sourceExit.Y <= targetEntry.Y
                 ? sourceExit.Y + (targetEntry.Y - sourceExit.Y) / 2 + laneOffset
                 : sourceExit.Y + settings.Layout.VerticalSpacing + laneOffset;
@@ -681,10 +810,11 @@ public sealed class DeterministicDrawioExporter
             return Math.Max(0, Math.Min(1, (x - rect.X) / (double)rect.Width));
         }
 
-        private static int NodeY(int depth, DiagramSettings settings)
+        private static int NodeY(int depth, DiagramSettings settings, IReadOnlyDictionary<int, int> depthOffsets)
         {
             return settings.Layout.ContainerPadding * 2 +
-                depth * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing);
+                depth * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing) +
+                (depthOffsets.TryGetValue(depth, out var offset) ? offset : 0);
         }
     }
 

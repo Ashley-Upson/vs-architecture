@@ -139,6 +139,46 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_uses_local_lane_offsets_instead_of_global_edge_order()
+    {
+        var unrelatedNodes = Enumerable.Range(0, 8)
+            .SelectMany(index => new[]
+            {
+                Node($"type_unrelated_source_{index}", "project_api", $"UnrelatedSource{index}"),
+                Node($"type_unrelated_target_{index}", "project_api", $"UnrelatedTarget{index}")
+            })
+            .ToArray();
+        var unrelatedEdges = Enumerable.Range(0, 8)
+            .Select(index => new DependencyEdge(
+                $"edge_unrelated_{index}",
+                $"type_unrelated_source_{index}",
+                $"type_unrelated_target_{index}",
+                "internal"))
+            .ToArray();
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_top", "project_api", "Top"),
+                    Node("type_middle", "project_api", "Middle"),
+                    Node("type_bottom", "project_api", "Bottom")
+                }.Concat(unrelatedNodes).ToArray())
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            unrelatedEdges.Concat(new[]
+            {
+                new DependencyEdge("edge_top_middle", "type_top", "type_middle", "internal"),
+                new DependencyEdge("edge_middle_bottom", "type_middle", "type_bottom", "internal"),
+                new DependencyEdge("edge_top_bottom", "type_top", "type_bottom", "internal")
+            }).ToArray()));
+
+        var laneY = EdgePoints(document, "edge_top_bottom")[1].Y;
+
+        Assert.True(laneY < AbsoluteY(document, "type_bottom") - 10);
+    }
+
+    [Fact]
     public void Render_separates_overlapping_corners()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -292,6 +332,16 @@ public sealed class DeterministicDrawioExporterTests
     private static int Geometry(XDocument document, string id, string attributeName)
     {
         return int.Parse((string)Cell(document, id).Element("mxGeometry")!.Attribute(attributeName)!);
+    }
+
+    private static IReadOnlyList<(int X, int Y)> EdgePoints(XDocument document, string id)
+    {
+        return Cell(document, id)
+            .Descendants("mxPoint")
+            .Select(point => (
+                int.Parse((string)point.Attribute("x")!),
+                int.Parse((string)point.Attribute("y")!)))
+            .ToArray();
     }
 
     private static string StyleValue(XElement edge, string key)
