@@ -675,10 +675,47 @@ public sealed class DeterministicDrawioExporter
             var sourceExit = new Point(sourcePoint.X, sourcePoint.Y + settings.Layout.LinkPadding);
             var targetEntry = new Point(targetPoint.X, targetPoint.Y - settings.Layout.LinkPadding);
             var laneOffset = laneIndex * settings.Layout.ParallelLaneSpacing;
+            var points = SelectBestRoute(sourceExit, targetEntry, obstacles, settings, laneOffset);
+
+            points = SeparateOverlappingCorners(points, usedCorners, settings.Layout.ParallelLaneSpacing);
+            points = SeparateParallelSegments(points, occupiedSegments, settings.Layout.ParallelLaneSpacing);
+            if (CrossesNode(points, obstacles))
+            {
+                points = SelectBestRoute(sourceExit, targetEntry, obstacles, settings, laneOffset + settings.Layout.ParallelLaneSpacing);
+            }
+
+            return Simplify(points);
+        }
+
+        private static List<Point> SelectBestRoute(
+            Point sourceExit,
+            Point targetEntry,
+            IReadOnlyList<Rect> obstacles,
+            DiagramSettings settings,
+            int laneOffset)
+        {
+            var candidates = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                .Select(Simplify)
+                .Where(route => !CrossesNode(route, obstacles))
+                .OrderBy(route => RouteScore(route, sourceExit, targetEntry))
+                .ToArray();
+
+            return candidates.FirstOrDefault()
+                ?? BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset);
+        }
+
+        private static IEnumerable<List<Point>> BuildRouteCandidates(
+            Point sourceExit,
+            Point targetEntry,
+            IReadOnlyList<Rect> obstacles,
+            DiagramSettings settings,
+            int laneOffset)
+        {
             var midY = sourceExit.Y <= targetEntry.Y
                 ? sourceExit.Y + (targetEntry.Y - sourceExit.Y) / 2 + laneOffset
                 : sourceExit.Y + settings.Layout.VerticalSpacing + laneOffset;
-            var points = new List<Point>
+
+            yield return new List<Point>
             {
                 sourceExit,
                 new(sourceExit.X, midY),
@@ -686,32 +723,23 @@ public sealed class DeterministicDrawioExporter
                 targetEntry
             };
 
-            if (CrossesNode(points, obstacles))
+            yield return new List<Point>
             {
-                points = BuildCorridorRoute(sourceExit, targetEntry, obstacles, settings, laneOffset)
-                    ?? BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset);
-            }
+                sourceExit,
+                new(targetEntry.X, sourceExit.Y),
+                targetEntry
+            };
 
-            points = SeparateOverlappingCorners(points, usedCorners, settings.Layout.ParallelLaneSpacing);
-            points = SeparateParallelSegments(points, occupiedSegments, settings.Layout.ParallelLaneSpacing);
-            if (CrossesNode(points, obstacles))
+            yield return new List<Point>
             {
-                points = BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset + settings.Layout.ParallelLaneSpacing);
-            }
+                sourceExit,
+                new(sourceExit.X, targetEntry.Y),
+                targetEntry
+            };
 
-            return Simplify(points);
-        }
-
-        private static List<Point>? BuildCorridorRoute(
-            Point sourceExit,
-            Point targetEntry,
-            IReadOnlyList<Rect> obstacles,
-            DiagramSettings settings,
-            int laneOffset)
-        {
             foreach (var corridorX in CorridorCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset))
             {
-                var route = new List<Point>
+                yield return new List<Point>
                 {
                     sourceExit,
                     new(corridorX, sourceExit.Y),
@@ -719,13 +747,33 @@ public sealed class DeterministicDrawioExporter
                     targetEntry
                 };
 
-                if (!CrossesNode(route, obstacles))
+                yield return new List<Point>
                 {
-                    return route;
-                }
+                    sourceExit,
+                    new(sourceExit.X, midY),
+                    new(corridorX, midY),
+                    new(corridorX, targetEntry.Y),
+                    targetEntry
+                };
+            }
+        }
+
+        private static int RouteScore(IReadOnlyList<Point> route, Point sourceExit, Point targetEntry)
+        {
+            var length = 0;
+            for (var index = 0; index < route.Count - 1; index++)
+            {
+                length += Math.Abs(route[index].X - route[index + 1].X) +
+                    Math.Abs(route[index].Y - route[index + 1].Y);
             }
 
-            return null;
+            var localLeft = Math.Min(sourceExit.X, targetEntry.X);
+            var localRight = Math.Max(sourceExit.X, targetEntry.X);
+            var routeLeft = route.Min(point => point.X);
+            var routeRight = route.Max(point => point.X);
+            var escapePenalty = Math.Max(0, localLeft - routeLeft) + Math.Max(0, routeRight - localRight);
+            var cornerPenalty = Math.Max(0, route.Count - 4) * 50;
+            return length + escapePenalty * 10 + cornerPenalty;
         }
 
         private static IEnumerable<int> CorridorCandidates(
