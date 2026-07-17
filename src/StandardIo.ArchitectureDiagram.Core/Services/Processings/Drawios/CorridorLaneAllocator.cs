@@ -24,7 +24,9 @@ internal static class CorridorLaneAllocator
                         group => group.Key,
                         group => group.Select(mapping => mapping.RouteRevision).Distinct().Single(),
                         StringComparer.Ordinal);
-                var requiredExtent = Math.Max(1, (usage.RequiredLanes - 1) * usage.Corridor.LaneSpacing + 1);
+                var requiredExtent = Math.Max(
+                    1,
+                    (usage.RequiredLanes - 1) * usage.Corridor.LaneSpacing + 1 + usage.Corridor.Clearance * 2);
                 var currentExtent = usage.Corridor.Orientation == CorridorOrientation.Horizontal
                     ? usage.Corridor.Bounds.Height
                     : usage.Corridor.Bounds.Width;

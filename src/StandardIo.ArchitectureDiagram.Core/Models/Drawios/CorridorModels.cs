@@ -23,7 +23,8 @@ internal sealed record RoutingCorridor(
     int Capacity,
     CorridorRole Role = CorridorRole.Ordinary,
     string RegionKey = "global",
-    string ObstacleBoundaryKey = "unbounded");
+    string ObstacleBoundaryKey = "unbounded",
+    int Clearance = 0);
 
 internal sealed record CorridorJunction(
     string Id,

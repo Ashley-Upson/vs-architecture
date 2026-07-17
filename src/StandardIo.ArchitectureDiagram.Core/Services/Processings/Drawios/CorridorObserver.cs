@@ -306,7 +306,8 @@ internal static class CorridorObserver
         var localThreshold = Math.Max(source.Rect.Width, target.Rect.Width) * 2;
         return distance > localThreshold
             ? $"cross:{Math.Min(source.Depth, target.Depth)}:{Math.Max(source.Depth, target.Depth)}"
-            : $"local:{Math.Min(source.Depth, target.Depth)}:{Math.Max(source.Depth, target.Depth)}";
+            : $"local:{Math.Min(source.Depth, target.Depth)}:{Math.Max(source.Depth, target.Depth)}:" +
+                $"band:{Math.Min(source.Rect.CenterX, target.Rect.CenterX) / Math.Max(1, localThreshold)}";
     }
 
     private static RoutingCorridor BuildCorridor(
@@ -347,7 +348,8 @@ internal static class CorridorObserver
             capacity,
             items[0].Role,
             items[0].RegionKey,
-            items[0].ObstacleBoundaryKey);
+            items[0].ObstacleBoundaryKey,
+            clearance);
     }
 
     private static IReadOnlyDictionary<string, CorridorJunction> BuildJunctions(IEnumerable<RoutingCorridor> corridors)

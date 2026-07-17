@@ -93,6 +93,32 @@ internal sealed class RenderLayout
                 settings.Layout.ParallelLaneSpacing,
                 settings.Layout.LinkPadding);
             var lanes = CorridorLaneAllocator.Allocate(corridors);
+            var capacityAttempts = new List<RouteRepairAttempt>();
+            for (var capacityPass = 0; capacityPass < 2 && lanes.CapacityRequests?.Count > 0; capacityPass++)
+            {
+                var capacityExpansion = ExpandLayersForCapacityRequests(
+                    nodes,
+                    provisionalLinks,
+                    corridors,
+                    lanes,
+                    settings);
+                capacityAttempts.AddRange(capacityExpansion.Attempts);
+                if (!capacityExpansion.Changed)
+                {
+                    break;
+                }
+
+                nodes = capacityExpansion.Nodes;
+                projects = PositionProjects(graph, settings, nodes);
+                positionedLinks = PositionLinks(graph, settings, nodes);
+                provisionalLinks = positionedLinks.Links;
+                corridors = CorridorObserver.Observe(
+                    nodes,
+                    provisionalLinks,
+                    settings.Layout.ParallelLaneSpacing,
+                    settings.Layout.LinkPadding);
+                lanes = CorridorLaneAllocator.Allocate(corridors);
+            }
             var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
             var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, provisionalLinks);
             links = EdgeTraversalCompiler.Apply(links, traversals);
@@ -101,7 +127,7 @@ internal sealed class RenderLayout
 
             var originalTraceability = traceability;
             var expansion = ExpandLayersForLaneDemand(nodes, links, traceability, settings);
-            var expansionAttempts = expansion.Attempts;
+            var expansionAttempts = capacityAttempts.Concat(expansion.Attempts).ToArray();
             if (expansion.Changed)
             {
                 nodes = expansion.Nodes;
@@ -186,6 +212,95 @@ internal sealed class RenderLayout
             Dictionary<string, NodeLayout> Nodes,
             IReadOnlyList<RouteRepairAttempt> Attempts,
             bool Changed);
+
+        internal static LayerExpansionResult ExpandLayersForCapacityRequests(
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, LinkLayout> links,
+            CorridorObservation corridors,
+            CorridorLaneAllocation lanes,
+            DiagramSettings settings)
+        {
+            var requests = lanes.CapacityRequests ?? Array.Empty<CapacityRequest>();
+            var demandByNode = new Dictionary<string, int>(StringComparer.Ordinal);
+            var outgoing = links.Values
+                .GroupBy(link => link.Link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Select(link => link.Link.TargetId).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+            foreach (var request in requests
+                .Where(request => request.SmallestExpansion > 0 &&
+                    corridors.Corridors.TryGetValue(request.CorridorId, out var corridor) &&
+                    corridor.Orientation == CorridorOrientation.Horizontal)
+                .OrderBy(request => request.CorridorId, StringComparer.Ordinal))
+            {
+                var affectedLinks = request.RouteRevisions.Keys
+                    .Where(links.ContainsKey)
+                    .Select(edgeId => links[edgeId])
+                    .ToArray();
+                if (affectedLinks.Length == 0)
+                {
+                    continue;
+                }
+
+                var expansion = Math.Min(
+                    request.SmallestExpansion,
+                    settings.Layout.VerticalSpacing * 2);
+                var queue = new Queue<string>(affectedLinks.Select(link => link.Link.TargetId));
+                var closure = new HashSet<string>(StringComparer.Ordinal);
+                while (queue.Count > 0)
+                {
+                    var nodeId = queue.Dequeue();
+                    if (!nodes.ContainsKey(nodeId) || !closure.Add(nodeId))
+                    {
+                        continue;
+                    }
+
+                    if (outgoing.TryGetValue(nodeId, out var children))
+                    {
+                        foreach (var child in children)
+                        {
+                            queue.Enqueue(child);
+                        }
+                    }
+                }
+
+                foreach (var nodeId in closure)
+                {
+                    demandByNode[nodeId] = Math.Max(
+                        demandByNode.TryGetValue(nodeId, out var current) ? current : 0,
+                        expansion);
+                }
+            }
+
+            if (demandByNode.Count == 0)
+            {
+                return new LayerExpansionResult(
+                    nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                    requests.Select(request => new RouteRepairAttempt(
+                        $"capacity:{request.CorridorId}",
+                        "CapacityRequest",
+                        false,
+                        "No bounded horizontal layer expansion was available for this capacity request.",
+                        Array.Empty<ValidationPoint>(),
+                        Array.Empty<ValidationPoint>())).ToArray(),
+                    false);
+            }
+
+            var expanded = nodes.ToDictionary(
+                item => item.Key,
+                item =>
+                {
+                    var delta = demandByNode.TryGetValue(item.Key, out var demand) ? demand : 0;
+                    return item.Value with { Rect = item.Value.Rect with { Y = item.Value.Rect.Y + delta } };
+                },
+                StringComparer.Ordinal);
+            var attempts = requests.OrderBy(item => item.CorridorId, StringComparer.Ordinal).Select(item => new RouteRepairAttempt(
+                $"capacity:{item.CorridorId}",
+                "CapacityRequest",
+                true,
+                $"Expanded the bounded downstream route closure for {item.RequiredLaneCount} required lane(s).",
+                Array.Empty<ValidationPoint>(),
+                Array.Empty<ValidationPoint>())).ToArray();
+            return new LayerExpansionResult(expanded, attempts, true);
+        }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
         {
