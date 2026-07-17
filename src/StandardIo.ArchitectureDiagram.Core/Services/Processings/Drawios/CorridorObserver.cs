@@ -21,15 +21,21 @@ internal static class CorridorObserver
             .Where(segment => segment is not null)
             .Select(segment => segment!)
             .ToArray();
-        var corridors = observed
+        var spatialGroups = observed
             .GroupBy(segment => segment.CorridorKey, StringComparer.Ordinal)
-            .Select(group => BuildCorridor(group.Key, group, laneSpacing, clearance))
+            .SelectMany(group => SplitSpatially(group.Key, group))
+            .ToArray();
+        var corridors = spatialGroups
+            .Select(group => BuildCorridor(group.Id, group.Segments, laneSpacing, clearance))
             .ToDictionary(corridor => corridor.Id, StringComparer.Ordinal);
+        var corridorIdBySegment = spatialGroups
+            .SelectMany(group => group.Segments.Select(segment => new { Segment = segment, group.Id }))
+            .ToDictionary(item => item.Segment, item => item.Id);
         var mappings = observed
             .Select(segment => new CorridorSegmentMapping(
                 segment.EdgeId,
                 segment.SegmentIndex,
-                segment.CorridorKey,
+                corridorIdBySegment[segment],
                 segment.Segment))
             .ToArray();
         var usage = mappings
@@ -40,7 +46,6 @@ internal static class CorridorObserver
                 {
                     var edgeIds = group.Select(mapping => mapping.EdgeId)
                         .Distinct(StringComparer.Ordinal)
-                        .OrderBy(id => id, StringComparer.Ordinal)
                         .ToArray();
                     return new CorridorUsage(corridors[group.Key], edgeIds, edgeIds.Length);
                 },
@@ -49,6 +54,56 @@ internal static class CorridorObserver
 
         return new CorridorObservation(corridors, junctions, mappings, usage);
     }
+
+    private static IEnumerable<SpatialCorridorGroup> SplitSpatially(
+        string bandId,
+        IEnumerable<ObservedSegment> segments)
+    {
+        var remaining = segments
+            .OrderBy(segment => LongitudinalStart(segment))
+            .ThenBy(segment => LongitudinalEnd(segment))
+            .ThenBy(segment => segment.EdgeId, StringComparer.Ordinal)
+            .ToArray();
+        var component = new List<ObservedSegment>();
+        var componentEnd = int.MinValue;
+
+        foreach (var segment in remaining)
+        {
+            var start = LongitudinalStart(segment);
+            var end = LongitudinalEnd(segment);
+            if (component.Count > 0 && start > componentEnd)
+            {
+                yield return SpatialGroup(bandId, component);
+                component = new List<ObservedSegment>();
+                componentEnd = int.MinValue;
+            }
+
+            component.Add(segment);
+            componentEnd = Math.Max(componentEnd, end);
+        }
+
+        if (component.Count > 0)
+        {
+            yield return SpatialGroup(bandId, component);
+        }
+    }
+
+    private static SpatialCorridorGroup SpatialGroup(string bandId, IReadOnlyList<ObservedSegment> segments)
+    {
+        var start = segments.Min(LongitudinalStart);
+        var end = segments.Max(LongitudinalEnd);
+        return new SpatialCorridorGroup($"{bandId}:{start}:{end}", segments.ToArray());
+    }
+
+    private static int LongitudinalStart(ObservedSegment segment) =>
+        segment.Orientation == CorridorOrientation.Horizontal
+            ? Math.Min(segment.Segment.Start.X, segment.Segment.End.X)
+            : Math.Min(segment.Segment.Start.Y, segment.Segment.End.Y);
+
+    private static int LongitudinalEnd(ObservedSegment segment) =>
+        segment.Orientation == CorridorOrientation.Horizontal
+            ? Math.Max(segment.Segment.Start.X, segment.Segment.End.X)
+            : Math.Max(segment.Segment.Start.Y, segment.Segment.End.Y);
 
     private static ObservedSegment? Describe(
         LinkLayout link,
@@ -62,12 +117,9 @@ internal static class CorridorObserver
             return null;
         }
 
-        var obstacles = nodes.Values
-            .Where(node =>
-                !string.Equals(node.Node.Id, link.Link.SourceId, StringComparison.Ordinal) &&
-                !string.Equals(node.Node.Id, link.Link.TargetId, StringComparison.Ordinal))
-            .Select(node => node.Rect)
-            .ToArray();
+        // Terminals are corridor boundaries even though they are not collision obstacles for
+        // their own edge. Omitting them lets a lane escape the source/target band.
+        var obstacles = nodes.Values.Select(node => node.Rect).ToArray();
         if (segment.IsHorizontal)
         {
             var left = Math.Min(segment.Start.X, segment.End.X);
@@ -136,11 +188,16 @@ internal static class CorridorObserver
     private static IReadOnlyDictionary<string, CorridorJunction> BuildJunctions(IEnumerable<RoutingCorridor> corridors)
     {
         var horizontal = corridors.Where(corridor => corridor.Orientation == CorridorOrientation.Horizontal).ToArray();
-        var vertical = corridors.Where(corridor => corridor.Orientation == CorridorOrientation.Vertical).ToArray();
+        var vertical = corridors
+            .Where(corridor => corridor.Orientation == CorridorOrientation.Vertical)
+            .OrderBy(corridor => corridor.Bounds.X)
+            .ToArray();
         var result = new Dictionary<string, CorridorJunction>(StringComparer.Ordinal);
         foreach (var left in horizontal)
         {
-            foreach (var right in vertical)
+            foreach (var right in vertical
+                .TakeWhile(corridor => corridor.Bounds.X < left.Bounds.Right)
+                .Where(corridor => corridor.Bounds.Right > left.Bounds.X))
             {
                 var intersectionLeft = Math.Max(left.Bounds.X, right.Bounds.X);
                 var intersectionTop = Math.Max(left.Bounds.Y, right.Bounds.Y);
@@ -197,4 +254,6 @@ internal static class CorridorObserver
         string CorridorKey,
         CorridorOrientation Orientation,
         Segment Segment);
+
+    private sealed record SpatialCorridorGroup(string Id, IReadOnlyList<ObservedSegment> Segments);
 }

@@ -19,7 +19,7 @@ public sealed class CorridorLaneAllocatorTests
         var lanes = allocation.Corridors["H:20:80"].Values
             .OrderBy(lane => lane.LaneIndex)
             .ToArray();
-        Assert.Equal(new[] { "edge_a", "edge_b", "edge_c" }, lanes.Select(lane => lane.EdgeId));
+        Assert.Equal(new[] { "edge_c", "edge_a", "edge_b" }, lanes.Select(lane => lane.EdgeId));
         Assert.Equal(new[] { 38, 50, 62 }, lanes.Select(lane => lane.Coordinate));
     }
 

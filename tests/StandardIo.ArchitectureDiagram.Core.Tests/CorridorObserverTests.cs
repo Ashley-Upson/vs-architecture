@@ -58,11 +58,30 @@ public sealed class CorridorObserverTests
         Assert.Single(observation.Junctions);
     }
 
+    [Fact]
+    public void Observe_does_not_merge_disconnected_segments_in_same_axis_band()
+    {
+        var links = new Dictionary<string, LinkLayout>
+        {
+            ["left"] = LinkBetween("left", 0, 20, 100, 50),
+            ["right"] = LinkBetween("right", 1, 500, 580, 50)
+        };
+
+        var observation = CorridorObserver.Observe(
+            new Dictionary<string, NodeLayout>(), links, laneSpacing: 12, clearance: 4);
+
+        Assert.Equal(2, observation.Corridors.Count);
+        Assert.All(observation.Usage.Values, usage => Assert.Equal(1, usage.RequiredLanes));
+    }
+
     private static LinkLayout Link(string id, int order, int y) =>
+        LinkBetween(id, order, 20, 100, y);
+
+    private static LinkLayout LinkBetween(string id, int order, int left, int right, int y) =>
         new(
             new RenderLink(id, $"{id}_source", $"{id}_target", "internal", order),
-            new Point(20, y),
-            new Point(100, y),
+            new Point(left, y),
+            new Point(right, y),
             Array.Empty<Point>(),
             0.5,
             0.5);

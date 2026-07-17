@@ -19,7 +19,7 @@ internal static class CorridorLaneAllocator
                 continue;
             }
 
-            var edgeIds = usage.EdgeIds.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            var edgeIds = usage.EdgeIds.ToArray();
             var lanes = new Dictionary<string, AllocatedCorridorLane>(StringComparer.Ordinal);
             for (var index = 0; index < edgeIds.Length; index++)
             {
