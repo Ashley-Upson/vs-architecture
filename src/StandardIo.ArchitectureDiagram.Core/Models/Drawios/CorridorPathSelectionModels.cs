@@ -60,7 +60,7 @@ internal sealed record GlobalRouteScore(
 
     private static int VisualCost(int crossings, int canvasEscape, int pathEconomy)
     {
-        const int PerpendicularCrossingCost = 100;
+        const int PerpendicularCrossingCost = 1000;
         var value = (long)crossings * PerpendicularCrossingCost + canvasEscape + pathEconomy;
         return value > int.MaxValue ? int.MaxValue : (int)value;
     }

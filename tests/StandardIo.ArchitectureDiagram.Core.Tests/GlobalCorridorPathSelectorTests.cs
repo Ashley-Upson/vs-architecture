@@ -134,7 +134,7 @@ public sealed class GlobalCorridorPathSelectorTests
             ["mutable"] = new[]
             {
                 Candidate("mutable", "compact", 140, "compact", P(0, 0, 140, 0)),
-                Candidate("mutable", "exterior", 1400, "exterior", P(0, 0, 0, -650, 100, -650, 100, 0), escape: 650)
+                Candidate("mutable", "exterior", 5000, "exterior", P(0, 0, 0, -2450, 100, -2450, 100, 0), escape: 2450)
             },
             ["crossing-a"] = new[] { Candidate("crossing-a", "fixed-a", 40, "fixed-a", P(40, -20, 40, 20)) },
             ["crossing-b"] = new[] { Candidate("crossing-b", "fixed-b", 40, "fixed-b", P(80, -20, 80, 20)) }
