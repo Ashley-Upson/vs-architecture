@@ -35,7 +35,8 @@ internal static class EdgeTraversalCompiler
             var traversal = junctionAllocation.Traversals[link.Link.Id];
             var compiled = Compile(traversal);
             var accepted = CompletePoints(link);
-            if (!Normalize(compiled.Points).SequenceEqual(Normalize(accepted)))
+            if (!Normalize(compiled.Points).SequenceEqual(Normalize(accepted)) &&
+                !junctionAllocation.AllocatedEdgeIds.Contains(link.Link.Id))
             {
                 var diagnostic = new TraversalDiagnostic(
                     link.Link.Id,
@@ -102,7 +103,7 @@ internal static class EdgeTraversalCompiler
             corridors.Add(new CorridorTraversal(
                 index,
                 mapping.CorridorId,
-                Direction(points[index], points[index + 1]),
+                Direction(observation.Corridors[mapping.CorridorId], points[index], points[index + 1]),
                 lane,
                 points[index],
                 points[index + 1]));
@@ -182,6 +183,11 @@ internal static class EdgeTraversalCompiler
 
         return end.Y >= start.Y ? TraversalDirection.Down : TraversalDirection.Up;
     }
+
+    private static TraversalDirection Direction(RoutingCorridor corridor, Point start, Point end) =>
+        corridor.Orientation == CorridorOrientation.Horizontal
+            ? end.X >= start.X ? TraversalDirection.Right : TraversalDirection.Left
+            : end.Y >= start.Y ? TraversalDirection.Down : TraversalDirection.Up;
 
     private static CorridorOrientation DirectionOrientation(TraversalDirection direction) =>
         direction is TraversalDirection.Left or TraversalDirection.Right

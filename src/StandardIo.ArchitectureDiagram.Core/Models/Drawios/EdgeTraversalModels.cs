@@ -57,4 +57,5 @@ internal sealed record EdgeTraversalCompilation(
 
 internal sealed record JunctionAllocationResult(
     IReadOnlyDictionary<string, EdgeTraversal> Traversals,
-    IReadOnlyList<TraversalDiagnostic> Diagnostics);
+    IReadOnlyList<TraversalDiagnostic> Diagnostics,
+    IReadOnlyCollection<string> AllocatedEdgeIds);

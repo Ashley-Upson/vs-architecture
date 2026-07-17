@@ -10,6 +10,7 @@ internal static class SimpleJunctionAllocator
     {
         var result = traversals.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var diagnostics = new List<TraversalDiagnostic>();
+        var allocatedEdgeIds = new HashSet<string>(StringComparer.Ordinal);
         var turns = traversals.Values
             .SelectMany(traversal => traversal.Junctions
                 .Where(junction => !junction.IsStraightContinuation)
@@ -63,7 +64,7 @@ internal static class SimpleJunctionAllocator
             {
                 var traversal = result[allocation.Turn.EdgeId];
                 var junctions = traversal.Junctions
-                    .Select(junction => junction == allocation.Turn.Junction
+                    .Select(junction => IsSameJunction(junction, allocation.Turn.Junction)
                         ? junction with { TransitionPoint = allocation.Point }
                         : junction)
                     .ToArray();
@@ -84,10 +85,11 @@ internal static class SimpleJunctionAllocator
                     return corridor;
                 }).ToArray();
                 result[allocation.Turn.EdgeId] = traversal with { Corridors = corridors, Junctions = junctions };
+                allocatedEdgeIds.Add(allocation.Turn.EdgeId);
             }
         }
 
-        return new JunctionAllocationResult(result, diagnostics);
+        return new JunctionAllocationResult(result, diagnostics, allocatedEdgeIds);
 
         void Diagnose(IEnumerable<Turn> affected, string code, string message)
         {
@@ -138,6 +140,13 @@ internal static class SimpleJunctionAllocator
 
         return true;
     }
+
+    private static bool IsSameJunction(JunctionTraversal left, JunctionTraversal right) =>
+        string.Equals(left.JunctionId, right.JunctionId, StringComparison.Ordinal) &&
+        string.Equals(left.IncomingCorridorId, right.IncomingCorridorId, StringComparison.Ordinal) &&
+        left.IncomingLaneIndex == right.IncomingLaneIndex &&
+        string.Equals(left.OutgoingCorridorId, right.OutgoingCorridorId, StringComparison.Ordinal) &&
+        left.OutgoingLaneIndex == right.OutgoingLaneIndex;
 
     private sealed record Turn(string EdgeId, JunctionTraversal Junction);
 }
