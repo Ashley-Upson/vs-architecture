@@ -61,14 +61,13 @@ function Points([string]$value, [int]$xOffset) {
 
 function Add-Route($root, $route, [string]$geometry, [int]$xOffset, [string]$colour, [int]$index) {
     $points = Points $geometry $xOffset
-    $object = Element "object"
-    $object.SetAttributeValue("id", "route-$index")
-    $object.SetAttributeValue("label", $route.Id)
-    $object.SetAttributeValue("routeId", $route.Id)
-    $object.SetAttributeValue("laneAssignment", $route.Lane)
-    $object.SetAttributeValue("diagnostic", $route.Diagnostic)
-    $object.SetAttributeValue("pointSequence", ($points | ForEach-Object { "$($_.X),$($_.Y)" }) -join " ")
     $cell = Element "mxCell"
+    $cell.SetAttributeValue("id", "route-$index")
+    $cell.SetAttributeValue("value", $route.Id)
+    $cell.SetAttributeValue("routeId", $route.Id)
+    $cell.SetAttributeValue("laneAssignment", $route.Lane)
+    $cell.SetAttributeValue("diagnostic", $route.Diagnostic)
+    $cell.SetAttributeValue("pointSequence", ($points | ForEach-Object { "$($_.X),$($_.Y)" }) -join " ")
     $cell.SetAttributeValue("style", "edgeStyle=none;orthogonalLoop=0;jettySize=auto;html=1;strokeWidth=2;strokeColor=$colour;endArrow=block;endFill=1;")
     $cell.SetAttributeValue("edge", "1")
     $cell.SetAttributeValue("parent", "1")
@@ -83,14 +82,18 @@ function Add-Route($root, $route, [string]$geometry, [int]$xOffset, [string]$col
     foreach ($point in $points[1..($points.Count - 2)]) {
         $item = Element "mxPoint"; $item.SetAttributeValue("x", $point.X); $item.SetAttributeValue("y", $point.Y); $array.Add($item)
     }
-    $geometryElement.Add($source); $geometryElement.Add($target); $geometryElement.Add($array); $cell.Add($geometryElement); $object.Add($cell); $root.Add($object)
+    $geometryElement.Add($source); $geometryElement.Add($target); $geometryElement.Add($array); $cell.Add($geometryElement); $root.Add($cell)
 }
 
 $mxfile = Element "mxfile"
 $mxfile.SetAttributeValue("host", "app.diagrams.net")
+$diagramIndex = 0
 foreach ($case in $cases) {
+    $diagramIndex++
     $diagram = Element "diagram"; $diagram.SetAttributeValue("name", $case.Name)
+    $diagram.SetAttributeValue("id", "junction-fixture-$diagramIndex")
     $model = Element "mxGraphModel"; $root = Element "root"
+    $model.SetAttributeValue("dx", "1200"); $model.SetAttributeValue("dy", "900"); $model.SetAttributeValue("grid", "0"); $model.SetAttributeValue("page", "0")
     $zero = Element "mxCell"; $zero.SetAttributeValue("id", "0")
     $one = Element "mxCell"; $one.SetAttributeValue("id", "1"); $one.SetAttributeValue("parent", "0")
     $root.Add($zero); $root.Add($one)
