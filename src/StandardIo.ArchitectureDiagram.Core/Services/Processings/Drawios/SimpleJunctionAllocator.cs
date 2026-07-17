@@ -44,13 +44,26 @@ internal static class SimpleJunctionAllocator
             foreach (var item in items)
             {
                 var traversal = result[item.EdgeId];
-                var incoming = traversal.Corridors.Single(corridor =>
+                var incomingMatches = traversal.Corridors.Where(corridor =>
                     corridor.CorridorId == item.Junction.IncomingCorridorId &&
-                    corridor.Lane.LaneIndex == item.Junction.IncomingLaneIndex);
-                var outgoing = traversal.Corridors.Single(corridor =>
+                    corridor.Lane.LaneIndex == item.Junction.IncomingLaneIndex).ToArray();
+                var outgoingMatches = traversal.Corridors.Where(corridor =>
                     corridor.CorridorId == item.Junction.OutgoingCorridorId &&
-                    corridor.Lane.LaneIndex == item.Junction.OutgoingLaneIndex);
-                allocated.Add((item, Intersection(incoming, outgoing)));
+                    corridor.Lane.LaneIndex == item.Junction.OutgoingLaneIndex).ToArray();
+                if (incomingMatches.Length != 1 || outgoingMatches.Length != 1)
+                {
+                    Diagnose(items, "AMBIGUOUS_JUNCTION_CORRIDOR",
+                        "The bounded allocator requires exactly one matching incoming and outgoing corridor traversal.");
+                    allocated.Clear();
+                    break;
+                }
+
+                allocated.Add((item, Intersection(incomingMatches[0], outgoingMatches[0])));
+            }
+
+            if (allocated.Count == 0)
+            {
+                continue;
             }
 
             if (allocated.Select(item => item.Point).Distinct().Count() != allocated.Count)
