@@ -19,7 +19,8 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, ProjectLayout> projects,
             IReadOnlyDictionary<string, LinkLayout> links,
             TraceabilityValidationResult traceability,
-            CorridorObservation corridors)
+            CorridorObservation corridors,
+            CorridorLaneAllocation lanes)
         {
             Graph = graph;
             Nodes = nodes;
@@ -27,6 +28,7 @@ internal sealed class RenderLayout
             Links = links;
             Traceability = traceability;
             Corridors = corridors;
+            Lanes = lanes;
         }
 
         public RenderGraph Graph { get; }
@@ -41,6 +43,8 @@ internal sealed class RenderLayout
 
         public CorridorObservation Corridors { get; }
 
+        public CorridorLaneAllocation Lanes { get; }
+
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var depths = CalculateDepths(graph);
@@ -48,15 +52,17 @@ internal sealed class RenderLayout
             var widths = CalculateWidths(graph, settings);
             var nodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
             var projects = PositionProjects(graph, settings, nodes);
-            var links = PositionLinks(graph, settings, nodes);
-            var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
+            var provisionalLinks = PositionLinks(graph, settings, nodes);
             var corridors = CorridorObserver.Observe(
                 nodes,
-                links,
+                provisionalLinks,
                 settings.Layout.ParallelLaneSpacing,
                 settings.Layout.LinkPadding);
+            var lanes = CorridorLaneAllocator.Allocate(corridors);
+            var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
+            var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links, traceability, corridors);
+            return new RenderLayout(graph, nodes, projects, links, traceability, corridors, lanes);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
@@ -854,7 +860,6 @@ internal sealed class RenderLayout
             var sourceGroups = graph.Links.GroupBy(link => link.SourceId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var targetGroups = graph.Links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var usedCorners = new HashSet<string>(StringComparer.Ordinal);
-            var occupiedSegments = new List<Segment>();
             var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
 
             foreach (var link in graph.Links.OrderBy(link => link.Order))
@@ -867,8 +872,7 @@ internal sealed class RenderLayout
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
                 var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
-                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners, occupiedSegments);
-                occupiedSegments.AddRange(Segments(route));
+                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners);
 
                 result[link.Id] = new LinkLayout(
                     link,
@@ -1073,8 +1077,7 @@ internal sealed class RenderLayout
             IReadOnlyList<Rect> obstacles,
             DiagramSettings settings,
             int laneIndex,
-            HashSet<string> usedCorners,
-            List<Segment> occupiedSegments)
+            HashSet<string> usedCorners)
         {
             var sourceExit = new Point(sourcePoint.X, sourcePoint.Y + settings.Layout.LinkPadding);
             var targetEntry = new Point(targetPoint.X, targetPoint.Y - settings.Layout.LinkPadding);
@@ -1082,7 +1085,6 @@ internal sealed class RenderLayout
             var points = SelectBestRoute(sourceExit, targetEntry, obstacles, settings, laneOffset);
 
             points = SeparateOverlappingCorners(points, usedCorners, settings.Layout.ParallelLaneSpacing);
-            points = SeparateParallelSegments(points, occupiedSegments, settings.Layout.ParallelLaneSpacing);
             if (CrossesNode(points, obstacles))
             {
                 points = SelectBestRoute(sourceExit, targetEntry, obstacles, settings, laneOffset + settings.Layout.ParallelLaneSpacing);
@@ -1250,46 +1252,6 @@ internal sealed class RenderLayout
 
             result.Add(points[points.Count - 1]);
             return result;
-        }
-
-        private static List<Point> SeparateParallelSegments(List<Point> points, List<Segment> occupiedSegments, int spacing)
-        {
-            for (var index = 1; index < points.Count - 2; index++)
-            {
-                var segment = new Segment(points[index], points[index + 1]);
-                if (!occupiedSegments.Any(occupied => ParallelOverlap(segment, occupied, spacing)))
-                {
-                    continue;
-                }
-
-                if (segment.IsHorizontal)
-                {
-                    points[index] = points[index] with { Y = points[index].Y + spacing };
-                    points[index + 1] = points[index + 1] with { Y = points[index + 1].Y + spacing };
-                }
-                else if (segment.IsVertical)
-                {
-                    points[index] = points[index] with { X = points[index].X + spacing };
-                    points[index + 1] = points[index + 1] with { X = points[index + 1].X + spacing };
-                }
-            }
-
-            return points;
-        }
-
-        private static bool ParallelOverlap(Segment left, Segment right, int spacing)
-        {
-            if (left.IsHorizontal && right.IsHorizontal && Math.Abs(left.Start.Y - right.Start.Y) < spacing)
-            {
-                return RangesOverlap(left.Start.X, left.End.X, right.Start.X, right.End.X);
-            }
-
-            if (left.IsVertical && right.IsVertical && Math.Abs(left.Start.X - right.Start.X) < spacing)
-            {
-                return RangesOverlap(left.Start.Y, left.End.Y, right.Start.Y, right.End.Y);
-            }
-
-            return false;
         }
 
         private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd)
