@@ -40,10 +40,12 @@ internal sealed record GlobalRouteScore(
         }
 
         var left = new[] { InvalidGeometry, SharedSegmentLength, SpacingDeficit, TerminalFanoutViolations, AmbiguousTransitions,
-            CapacityFailure, CrossingsAndCongestion, CanvasEscape, PathEconomy };
+            CapacityFailure, VisualCost(CrossingsAndCongestion, CanvasEscape, PathEconomy),
+            CrossingsAndCongestion, CanvasEscape, PathEconomy };
         var right = new[] { other.InvalidGeometry, other.SharedSegmentLength, other.SpacingDeficit, other.TerminalFanoutViolations,
-            other.AmbiguousTransitions, other.CapacityFailure, other.CrossingsAndCongestion,
-            other.CanvasEscape, other.PathEconomy };
+            other.AmbiguousTransitions, other.CapacityFailure,
+            VisualCost(other.CrossingsAndCongestion, other.CanvasEscape, other.PathEconomy),
+            other.CrossingsAndCongestion, other.CanvasEscape, other.PathEconomy };
         for (var index = 0; index < left.Length; index++)
         {
             var comparison = left[index].CompareTo(right[index]);
@@ -54,6 +56,13 @@ internal sealed record GlobalRouteScore(
         }
 
         return 0;
+    }
+
+    private static int VisualCost(int crossings, int canvasEscape, int pathEconomy)
+    {
+        const int PerpendicularCrossingCost = 100;
+        var value = (long)crossings * PerpendicularCrossingCost + canvasEscape + pathEconomy;
+        return value > int.MaxValue ? int.MaxValue : (int)value;
     }
 }
 

@@ -127,6 +127,30 @@ public sealed class GlobalCorridorPathSelectorTests
     }
 
     [Fact]
+    public void Select_prefers_compact_perpendicular_crossings_over_disproportionate_exterior_detour()
+    {
+        var candidates = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+        {
+            ["mutable"] = new[]
+            {
+                Candidate("mutable", "compact", 140, "compact", P(0, 0, 140, 0)),
+                Candidate("mutable", "exterior", 1400, "exterior", P(0, 0, 0, -650, 100, -650, 100, 0), escape: 650)
+            },
+            ["crossing-a"] = new[] { Candidate("crossing-a", "fixed-a", 40, "fixed-a", P(40, -20, 40, 20)) },
+            ["crossing-b"] = new[] { Candidate("crossing-b", "fixed-b", 40, "fixed-b", P(80, -20, 80, 20)) }
+        };
+
+        var result = GlobalCorridorPathSelector.Select(
+            candidates,
+            Capacities(("compact", 1), ("exterior", 1), ("fixed-a", 1), ("fixed-b", 1)),
+            10,
+            4);
+
+        Assert.Equal("compact", result.Selected["mutable"].Signature.Value);
+        Assert.Equal(2, result.FinalScore.CrossingsAndCongestion);
+    }
+
+    [Fact]
     public void Select_longer_path_wins_when_short_path_has_higher_tier_identity_failure()
     {
         var result = GlobalCorridorPathSelector.Select(EarlyCommitCandidates(), Capacities(("main", 3), ("upper", 1)), 10, 4);
