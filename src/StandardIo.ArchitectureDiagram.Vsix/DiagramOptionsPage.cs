@@ -91,6 +91,11 @@ public sealed class DiagramOptionsPage : DialogPage
         catch (Exception ex)
         {
             DiagnosticLog.Write("DiagramOptionsPage.SaveSettingsToStorage failed.", ex);
+            MessageBox.Show(
+                $"The architecture diagram settings could not be saved.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                "Architecture Diagram Settings",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
             // Avoid Visual Studio replacing the whole page with "An error occurred".
         }
     }
@@ -131,6 +136,8 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly NumericUpDown _dataModelRelationshipStubLength = NumberBox(0, 500);
     private readonly TextBox _baselineAlignmentPattern = TextBox();
     private readonly CheckBox _showProjectContainers = new() { Text = "Show project containers", AutoSize = true };
+    private readonly CheckBox _allowDuplicateNodes = new() { Text = "Allow duplicate render nodes", AutoSize = true };
+    private readonly TextBox _duplicationExceptionPatterns = MultilineTextBox();
     private readonly TextBox _connectorColor = TextBox();
     private readonly NumericUpDown _connectorWidth = NumberBox(1, 20);
     private readonly CheckBox _connectorRounded = new() { Text = "Rounded connectors", AutoSize = true };
@@ -197,6 +204,8 @@ internal sealed class DiagramOptionsControl : UserControl
         _dataModelRelationshipStubLength.Value = Clamp(settings.Layout.DataModelRelationshipStubLength, _dataModelRelationshipStubLength);
         _baselineAlignmentPattern.Text = settings.Layout.BaselineAlignmentPattern;
         _showProjectContainers.Checked = settings.ShowProjectContainers;
+        _allowDuplicateNodes.Checked = settings.NodeDuplication.AllowDuplicateNodes;
+        _duplicationExceptionPatterns.Text = string.Join(Environment.NewLine, settings.NodeDuplication.DuplicationExceptionPatterns);
         _connectorColor.Text = settings.Connector.StrokeColor;
         _connectorWidth.Value = Clamp(settings.Connector.StrokeWidth, _connectorWidth);
         _connectorRounded.Checked = settings.Connector.Rounded;
@@ -266,6 +275,11 @@ internal sealed class DiagramOptionsControl : UserControl
             StyleRules = ReadRules(),
             Overrides = ReadOverrides(),
             ShowProjectContainers = _showProjectContainers.Checked,
+            NodeDuplication = new NodeDuplicationSettings
+            {
+                AllowDuplicateNodes = _allowDuplicateNodes.Checked,
+                DuplicationExceptionPatterns = Lines(_duplicationExceptionPatterns)
+            },
             ProjectContainerStyle = _projectStyle.ToStyle(),
             ExternalDependencyStyle = _externalStyle.ToStyle()
         };
@@ -289,6 +303,8 @@ internal sealed class DiagramOptionsControl : UserControl
         settings.Overrides ??= new();
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
         settings.ExternalDependencyStyle ??= NodeStyle.External();
+        settings.NodeDuplication ??= new NodeDuplicationSettings();
+        settings.NodeDuplication.DuplicationExceptionPatterns ??= new();
         return settings;
     }
 
@@ -311,6 +327,8 @@ internal sealed class DiagramOptionsControl : UserControl
         AddRow(panel, "Container padding", _containerPadding);
         AddRow(panel, "Baseline regex", _baselineAlignmentPattern);
         AddRow(panel, string.Empty, _showProjectContainers);
+        AddRow(panel, string.Empty, _allowDuplicateNodes);
+        AddRow(panel, "Duplication exception regexes", _duplicationExceptionPatterns, 90);
         AddRow(panel, "Connector color", _connectorColor);
         AddRow(panel, "Connector width", _connectorWidth);
         AddRow(panel, string.Empty, _connectorRounded);
