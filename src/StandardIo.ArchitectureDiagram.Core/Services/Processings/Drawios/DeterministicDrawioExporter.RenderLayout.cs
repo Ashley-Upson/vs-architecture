@@ -581,6 +581,20 @@ internal sealed class RenderLayout
             RenderGraph graph,
             Dictionary<string, NodeLayout> nodes)
         {
+            var nodeOrder = graph.Nodes.ToDictionary(node => node.Id, node => node.Order, StringComparer.Ordinal);
+            var placementParentByTarget = graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
+                .GroupBy(link => link.TargetId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderBy(link => nodeOrder[link.SourceId])
+                        .ThenBy(link => link.Order)
+                        .ThenBy(link => link.Id, StringComparer.Ordinal)
+                        .First()
+                        .SourceId,
+                    StringComparer.Ordinal);
+
             foreach (var source in graph.Nodes
                 .Where(node => nodes.ContainsKey(node.Id))
                 .OrderByDescending(node => nodes[node.Id].Depth)
@@ -589,7 +603,9 @@ internal sealed class RenderLayout
                 var children = graph.Links
                     .Where(link => string.Equals(link.SourceId, source.Id, StringComparison.Ordinal) &&
                         nodes.ContainsKey(link.TargetId) &&
-                        nodes[link.TargetId].Depth > nodes[source.Id].Depth)
+                        nodes[link.TargetId].Depth > nodes[source.Id].Depth &&
+                        placementParentByTarget.TryGetValue(link.TargetId, out var placementParentId) &&
+                        string.Equals(placementParentId, source.Id, StringComparison.Ordinal))
                     .Select(link => nodes[link.TargetId].Rect)
                     .ToArray();
                 if (children.Length == 0)
