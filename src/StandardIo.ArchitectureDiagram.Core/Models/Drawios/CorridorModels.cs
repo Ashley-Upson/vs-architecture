@@ -41,3 +41,28 @@ internal sealed record CorridorObservation(
     IReadOnlyDictionary<string, CorridorJunction> Junctions,
     IReadOnlyList<CorridorSegmentMapping> SegmentMappings,
     IReadOnlyDictionary<string, CorridorUsage> Usage);
+
+internal sealed record AllocatedCorridorLane(
+    string CorridorId,
+    string EdgeId,
+    int LaneIndex,
+    int Coordinate);
+
+internal sealed record CorridorLaneAllocation(
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>> Corridors,
+    IReadOnlyList<string> FailedCorridorIds)
+{
+    public bool IsSuccessful => FailedCorridorIds.Count == 0;
+
+    public bool TryGetLane(string corridorId, string edgeId, out AllocatedCorridorLane lane)
+    {
+        if (Corridors.TryGetValue(corridorId, out var corridor) &&
+            corridor.TryGetValue(edgeId, out lane!))
+        {
+            return true;
+        }
+
+        lane = null!;
+        return false;
+    }
+}
