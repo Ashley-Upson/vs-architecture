@@ -869,8 +869,8 @@ internal sealed class RenderLayout
             {
                 var source = nodes[link.SourceId].Rect;
                 var target = nodes[link.TargetId].Rect;
-                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing);
-                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
@@ -912,8 +912,8 @@ internal sealed class RenderLayout
                 var terminalLaneSpacing = Math.Max(
                     settings.Layout.EdgePortSpacing,
                     settings.Layout.ParallelLaneSpacing * 2);
-                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing);
-                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var points = BuildExposureTreeRoute(
@@ -1316,9 +1316,19 @@ internal sealed class RenderLayout
             return result;
         }
 
-        private static int PortOffset(IReadOnlyList<RenderLink> group, RenderLink link, int spacing)
+        private static int PortOffset(
+            IReadOnlyList<RenderLink> group,
+            RenderLink link,
+            int spacing,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            bool sourcePort)
         {
-            var ordered = group.OrderBy(item => item.Order).ToArray();
+            var ordered = group
+                .OrderBy(item => sourcePort
+                    ? nodes[item.TargetId].Rect.CenterX
+                    : nodes[item.SourceId].Rect.CenterX)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .ToArray();
             var index = Array.FindIndex(ordered, item => item.Id == link.Id);
             var center = (ordered.Length - 1) / 2.0;
             return (int)Math.Round((index - center) * spacing);

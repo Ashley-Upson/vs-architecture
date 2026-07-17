@@ -767,6 +767,38 @@ public sealed class DeterministicDrawioExporterTests
         }
     }
 
+    [Theory]
+    [InlineData(5)]
+    [InlineData(7)]
+    public void Render_orders_same_side_fan_out_monotonically(int targetCount)
+    {
+        var targetIds = Enumerable.Range(0, targetCount).Select(index => $"target_{index}").ToArray();
+        var nodes = new[] { Node("source", "project", "ProcessingSource") }
+            .Concat(targetIds.Select(id => Node(id, "project", id)))
+            .ToArray();
+        var edges = targetIds.Select(id => new DependencyEdge($"edge_{id}", "source", id, "internal")).ToArray();
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ExposureTreeLayoutThreshold = 1;
+
+        var forward = Render(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", nodes) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges), settings);
+        var reversed = Render(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", nodes) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges.AsEnumerable().Reverse().ToArray()), settings);
+
+        AssertMonotonicFanOut(forward, "ProcessingSource", targetIds, settings.Layout.ParallelLaneSpacing);
+        AssertMonotonicFanOut(reversed, "ProcessingSource", targetIds, settings.Layout.ParallelLaneSpacing);
+        foreach (var targetId in targetIds)
+        {
+            Assert.Equal(
+                CompleteEdgePointsBetween(forward, "ProcessingSource", targetId),
+                CompleteEdgePointsBetween(reversed, "ProcessingSource", targetId));
+        }
+    }
+
     private static XDocument Render(DiagramModel diagram, DiagramSettings? settings = null)
     {
         return XDocument.Parse(new DrawioDiagramRenderer().Render(diagram, settings ?? DiagramSettings.CreateDefault()));
@@ -1067,6 +1099,72 @@ public sealed class DeterministicDrawioExporterTests
         points.Add(RatioPoint(NodeRect(document, (string)edge.Attribute("target")!), StyleValue(edge, "entryX"), StyleValue(edge, "entryY")));
         return points;
     }
+
+    private static void AssertMonotonicFanOut(
+        XDocument document,
+        string sourceValue,
+        IReadOnlyList<string> targetValues,
+        int laneSpacing)
+    {
+        var source = NodeRect(document, CellIdByValue(document, sourceValue));
+        var routes = targetValues.Select(value => new
+        {
+            Value = value,
+            Target = NodeRect(document, CellIdByValue(document, value)),
+            Points = CompleteEdgePointsBetween(document, sourceValue, value)
+        }).ToArray();
+
+        foreach (var route in routes)
+        {
+            Assert.Equal(source.Y + source.Height, route.Points[0].Y);
+            Assert.Equal(route.Target.Y, route.Points[^1].Y);
+        }
+
+        var sides = new[]
+        {
+            routes.Where(route => route.Target.X + route.Target.Width / 2 < source.X + source.Width / 2)
+                .OrderByDescending(route => route.Target.X + route.Target.Width / 2).ToArray(),
+            routes.Where(route => route.Target.X + route.Target.Width / 2 > source.X + source.Width / 2)
+                .OrderBy(route => route.Target.X + route.Target.Width / 2).ToArray()
+        };
+        foreach (var side in sides)
+        {
+            Assert.True(side.Length >= 2);
+            var sourcePorts = side.Select(route => route.Points[0].X).ToArray();
+            var laneCoordinates = side.Select(route => route.Points.First(point => point.Y != source.Y + source.Height).Y).ToArray();
+            if (side[0].Target.X < source.X)
+            {
+                Assert.Equal(sourcePorts.OrderByDescending(value => value), sourcePorts);
+            }
+            else
+            {
+                Assert.Equal(sourcePorts.OrderBy(value => value), sourcePorts);
+            }
+
+            Assert.Equal(laneCoordinates.OrderByDescending(value => value), laneCoordinates);
+            Assert.All(laneCoordinates.Zip(laneCoordinates.Skip(1), (left, right) => left - right),
+                distance => Assert.True(distance >= laneSpacing));
+            foreach (var pair in side.SelectMany((left, index) => side.Skip(index + 1).Select(right => (left, right))))
+            {
+                Assert.False(
+                    RoutesCross(pair.left.Points, pair.right.Points),
+                    $"Routes {pair.left.Value} and {pair.right.Value} cross: " +
+                    $"{string.Join(" -> ", pair.left.Points)} / {string.Join(" -> ", pair.right.Points)}");
+            }
+        }
+    }
+
+    private static bool RoutesCross(IReadOnlyList<(int X, int Y)> left, IReadOnlyList<(int X, int Y)> right) =>
+        TestSegments(left).Any(leftSegment => TestSegments(right).Any(rightSegment =>
+            leftSegment.Start.X == leftSegment.End.X && rightSegment.Start.Y == rightSegment.End.Y &&
+            BetweenStrict(leftSegment.Start.X, rightSegment.Start.X, rightSegment.End.X) &&
+            BetweenStrict(rightSegment.Start.Y, leftSegment.Start.Y, leftSegment.End.Y) ||
+            leftSegment.Start.Y == leftSegment.End.Y && rightSegment.Start.X == rightSegment.End.X &&
+            BetweenStrict(rightSegment.Start.X, leftSegment.Start.X, leftSegment.End.X) &&
+            BetweenStrict(leftSegment.Start.Y, rightSegment.Start.Y, rightSegment.End.Y)));
+
+    private static bool BetweenStrict(int value, int first, int second) =>
+        value > Math.Min(first, second) && value < Math.Max(first, second);
 
     private static string CellIdByValue(XDocument document, string value) =>
         (string)document.Descendants("mxCell").Single(cell =>

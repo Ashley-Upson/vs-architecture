@@ -44,8 +44,13 @@ internal static class CorridorObserver
                 group => group.Key,
                 group =>
                 {
-                    var edgeIds = group.Select(mapping => mapping.EdgeId)
-                        .Distinct(StringComparer.Ordinal)
+                    var edgeIds = group
+                        .GroupBy(mapping => mapping.EdgeId, StringComparer.Ordinal)
+                        .Select(edge => edge.OrderBy(mapping => mapping.SegmentIndex).First())
+                        .OrderBy(mapping => FanOutDirection(mapping))
+                        .ThenBy(mapping => FanOutOrder(mapping))
+                        .ThenBy(mapping => mapping.EdgeId, StringComparer.Ordinal)
+                        .Select(mapping => mapping.EdgeId)
                         .ToArray();
                     return new CorridorUsage(corridors[group.Key], edgeIds, edgeIds.Length);
                 },
@@ -54,6 +59,23 @@ internal static class CorridorObserver
 
         return new CorridorObservation(corridors, junctions, mappings, usage);
     }
+
+    private static int FanOutDirection(CorridorSegmentMapping mapping) =>
+        LongitudinalTarget(mapping) < LongitudinalSource(mapping) ? -1 : 1;
+
+    private static int FanOutOrder(CorridorSegmentMapping mapping)
+    {
+        var target = LongitudinalTarget(mapping);
+        // Ports progress from near to far on each side. Horizontal/vertical fan-out lanes
+        // must nest in the opposite order so a farther route clears nearer terminal stubs.
+        return FanOutDirection(mapping) < 0 ? target : -target;
+    }
+
+    private static int LongitudinalSource(CorridorSegmentMapping mapping) =>
+        mapping.Segment.IsHorizontal ? mapping.Segment.Start.X : mapping.Segment.Start.Y;
+
+    private static int LongitudinalTarget(CorridorSegmentMapping mapping) =>
+        mapping.Segment.IsHorizontal ? mapping.Segment.End.X : mapping.Segment.End.Y;
 
     private static IEnumerable<SpatialCorridorGroup> SplitSpatially(
         string bandId,
