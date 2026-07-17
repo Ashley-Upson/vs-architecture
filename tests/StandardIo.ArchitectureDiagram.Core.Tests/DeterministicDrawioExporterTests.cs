@@ -27,6 +27,7 @@ public sealed class DeterministicDrawioExporterTests
             new[]
             {
                 new DependencyEdge("edge_controller_service", "type_controller", "type_service", "internal"),
+                new DependencyEdge("edge_controller_repository", "type_controller", "type_repository", "internal"),
                 new DependencyEdge("edge_service_repository", "type_service", "type_repository", "internal")
             }),
             settings);
@@ -42,6 +43,7 @@ public sealed class DeterministicDrawioExporterTests
             Assert.NotNull(edge.Attribute("pathInitialSignature"));
             Assert.NotNull(edge.Attribute("pathFinalSignature"));
         });
+        Assert.Contains(edges, edge => edge.Attribute("fanoutGroups") is not null);
     }
 
     [Fact]
