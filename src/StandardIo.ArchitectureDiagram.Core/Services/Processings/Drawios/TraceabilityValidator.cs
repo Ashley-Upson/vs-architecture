@@ -10,7 +10,8 @@ internal enum TraceabilityViolationCode
     SharedSegment,
     ParallelSpacing,
     ReusedBend,
-    ImmediateReversal
+    ImmediateReversal,
+    PerpendicularCrossing
 }
 
 internal sealed record TraceabilityViolation(
@@ -170,6 +171,22 @@ internal static class TraceabilityValidator
                         $"Edges {left.Link.Id} and {right.Link.Id} reuse {reusedBends} bend point(s).",
                         Locations: leftBends.Intersect(rightBends).ToArray()));
                 }
+
+                var crossings = leftSegments.SelectMany(leftSegment => rightSegments
+                    .Where(leftSegment.Crosses)
+                    .Select(rightSegment => CrossingPoint(leftSegment, rightSegment)))
+                    .Distinct()
+                    .ToArray();
+                if (crossings.Length > 0)
+                {
+                    violations.Add(new TraceabilityViolation(
+                        TraceabilityViolationCode.PerpendicularCrossing,
+                        left.Link.Id,
+                        right.Link.Id,
+                        crossings.Length,
+                        $"Edges {left.Link.Id} and {right.Link.Id} cross perpendicularly at {crossings.Length} point(s).",
+                        Locations: crossings));
+                }
             }
         }
 
@@ -232,6 +249,7 @@ internal static class TraceabilityValidator
                         offending.Add(new Segment(new Point(overlap.Start, left.Start.Y), new Point(overlap.End, left.Start.Y)));
                     }
                 }
+
                 else if (left.IsVertical && right.IsVertical && RangesOverlap(left.Start.Y, left.End.Y, right.Start.Y, right.End.Y))
                 {
                     var distance = Math.Abs(left.Start.X - right.Start.X);
@@ -300,4 +318,11 @@ internal static class TraceabilityValidator
 
     private static Point Midpoint(Segment segment) =>
         new((segment.Start.X + segment.End.X) / 2, (segment.Start.Y + segment.End.Y) / 2);
+
+    private static Point CrossingPoint(Segment left, Segment right)
+    {
+        var horizontal = left.IsHorizontal ? left : right;
+        var vertical = left.IsVertical ? left : right;
+        return new Point(vertical.Start.X, horizontal.Start.Y);
+    }
 }

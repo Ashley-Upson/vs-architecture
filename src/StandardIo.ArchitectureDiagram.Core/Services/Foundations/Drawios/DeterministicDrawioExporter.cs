@@ -86,6 +86,11 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 return false;
             }
 
+            if (violation.Code == TraceabilityViolationCode.PerpendicularCrossing)
+            {
+                return false;
+            }
+
             if (!successfulCorridorsByEdge.TryGetValue(violation.EdgeId, out var edgeCorridors))
             {
                 return false;

@@ -236,6 +236,7 @@ internal static class DrawioDiagnosticReportBuilder
         TraceabilityViolationCode.ParallelSpacing => "SpacingDeficit",
         TraceabilityViolationCode.ReusedBend => "ReusedBend",
         TraceabilityViolationCode.ImmediateReversal => "ImmediateReversal",
+        TraceabilityViolationCode.PerpendicularCrossing => "PerpendicularCrossing",
         _ => "Other"
     };
 
@@ -245,6 +246,7 @@ internal static class DrawioDiagnosticReportBuilder
         TraceabilityViolationCode.SharedSegment or TraceabilityViolationCode.ReusedBend => "shared-or-ambiguous-geometry",
         TraceabilityViolationCode.ParallelSpacing => "spacing-problems",
         TraceabilityViolationCode.ImmediateReversal => "malformed-traversal-or-reversals",
+        TraceabilityViolationCode.PerpendicularCrossing => "perpendicular-crossings",
         _ => "other"
     };
 

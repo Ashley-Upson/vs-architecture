@@ -154,6 +154,21 @@ public sealed class TraceabilityValidatorTests
             violation.Code == TraceabilityViolationCode.ImmediateReversal);
     }
 
+    [Fact]
+    public void Validate_reports_clean_perpendicular_crossing_with_exact_coordinate()
+    {
+        var links = new Dictionary<string, LinkLayout>
+        {
+            ["horizontal"] = Link("horizontal", 0, new Point(0, 50), new Point(100, 50), Array.Empty<Point>()),
+            ["vertical"] = Link("vertical", 1, new Point(40, 0), new Point(40, 100), Array.Empty<Point>())
+        };
+
+        var result = TraceabilityValidator.Validate(new Dictionary<string, NodeLayout>(), links, 12);
+
+        var crossing = Assert.Single(result.Violations, item => item.Code == TraceabilityViolationCode.PerpendicularCrossing);
+        Assert.Equal(new Point(40, 50), Assert.Single(crossing.Locations!));
+    }
+
     private static LinkLayout Link(
         string id,
         int order,
