@@ -267,6 +267,47 @@ public sealed class RoslynDependencyAnalyzerTests
     }
 
     [Fact]
+    public async Task Analyze_is_stable_when_selected_project_enumeration_is_reversed()
+    {
+        using var workspace = new AdhocWorkspace();
+        var apiId = ProjectId.CreateNewId();
+        var workerId = ProjectId.CreateNewId();
+        var solution = workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(
+                apiId,
+                VersionStamp.Create(),
+                "Api",
+                "Api",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(apiId), "Controller.cs", SourceText.From("namespace Api { public class HomeController {} }"))
+            .AddProject(ProjectInfo.Create(
+                workerId,
+                VersionStamp.Create(),
+                "Worker",
+                "Worker",
+                LanguageNames.CSharp,
+                metadataReferences: BasicReferences()))
+            .AddDocument(DocumentId.CreateNewId(workerId), "Job.cs", SourceText.From("namespace Worker { public class NightlyJob {} }"));
+        var forwardProjects = new[] { solution.GetProject(apiId)!, solution.GetProject(workerId)! };
+        var reverseProjects = new[] { forwardProjects[1], forwardProjects[0] };
+        var analyzer = new RoslynDependencyAnalyzer();
+
+        var forward = await analyzer.AnalyzeAsync(forwardProjects, DiagramSettings.CreateDefault());
+        var reverse = await analyzer.AnalyzeAsync(reverseProjects, DiagramSettings.CreateDefault());
+
+        Assert.Equal(
+            forward.Projects.Select(project => (project.Id, project.Name)),
+            reverse.Projects.Select(project => (project.Id, project.Name)));
+        Assert.Equal(
+            forward.Projects.SelectMany(project => project.Types).Select(type => (type.Id, type.ProjectId, type.FullName)),
+            reverse.Projects.SelectMany(project => project.Types).Select(type => (type.Id, type.ProjectId, type.FullName)));
+        Assert.Equal(
+            forward.Edges.Select(edge => (edge.Id, edge.SourceId, edge.TargetId, edge.Kind)),
+            reverse.Edges.Select(edge => (edge.Id, edge.SourceId, edge.TargetId, edge.Kind)));
+    }
+
+    [Fact]
     public async Task Analyze_keeps_constructor_interface_when_implementation_is_not_registered()
     {
         using var workspace = new AdhocWorkspace();
