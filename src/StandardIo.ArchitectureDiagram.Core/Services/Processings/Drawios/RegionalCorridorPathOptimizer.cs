@@ -40,11 +40,8 @@ internal static class RegionalCorridorPathOptimizer
         var currentWholeScore = initialScore;
         var interactions = DiscoverInteractions(selected, minimumSpacing);
         var interactionRegions = BuildRegions(interactions, retained, limits);
-        var representedEdges = new HashSet<string>(
-            interactionRegions.SelectMany(region => region.MutableEdgeIds.Concat(region.FixedContextEdgeIds)),
-            StringComparer.Ordinal);
         var invalidGeometryRegions = selected.Values
-            .Where(candidate => candidate.HasInvalidGeometry && !representedEdges.Contains(candidate.EdgeId))
+            .Where(candidate => candidate.HasInvalidGeometry)
             .OrderBy(candidate => candidate.EdgeId, StringComparer.Ordinal)
             .Select(candidate =>
             {

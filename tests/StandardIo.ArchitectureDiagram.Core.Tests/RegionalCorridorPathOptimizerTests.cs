@@ -30,6 +30,28 @@ public sealed class RegionalCorridorPathOptimizerTests
         Assert.Contains(result.Regions, region => region.Id == "invalid_geometry_edge");
     }
 
+    [Fact]
+    public void Invalid_baseline_receives_single_edge_region_even_when_it_interacts_with_a_large_component()
+    {
+        var candidates = OneHundredEdgeCandidates().ToDictionary(
+            item => item.Key,
+            item => item.Value,
+            StringComparer.Ordinal);
+        var invalid = candidates["blocker"][0] with { HasInvalidGeometry = true };
+        candidates["blocker"] = new[] { invalid, candidates["blocker"][1] };
+
+        var result = RegionalCorridorPathOptimizer.Optimise(
+            candidates,
+            Capacities(),
+            12,
+            new RegionalOptimisationLimits(MaximumMutableEdges: 1));
+
+        Assert.Contains(result.Regions, region =>
+            region.Id == "invalid_geometry_blocker" &&
+            region.MutableEdgeIds.SequenceEqual(new[] { "blocker" }));
+        Assert.False(result.Selected["blocker"].HasInvalidGeometry);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
