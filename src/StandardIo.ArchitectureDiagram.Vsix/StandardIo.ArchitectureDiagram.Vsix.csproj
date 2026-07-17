@@ -72,7 +72,7 @@
 	</Target>
 	<Target Name="IncludeGeneratedMenuResourceInVsix" BeforeTargets="GetVsixSourceItems" DependsOnTargets="MergeCtoResource">
 		<ItemGroup>
-			<VSIXSourceItem Include="$(IntermediateOutputPath)Menus.ctmenu">
+			<VSIXSourceItem Include="$(IntermediateOutputPath)Menus.cto">
 				<TargetPath>Menus.ctmenu</TargetPath>
 			</VSIXSourceItem>
 		</ItemGroup>
