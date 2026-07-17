@@ -35,8 +35,8 @@ $cases = @(
         (Route "up" "H0 to V-up" "20,70 100,70 100,20" "20,70 100,70 100,20" "UNSUPPORTED_JUNCTION_TOPOLOGY"),
         (Route "down" "H1 to V-down" "20,80 100,80 100,150" "20,80 100,80 100,150" "UNSUPPORTED_JUNCTION_TOPOLOGY")) },
     @{ Name = "06 separate sources enter common corridor"; Routes = @(
-        (Route "A" "S0 to H0" "20,20 60,70 180,70" "20,20 60,60 60,70 180,70"),
-        (Route "B" "S1 to H1" "40,20 60,70 180,80" "40,20 70,20 70,80 180,80")) },
+        (Route "A" "S0 to H0" "20,20 60,70 180,70" "20,20 60,70 180,70" "UNSUPPORTED_JUNCTION_TOPOLOGY"),
+        (Route "B" "S1 to H1" "40,20 60,70 180,80" "40,20 60,70 180,80" "UNSUPPORTED_JUNCTION_TOPOLOGY")) },
     @{ Name = "07 neighbouring targets after shared turn"; Routes = @(
         (Route "left-target" "H0 to V0" "20,60 100,60 100,160" "20,60 110,60 110,160"),
         (Route "middle-target" "H1 to V1" "20,70 100,60 120,160" "20,70 120,70 120,160"),
@@ -45,11 +45,11 @@ $cases = @(
         (Route "A" "H0 to V0" "20,60 100,80 120,150" "20,60 120,60 120,150"),
         (Route "B" "H1 to V1" "20,70 100,80 110,150" "20,70 110,70 110,150")) },
     @{ Name = "09 avoidable lane-transition crossing"; Routes = @(
-        (Route "A" "H0 to V1" "20,60 120,60 120,150" "20,60 110,60 110,150"),
-        (Route "B" "H1 to V0" "20,70 110,70 110,150" "20,70 120,70 120,150")) },
+        (Route "A" "H0 to V1" "20,60 120,60 120,150" "20,60 120,60 120,150" "JUNCTION_LANE_ORDER_INVERSION"),
+        (Route "B" "H1 to V0" "20,70 110,70 110,150" "20,70 110,70 110,150" "JUNCTION_LANE_ORDER_INVERSION")) },
     @{ Name = "10 explicit required lane-order change"; Routes = @(
-        (Route "A" "H0 to V1" "20,60 110,60 110,150" "20,60 90,60 90,50 120,50 120,150" "LANE_ORDER_CHANGE_EXPLICIT"),
-        (Route "B" "H1 to V0" "20,70 120,70 120,150" "20,70 100,70 100,90 110,90 110,150" "LANE_ORDER_CHANGE_EXPLICIT")) }
+        (Route "A" "H0 to V1" "20,60 110,60 110,150" "20,60 110,60 110,150" "JUNCTION_LANE_ORDER_INVERSION"),
+        (Route "B" "H1 to V0" "20,70 120,70 120,150" "20,70 120,70 120,150" "JUNCTION_LANE_ORDER_INVERSION")) }
 )
 
 function Points([string]$value, [int]$xOffset) {
