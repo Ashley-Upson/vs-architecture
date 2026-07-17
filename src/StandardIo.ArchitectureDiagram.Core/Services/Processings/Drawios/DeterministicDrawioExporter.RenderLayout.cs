@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -29,7 +30,13 @@ internal sealed class RenderLayout
             IReadOnlyList<RouteRepairAttempt>? repairAttempts = null,
             int repairWorkUsed = 0,
             bool repairBudgetExhausted = false,
-            string repairRunReason = "RepairableFindingsPresent")
+            string repairRunReason = "RepairableFindingsPresent",
+            IReadOnlyList<PipelineStageMetric>? stageTimings = null,
+            int routesInvalidated = 0,
+            long routePairsRevalidated = 0,
+            int corridorRebuildCount = 0,
+            int capacityFailureCount = 0,
+            int capacityExpansionCount = 0)
         {
             Graph = graph;
             Nodes = nodes;
@@ -46,6 +53,12 @@ internal sealed class RenderLayout
             RepairWorkUsed = repairWorkUsed;
             RepairBudgetExhausted = repairBudgetExhausted;
             RepairRunReason = repairRunReason;
+            StageTimings = stageTimings ?? Array.Empty<PipelineStageMetric>();
+            RoutesInvalidated = routesInvalidated;
+            RoutePairsRevalidated = routePairsRevalidated;
+            CorridorRebuildCount = corridorRebuildCount;
+            CapacityFailureCount = capacityFailureCount;
+            CapacityExpansionCount = capacityExpansionCount;
         }
 
         public RenderGraph Graph { get; }
@@ -78,34 +91,64 @@ internal sealed class RenderLayout
 
         public string RepairRunReason { get; }
 
+        public IReadOnlyList<PipelineStageMetric> StageTimings { get; }
+
+        public int RoutesInvalidated { get; }
+
+        public long RoutePairsRevalidated { get; }
+
+        public int CorridorRebuildCount { get; }
+
+        public int CapacityFailureCount { get; }
+
+        public int CapacityExpansionCount { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
             new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
-                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason);
+                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason, StageTimings,
+                RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
-            var depths = CalculateDepths(graph);
-            var depthOffsets = CalculateDepthOffsets(graph, settings, depths);
-            var widths = CalculateWidths(graph, settings);
-            var nodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
-            var projects = PositionProjects(graph, settings, nodes);
-            var positionedLinks = PositionLinks(graph, settings, nodes);
+            var timings = new List<PipelineStageMetric>();
+            T Measure<T>(string stage, Func<T> action)
+            {
+                var timer = Stopwatch.StartNew();
+                var result = action();
+                timer.Stop();
+                timings.Add(new PipelineStageMetric(stage, timer.ElapsedMilliseconds,
+                    timings.Count(item => item.Stage == stage) + 1));
+                return result;
+            }
+
+            var placement = Measure("node placement", () =>
+            {
+                var depths = CalculateDepths(graph);
+                var depthOffsets = CalculateDepthOffsets(graph, settings, depths);
+                var widths = CalculateWidths(graph, settings);
+                var positionedNodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
+                return (Nodes: positionedNodes, Projects: PositionProjects(graph, settings, positionedNodes));
+            });
+            var nodes = placement.Nodes;
+            var projects = placement.Projects;
+            var positionedLinks = Measure("candidate construction and selection", () => PositionLinks(graph, settings, nodes));
             var provisionalLinks = positionedLinks.Links;
-            var corridors = CorridorObserver.Observe(
+            var corridors = Measure("corridor observation", () => CorridorObserver.Observe(
                 nodes,
                 provisionalLinks,
                 settings.Layout.ParallelLaneSpacing,
-                settings.Layout.LinkPadding);
-            var lanes = CorridorLaneAllocator.Allocate(corridors);
+                settings.Layout.LinkPadding));
+            var lanes = Measure("lane allocation", () => CorridorLaneAllocator.Allocate(corridors));
+            var capacityFailureCount = lanes.CapacityRequests?.Count ?? 0;
             var capacityAttempts = new List<RouteRepairAttempt>();
             for (var capacityPass = 0; capacityPass < 2 && lanes.CapacityRequests?.Count > 0; capacityPass++)
             {
-                var capacityExpansion = ExpandLayersForCapacityRequests(
+                var capacityExpansion = Measure("capacity requests", () => ExpandLayersForCapacityRequests(
                     nodes,
                     provisionalLinks,
                     corridors,
                     lanes,
-                    settings);
+                    settings));
                 capacityAttempts.AddRange(capacityExpansion.Attempts);
                 if (!capacityExpansion.Changed)
                 {
@@ -114,20 +157,21 @@ internal sealed class RenderLayout
 
                 nodes = capacityExpansion.Nodes;
                 projects = PositionProjects(graph, settings, nodes);
-                positionedLinks = PositionLinks(graph, settings, nodes);
+                positionedLinks = Measure("candidate construction and selection", () => PositionLinks(graph, settings, nodes));
                 provisionalLinks = positionedLinks.Links;
-                corridors = CorridorObserver.Observe(
+                corridors = Measure("corridor observation", () => CorridorObserver.Observe(
                     nodes,
                     provisionalLinks,
                     settings.Layout.ParallelLaneSpacing,
-                    settings.Layout.LinkPadding);
-                lanes = CorridorLaneAllocator.Allocate(corridors);
+                    settings.Layout.LinkPadding));
+                lanes = Measure("lane allocation", () => CorridorLaneAllocator.Allocate(corridors));
+                capacityFailureCount += lanes.CapacityRequests?.Count ?? 0;
             }
-            var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
-            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, provisionalLinks);
+            var links = Measure("lane geometry compilation", () => CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes));
+            var traversals = Measure("traversal compilation", () => EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, provisionalLinks));
             links = EdgeTraversalCompiler.Apply(links, traversals);
-            links = LogicalRouteNormalizer.Normalize(nodes, links, settings.Layout.LinkPadding);
-            var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
+            links = Measure("normalization", () => LogicalRouteNormalizer.Normalize(nodes, links, settings.Layout.LinkPadding));
+            var traceability = Measure("validation", () => TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing));
 
             var originalTraceability = traceability;
             var expansion = ExpandLayersForLaneDemand(nodes, links, traceability, settings);
@@ -152,13 +196,13 @@ internal sealed class RenderLayout
                 violation.Code == TraceabilityViolationCode.NodeCollision ||
                 violation.Code == TraceabilityViolationCode.SharedSegment &&
                 violation.Magnitude >= settings.Layout.NodeWidth);
-            var repair = duplicateExposureMode && !duplicateNeedsRepair
+            var repair = Measure("repair passes", () => duplicateExposureMode && !duplicateNeedsRepair
                 ? RouteRepairCoordinator.CompileOnly(
                     nodes,
                     links,
                     settings,
                     "SkippedDuplicatedModeNonBlockingAdvisories")
-                : RouteRepairCoordinator.Repair(nodes, links, settings, repairBudget);
+                : RouteRepairCoordinator.Repair(nodes, links, settings, repairBudget));
             links = repair.Links;
             corridors = repair.Corridors;
             lanes = repair.Lanes;
@@ -168,7 +212,9 @@ internal sealed class RenderLayout
             return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection,
                 traversals, traceability, corridors, lanes, originalTraceability,
                 expansionAttempts.Concat(repair.Attempts).ToArray(),
-                repair.EstimatedWorkUsed, repair.WorkBudgetExhausted, repair.RunReason);
+                repair.EstimatedWorkUsed, repair.WorkBudgetExhausted, repair.RunReason, timings,
+                repair.RoutesInvalidated, repair.RoutePairsRevalidated, repair.CorridorRebuildCount,
+                capacityFailureCount, capacityAttempts.Count(attempt => attempt.Applied));
         }
 
         internal static LayerExpansionResult ExpandLayersForLaneDemand(

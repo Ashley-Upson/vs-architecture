@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using StandardIo.ArchitectureDiagram.Core;
@@ -70,16 +71,24 @@ public static class Program
         CliOptions options,
         DiagramSettings settings)
     {
+        var workspaceTimer = Stopwatch.StartNew();
         var target = await provider.GetRequiredService<IWorkspacePathBroker>()
             .LoadAsync(
                 options.InputPath!,
                 new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
             .ConfigureAwait(false);
+        workspaceTimer.Stop();
+        var analysisTimer = Stopwatch.StartNew();
         var diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
             .AnalyzeAsync(target.Projects, settings)
             .ConfigureAwait(false);
+        analysisTimer.Stop();
         var exporter = provider.GetRequiredService<IDeterministicDrawioExporter>();
-        var generation = exporter.GenerateResult(diagram, settings);
+        var generation = exporter.GenerateResult(diagram, settings, new[]
+        {
+            new PipelineStageMetric("workspace acquisition", workspaceTimer.ElapsedMilliseconds),
+            new PipelineStageMetric("semantic analysis", analysisTimer.ElapsedMilliseconds)
+        });
         var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
             ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
             : Path.GetFullPath(options.OutputPath);

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
@@ -37,6 +38,16 @@ public sealed class DeterministicDrawioExporterTests
         Assert.Equal(1, result.PreparationCount);
         Assert.Same(result.Diagnostics, exporter.ExportDiagnostic(result));
         Assert.False(string.IsNullOrWhiteSpace(result.Diagnostics.ReportJson));
+        Assert.Contains(result.StageTimings, timing => timing.Stage == "render graph construction");
+        Assert.Contains(result.StageTimings, timing => timing.Stage == "normalization");
+        Assert.Contains(result.StageTimings, timing => timing.Stage == "ownership");
+        Assert.Contains(result.StageTimings, timing => timing.Stage == "serialization");
+        using var report = JsonDocument.Parse(result.Diagnostics.ReportJson);
+        var summary = report.RootElement.GetProperty("summary");
+        Assert.True(summary.GetProperty("diagnosticReuse").GetBoolean());
+        Assert.True(summary.TryGetProperty("routeRevisionsCreated", out _));
+        Assert.True(summary.TryGetProperty("routePairsRevalidated", out _));
+        Assert.True(report.RootElement.GetProperty("stageTimings").GetArrayLength() > 0);
     }
 
     [Fact]

@@ -5,6 +5,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Models;
 public sealed record ValidationPoint(int X, int Y);
 public sealed record ValidationSegment(ValidationPoint Start, ValidationPoint End);
 public sealed record GeneratedRoute(string LogicalRouteId, IReadOnlyList<ValidationPoint> Points);
+public sealed record PipelineStageMetric(string Stage, long ElapsedMilliseconds, int Invocation = 1);
 
 public sealed record ValidationFinding(
     string Category,
@@ -40,7 +41,8 @@ public sealed class DrawioGenerationResult
         bool serializationSucceeded,
         bool strictValidationPassed,
         DrawioDiagnosticExportResult diagnostics,
-        int preparationCount = 1)
+        int preparationCount = 1,
+        IReadOnlyList<PipelineStageMetric>? stageTimings = null)
     {
         Document = document;
         PreRepairFindings = preRepairFindings;
@@ -51,6 +53,7 @@ public sealed class DrawioGenerationResult
         StrictValidationPassed = strictValidationPassed;
         Diagnostics = diagnostics;
         PreparationCount = preparationCount;
+        StageTimings = stageTimings ?? new PipelineStageMetric[0];
     }
 
     public string Document { get; }
@@ -62,4 +65,5 @@ public sealed class DrawioGenerationResult
     public bool StrictValidationPassed { get; }
     public DrawioDiagnosticExportResult Diagnostics { get; }
     public int PreparationCount { get; }
+    public IReadOnlyList<PipelineStageMetric> StageTimings { get; }
 }

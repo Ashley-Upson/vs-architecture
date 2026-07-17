@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 
@@ -11,19 +12,28 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
     {
         var prepared = Prepare(diagram, settings);
         TraceabilityValidator.ThrowIfInvalid(prepared.Layout.Traceability, prepared.IsEnforced);
-        return new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        return Measure(prepared.StageTimings, "serialization", () =>
+            new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
     }
 
-    public DrawioGenerationResult GenerateResult(DiagramModel diagram, DiagramSettings settings)
+    public DrawioGenerationResult GenerateResult(
+        DiagramModel diagram,
+        DiagramSettings settings,
+        IReadOnlyList<PipelineStageMetric>? upstreamTimings = null)
     {
         var prepared = Prepare(diagram, settings);
+        if (upstreamTimings is not null)
+        {
+            prepared.StageTimings.InsertRange(0, upstreamTimings);
+        }
         var findings = prepared.Layout.Traceability.Violations
             .Select(violation => ToFinding(violation, prepared.IsEnforced(violation)))
             .ToArray();
         var preRepairFindings = prepared.Layout.PreRepairTraceability.Violations
             .Select(violation => ToFinding(violation, enforced: false))
             .ToArray();
-        var document = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        var document = Measure(prepared.StageTimings, "serialization", () =>
+            new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
         var diagnostics = BuildDiagnostic(prepared, document);
         return new DrawioGenerationResult(
             document,
@@ -40,13 +50,15 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 .ToArray(),
             serializationSucceeded: true,
             strictValidationPassed: findings.All(finding => !finding.IsStrictlyEnforced),
-            diagnostics);
+            diagnostics,
+            stageTimings: AllTimings(prepared));
     }
 
     public DrawioDiagnosticExportResult ExportDiagnostic(DiagramModel diagram, DiagramSettings settings)
     {
         var prepared = Prepare(diagram, settings);
-        var content = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        var content = Measure(prepared.StageTimings, "serialization", () =>
+            new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
         return BuildDiagnostic(prepared, content);
     }
 
@@ -63,7 +75,9 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             prepared.Layout,
             prepared.Ownership,
             enforced,
-            prepared.Settings.Layout.ParallelLaneSpacing);
+            prepared.Settings.Layout.ParallelLaneSpacing,
+            AllTimings(prepared),
+            diagnosticReuse: true);
         var annotated = DrawioDiagnosticReportBuilder.Annotate(content, enforced, "All enforced findings", prepared.Layout);
         var focused = DrawioDiagnosticReportBuilder.FocusedOutputs(content, enforced, prepared.Layout);
         return new DrawioDiagnosticExportResult(
@@ -82,8 +96,9 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         }
 
         settings ??= DiagramSettings.CreateDefault();
-        var graph = RenderGraph.From(diagram, settings);
-        var layout = RenderLayout.Build(graph, settings);
+        var timings = new List<PipelineStageMetric>();
+        var graph = Measure(timings, "render graph construction", () => RenderGraph.From(diagram, settings));
+        var layout = Measure(timings, "layout and routing", () => RenderLayout.Build(graph, settings));
         var successfulCorridorsByEdge = layout.Corridors.SegmentMappings
             .Where(mapping => !layout.Lanes.FailedCorridorIds.Contains(mapping.CorridorId))
             .GroupBy(mapping => mapping.EdgeId)
@@ -114,11 +129,11 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 edgeCorridors.Overlaps(otherCorridors);
         }
 
-        var ownership = CoordinateOwnershipCompiler.Compile(
+        var ownership = Measure(timings, "ownership", () => CoordinateOwnershipCompiler.Compile(
             layout.Nodes,
             layout.Projects,
             layout.Links,
-            settings.ShowProjectContainers);
+            settings.ShowProjectContainers));
         if (settings.ShowProjectContainers)
         {
             var projects = ProjectOwnershipBoundsCompiler.Compile(
@@ -131,14 +146,28 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
         }
 
-        return new PreparedExport(settings, layout, ownership, IsEnforced);
+        return new PreparedExport(settings, layout, ownership, IsEnforced, timings);
     }
+
+    private static T Measure<T>(ICollection<PipelineStageMetric> timings, string stage, Func<T> action)
+    {
+        var timer = Stopwatch.StartNew();
+        var result = action();
+        timer.Stop();
+        timings.Add(new PipelineStageMetric(stage, timer.ElapsedMilliseconds,
+            timings.Count(item => item.Stage == stage) + 1));
+        return result;
+    }
+
+    private static PipelineStageMetric[] AllTimings(PreparedExport prepared) =>
+        prepared.StageTimings.Concat(prepared.Layout.StageTimings).ToArray();
 
     private sealed record PreparedExport(
         DiagramSettings Settings,
         RenderLayout Layout,
         CoordinateOwnershipCompilation Ownership,
-        Func<TraceabilityViolation, bool> IsEnforced);
+        Func<TraceabilityViolation, bool> IsEnforced,
+        List<PipelineStageMetric> StageTimings);
 
     private static ValidationFinding ToFinding(TraceabilityViolation violation, bool enforced) =>
         new(

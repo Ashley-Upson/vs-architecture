@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Xml.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -18,7 +19,9 @@ internal static class DrawioDiagnosticReportBuilder
         RenderLayout layout,
         CoordinateOwnershipCompilation ownership,
         IReadOnlyList<TraceabilityViolation> enforced,
-        int requiredSpacing)
+        int requiredSpacing,
+        IReadOnlyList<PipelineStageMetric> stageTimings,
+        bool diagnosticReuse)
     {
         var projectNames = layout.Graph.Projects.ToDictionary(project => project.Id, project => project.Name, StringComparer.Ordinal);
         var routes = enforced
@@ -145,12 +148,22 @@ internal static class DrawioDiagnosticReportBuilder
                 repairsApplied = layout.RepairAttempts.Count(attempt => attempt.Applied),
                 repairWorkUsed = layout.RepairWorkUsed,
                 repairBudgetExhausted = layout.RepairBudgetExhausted,
-                repairRunReason = layout.RepairRunReason
+                repairRunReason = layout.RepairRunReason,
+                routeRevisionsCreated = layout.Links.Values.Sum(link => link.RouteState.Revision),
+                staleStateRejections = layout.Links.Values.Sum(link =>
+                    link.RouteState.History.Count(snapshot => snapshot.CompilationStatus == LogicalRouteCompilationStatus.Rejected)),
+                routesInvalidated = layout.RoutesInvalidated,
+                routePairsRevalidated = layout.RoutePairsRevalidated,
+                corridorRebuildCount = layout.CorridorRebuildCount,
+                capacityFailures = layout.CapacityFailureCount,
+                capacityExpansions = layout.CapacityExpansionCount,
+                diagnosticReuse
             },
             categories,
             findings,
             routes,
             routeGeometry,
+            stageTimings,
             repair = new
             {
                 preRepairFindings = layout.PreRepairTraceability.Violations.Select((finding, index) =>
