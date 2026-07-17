@@ -139,12 +139,27 @@ internal static class DrawioDiagnosticReportBuilder
             {
                 uniqueRejectedRoutes = routes.Length,
                 enforcedFindings = enforced.Count,
-                allValidatorFindings = layout.Traceability.Violations.Count
+                allValidatorFindings = layout.Traceability.Violations.Count,
+                preRepairFindings = layout.PreRepairTraceability.Violations.Count,
+                repairAttempts = layout.RepairAttempts.Count,
+                repairsApplied = layout.RepairAttempts.Count(attempt => attempt.Applied),
+                repairWorkUsed = layout.RepairWorkUsed,
+                repairBudgetExhausted = layout.RepairBudgetExhausted
             },
             categories,
             findings,
             routes,
-            routeGeometry
+            routeGeometry,
+            repair = new
+            {
+                preRepairFindings = layout.PreRepairTraceability.Violations.Select((finding, index) =>
+                    Finding(finding, index + 1, requiredSpacing)).ToArray(),
+                attempts = layout.RepairAttempts,
+                postRepairFindings = layout.Traceability.Violations.Select((finding, index) =>
+                    Finding(finding, index + 1, requiredSpacing)).ToArray(),
+                layout.RepairWorkUsed,
+                layout.RepairBudgetExhausted
+            }
         }, JsonOptions);
     }
 

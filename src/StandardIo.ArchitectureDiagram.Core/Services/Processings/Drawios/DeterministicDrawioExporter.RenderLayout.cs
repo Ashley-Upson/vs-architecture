@@ -120,7 +120,12 @@ internal sealed class RenderLayout
                 links = positionedLinks.Links;
             }
 
-            var repair = RouteRepairCoordinator.Repair(nodes, links, settings);
+            var repairBudget = links.Count > 256
+                ? new RouteRepairBudget(16, 2, 1, 24)
+                : links.Count > 128
+                    ? new RouteRepairBudget(32, 4, 2, 128)
+                    : new RouteRepairBudget();
+            var repair = RouteRepairCoordinator.Repair(nodes, links, settings, repairBudget);
             links = repair.Links;
             corridors = repair.Corridors;
             lanes = repair.Lanes;
