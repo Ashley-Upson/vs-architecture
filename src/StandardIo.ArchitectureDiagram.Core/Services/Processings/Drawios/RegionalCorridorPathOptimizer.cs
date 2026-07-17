@@ -37,13 +37,14 @@ internal static class RegionalCorridorPathOptimizer
             StringComparer.Ordinal);
         var initialSelection = selected.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var initialScore = GlobalCorridorPathSelector.Score(selected, corridorCapacities, minimumSpacing);
+        var currentWholeScore = initialScore;
         var interactions = DiscoverInteractions(selected, minimumSpacing);
         var regions = BuildRegions(interactions, retained, limits);
         var decisions = new List<RegionOptimisationDecision>();
 
         foreach (var region in regions.Take(limits.MaximumRegions))
         {
-            var beforeWhole = GlobalCorridorPathSelector.Score(selected, corridorCapacities, minimumSpacing);
+            var beforeWhole = currentWholeScore;
             if (region.MutableEdgeIds.Count > limits.MaximumMutableEdges ||
                 region.FixedContextEdgeIds.Count > limits.MaximumFixedContextEdges)
             {
@@ -91,6 +92,7 @@ internal static class RegionalCorridorPathOptimizer
             if (afterWhole.CompareTo(beforeWhole) < 0)
             {
                 selected = trial;
+                currentWholeScore = afterWhole;
                 decisions.Add(Decision(region, beforeWhole, afterWhole, true, RegionFallbackReason.None,
                     $"Accepted strict whole-diagram improvement {beforeWhole} -> {afterWhole}."));
             }
@@ -106,7 +108,7 @@ internal static class RegionalCorridorPathOptimizer
             }
         }
 
-        var finalScore = GlobalCorridorPathSelector.Score(selected, corridorCapacities, minimumSpacing);
+        var finalScore = currentWholeScore;
         return new RegionalPathSelectionResult(initialSelection, selected, interactions, regions, decisions, initialScore, finalScore);
     }
 
