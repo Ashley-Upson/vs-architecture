@@ -404,6 +404,8 @@ internal sealed class RenderLayout
             var placed = new HashSet<string>(StringComparer.Ordinal);
             var cursorX = settings.Layout.ContainerPadding * 2;
             var treeGap = settings.Layout.NodeWidth + settings.Layout.StandaloneGroupSpacing;
+            var exposureDepths = CalculateExposureTraversalDepths(graph, roots);
+            var depthGaps = CalculateExposureDepthGaps(graph, settings, exposureDepths);
 
             foreach (var root in roots)
             {
@@ -421,7 +423,8 @@ internal sealed class RenderLayout
                     nodeById,
                     result,
                     placed,
-                    new HashSet<string>(StringComparer.Ordinal));
+                    new HashSet<string>(StringComparer.Ordinal),
+                    depthGaps);
                 cursorX += subtree.Width + treeGap;
             }
 
@@ -461,6 +464,80 @@ internal sealed class RenderLayout
             }
 
             return result;
+        }
+
+        private static IReadOnlyDictionary<string, int> CalculateExposureTraversalDepths(
+            RenderGraph graph,
+            IReadOnlyList<RenderNode> roots)
+        {
+            var outgoing = graph.Links
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            var queue = new Queue<string>();
+            foreach (var root in roots)
+            {
+                result[root.Id] = 0;
+                queue.Enqueue(root.Id);
+            }
+
+            while (queue.Count > 0)
+            {
+                var sourceId = queue.Dequeue();
+                if (!outgoing.TryGetValue(sourceId, out var links))
+                {
+                    continue;
+                }
+
+                foreach (var link in links.OrderBy(item => item.Id, StringComparer.Ordinal))
+                {
+                    var candidateDepth = result[sourceId] + 1;
+                    if (result.TryGetValue(link.TargetId, out var existingDepth) && existingDepth <= candidateDepth)
+                    {
+                        continue;
+                    }
+
+                    result[link.TargetId] = candidateDepth;
+                    queue.Enqueue(link.TargetId);
+                }
+            }
+
+            return result;
+        }
+
+        private static IReadOnlyDictionary<int, int> CalculateExposureDepthGaps(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, int> depths)
+        {
+            var maximumDepth = depths.Values.DefaultIfEmpty(0).Max();
+            var gaps = new Dictionary<int, int>();
+            for (var depth = 0; depth < maximumDepth; depth++)
+            {
+                var fanoutLaneCount = graph.Links
+                    .Where(link => depths.TryGetValue(link.SourceId, out var sourceDepth) && sourceDepth == depth)
+                    .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                    .Select(group => group.Count())
+                    .DefaultIfEmpty(0)
+                    .Max();
+                var traversingRouteCount = graph.Links.Count(link =>
+                    depths.TryGetValue(link.SourceId, out var sourceDepth) &&
+                    depths.TryGetValue(link.TargetId, out var targetDepth) &&
+                    Math.Min(sourceDepth, targetDepth) <= depth &&
+                    Math.Max(sourceDepth, targetDepth) > depth);
+                var laneCount = Math.Max(fanoutLaneCount, traversingRouteCount);
+                var terminalClearance = Math.Max(
+                    settings.Layout.LinkPadding,
+                    settings.Layout.ExposureTreeConnectorMinSegment);
+                var required = terminalClearance * 2 +
+                    Math.Max(0, laneCount - 1) * settings.Layout.ParallelLaneSpacing +
+                    settings.Layout.LinkPadding * 2;
+                gaps[depth] = Math.Max(
+                    Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing),
+                    required);
+            }
+
+            return gaps;
         }
 
         private static void CenterExposureParentsOverChildren(
@@ -539,7 +616,8 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, RenderNode> nodeById,
             Dictionary<string, NodeLayout> result,
             HashSet<string> placed,
-            HashSet<string> ancestors)
+            HashSet<string> ancestors,
+            IReadOnlyDictionary<int, int> depthGaps)
         {
             if (!ancestors.Add(nodeId))
             {
@@ -570,7 +648,10 @@ internal sealed class RenderLayout
                 .ToArray();
             var rowWidth = childMeasures.Sum(child => child.Measure.Width) + Math.Max(0, childMeasures.Length - 1) * gap;
             var childLeft = left + Math.Max(0, (subtreeWidth - rowWidth) / 2);
-            var childTop = top + settings.Layout.NodeHeight + Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing);
+            var childTop = top + settings.Layout.NodeHeight +
+                (depthGaps.TryGetValue(depth, out var requiredGap)
+                    ? requiredGap
+                    : Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing));
 
             foreach (var child in childMeasures)
             {
@@ -587,7 +668,8 @@ internal sealed class RenderLayout
                     nodeById,
                     result,
                     placed,
-                    new HashSet<string>(ancestors, StringComparer.Ordinal));
+                    new HashSet<string>(ancestors, StringComparer.Ordinal),
+                    depthGaps);
                 childLeft += child.Measure.Width + gap;
             }
         }

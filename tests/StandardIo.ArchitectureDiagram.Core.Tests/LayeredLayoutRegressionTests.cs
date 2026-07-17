@@ -77,6 +77,37 @@ public sealed class LayeredLayoutRegressionTests
     }
 
     [Fact]
+    public void Busy_fanout_expands_its_inter_layer_gap()
+    {
+        var children = Enumerable.Range(0, 8).Select(index => Node($"tree_child_{index}", $"Child{index}")).ToArray();
+        var graph = new ArchitectureGraph(
+            new[] { new ProjectContainer("project_a", "App", new[] { Node("tree_parent", "Parent") }.Concat(children).ToArray()) },
+            Array.Empty<ExternalDependencyNode>(),
+            children.Select((child, index) => Edge($"edge_{index}", "tree_parent", child.Id)).ToArray());
+        var document = Export(graph);
+
+        Assert.True(Top(document, "tree_child_0") - Bottom(document, "tree_parent") > 100);
+    }
+
+    [Fact]
+    public void Adjacent_layer_gaps_reflect_different_routing_demand()
+    {
+        var leaves = Enumerable.Range(0, 8).Select(index => Node($"tree_leaf_{index}", $"Leaf{index}")).ToArray();
+        var graph = new ArchitectureGraph(
+            new[] { new ProjectContainer("project_a", "App", new[] { Node("tree_root", "Root"), Node("tree_parent", "Parent") }.Concat(leaves).ToArray()) },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { Edge("root_parent", "tree_root", "tree_parent") }
+                .Concat(leaves.Select((leaf, index) => Edge($"edge_{index}", "tree_parent", leaf.Id)))
+                .ToArray());
+        var document = Export(graph);
+        var firstGap = Top(document, "tree_parent") - Bottom(document, "tree_root");
+        var secondGap = Top(document, "tree_leaf_0") - Bottom(document, "tree_parent");
+
+        Assert.Equal(100, firstGap);
+        Assert.True(secondGap > firstGap);
+    }
+
+    [Fact]
     public void Reversed_enumeration_produces_identical_small_exposure_layout()
     {
         var graph = MessyExposureGraph();
@@ -170,6 +201,14 @@ public sealed class LayeredLayoutRegressionTests
     {
         var geometry = Cell(document, id).Element("mxGeometry")!;
         return AbsoluteX(document, id) + Number(geometry, "width");
+    }
+
+    private static double Top(XDocument document, string id) => AbsoluteY(document, id);
+
+    private static double Bottom(XDocument document, string id)
+    {
+        var geometry = Cell(document, id).Element("mxGeometry")!;
+        return AbsoluteY(document, id) + Number(geometry, "height");
     }
 
     private static string GeometrySignature(XDocument document) => string.Join("\n",
