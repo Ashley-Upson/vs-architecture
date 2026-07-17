@@ -6,10 +6,10 @@ using StandardIo.ArchitectureDiagram.Core.Models;
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal sealed record RouteRepairBudget(
-    int MaximumAffectedRoutes = 64,
-    int MaximumCandidatesPerFinding = 8,
-    int MaximumPasses = 3,
-    int MaximumEstimatedWork = 10000);
+    int MaximumAffectedRoutes = 32,
+    int MaximumCandidatesPerFinding = 4,
+    int MaximumPasses = 2,
+    int MaximumEstimatedWork = 128);
 
 internal sealed record RouteRepairResult(
     IReadOnlyDictionary<string, LinkLayout> Links,
