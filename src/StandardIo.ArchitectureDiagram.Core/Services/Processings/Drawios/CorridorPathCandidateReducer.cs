@@ -26,7 +26,11 @@ internal static class CorridorPathCandidateReducer
             return Array.Empty<CorridorPathCandidate>();
         }
 
-        var shortest = valid.Min(candidate => candidate.LocalCost.PathLength);
+        var shortest = valid
+            .Where(candidate => !candidate.HasInvalidGeometry)
+            .Select(candidate => candidate.LocalCost.PathLength)
+            .DefaultIfEmpty(valid.Min(candidate => candidate.LocalCost.PathLength))
+            .Min();
         return valid
             .Where(candidate => candidate.IsAcceptedPath || candidate.LocalCost.PathLength <= shortest + maximumDetour)
             .OrderByDescending(candidate => candidate.IsAcceptedPath)

@@ -24,6 +24,21 @@ public sealed class GlobalCorridorPathSelectorTests
     }
 
     [Fact]
+    public void Reducer_measures_detour_from_valid_route_when_accepted_baseline_is_invalid()
+    {
+        var accepted = Candidate("edge", "invalid", 100, "invalid", P(0, 0, 100, 0)) with
+        {
+            HasInvalidGeometry = true,
+            IsAcceptedPath = true
+        };
+        var longSafe = Candidate("edge", "long-safe", 1000, "outside", P(0, 0, 0, 500, 100, 500, 100, 0));
+
+        var retained = CorridorPathCandidateReducer.Retain(new[] { accepted, longSafe }, 8, 200);
+
+        Assert.Contains(longSafe, retained);
+    }
+
+    [Fact]
     public void Select_moves_locally_shortest_blocker_to_longer_clean_corridor()
     {
         var candidates = EarlyCommitCandidates();
