@@ -14,11 +14,26 @@ internal static class CorridorObserver
     {
         laneSpacing = Math.Max(1, laneSpacing);
         clearance = Math.Max(0, clearance);
+        var sourceCounts = links.Values.GroupBy(link => link.Link.SourceId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var targetCounts = links.Values.GroupBy(link => link.Link.TargetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         var observed = links.Values
             .OrderBy(link => link.Link.Order)
             .ThenBy(link => link.Link.Id, StringComparer.Ordinal)
-            .SelectMany(link => CompleteSegments(link)
-                .Select((segment, index) => Describe(link, segment, index, nodes, laneSpacing)))
+            .SelectMany(link =>
+            {
+                var segments = CompleteSegments(link);
+                return segments.Select((segment, index) => Describe(
+                    link,
+                    segment,
+                    index,
+                    segments.Length,
+                    sourceCounts[link.Link.SourceId],
+                    targetCounts[link.Link.TargetId],
+                    nodes,
+                    laneSpacing));
+            })
             .Where(segment => segment is not null)
             .Select(segment => segment!)
             .ToArray();
@@ -58,8 +73,75 @@ internal static class CorridorObserver
                 },
                 StringComparer.Ordinal);
         var junctions = BuildJunctions(corridors.Values);
+        var transitions = BuildTerminalTransitions(nodes, links, mappings, corridors, laneSpacing);
 
-        return new CorridorObservation(corridors, junctions, mappings, usage);
+        return new CorridorObservation(corridors, junctions, mappings, usage, transitions);
+    }
+
+    private static IReadOnlyList<TerminalTransition> BuildTerminalTransitions(
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> links,
+        IReadOnlyList<CorridorSegmentMapping> mappings,
+        IReadOnlyDictionary<string, RoutingCorridor> corridors,
+        int laneSpacing)
+    {
+        var result = new List<TerminalTransition>();
+        Add(FanoutDirection.Source);
+        Add(FanoutDirection.Target);
+        return result.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
+
+        void Add(FanoutDirection direction)
+        {
+            var groups = links.Values
+                .Where(link => nodes.ContainsKey(direction == FanoutDirection.Source ? link.Link.SourceId : link.Link.TargetId))
+                .GroupBy(link => direction == FanoutDirection.Source ? link.Link.SourceId : link.Link.TargetId, StringComparer.Ordinal);
+            foreach (var group in groups.OrderBy(item => item.Key, StringComparer.Ordinal))
+            {
+                var terminal = nodes[group.Key].Rect;
+                foreach (var side in group.GroupBy(link =>
+                {
+                    var remoteId = direction == FanoutDirection.Source ? link.Link.TargetId : link.Link.SourceId;
+                    return nodes.TryGetValue(remoteId, out var remote) && remote.Rect.CenterX < terminal.CenterX
+                        ? FanoutSide.Left
+                        : FanoutSide.Right;
+                }))
+                {
+                    var ordered = side.OrderBy(link =>
+                    {
+                        var remoteId = direction == FanoutDirection.Source ? link.Link.TargetId : link.Link.SourceId;
+                        return nodes.TryGetValue(remoteId, out var remote)
+                            ? Math.Abs(remote.Rect.CenterX - terminal.CenterX)
+                            : int.MaxValue;
+                    }).ThenBy(link => link.Link.Id, StringComparer.Ordinal).ToArray();
+                    for (var index = 0; index < ordered.Length; index++)
+                    {
+                        var link = ordered[index];
+                        var points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+                        var stub = direction == FanoutDirection.Source
+                            ? new Segment(points[0], points[Math.Min(1, points.Length - 1)])
+                            : new Segment(points[points.Length - 1], points[Math.Max(0, points.Length - 2)]);
+                        var ordinary = mappings
+                            .Where(mapping => mapping.EdgeId == link.Link.Id &&
+                                corridors[mapping.CorridorId].Role == CorridorRole.Ordinary)
+                            .OrderBy(mapping => direction == FanoutDirection.Source ? mapping.SegmentIndex : -mapping.SegmentIndex)
+                            .FirstOrDefault();
+                        result.Add(new TerminalTransition(
+                            $"terminal:{direction}:{group.Key}:{side.Key}:{index}",
+                            link.Link.Id,
+                            link.RouteState.Revision,
+                            direction,
+                            group.Key,
+                            side.Key,
+                            direction == FanoutDirection.Source ? link.SourcePoint.X : link.TargetPoint.X,
+                            stub,
+                            ordinary?.CorridorId,
+                            Math.Max(stub.Length, laneSpacing),
+                            Math.Max(0, ordered.Length - 1) * laneSpacing,
+                            index));
+                    }
+                }
+            }
+        }
     }
 
     private static int FanOutDirection(CorridorSegmentMapping mapping) =>
@@ -133,6 +215,9 @@ internal static class CorridorObserver
         LinkLayout link,
         Segment segment,
         int segmentIndex,
+        int segmentCount,
+        int sourceRouteCount,
+        int targetRouteCount,
         IReadOnlyDictionary<string, NodeLayout> nodes,
         int laneSpacing)
     {
@@ -158,7 +243,10 @@ internal static class CorridorObserver
                 .DefaultIfEmpty(segment.Start.Y + laneSpacing * 2)
                 .Min();
             NormalizeBounds(segment.Start.Y, laneSpacing, ref top, ref bottom);
-            return new ObservedSegment(link.Link.Id, link.RouteState.Revision, segmentIndex, $"H:{top}:{bottom}", CorridorOrientation.Horizontal, segment);
+            var role = Role(segmentIndex, segmentCount, sourceRouteCount, targetRouteCount);
+            var region = Region(link, nodes, role);
+            return new ObservedSegment(link.Link.Id, link.RouteState.Revision, segmentIndex,
+                $"H:{top}:{bottom}:{role}:{region}", CorridorOrientation.Horizontal, role, region, $"{top}:{bottom}", segment);
         }
 
         var upper = Math.Min(segment.Start.Y, segment.End.Y);
@@ -173,7 +261,52 @@ internal static class CorridorObserver
             .DefaultIfEmpty(segment.Start.X + laneSpacing * 2)
             .Min();
         NormalizeBounds(segment.Start.X, laneSpacing, ref corridorLeft, ref corridorRight);
-        return new ObservedSegment(link.Link.Id, link.RouteState.Revision, segmentIndex, $"V:{corridorLeft}:{corridorRight}", CorridorOrientation.Vertical, segment);
+        var verticalRole = Role(segmentIndex, segmentCount, sourceRouteCount, targetRouteCount);
+        var verticalRegion = Region(link, nodes, verticalRole);
+        return new ObservedSegment(link.Link.Id, link.RouteState.Revision, segmentIndex,
+            $"V:{corridorLeft}:{corridorRight}:{verticalRole}:{verticalRegion}", CorridorOrientation.Vertical,
+            verticalRole, verticalRegion, $"{corridorLeft}:{corridorRight}", segment);
+    }
+
+    private static CorridorRole Role(
+        int segmentIndex,
+        int segmentCount,
+        int sourceRouteCount,
+        int targetRouteCount) =>
+        segmentCount <= 1
+            ? CorridorRole.Ordinary
+            : segmentIndex == 0 || segmentIndex == 1 && sourceRouteCount > 1
+            ? CorridorRole.SourceTransition
+            : segmentIndex == segmentCount - 1 || segmentIndex == segmentCount - 2 && targetRouteCount > 1
+                ? CorridorRole.TargetTransition
+                : CorridorRole.Ordinary;
+
+    private static string Region(
+        LinkLayout link,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        CorridorRole role)
+    {
+        if (role == CorridorRole.SourceTransition)
+        {
+            return $"terminal-source:{link.Link.SourceId}";
+        }
+
+        if (role == CorridorRole.TargetTransition)
+        {
+            return $"terminal-target:{link.Link.TargetId}";
+        }
+
+        if (!nodes.TryGetValue(link.Link.SourceId, out var source) ||
+            !nodes.TryGetValue(link.Link.TargetId, out var target))
+        {
+            return "unknown";
+        }
+
+        var distance = Math.Abs(source.Rect.CenterX - target.Rect.CenterX);
+        var localThreshold = Math.Max(source.Rect.Width, target.Rect.Width) * 2;
+        return distance > localThreshold
+            ? $"cross:{Math.Min(source.Depth, target.Depth)}:{Math.Max(source.Depth, target.Depth)}"
+            : $"local:{Math.Min(source.Depth, target.Depth)}:{Math.Max(source.Depth, target.Depth)}";
     }
 
     private static RoutingCorridor BuildCorridor(
@@ -206,7 +339,15 @@ internal static class CorridorObserver
 
         var usableSize = Math.Max(0, perpendicularSize - clearance * 2);
         var capacity = Math.Max(1, 1 + Math.Max(0, usableSize - 1) / laneSpacing);
-        return new RoutingCorridor(id, orientation, bounds, laneSpacing, capacity);
+        return new RoutingCorridor(
+            id,
+            orientation,
+            bounds,
+            laneSpacing,
+            capacity,
+            items[0].Role,
+            items[0].RegionKey,
+            items[0].ObstacleBoundaryKey);
     }
 
     private static IReadOnlyDictionary<string, CorridorJunction> BuildJunctions(IEnumerable<RoutingCorridor> corridors)
@@ -278,6 +419,9 @@ internal static class CorridorObserver
         int SegmentIndex,
         string CorridorKey,
         CorridorOrientation Orientation,
+        CorridorRole Role,
+        string RegionKey,
+        string ObstacleBoundaryKey,
         Segment Segment);
 
     private sealed record SpatialCorridorGroup(string Id, IReadOnlyList<ObservedSegment> Segments);

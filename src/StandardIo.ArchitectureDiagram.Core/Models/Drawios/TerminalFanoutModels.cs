@@ -19,3 +19,17 @@ internal sealed record TerminalFanoutGroup(
     FanoutDirection Direction,
     string SharedNodeId,
     IReadOnlyList<TerminalFanoutMembership> Routes);
+
+internal sealed record TerminalTransition(
+    string Id,
+    string EdgeId,
+    int RouteRevision,
+    FanoutDirection Direction,
+    string TerminalNodeId,
+    FanoutSide Side,
+    int PortCoordinate,
+    Segment ProtectedStub,
+    string? FirstOrdinaryCorridorId,
+    int RequiredDepth,
+    int RequiredSpread,
+    int LaneOrder);

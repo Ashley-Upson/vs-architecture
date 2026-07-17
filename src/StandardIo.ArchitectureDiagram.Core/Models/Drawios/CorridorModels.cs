@@ -8,12 +8,22 @@ internal enum CorridorOrientation
     Vertical
 }
 
+internal enum CorridorRole
+{
+    Ordinary,
+    SourceTransition,
+    TargetTransition
+}
+
 internal sealed record RoutingCorridor(
     string Id,
     CorridorOrientation Orientation,
     Rect Bounds,
     int LaneSpacing,
-    int Capacity);
+    int Capacity,
+    CorridorRole Role = CorridorRole.Ordinary,
+    string RegionKey = "global",
+    string ObstacleBoundaryKey = "unbounded");
 
 internal sealed record CorridorJunction(
     string Id,
@@ -41,7 +51,8 @@ internal sealed record CorridorObservation(
     IReadOnlyDictionary<string, RoutingCorridor> Corridors,
     IReadOnlyDictionary<string, CorridorJunction> Junctions,
     IReadOnlyList<CorridorSegmentMapping> SegmentMappings,
-    IReadOnlyDictionary<string, CorridorUsage> Usage);
+    IReadOnlyDictionary<string, CorridorUsage> Usage,
+    IReadOnlyList<TerminalTransition>? TerminalTransitions = null);
 
 internal sealed record AllocatedCorridorLane(
     string CorridorId,
@@ -51,7 +62,8 @@ internal sealed record AllocatedCorridorLane(
 
 internal sealed record CorridorLaneAllocation(
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>> Corridors,
-    IReadOnlyList<string> FailedCorridorIds)
+    IReadOnlyList<string> FailedCorridorIds,
+    IReadOnlyList<CapacityRequest>? CapacityRequests = null)
 {
     public bool IsSuccessful => FailedCorridorIds.Count == 0;
 
@@ -67,3 +79,13 @@ internal sealed record CorridorLaneAllocation(
         return false;
     }
 }
+
+internal sealed record CapacityRequest(
+    string CorridorId,
+    CorridorRole Role,
+    IReadOnlyDictionary<string, int> RouteRevisions,
+    int RequiredLaneCount,
+    int AvailableLaneCount,
+    int RequiredPerpendicularExtent,
+    Rect CurrentObstacleBoundaries,
+    int SmallestExpansion);

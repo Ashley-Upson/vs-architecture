@@ -33,6 +33,11 @@ public sealed class CorridorLaneAllocatorTests
         Assert.False(allocation.IsSuccessful);
         Assert.Equal(new[] { "H:20:80" }, allocation.FailedCorridorIds);
         Assert.False(allocation.Corridors.ContainsKey("H:20:80"));
+        var request = Assert.Single(allocation.CapacityRequests!);
+        Assert.Equal(3, request.RequiredLaneCount);
+        Assert.Equal(2, request.AvailableLaneCount);
+        Assert.Equal(25, request.RequiredPerpendicularExtent);
+        Assert.Equal(CorridorRole.Ordinary, request.Role);
     }
 
     private static CorridorObservation Observation(int capacity, params string[] edges)
@@ -47,7 +52,12 @@ public sealed class CorridorLaneAllocatorTests
         return new CorridorObservation(
             new Dictionary<string, RoutingCorridor> { [corridor.Id] = corridor },
             new Dictionary<string, CorridorJunction>(),
-            Array.Empty<CorridorSegmentMapping>(),
+            edges.Select((edge, index) => new CorridorSegmentMapping(
+                edge,
+                index + 1,
+                corridor.Id,
+                new Segment(new Point(0, 40 + index), new Point(200, 40 + index)),
+                index)).ToArray(),
             new Dictionary<string, CorridorUsage> { [corridor.Id] = usage });
     }
 }
