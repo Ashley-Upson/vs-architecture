@@ -59,9 +59,17 @@ internal sealed record CorridorPathDecision(
     string FinalSignature,
     string Reason);
 
+internal sealed record CorridorPathEvaluation(
+    string EdgeId,
+    string Signature,
+    bool IsSelected,
+    GlobalRouteScore Score,
+    string Reason);
+
 internal sealed record CorridorPathSelectionResult(
     IReadOnlyDictionary<string, CorridorPathCandidate> Selected,
     GlobalRouteScore InitialScore,
     GlobalRouteScore FinalScore,
     IReadOnlyList<CorridorPathDecision> Decisions,
+    IReadOnlyList<CorridorPathEvaluation> Evaluations,
     int CompletedPasses);

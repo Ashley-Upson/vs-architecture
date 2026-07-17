@@ -17,6 +17,11 @@ public sealed class GlobalCorridorPathSelectorTests
         Assert.Equal("upper", result.Selected["blocker"].Signature.Value);
         Assert.True(result.FinalScore.CompareTo(result.InitialScore) < 0);
         Assert.Equal(0, result.FinalScore.SharedSegmentLength);
+        Assert.Contains(result.Evaluations, evaluation =>
+            evaluation.EdgeId == "blocker" && evaluation.Signature == "upper" && evaluation.IsSelected);
+        Assert.Contains(result.Evaluations, evaluation =>
+            evaluation.EdgeId == "blocker" && evaluation.Signature == "main" && !evaluation.IsSelected &&
+            evaluation.Reason.StartsWith("Rejected because score", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -42,6 +42,7 @@ public sealed class DeterministicDrawioExporterTests
             Assert.Contains("length=", localCost);
             Assert.Contains(";bends=", localCost);
             Assert.Contains(";escape=", localCost);
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathRejectedAlternatives")));
         });
     }
 

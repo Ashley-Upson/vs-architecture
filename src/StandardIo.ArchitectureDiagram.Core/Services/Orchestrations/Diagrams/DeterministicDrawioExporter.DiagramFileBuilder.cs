@@ -108,7 +108,9 @@ internal sealed class DiagramFileBuilder
                 {
                     layout.PathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
                 }
-                root.Add(Edge(segment, traversal, pathDecision, pathCandidate));
+                var rejectedPathEvaluations = layout.PathSelection?.Evaluations.Where(evaluation =>
+                    evaluation.EdgeId == segment.LogicalEdgeId && !evaluation.IsSelected).ToArray();
+                root.Add(Edge(segment, traversal, pathDecision, pathCandidate, rejectedPathEvaluations));
             }
 
             return root;
@@ -236,7 +238,8 @@ private XElement GraphModel(XElement root)
             PhysicalEdgeSegment segment,
             EdgeTraversal? traversal,
             CorridorPathDecision? pathDecision,
-            CorridorPathCandidate? pathCandidate)
+            CorridorPathCandidate? pathCandidate,
+            IReadOnlyList<CorridorPathEvaluation>? rejectedPathEvaluations)
         {
             // mxCell stores edge terminals in source/target, style as key=value pairs, and mxGeometry points as waypoints.
             // See https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxCell-js.html and
@@ -254,6 +257,9 @@ private XElement GraphModel(XElement root)
                 pathDecision is null ? null : new XAttribute("pathDecision", pathDecision.Reason),
                 pathCandidate is null ? null : new XAttribute("pathLocalCost",
                     $"length={pathCandidate.LocalCost.PathLength};bends={pathCandidate.LocalCost.BendCount};escape={pathCandidate.LocalCost.CanvasEscape}"),
+                rejectedPathEvaluations is null || rejectedPathEvaluations.Count == 0 ? null :
+                    new XAttribute("pathRejectedAlternatives", string.Join(" | ", rejectedPathEvaluations.Select(evaluation =>
+                        $"{evaluation.Signature}: {evaluation.Reason}"))),
                 traversal is null || traversal.Diagnostics.Count == 0
                     ? null
                     : new XAttribute("routingDiagnostics", string.Join(",", traversal.Diagnostics

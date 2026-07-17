@@ -74,12 +74,50 @@ internal static class GlobalCorridorPathSelector
         }
 
         var final = Score(selected, corridorCapacities, minimumSpacing);
+        var evaluations = EvaluateCandidates(retained, selected, decisions, final, corridorCapacities, minimumSpacing);
         return new CorridorPathSelectionResult(
             selected,
             initial,
             final,
             decisions.Values.OrderBy(item => item.EdgeId, StringComparer.Ordinal).ToArray(),
+            evaluations,
             completedPasses);
+    }
+
+    private static IReadOnlyList<CorridorPathEvaluation> EvaluateCandidates(
+        IReadOnlyDictionary<string, IReadOnlyList<CorridorPathCandidate>> retained,
+        IReadOnlyDictionary<string, CorridorPathCandidate> selected,
+        IReadOnlyDictionary<string, CorridorPathDecision> decisions,
+        GlobalRouteScore finalScore,
+        IReadOnlyDictionary<string, int> corridorCapacities,
+        int minimumSpacing)
+    {
+        var trial = selected.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var evaluations = new List<CorridorPathEvaluation>();
+        foreach (var edgeId in retained.Keys.OrderBy(id => id, StringComparer.Ordinal))
+        {
+            foreach (var candidate in retained[edgeId].OrderBy(item => item.Signature.Value, StringComparer.Ordinal))
+            {
+                var isSelected = candidate.Signature.Value == selected[edgeId].Signature.Value;
+                trial[edgeId] = candidate;
+                var score = Score(trial, corridorCapacities, minimumSpacing);
+                var reason = isSelected
+                    ? decisions[edgeId].Reason
+                    : score.CompareTo(finalScore) < 0
+                        ? "Rejected because it was not a stable strict improvement during ordered passes."
+                        : $"Rejected because score {score} does not strictly improve final score {finalScore}.";
+                evaluations.Add(new CorridorPathEvaluation(
+                    edgeId,
+                    candidate.Signature.Value,
+                    isSelected,
+                    score,
+                    reason));
+            }
+
+            trial[edgeId] = selected[edgeId];
+        }
+
+        return evaluations;
     }
 
     internal static GlobalRouteScore Score(
