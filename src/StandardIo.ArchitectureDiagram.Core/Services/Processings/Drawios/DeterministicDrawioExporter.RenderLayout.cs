@@ -290,8 +290,7 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths)
         {
-            if (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold &&
-                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
             {
                 return PositionExposureTrees(graph, settings, depths, widths);
             }
@@ -426,6 +425,8 @@ internal sealed class RenderLayout
                 cursorX += subtree.Width + treeGap;
             }
 
+            CenterExposureParentsOverChildren(graph, result);
+
             var standaloneNodes = graph.Nodes
                 .Where(node => !placed.Contains(node.Id))
                 .OrderBy(node => depths.TryGetValue(node.Id, out var depth) ? depth : 0)
@@ -460,6 +461,36 @@ internal sealed class RenderLayout
             }
 
             return result;
+        }
+
+        private static void CenterExposureParentsOverChildren(
+            RenderGraph graph,
+            Dictionary<string, NodeLayout> nodes)
+        {
+            foreach (var source in graph.Nodes
+                .Where(node => nodes.ContainsKey(node.Id))
+                .OrderByDescending(node => nodes[node.Id].Depth)
+                .ThenBy(node => node.Id, StringComparer.Ordinal))
+            {
+                var children = graph.Links
+                    .Where(link => string.Equals(link.SourceId, source.Id, StringComparison.Ordinal) &&
+                        nodes.ContainsKey(link.TargetId) &&
+                        nodes[link.TargetId].Depth > nodes[source.Id].Depth)
+                    .Select(link => nodes[link.TargetId].Rect)
+                    .ToArray();
+                if (children.Length == 0)
+                {
+                    continue;
+                }
+
+                var left = children.Min(child => child.X);
+                var right = children.Max(child => child.Right);
+                var current = nodes[source.Id];
+                nodes[source.Id] = current with
+                {
+                    Rect = current.Rect with { X = left + (right - left - current.Rect.Width) / 2 }
+                };
+            }
         }
 
         private static SubtreeMeasure MeasureExposureSubtree(

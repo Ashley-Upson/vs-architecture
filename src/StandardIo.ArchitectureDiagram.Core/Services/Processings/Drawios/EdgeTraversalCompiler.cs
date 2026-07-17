@@ -159,6 +159,14 @@ internal static class EdgeTraversalCompiler
             return new CompiledEdgeGeometry(traversal.Link.Id, traversal.AcceptedFallbackPoints, true);
         }
 
+        // A direct terminal-to-terminal route has no independently allocated corridor.
+        // Treating each terminal access as a separate traversal duplicates the whole
+        // segment in reverse and compiles source -> target -> source -> target.
+        if (traversal.Corridors.Count == 0)
+        {
+            return new CompiledEdgeGeometry(traversal.Link.Id, traversal.AcceptedFallbackPoints, false);
+        }
+
         var result = new List<Point> { traversal.SourceAccess.Terminal, traversal.SourceAccess.CorridorBoundary };
         foreach (var corridor in traversal.Corridors.OrderBy(item => item.SegmentIndex))
         {
