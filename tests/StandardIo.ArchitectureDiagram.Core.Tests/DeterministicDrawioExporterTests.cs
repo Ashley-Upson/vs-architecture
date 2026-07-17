@@ -9,6 +9,82 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DeterministicDrawioExporterTests
 {
     [Fact]
+    public void Render_emits_regional_optimisation_diagnostics_for_exposure_tree_edges()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ExposureTreeLayoutThreshold = 2;
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "ApiController"),
+                    Node("type_service", "project_api", "Service"),
+                    Node("type_repository", "project_api", "Repository")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_controller_service", "type_controller", "type_service", "internal"),
+                new DependencyEdge("edge_controller_repository", "type_controller", "type_repository", "internal"),
+                new DependencyEdge("edge_service_repository", "type_service", "type_repository", "internal")
+            }),
+            settings);
+
+        var edges = document.Descendants("mxCell").Where(cell => (string?)cell.Attribute("edge") == "1").ToArray();
+
+        Assert.NotEmpty(edges);
+        Assert.All(edges, edge =>
+        {
+            Assert.Equal("regional", (string?)edge.Attribute("optimisationMode"));
+            Assert.NotNull(edge.Attribute("regionDecision"));
+            Assert.NotNull(edge.Attribute("regionFallbackReason"));
+            Assert.NotNull(edge.Attribute("pathInitialSignature"));
+            Assert.NotNull(edge.Attribute("pathFinalSignature"));
+        });
+        Assert.Contains(edges, edge => edge.Attribute("fanoutGroups") is not null);
+    }
+
+    [Fact]
+    public void Render_emits_global_path_selection_diagnostics_on_physical_segments()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_source", "project_api", "Source"),
+                    Node("type_left", "project_api", "Left"),
+                    Node("type_right", "project_api", "Right")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_source_left", "type_source", "type_left", "internal"),
+                new DependencyEdge("edge_source_right", "type_source", "type_right", "internal")
+            }));
+
+        var edges = document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("edge") == "1")
+            .ToArray();
+
+        Assert.NotEmpty(edges);
+        Assert.All(edges, edge =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathInitialSignature")));
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathFinalSignature")));
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathDecision")));
+            var localCost = (string?)edge.Attribute("pathLocalCost");
+            Assert.Contains("length=", localCost);
+            Assert.Contains(";bends=", localCost);
+            Assert.Contains(";escape=", localCost);
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathRejectedAlternatives")));
+        });
+    }
+
+    [Fact]
     public void Render_aligns_nodes_by_dependency_depth()
     {
         var document = Render(new DiagramModel(
@@ -267,6 +343,33 @@ public sealed class DeterministicDrawioExporterTests
             EdgePoints(document, "edge_cache"),
             EdgePoints(document, "edge_repository"),
             settings.Layout.ParallelLaneSpacing);
+    }
+
+    [Fact]
+    public void Render_emits_exporter_owned_connector_geometry()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_source", "project_api", "Source"),
+                    Node("type_target", "project_api", "Target")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("edge", "type_source", "type_target", "internal") }));
+        var edge = Cell(document, "edge");
+        var style = (string?)edge.Attribute("style") ?? string.Empty;
+
+        Assert.Contains("edgeStyle=none", style);
+        Assert.Contains("noEdgeStyle=1", style);
+        Assert.Contains("orthogonal=0", style);
+        Assert.Contains("exitPerimeter=0", style);
+        Assert.Contains("entryPerimeter=0", style);
+        Assert.DoesNotContain("orthogonalEdgeStyle", style);
+        Assert.DoesNotContain("jettySize", style);
+        Assert.NotEmpty(edge.Descendants("mxPoint"));
     }
 
     [Fact]
@@ -683,6 +786,95 @@ public sealed class DeterministicDrawioExporterTests
             Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
     }
 
+    [Fact]
+    public void Render_keeps_busy_exposure_tree_dependencies_traceable_end_to_end()
+    {
+        var childIds = new[] { "json", "template", "component", "resource", "app", "script", "cache" };
+        var nodes = new List<TypeNode> { Node("processing", "project", "TemplateRenderProcessingService") };
+        nodes.AddRange(childIds.Select(id => Node(id, "project", id + "Service")));
+        nodes.AddRange(new[]
+        {
+            Node("template_broker", "project", "TemplateBroker"),
+            Node("component_broker", "project", "ComponentBroker"),
+            Node("resource_broker", "project", "ResourceBroker"),
+            Node("app_broker", "project", "AppBroker")
+        });
+        var edges = childIds.Select((id, index) =>
+                new DependencyEdge("edge_" + id, "processing", id, "internal"))
+            .Concat(new[]
+            {
+                new DependencyEdge("edge_template_broker", "template", "template_broker", "internal"),
+                new DependencyEdge("edge_component_broker", "component", "component_broker", "internal"),
+                new DependencyEdge("edge_resource_broker", "resource", "resource_broker", "internal"),
+                new DependencyEdge("edge_app_broker", "app", "app_broker", "internal")
+            })
+            .ToArray();
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ExposureTreeLayoutThreshold = 1;
+        var document = Render(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", nodes) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges), settings);
+        var routes = childIds.ToDictionary(
+            id => id,
+            id => CompleteEdgePointsBetween(document, "TemplateRenderProcessingService", id + "Service"));
+
+        foreach (var id in childIds)
+        {
+            var route = routes[id];
+            var source = NodeRect(document, CellIdByValue(document, "TemplateRenderProcessingService"));
+            var target = NodeRect(document, CellIdByValue(document, id + "Service"));
+            Assert.True(route.Count >= 2);
+            Assert.Equal(source.Y + source.Height, route[0].Y);
+            Assert.Equal(route[0].X, route[1].X);
+            Assert.True(route[1].Y > route[0].Y);
+            Assert.Equal(target.Y, route[^1].Y);
+            Assert.Equal(route[^1].X, route[^2].X);
+            Assert.True(route[^2].Y < route[^1].Y);
+            Assert.All(TestSegments(route), segment =>
+                Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+        }
+
+        var routePairs = childIds.SelectMany((left, index) => childIds.Skip(index + 1).Select(right => (left, right)));
+        foreach (var (left, right) in routePairs)
+        {
+            Assert.Equal(0, SharedLength(routes[left], routes[right]));
+            AssertParallelSegmentsSeparated(routes[left], routes[right], settings.Layout.ParallelLaneSpacing);
+        }
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(7)]
+    public void Render_orders_same_side_fan_out_monotonically(int targetCount)
+    {
+        var targetIds = Enumerable.Range(0, targetCount).Select(index => $"target_{index}").ToArray();
+        var nodes = new[] { Node("source", "project", "ProcessingSource") }
+            .Concat(targetIds.Select(id => Node(id, "project", id)))
+            .ToArray();
+        var edges = targetIds.Select(id => new DependencyEdge($"edge_{id}", "source", id, "internal")).ToArray();
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ExposureTreeLayoutThreshold = 1;
+
+        var forward = Render(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", nodes) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges), settings);
+        var reversed = Render(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", nodes) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges.AsEnumerable().Reverse().ToArray()), settings);
+
+        AssertMonotonicFanOut(forward, "ProcessingSource", targetIds, settings.Layout.ParallelLaneSpacing);
+        AssertMonotonicFanOut(reversed, "ProcessingSource", targetIds, settings.Layout.ParallelLaneSpacing);
+        foreach (var targetId in targetIds)
+        {
+            Assert.Equal(
+                CompleteEdgePointsBetween(forward, "ProcessingSource", targetId),
+                CompleteEdgePointsBetween(reversed, "ProcessingSource", targetId));
+        }
+    }
+
     private static XDocument Render(DiagramModel diagram, DiagramSettings? settings = null)
     {
         return XDocument.Parse(new DrawioDiagramRenderer().Render(diagram, settings ?? DiagramSettings.CreateDefault()));
@@ -711,7 +903,13 @@ public sealed class DeterministicDrawioExporterTests
 
     private static XElement Cell(XDocument document, string id)
     {
-        return document.Descendants("mxCell").Single(cell => (string?)cell.Attribute("id") == id);
+        var exact = document.Descendants("mxCell").SingleOrDefault(cell => (string?)cell.Attribute("id") == id);
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        return LogicalEdgeCells(document, id).OrderByDescending(SegmentIndex).First();
     }
 
     private static int AbsoluteX(XDocument document, string id)
@@ -751,12 +949,66 @@ public sealed class DeterministicDrawioExporterTests
 
     private static IReadOnlyList<(int X, int Y)> EdgePoints(XDocument document, string id)
     {
-        return Cell(document, id)
-            .Descendants("mxPoint")
-            .Select(point => (
-                int.Parse((string)point.Attribute("x")!),
-                int.Parse((string)point.Attribute("y")!)))
+        var segments = LogicalEdgeCells(document, id).OrderBy(SegmentIndex).ToArray();
+        if (segments.Length == 0)
+        {
+            segments = new[] { Cell(document, id) };
+        }
+
+        var points = new List<(int X, int Y)>();
+        for (var index = 0; index < segments.Length; index++)
+        {
+            var segment = segments[index];
+            var parentId = (string?)segment.Attribute("parent");
+            var offsetX = string.IsNullOrWhiteSpace(parentId) || parentId == "1" ? 0 : AbsoluteX(document, parentId);
+            var offsetY = string.IsNullOrWhiteSpace(parentId) || parentId == "1" ? 0 : AbsoluteY(document, parentId);
+            if (index > 0)
+            {
+                var source = Cell(document, (string)segment.Attribute("source")!);
+                points.Add((AbsoluteX(document, (string)source.Attribute("id")!), AbsoluteY(document, (string)source.Attribute("id")!)));
+            }
+
+            points.AddRange(segment.Descendants("mxPoint").Select(point => (
+                int.Parse((string)point.Attribute("x")!) + offsetX,
+                int.Parse((string)point.Attribute("y")!) + offsetY)));
+            if (index < segments.Length - 1)
+            {
+                var target = Cell(document, (string)segment.Attribute("target")!);
+                points.Add((AbsoluteX(document, (string)target.Attribute("id")!), AbsoluteY(document, (string)target.Attribute("id")!)));
+            }
+        }
+
+        return NormalizeRoutePoints(points);
+    }
+
+    private static XElement[] LogicalEdgeCells(XDocument document, string id) =>
+        document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("edge") == "1" &&
+                (string?)cell.Attribute("logicalEdgeId") == id)
             .ToArray();
+
+    private static int SegmentIndex(XElement edge) =>
+        int.TryParse((string?)edge.Attribute("segmentIndex"), out var index) ? index : 0;
+
+    private static IReadOnlyList<(int X, int Y)> NormalizeRoutePoints(IEnumerable<(int X, int Y)> source)
+    {
+        var result = new List<(int X, int Y)>();
+        foreach (var point in source)
+        {
+            if (result.Count == 0 || result[^1] != point)
+            {
+                result.Add(point);
+            }
+
+            while (result.Count >= 3 &&
+                (result[^3].X == result[^2].X && result[^2].X == result[^1].X ||
+                 result[^3].Y == result[^2].Y && result[^2].Y == result[^1].Y))
+            {
+                result.RemoveAt(result.Count - 2);
+            }
+        }
+
+        return result;
     }
 
     private static void AssertNoWaypointSegmentsCrossNonEndpointNodes(XDocument document)
@@ -962,6 +1214,125 @@ public sealed class DeterministicDrawioExporterTests
             yield return (points[index], points[index + 1]);
         }
     }
+
+    private static IReadOnlyList<(int X, int Y)> CompleteEdgePointsBetween(
+        XDocument document,
+        string sourceValue,
+        string targetValue)
+    {
+        var sourceId = CellIdByValue(document, sourceValue);
+        var targetId = CellIdByValue(document, targetValue);
+        var logicalEdges = document.Descendants("mxCell").Where(cell =>
+            (string?)cell.Attribute("edge") == "1" &&
+            ((string?)cell.Attribute("semanticSourceId") == sourceId &&
+             (string?)cell.Attribute("semanticTargetId") == targetId ||
+             (string?)cell.Attribute("source") == sourceId &&
+             (string?)cell.Attribute("target") == targetId)).ToArray();
+        var firstEdge = logicalEdges.OrderBy(SegmentIndex).First();
+        var lastEdge = logicalEdges.OrderByDescending(SegmentIndex).First();
+        var logicalEdgeId = (string?)firstEdge.Attribute("logicalEdgeId") ?? (string)firstEdge.Attribute("id")!;
+        var points = new List<(int X, int Y)>
+        {
+            RatioPoint(NodeRect(document, sourceId), StyleValue(firstEdge, "exitX"), StyleValue(firstEdge, "exitY"))
+        };
+        points.AddRange(EdgePoints(document, logicalEdgeId));
+        points.Add(RatioPoint(NodeRect(document, targetId), StyleValue(lastEdge, "entryX"), StyleValue(lastEdge, "entryY")));
+        return points;
+    }
+
+    private static void AssertMonotonicFanOut(
+        XDocument document,
+        string sourceValue,
+        IReadOnlyList<string> targetValues,
+        int laneSpacing)
+    {
+        var source = NodeRect(document, CellIdByValue(document, sourceValue));
+        var routes = targetValues.Select(value => new
+        {
+            Value = value,
+            Target = NodeRect(document, CellIdByValue(document, value)),
+            Points = CompleteEdgePointsBetween(document, sourceValue, value)
+        }).ToArray();
+
+        foreach (var route in routes)
+        {
+            Assert.Equal(source.Y + source.Height, route.Points[0].Y);
+            Assert.Equal(route.Target.Y, route.Points[^1].Y);
+        }
+
+        var sides = new[]
+        {
+            routes.Where(route => route.Target.X + route.Target.Width / 2 < source.X + source.Width / 2)
+                .OrderByDescending(route => route.Target.X + route.Target.Width / 2).ToArray(),
+            routes.Where(route => route.Target.X + route.Target.Width / 2 > source.X + source.Width / 2)
+                .OrderBy(route => route.Target.X + route.Target.Width / 2).ToArray()
+        };
+        foreach (var side in sides)
+        {
+            Assert.True(side.Length >= 2);
+            var sourcePorts = side.Select(route => route.Points[0].X).ToArray();
+            var laneCoordinates = side.Select(route => route.Points.First(point => point.Y != source.Y + source.Height).Y).ToArray();
+            if (side[0].Target.X < source.X)
+            {
+                Assert.Equal(sourcePorts.OrderByDescending(value => value), sourcePorts);
+            }
+            else
+            {
+                Assert.Equal(sourcePorts.OrderBy(value => value), sourcePorts);
+            }
+
+            Assert.Equal(laneCoordinates.OrderByDescending(value => value), laneCoordinates);
+            Assert.All(laneCoordinates.Zip(laneCoordinates.Skip(1), (left, right) => left - right),
+                distance => Assert.True(distance >= laneSpacing));
+            foreach (var pair in side.SelectMany((left, index) => side.Skip(index + 1).Select(right => (left, right))))
+            {
+                Assert.False(
+                    RoutesCross(pair.left.Points, pair.right.Points),
+                    $"Routes {pair.left.Value} and {pair.right.Value} cross: " +
+                    $"{string.Join(" -> ", pair.left.Points)} / {string.Join(" -> ", pair.right.Points)}");
+            }
+        }
+    }
+
+    private static bool RoutesCross(IReadOnlyList<(int X, int Y)> left, IReadOnlyList<(int X, int Y)> right) =>
+        TestSegments(left).Any(leftSegment => TestSegments(right).Any(rightSegment =>
+            leftSegment.Start.X == leftSegment.End.X && rightSegment.Start.Y == rightSegment.End.Y &&
+            BetweenStrict(leftSegment.Start.X, rightSegment.Start.X, rightSegment.End.X) &&
+            BetweenStrict(rightSegment.Start.Y, leftSegment.Start.Y, leftSegment.End.Y) ||
+            leftSegment.Start.Y == leftSegment.End.Y && rightSegment.Start.X == rightSegment.End.X &&
+            BetweenStrict(rightSegment.Start.X, leftSegment.Start.X, leftSegment.End.X) &&
+            BetweenStrict(leftSegment.Start.Y, rightSegment.Start.Y, rightSegment.End.Y)));
+
+    private static bool BetweenStrict(int value, int first, int second) =>
+        value > Math.Min(first, second) && value < Math.Max(first, second);
+
+    private static string CellIdByValue(XDocument document, string value) =>
+        (string)document.Descendants("mxCell").Single(cell =>
+            ((string?)cell.Attribute("value"))?.StartsWith(value, StringComparison.Ordinal) == true).Attribute("id")!;
+
+    private static int SharedLength(IReadOnlyList<(int X, int Y)> left, IReadOnlyList<(int X, int Y)> right)
+    {
+        return TestSegments(left).Sum(leftSegment => TestSegments(right).Sum(rightSegment =>
+        {
+            if (leftSegment.Start.Y == leftSegment.End.Y && rightSegment.Start.Y == rightSegment.End.Y &&
+                leftSegment.Start.Y == rightSegment.Start.Y)
+            {
+                return RangeOverlapLength(leftSegment.Start.X, leftSegment.End.X, rightSegment.Start.X, rightSegment.End.X);
+            }
+
+            if (leftSegment.Start.X == leftSegment.End.X && rightSegment.Start.X == rightSegment.End.X &&
+                leftSegment.Start.X == rightSegment.Start.X)
+            {
+                return RangeOverlapLength(leftSegment.Start.Y, leftSegment.End.Y, rightSegment.Start.Y, rightSegment.End.Y);
+            }
+
+            return 0;
+        }));
+    }
+
+    private static int RangeOverlapLength(int leftStart, int leftEnd, int rightStart, int rightEnd) =>
+        Math.Max(0, Math.Min(Math.Max(leftStart, leftEnd), Math.Max(rightStart, rightEnd)) -
+            Math.Max(Math.Min(leftStart, leftEnd), Math.Min(rightStart, rightEnd)));
 
     private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd)
     {

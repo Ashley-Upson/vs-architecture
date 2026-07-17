@@ -63,6 +63,7 @@ internal sealed class RenderGraph
                 .ToArray();
 
             var knownSourceIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
+            var projectBySourceId = nodes.ToDictionary(node => node.Id, node => node.ProjectId, StringComparer.Ordinal);
             var externalById = diagram.ExternalDependencies.ToDictionary(external => external.Id, StringComparer.Ordinal);
             var externalTargetIds = new Dictionary<string, string>(StringComparer.Ordinal);
             var externalEdgesByTarget = diagram.Edges
@@ -83,7 +84,8 @@ internal sealed class RenderGraph
 
                     if (seenNodeIds.Add(renderNodeId))
                     {
-                        nodes.Add(ToRenderNode(external, renderNodeId, nodes.Count));
+                        projectBySourceId.TryGetValue(edge.SourceId, out var ownerProjectId);
+                        nodes.Add(ToRenderNode(external, renderNodeId, ownerProjectId, nodes.Count));
                     }
 
                     externalTargetIds[edge.Id] = renderNodeId;
@@ -92,11 +94,20 @@ internal sealed class RenderGraph
 
             var nodeIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
             var links = diagram.Edges
-                .Select(edge => externalTargetIds.TryGetValue(edge.Id, out var targetId)
-                    ? new DependencyEdge(edge.Id, edge.SourceId, targetId, edge.Kind)
-                    : edge)
-                .Where(edge => nodeIds.Contains(edge.SourceId) && nodeIds.Contains(edge.TargetId))
-                .Select((edge, order) => new RenderLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, order))
+                .Select(edge => new
+                {
+                    Edge = edge,
+                    RenderTargetId = externalTargetIds.TryGetValue(edge.Id, out var targetId) ? targetId : edge.TargetId
+                })
+                .Where(item => nodeIds.Contains(item.Edge.SourceId) && nodeIds.Contains(item.RenderTargetId))
+                .Select((item, order) => new RenderLink(
+                    item.Edge.Id,
+                    item.Edge.SourceId,
+                    item.RenderTargetId,
+                    item.Edge.Kind,
+                    order,
+                    item.Edge.SourceId,
+                    item.Edge.TargetId))
                 .ToArray();
 
             return new RenderGraph(projects, nodes, links, dataModels);
@@ -117,7 +128,11 @@ internal sealed class RenderGraph
                 .GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
-                    group => group.OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order).ThenBy(link => link.Order).ToArray(),
+                    group => group
+                        .OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order)
+                        .ThenBy(link => link.Order)
+                        .ThenBy(link => link.Id, StringComparer.Ordinal)
+                        .ToArray(),
                     StringComparer.Ordinal);
 
             foreach (var link in graph.Links)
@@ -131,12 +146,14 @@ internal sealed class RenderGraph
             var preferredRoots = graph.Nodes
                 .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && IsExposureNode(node))
                 .OrderBy(node => node.Order)
+                .ThenBy(node => node.Id, StringComparer.Ordinal)
                 .ToArray();
             var roots = preferredRoots.Length > 0
                 ? preferredRoots
                 : graph.Nodes
                     .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && incoming[node.Id] == 0)
                     .OrderBy(node => node.Order)
+                    .ThenBy(node => node.Id, StringComparer.Ordinal)
                     .ToArray();
 
             if (roots.Length == 0)
@@ -224,11 +241,15 @@ internal sealed class RenderGraph
                 type.MethodCount);
         }
 
-        private static RenderNode ToRenderNode(ExternalDependencyNode external, string id, int order)
+        private static RenderNode ToRenderNode(
+            ExternalDependencyNode external,
+            string id,
+            string? ownerProjectId,
+            int order)
         {
             var fullName = string.IsNullOrWhiteSpace(external.FullName) ? external.Name : external.FullName;
             var tag = string.IsNullOrWhiteSpace(external.Tag) ? "[External]" : external.Tag;
-            return new RenderNode(id, null, external.Name, fullName, "External", true, tag, order, Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
+            return new RenderNode(id, ownerProjectId, external.Name, fullName, "External", true, tag, order, Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
         }
 
         private static string SafeId(string value)

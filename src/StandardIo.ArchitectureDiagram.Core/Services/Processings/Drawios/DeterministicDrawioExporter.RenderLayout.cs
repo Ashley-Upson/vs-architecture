@@ -12,17 +12,30 @@ internal sealed class RenderLayout
 {
     private const int TextWidth = 8;
     private const string ExposureTreeIdPrefix = "tree_";
+    private const int MaximumGlobalPathSelectionEdges = 64;
 
-    private RenderLayout(
+        private RenderLayout(
             RenderGraph graph,
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, ProjectLayout> projects,
-            IReadOnlyDictionary<string, LinkLayout> links)
+            IReadOnlyDictionary<string, LinkLayout> links,
+            CorridorPathSelectionResult? pathSelection,
+            RegionalPathSelectionResult? regionalPathSelection,
+            EdgeTraversalCompilation traversals,
+            TraceabilityValidationResult traceability,
+            CorridorObservation corridors,
+            CorridorLaneAllocation lanes)
         {
             Graph = graph;
             Nodes = nodes;
             Projects = projects;
             Links = links;
+            PathSelection = pathSelection;
+            RegionalPathSelection = regionalPathSelection;
+            Traversals = traversals;
+            Traceability = traceability;
+            Corridors = corridors;
+            Lanes = lanes;
         }
 
         public RenderGraph Graph { get; }
@@ -33,6 +46,21 @@ internal sealed class RenderLayout
 
         public IReadOnlyDictionary<string, LinkLayout> Links { get; }
 
+        public CorridorPathSelectionResult? PathSelection { get; }
+
+        public RegionalPathSelectionResult? RegionalPathSelection { get; }
+
+        public EdgeTraversalCompilation Traversals { get; }
+
+        public TraceabilityValidationResult Traceability { get; }
+
+        public CorridorObservation Corridors { get; }
+
+        public CorridorLaneAllocation Lanes { get; }
+
+        public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
+            new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes);
+
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var depths = CalculateDepths(graph);
@@ -40,9 +68,20 @@ internal sealed class RenderLayout
             var widths = CalculateWidths(graph, settings);
             var nodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
             var projects = PositionProjects(graph, settings, nodes);
-            var links = PositionLinks(graph, settings, nodes);
+            var positionedLinks = PositionLinks(graph, settings, nodes);
+            var provisionalLinks = positionedLinks.Links;
+            var corridors = CorridorObserver.Observe(
+                nodes,
+                provisionalLinks,
+                settings.Layout.ParallelLaneSpacing,
+                settings.Layout.LinkPadding);
+            var lanes = CorridorLaneAllocator.Allocate(corridors);
+            var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
+            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes);
+            links = EdgeTraversalCompiler.Apply(links, traversals);
+            var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links);
+            return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection, traversals, traceability, corridors, lanes);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
@@ -251,8 +290,8 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths)
         {
-            if (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold &&
-                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)) &&
+                (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold || IsRootedExposureForest(graph)))
             {
                 return PositionExposureTrees(graph, settings, depths, widths);
             }
@@ -269,7 +308,7 @@ internal sealed class RenderLayout
                 .OrderBy(group => group.Key))
             {
                 var x = settings.Layout.ContainerPadding * 2;
-                foreach (var node in layer.OrderBy(node => node.Order))
+                foreach (var node in layer.OrderBy(node => node.Order).ThenBy(node => node.Id, StringComparer.Ordinal))
                 {
                     result[node.Id] = new NodeLayout(
                         node,
@@ -361,10 +400,15 @@ internal sealed class RenderLayout
             var roots = graph.Nodes
                 .Where(node => connectedIds.Contains(node.Id) && incoming[node.Id] == 0)
                 .OrderBy(node => node.Order)
+                .ThenBy(node => node.Id, StringComparer.Ordinal)
                 .ToArray();
             var placed = new HashSet<string>(StringComparer.Ordinal);
             var cursorX = settings.Layout.ContainerPadding * 2;
             var treeGap = settings.Layout.NodeWidth + settings.Layout.StandaloneGroupSpacing;
+            var exposureDepths = CalculateExposureTraversalDepths(graph, roots);
+            var depthGaps = graph.Nodes.Count < settings.Layout.ExposureTreeLayoutThreshold
+                ? CalculateExposureDepthGaps(graph, settings, exposureDepths)
+                : new Dictionary<int, int>();
 
             foreach (var root in roots)
             {
@@ -382,9 +426,12 @@ internal sealed class RenderLayout
                     nodeById,
                     result,
                     placed,
-                    new HashSet<string>(StringComparer.Ordinal));
+                    new HashSet<string>(StringComparer.Ordinal),
+                    depthGaps);
                 cursorX += subtree.Width + treeGap;
             }
+
+            CenterExposureParentsOverChildren(graph, result);
 
             var standaloneNodes = graph.Nodes
                 .Where(node => !placed.Contains(node.Id))
@@ -420,6 +467,144 @@ internal sealed class RenderLayout
             }
 
             return result;
+        }
+
+        private static bool IsRootedExposureForest(RenderGraph graph)
+        {
+            var incoming = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+            var outgoing = graph.Nodes.ToDictionary(
+                node => node.Id,
+                node => graph.Links.Where(link => link.SourceId == node.Id).Select(link => link.TargetId).ToArray(),
+                StringComparer.Ordinal);
+            foreach (var link in graph.Links)
+            {
+                if (!incoming.ContainsKey(link.TargetId) || ++incoming[link.TargetId] > 1)
+                {
+                    return false;
+                }
+            }
+
+            var roots = incoming.Where(item => item.Value == 0).Select(item => item.Key).ToArray();
+            if (roots.Length == 0)
+            {
+                return false;
+            }
+
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            var queue = new Queue<string>(roots);
+            while (queue.Count > 0)
+            {
+                var nodeId = queue.Dequeue();
+                if (!visited.Add(nodeId))
+                {
+                    return false;
+                }
+
+                foreach (var targetId in outgoing[nodeId])
+                {
+                    queue.Enqueue(targetId);
+                }
+            }
+
+            return visited.Count == graph.Nodes.Count;
+        }
+
+        private static IReadOnlyDictionary<string, int> CalculateExposureTraversalDepths(
+            RenderGraph graph,
+            IReadOnlyList<RenderNode> roots)
+        {
+            var outgoing = graph.Links
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            var queue = new Queue<string>();
+            foreach (var root in roots)
+            {
+                result[root.Id] = 0;
+                queue.Enqueue(root.Id);
+            }
+
+            while (queue.Count > 0)
+            {
+                var sourceId = queue.Dequeue();
+                if (!outgoing.TryGetValue(sourceId, out var links))
+                {
+                    continue;
+                }
+
+                foreach (var link in links.OrderBy(item => item.Id, StringComparer.Ordinal))
+                {
+                    var candidateDepth = result[sourceId] + 1;
+                    if (result.TryGetValue(link.TargetId, out var existingDepth) && existingDepth <= candidateDepth)
+                    {
+                        continue;
+                    }
+
+                    result[link.TargetId] = candidateDepth;
+                    queue.Enqueue(link.TargetId);
+                }
+            }
+
+            return result;
+        }
+
+        private static IReadOnlyDictionary<int, int> CalculateExposureDepthGaps(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, int> depths)
+        {
+            var maximumDepth = depths.Values.DefaultIfEmpty(0).Max();
+            var gaps = new Dictionary<int, int>();
+            for (var depth = 0; depth < maximumDepth; depth++)
+            {
+                var fanoutLaneCount = graph.Links
+                    .Where(link => depths.TryGetValue(link.SourceId, out var sourceDepth) && sourceDepth == depth)
+                    .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                    .Select(group => group.Count())
+                    .DefaultIfEmpty(0)
+                    .Max();
+                var terminalClearance = Math.Max(
+                    settings.Layout.LinkPadding,
+                    settings.Layout.ExposureTreeConnectorMinSegment);
+                var required = terminalClearance * 2 +
+                    Math.Max(0, fanoutLaneCount - 1) * settings.Layout.ParallelLaneSpacing +
+                    settings.Layout.LinkPadding * 2;
+                gaps[depth] = Math.Max(
+                    Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing),
+                    required);
+            }
+
+            return gaps;
+        }
+
+        private static void CenterExposureParentsOverChildren(
+            RenderGraph graph,
+            Dictionary<string, NodeLayout> nodes)
+        {
+            foreach (var source in graph.Nodes
+                .Where(node => nodes.ContainsKey(node.Id))
+                .OrderByDescending(node => nodes[node.Id].Depth)
+                .ThenBy(node => node.Id, StringComparer.Ordinal))
+            {
+                var children = graph.Links
+                    .Where(link => string.Equals(link.SourceId, source.Id, StringComparison.Ordinal) &&
+                        nodes.ContainsKey(link.TargetId) &&
+                        nodes[link.TargetId].Depth > nodes[source.Id].Depth)
+                    .Select(link => nodes[link.TargetId].Rect)
+                    .ToArray();
+                if (children.Length == 0)
+                {
+                    continue;
+                }
+
+                var left = children.Min(child => child.X);
+                var right = children.Max(child => child.Right);
+                var current = nodes[source.Id];
+                nodes[source.Id] = current with
+                {
+                    Rect = current.Rect with { X = left + (right - left - current.Rect.Width) / 2 }
+                };
+            }
         }
 
         private static SubtreeMeasure MeasureExposureSubtree(
@@ -468,7 +653,8 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, RenderNode> nodeById,
             Dictionary<string, NodeLayout> result,
             HashSet<string> placed,
-            HashSet<string> ancestors)
+            HashSet<string> ancestors,
+            IReadOnlyDictionary<int, int> depthGaps)
         {
             if (!ancestors.Add(nodeId))
             {
@@ -499,7 +685,10 @@ internal sealed class RenderLayout
                 .ToArray();
             var rowWidth = childMeasures.Sum(child => child.Measure.Width) + Math.Max(0, childMeasures.Length - 1) * gap;
             var childLeft = left + Math.Max(0, (subtreeWidth - rowWidth) / 2);
-            var childTop = top + settings.Layout.NodeHeight + Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing);
+            var childTop = top + settings.Layout.NodeHeight +
+                (depthGaps.TryGetValue(depth, out var requiredGap)
+                    ? requiredGap
+                    : Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing));
 
             foreach (var child in childMeasures)
             {
@@ -516,7 +705,8 @@ internal sealed class RenderLayout
                     nodeById,
                     result,
                     placed,
-                    new HashSet<string>(ancestors, StringComparer.Ordinal));
+                    new HashSet<string>(ancestors, StringComparer.Ordinal),
+                    depthGaps);
                 childLeft += child.Measure.Width + gap;
             }
         }
@@ -577,7 +767,7 @@ internal sealed class RenderLayout
                 .GroupBy(link => link.SourceId, StringComparer.Ordinal))
             {
                 var source = nodes[group.Key];
-                var links = group.OrderBy(link => link.Order).ToArray();
+                var links = group.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal).ToArray();
                 var totalWidth = links
                     .Select(link => nodes[link.TargetId].Rect.Width)
                     .Sum() + Math.Max(0, links.Length - 1) * settings.Layout.HorizontalSpacing;
@@ -612,7 +802,8 @@ internal sealed class RenderLayout
 
             foreach (var node in connectedNodes.Values
                 .Where(node => node.Depth > 0 && !IsBaselineNode(node.Node, settings.Layout.BaselineAlignmentPattern))
-                .OrderBy(node => node.Node.Order))
+                .OrderBy(node => node.Node.Order)
+                .ThenBy(node => node.Node.Id, StringComparer.Ordinal))
             {
                 var incidentLinkCount = graph.Links.Count(link =>
                     string.Equals(link.SourceId, node.Node.Id, StringComparison.Ordinal) ||
@@ -706,6 +897,7 @@ internal sealed class RenderLayout
                     };
                 })
                 .OrderBy(item => item.Link.Order)
+                .ThenBy(item => item.Link.Id, StringComparer.Ordinal)
                 .ToArray();
 
             foreach (var claim in corridorClaims)
@@ -826,35 +1018,41 @@ internal sealed class RenderLayout
             return projects;
         }
 
-        private static Dictionary<string, LinkLayout> PositionLinks(
+        private static PositionedLinkLayouts PositionLinks(
             RenderGraph graph,
             DiagramSettings settings,
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
             if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
             {
-                return PositionExposureTreeLinks(graph, settings, nodes);
+                return OptimiseRegionalLinks(
+                    graph,
+                    settings,
+                    nodes,
+                    PositionExposureTreeLinks(graph, settings, nodes),
+                    true);
             }
 
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
             var sourceGroups = graph.Links.GroupBy(link => link.SourceId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var targetGroups = graph.Links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var usedCorners = new HashSet<string>(StringComparer.Ordinal);
-            var occupiedSegments = new List<Segment>();
             var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
+            var terminalLaneSpacing = Math.Max(
+                settings.Layout.EdgePortSpacing,
+                settings.Layout.ParallelLaneSpacing * 2);
 
-            foreach (var link in graph.Links.OrderBy(link => link.Order))
+            foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
             {
                 var source = nodes[link.SourceId].Rect;
                 var target = nodes[link.TargetId].Rect;
-                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, settings.Layout.EdgePortSpacing);
-                var targetOffset = PortOffset(targetGroups[link.TargetId], link, settings.Layout.EdgePortSpacing);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
                 var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
-                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners, occupiedSegments);
-                occupiedSegments.AddRange(Segments(route));
+                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners);
 
                 result[link.Id] = new LinkLayout(
                     link,
@@ -865,7 +1063,275 @@ internal sealed class RenderLayout
                     Ratio(targetPoint.X, target));
             }
 
-            return result;
+            if (result.Count > MaximumGlobalPathSelectionEdges)
+            {
+                return OptimiseRegionalLinks(graph, settings, nodes, result, false);
+            }
+
+            var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
+            foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
+            {
+                var accepted = result[link.Id];
+                var source = nodes[link.SourceId].Rect;
+                var target = nodes[link.TargetId].Rect;
+                var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
+                var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
+                var laneOffset = routeLaneIndex * settings.Layout.ParallelLaneSpacing;
+                var sourceExit = accepted.Points.Count > 0
+                    ? accepted.Points[0]
+                    : new Point(accepted.SourcePoint.X, accepted.SourcePoint.Y + settings.Layout.LinkPadding);
+                var targetEntry = accepted.Points.Count > 0
+                    ? accepted.Points[accepted.Points.Count - 1]
+                    : new Point(accepted.TargetPoint.X, accepted.TargetPoint.Y - settings.Layout.LinkPadding);
+                var alternatives = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                    .Concat(BuildRouteCandidates(
+                        sourceExit,
+                        targetEntry,
+                        obstacles,
+                        settings,
+                        laneOffset + settings.Layout.ParallelLaneSpacing))
+                    .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
+                    .Select(Simplify)
+                    .Where(route => !CrossesNode(route, obstacles))
+                    .Select(route => PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, route, false))
+                    .Append(PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, accepted.Points.ToList(), true))
+                    .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
+                    .Select(group => group.First());
+                candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
+                    alternatives,
+                    8,
+                    settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+            }
+
+            var selection = GlobalCorridorPathSelector.Select(
+                candidatesByEdge,
+                new Dictionary<string, int>(StringComparer.Ordinal),
+                settings.Layout.ParallelLaneSpacing,
+                4);
+            var selectedLayouts = result.Values.ToDictionary(
+                layout => layout.Link.Id,
+                layout =>
+                {
+                    var points = selection.Selected[layout.Link.Id].Points;
+                    return new LinkLayout(
+                        layout.Link,
+                        points[0],
+                        points[points.Count - 1],
+                        points.Skip(1).Take(points.Count - 2),
+                        layout.ExitX,
+                        layout.EntryX,
+                        layout.ExitY,
+                        layout.EntryY);
+                },
+                StringComparer.Ordinal);
+            return new PositionedLinkLayouts(selectedLayouts, selection, null);
+        }
+
+        private static PositionedLinkLayouts OptimiseRegionalLinks(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, LinkLayout> acceptedLayouts,
+            bool exposureTree)
+        {
+            var acceptedCandidates = acceptedLayouts.Values.ToDictionary(
+                layout => layout.Link.Id,
+                layout =>
+                {
+                    var scope = ExposureScope(layout.Link.Id, exposureTree);
+                    var fanouts = FanoutMemberships(graph, nodes, acceptedLayouts, layout.Link);
+                    return PathCandidate(
+                        layout.Link.Id,
+                        layout.SourcePoint,
+                        layout.TargetPoint,
+                        layout.Points.ToList(),
+                        true,
+                        scope.RootId,
+                        scope.BranchId,
+                        fanouts);
+                },
+                StringComparer.Ordinal);
+            var interactions = RegionalCorridorPathOptimizer.DiscoverInteractions(
+                acceptedCandidates,
+                settings.Layout.ParallelLaneSpacing);
+            var relevantEdges = new HashSet<string>(
+                interactions.SelectMany(interaction => new[] { interaction.FirstEdgeId, interaction.SecondEdgeId }),
+                StringComparer.Ordinal);
+            var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
+            var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
+            foreach (var link in graph.Links.OrderBy(item => item.Order).ThenBy(item => item.Id, StringComparer.Ordinal))
+            {
+                var accepted = acceptedLayouts[link.Id];
+                var acceptedCandidate = acceptedCandidates[link.Id];
+                if (!relevantEdges.Contains(link.Id) || accepted.Points.Count == 0)
+                {
+                    candidatesByEdge[link.Id] = new[] { acceptedCandidate };
+                    continue;
+                }
+
+                var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
+                var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
+                var laneOffset = routeLaneIndex * settings.Layout.ParallelLaneSpacing;
+                var sourceExit = accepted.Points[0];
+                var targetEntry = accepted.Points[accepted.Points.Count - 1];
+                var alternatives = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                    .Concat(BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings,
+                        laneOffset + settings.Layout.ParallelLaneSpacing))
+                    .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
+                    .Select(Simplify)
+                    .Where(route => !CrossesNode(route, obstacles))
+                    .Select(route => PathCandidate(
+                        link.Id,
+                        accepted.SourcePoint,
+                        accepted.TargetPoint,
+                        route,
+                        false,
+                        acceptedCandidate.ExposureRootId,
+                        acceptedCandidate.ExposureBranchId,
+                        acceptedCandidate.FanoutMemberships))
+                    .Where(candidate => PreservesTerminalFanoutGeometry(acceptedCandidate, candidate))
+                    .Append(acceptedCandidate)
+                    .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
+                    .Select(group => group.First());
+                candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
+                    alternatives,
+                    8,
+                    settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+            }
+
+            var regional = RegionalCorridorPathOptimizer.Optimise(
+                candidatesByEdge,
+                new Dictionary<string, int>(StringComparer.Ordinal),
+                settings.Layout.ParallelLaneSpacing,
+                new RegionalOptimisationLimits());
+            var selectedLayouts = acceptedLayouts.Values.ToDictionary(
+                layout => layout.Link.Id,
+                layout =>
+                {
+                    var points = regional.Selected[layout.Link.Id].Points;
+                    return new LinkLayout(
+                        layout.Link,
+                        points[0],
+                        points[points.Count - 1],
+                        points.Skip(1).Take(points.Count - 2),
+                        layout.ExitX,
+                        layout.EntryX,
+                        layout.ExitY,
+                        layout.EntryY);
+                },
+                StringComparer.Ordinal);
+            return new PositionedLinkLayouts(selectedLayouts, null, regional);
+        }
+
+        private static CorridorPathCandidate PathCandidate(
+            string edgeId,
+            Point source,
+            Point target,
+            IReadOnlyList<Point> route,
+            bool isAcceptedPath,
+            string? exposureRootId = null,
+            string? exposureBranchId = null,
+            IReadOnlyList<TerminalFanoutMembership>? fanoutMemberships = null)
+        {
+            var complete = new[] { source }.Concat(route).Concat(new[] { target }).ToArray();
+            var length = Segments(complete).Sum(segment => segment.Length);
+            var localLeft = Math.Min(source.X, target.X);
+            var localRight = Math.Max(source.X, target.X);
+            var localTop = Math.Min(source.Y, target.Y);
+            var localBottom = Math.Max(source.Y, target.Y);
+            var escape = Math.Max(0, localLeft - complete.Min(point => point.X)) +
+                Math.Max(0, complete.Max(point => point.X) - localRight) +
+                Math.Max(0, localTop - complete.Min(point => point.Y)) +
+                Math.Max(0, complete.Max(point => point.Y) - localBottom);
+            var signature = RoutePathSignature(complete, source, target);
+            return new CorridorPathCandidate(
+                edgeId,
+                new[] { signature },
+                Array.Empty<string>(),
+                new CorridorPathSignature(signature),
+                new CorridorPathLocalCost(length, Math.Max(0, complete.Length - 2), escape),
+                complete,
+                IsAcceptedPath: isAcceptedPath,
+                ExposureRootId: exposureRootId,
+                ExposureBranchId: exposureBranchId,
+                FanoutMemberships: fanoutMemberships);
+        }
+
+        private static IReadOnlyList<TerminalFanoutMembership> FanoutMemberships(
+            RenderGraph graph,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, LinkLayout> layouts,
+            RenderLink link)
+        {
+            var memberships = new List<TerminalFanoutMembership>();
+            Add(graph.Links.Where(item => item.SourceId == link.SourceId).ToArray(), FanoutDirection.Source, link.SourceId, true);
+            Add(graph.Links.Where(item => item.TargetId == link.TargetId).ToArray(), FanoutDirection.Target, link.TargetId, false);
+            return memberships;
+
+            void Add(IReadOnlyList<RenderLink> group, FanoutDirection direction, string sharedNodeId, bool source)
+            {
+                if (group.Count < 2)
+                {
+                    return;
+                }
+
+                var orderedTerminals = group.OrderBy(item => source ? layouts[item.Id].SourcePoint.X : layouts[item.Id].TargetPoint.X)
+                    .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+                var orderedRemote = group.OrderBy(item => source ? nodes[item.TargetId].Rect.CenterX : nodes[item.SourceId].Rect.CenterX)
+                    .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+                var terminalOrder = Array.FindIndex(orderedTerminals, item => item.Id == link.Id);
+                var remoteOrder = Array.FindIndex(orderedRemote, item => item.Id == link.Id);
+                var sharedX = nodes[sharedNodeId].Rect.CenterX;
+                var remoteX = source ? nodes[link.TargetId].Rect.CenterX : nodes[link.SourceId].Rect.CenterX;
+                memberships.Add(new TerminalFanoutMembership(
+                    $"{direction.ToString().ToLowerInvariant()}:{sharedNodeId}",
+                    direction,
+                    sharedNodeId,
+                    terminalOrder,
+                    terminalOrder,
+                    remoteOrder,
+                    remoteX < sharedX ? FanoutSide.Left : FanoutSide.Right));
+            }
+        }
+
+        private static bool PreservesTerminalFanoutGeometry(
+            CorridorPathCandidate accepted,
+            CorridorPathCandidate candidate)
+        {
+            if (accepted.FanoutMemberships is null || accepted.FanoutMemberships.Count == 0)
+            {
+                return true;
+            }
+
+            var prefixLength = Math.Min(3, accepted.Points.Count);
+            var suffixLength = Math.Min(3, accepted.Points.Count);
+            return candidate.Points.Take(prefixLength).SequenceEqual(accepted.Points.Take(prefixLength)) &&
+                candidate.Points.Skip(candidate.Points.Count - suffixLength)
+                    .SequenceEqual(accepted.Points.Skip(accepted.Points.Count - suffixLength));
+        }
+
+        private static (string? RootId, string? BranchId) ExposureScope(string edgeId, bool exposureTree)
+        {
+            if (!exposureTree || !edgeId.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal))
+            {
+                return (null, null);
+            }
+
+            var parts = edgeId.Split(new[] { "__" }, StringSplitOptions.None);
+            return (parts.Length > 0 ? parts[0] : edgeId, parts.Length > 1 ? parts[1] : edgeId);
+        }
+
+        private static string RoutePathSignature(IReadOnlyList<Point> points, Point source, Point target)
+        {
+            var orientations = string.Join(string.Empty, Segments(points).Select(segment =>
+                segment.IsHorizontal ? "H" : segment.IsVertical ? "V" : "D"));
+            var minX = Math.Min(source.X, target.X);
+            var maxX = Math.Max(source.X, target.X);
+            var minY = Math.Min(source.Y, target.Y);
+            var maxY = Math.Max(source.Y, target.Y);
+            var bands = string.Join(string.Empty, points.Skip(1).Take(Math.Max(0, points.Count - 2)).Select(point =>
+                $"{(point.X < minX ? 'L' : point.X > maxX ? 'R' : 'M')}{(point.Y < minY ? 'A' : point.Y > maxY ? 'B' : 'M')}"));
+            return $"{orientations}:{bands}";
         }
 
         private static Dictionary<string, LinkLayout> PositionExposureTreeLinks(
@@ -874,7 +1340,11 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
-            foreach (var link in graph.Links.OrderBy(link => link.Order))
+            var sourceGroups = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            var targetGroups = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
             {
                 if (!nodes.TryGetValue(link.SourceId, out var sourceLayout) ||
                     !nodes.TryGetValue(link.TargetId, out var targetLayout))
@@ -884,8 +1354,13 @@ internal sealed class RenderLayout
 
                 var source = sourceLayout.Rect;
                 var target = targetLayout.Rect;
-                var sourcePoint = new Point(source.CenterX, source.Bottom);
-                var targetPoint = new Point(target.CenterX, target.Y);
+                var terminalLaneSpacing = Math.Max(
+                    settings.Layout.EdgePortSpacing,
+                    settings.Layout.ParallelLaneSpacing * 2);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
+                var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
+                var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var points = BuildExposureTreeRoute(
                     sourcePoint,
                     targetPoint,
@@ -1059,8 +1534,7 @@ internal sealed class RenderLayout
             IReadOnlyList<Rect> obstacles,
             DiagramSettings settings,
             int laneIndex,
-            HashSet<string> usedCorners,
-            List<Segment> occupiedSegments)
+            HashSet<string> usedCorners)
         {
             var sourceExit = new Point(sourcePoint.X, sourcePoint.Y + settings.Layout.LinkPadding);
             var targetEntry = new Point(targetPoint.X, targetPoint.Y - settings.Layout.LinkPadding);
@@ -1068,7 +1542,6 @@ internal sealed class RenderLayout
             var points = SelectBestRoute(sourceExit, targetEntry, obstacles, settings, laneOffset);
 
             points = SeparateOverlappingCorners(points, usedCorners, settings.Layout.ParallelLaneSpacing);
-            points = SeparateParallelSegments(points, occupiedSegments, settings.Layout.ParallelLaneSpacing);
             if (CrossesNode(points, obstacles))
             {
                 points = SelectBestRoute(sourceExit, targetEntry, obstacles, settings, laneOffset + settings.Layout.ParallelLaneSpacing);
@@ -1238,46 +1711,6 @@ internal sealed class RenderLayout
             return result;
         }
 
-        private static List<Point> SeparateParallelSegments(List<Point> points, List<Segment> occupiedSegments, int spacing)
-        {
-            for (var index = 1; index < points.Count - 2; index++)
-            {
-                var segment = new Segment(points[index], points[index + 1]);
-                if (!occupiedSegments.Any(occupied => ParallelOverlap(segment, occupied, spacing)))
-                {
-                    continue;
-                }
-
-                if (segment.IsHorizontal)
-                {
-                    points[index] = points[index] with { Y = points[index].Y + spacing };
-                    points[index + 1] = points[index + 1] with { Y = points[index + 1].Y + spacing };
-                }
-                else if (segment.IsVertical)
-                {
-                    points[index] = points[index] with { X = points[index].X + spacing };
-                    points[index + 1] = points[index + 1] with { X = points[index + 1].X + spacing };
-                }
-            }
-
-            return points;
-        }
-
-        private static bool ParallelOverlap(Segment left, Segment right, int spacing)
-        {
-            if (left.IsHorizontal && right.IsHorizontal && Math.Abs(left.Start.Y - right.Start.Y) < spacing)
-            {
-                return RangesOverlap(left.Start.X, left.End.X, right.Start.X, right.End.X);
-            }
-
-            if (left.IsVertical && right.IsVertical && Math.Abs(left.Start.X - right.Start.X) < spacing)
-            {
-                return RangesOverlap(left.Start.Y, left.End.Y, right.Start.Y, right.End.Y);
-            }
-
-            return false;
-        }
-
         private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd)
         {
             var firstMin = Math.Min(firstStart, firstEnd);
@@ -1328,9 +1761,19 @@ internal sealed class RenderLayout
             return result;
         }
 
-        private static int PortOffset(IReadOnlyList<RenderLink> group, RenderLink link, int spacing)
+        private static int PortOffset(
+            IReadOnlyList<RenderLink> group,
+            RenderLink link,
+            int spacing,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            bool sourcePort)
         {
-            var ordered = group.OrderBy(item => item.Order).ToArray();
+            var ordered = group
+                .OrderBy(item => sourcePort
+                    ? nodes[item.TargetId].Rect.CenterX
+                    : nodes[item.SourceId].Rect.CenterX)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .ToArray();
             var index = Array.FindIndex(ordered, item => item.Id == link.Id);
             var center = (ordered.Length - 1) / 2.0;
             return (int)Math.Round((index - center) * spacing);
@@ -1347,4 +1790,9 @@ internal sealed class RenderLayout
                 depth * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing) +
                 (depthOffsets.TryGetValue(depth, out var offset) ? offset : 0);
         }
+
+        private sealed record PositionedLinkLayouts(
+            IReadOnlyDictionary<string, LinkLayout> Links,
+            CorridorPathSelectionResult? Selection,
+            RegionalPathSelectionResult? RegionalSelection);
     }

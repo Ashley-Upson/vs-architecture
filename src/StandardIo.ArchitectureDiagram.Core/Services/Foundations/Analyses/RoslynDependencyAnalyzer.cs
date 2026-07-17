@@ -24,7 +24,10 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         DiagramSettings settings,
         CancellationToken cancellationToken = default)
     {
-        var projects = selectedProjects?.Where(project => project is not null).ToList()
+        var projects = selectedProjects?.Where(project => project is not null)
+            .OrderBy(StableProjectKey, System.StringComparer.OrdinalIgnoreCase)
+            .ThenBy(project => project.Name, System.StringComparer.Ordinal)
+            .ToList()
             ?? new List<Project>();
         var resolver = new StyleResolver(settings);
         var typeBySymbol = new Dictionary<ISymbol, TypeNode>(SymbolEqualityComparer.Default);
@@ -41,7 +44,8 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             }
 
             var types = new List<TypeNode>();
-            foreach (var type in GetNamedTypes(compilation.Assembly.GlobalNamespace))
+            foreach (var type in GetNamedTypes(compilation.Assembly.GlobalNamespace)
+                .OrderBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), System.StringComparer.Ordinal))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -58,7 +62,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                     continue;
                 }
 
-                var projectId = StableId.From("project", project.Id.Id.ToString());
+                var projectId = StableId.From("project", StableProjectKey(project));
                 var node = new TypeNode(
                     StableId.From("type", fullName),
                     projectId,
@@ -78,7 +82,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 typeByFullName[fullName] = node;
             }
 
-            projectTypes.Add((project, StableId.From("project", project.Id.Id.ToString()), types));
+            projectTypes.Add((project, StableId.From("project", StableProjectKey(project)), types));
         }
 
         foreach (var project in projects)
@@ -120,7 +124,9 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 continue;
             }
 
-            foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree))
+            foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree)
+                .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
+                .ThenBy(document => document.Name, System.StringComparer.Ordinal))
             {
                 var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
                 if (root is null)
@@ -181,6 +187,9 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             new DiagramMetadata());
     }
 
+    private static string StableProjectKey(Project project) =>
+        project.FilePath ?? project.Name;
+
     private static IEnumerable<INamedTypeSymbol> GetNamedTypes(INamespaceOrTypeSymbol symbol)
     {
         foreach (var member in symbol.GetMembers())
@@ -206,7 +215,9 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         CancellationToken cancellationToken)
     {
         var registrations = new List<ServiceRegistration>();
-        foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree))
+        foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree)
+            .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
+            .ThenBy(document => document.Name, System.StringComparer.Ordinal))
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
             if (root is null)

@@ -29,3 +29,7 @@ Install it by double-clicking the `.vsix` file or using Visual Studio's VSIX ins
 - Internal solution projects render as containers around their classes/interfaces.
 - External dependencies collapse to package/assembly-level nodes.
 - The generated `.drawio` is intentionally editable so layout can be refined in diagrams.net or Draw.io-compatible tooling.
+
+## Routing architecture
+
+The Draw.io renderer owns connector geometry and uses deterministic corridor, lane, junction, path-selection, and coordinate-ownership stages. See [Routing architecture](docs/routing-architecture.md) for the accepted invariants, optimisation limits, manual-editing behaviour, and defect-driven maintenance workflow.

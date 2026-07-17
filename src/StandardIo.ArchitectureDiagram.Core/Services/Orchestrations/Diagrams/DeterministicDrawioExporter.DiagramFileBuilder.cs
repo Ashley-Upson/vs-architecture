@@ -19,9 +19,9 @@ internal sealed class DiagramFileBuilder
             _styleResolver = new StyleResolver(settings);
         }
 
-        public string Build(RenderLayout layout)
+        public string Build(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
-            var architectureRoot = new ArchitectureGenerator(this).Generate(layout);
+            var architectureRoot = new ArchitectureGenerator(this).Generate(layout, ownership);
             var dataModelRoot = new DataModelGenerator(this).Generate(layout.Graph.DataModels);
 
             var file = new XElement("mxfile",
@@ -32,7 +32,7 @@ internal sealed class DiagramFileBuilder
             return new XDocument(file).ToString(SaveOptions.DisableFormatting);
         }
 
-        private XElement ArchitectureRoot(RenderLayout layout)
+        private XElement ArchitectureRoot(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
             var root = new XElement("root",
                 new XElement("mxCell", new XAttribute("id", "0")),
@@ -65,15 +65,20 @@ internal sealed class DiagramFileBuilder
 
                     root.Add(Vertex(
                         nodeLayout.Node.Id,
-                        NodeLabel(nodeLayout.Node),
-                        BuildNodeStyle(_styleResolver.Resolve(ToTypeNode(nodeLayout.Node))),
+                        nodeLayout.Node.IsExternal
+                            ? $"{nodeLayout.Node.Tag}\n{nodeLayout.Node.Name}\n{nodeLayout.Node.FullName}"
+                            : NodeLabel(nodeLayout.Node),
+                        nodeLayout.Node.IsExternal
+                            ? BuildNodeStyle(_settings.ExternalDependencyStyle)
+                            : BuildNodeStyle(_styleResolver.Resolve(ToTypeNode(nodeLayout.Node))),
                         parent,
                         rect));
                 }
             }
 
             foreach (var nodeLayout in layout.Nodes.Values
-                .Where(node => node.Node.IsExternal)
+                .Where(node => node.Node.IsExternal &&
+                    (!_settings.ShowProjectContainers || node.Node.ProjectId is null || !layout.Projects.ContainsKey(node.Node.ProjectId)))
                 .OrderBy(node => node.Node.Order))
             {
                 root.Add(Vertex(
@@ -84,9 +89,52 @@ internal sealed class DiagramFileBuilder
                     nodeLayout.Rect));
             }
 
-            foreach (var linkLayout in layout.Links.Values.OrderBy(link => link.Link.Order))
+            foreach (var anchor in ownership.Anchors
+                .OrderBy(anchor => anchor.LogicalEdgeId, StringComparer.Ordinal)
+                .ThenBy(anchor => anchor.TransitionIndex))
             {
-                root.Add(Edge(linkLayout));
+                root.Add(Anchor(anchor));
+            }
+
+            foreach (var segment in ownership.Segments
+                .OrderBy(segment => segment.LogicalLink.Link.Order)
+                .ThenBy(segment => segment.SegmentIndex))
+            {
+                layout.Traversals.Traversals.TryGetValue(segment.LogicalEdgeId, out var traversal);
+                var pathDecision = layout.PathSelection?.Decisions.FirstOrDefault(decision =>
+                    string.Equals(decision.EdgeId, segment.LogicalEdgeId, StringComparison.Ordinal));
+                CorridorPathCandidate? pathCandidate = null;
+                if (layout.PathSelection is not null)
+                {
+                    layout.PathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
+                }
+                if (layout.RegionalPathSelection is not null)
+                {
+                    layout.RegionalPathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
+                    if (layout.RegionalPathSelection.Initial.TryGetValue(segment.LogicalEdgeId, out var initialPathCandidate))
+                    {
+                        var regionalDecision = layout.RegionalPathSelection.Decisions.FirstOrDefault(decision =>
+                            decision.MutableEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
+                        pathDecision = new CorridorPathDecision(
+                            segment.LogicalEdgeId,
+                            initialPathCandidate.Signature.Value,
+                            pathCandidate?.Signature.Value ?? initialPathCandidate.Signature.Value,
+                            regionalDecision?.Reason ?? "No local traceability interaction was discovered.");
+                    }
+                }
+                var rejectedPathEvaluations = layout.PathSelection?.Evaluations.Where(evaluation =>
+                    evaluation.EdgeId == segment.LogicalEdgeId && !evaluation.IsSelected).ToArray();
+                var regionDecision = layout.RegionalPathSelection?.Decisions.FirstOrDefault(decision =>
+                    decision.MutableEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal) ||
+                    decision.FixedContextEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
+                root.Add(Edge(
+                    segment,
+                    traversal,
+                    pathDecision,
+                    pathCandidate,
+                    rejectedPathEvaluations,
+                    layout.RegionalPathSelection is not null,
+                    regionDecision));
             }
 
             return root;
@@ -101,9 +149,9 @@ internal sealed class DiagramFileBuilder
                 _builder = builder;
             }
 
-            public XElement Generate(RenderLayout layout)
+            public XElement Generate(RenderLayout layout, CoordinateOwnershipCompilation ownership)
             {
-                return _builder.ArchitectureRoot(layout);
+                return _builder.ArchitectureRoot(layout, ownership);
             }
         }
 
@@ -190,11 +238,94 @@ private XElement GraphModel(XElement root)
                     new XAttribute("as", "geometry")));
         }
 
-        private XElement Edge(LinkLayout link)
+        private static XElement Anchor(BoundaryAnchor anchor)
+        {
+            return new XElement("mxCell",
+                new XAttribute("id", anchor.Id),
+                new XAttribute("logicalEdgeId", anchor.LogicalEdgeId),
+                new XAttribute("anchorRole", "ownership-boundary"),
+                new XAttribute("ownerProjectId", anchor.OwnerProjectId),
+                new XAttribute("transitionIndex", anchor.TransitionIndex),
+                new XAttribute("value", string.Empty),
+                new XAttribute("style", "opacity=0;fillOpacity=0;strokeOpacity=0;movable=0;resizable=0;deletable=0;"),
+                new XAttribute("vertex", "1"),
+                new XAttribute("parent", anchor.OwnerProjectId),
+                new XElement("mxGeometry",
+                    new XAttribute("x", anchor.RelativePoint.X),
+                    new XAttribute("y", anchor.RelativePoint.Y),
+                    new XAttribute("width", 0),
+                    new XAttribute("height", 0),
+                    new XAttribute("as", "geometry")));
+        }
+
+        private XElement Edge(
+            PhysicalEdgeSegment segment,
+            EdgeTraversal? traversal,
+            CorridorPathDecision? pathDecision,
+            CorridorPathCandidate? pathCandidate,
+            IReadOnlyList<CorridorPathEvaluation>? rejectedPathEvaluations,
+            bool usesRegionalOptimisation,
+            RegionOptimisationDecision? regionDecision)
         {
             // mxCell stores edge terminals in source/target, style as key=value pairs, and mxGeometry points as waypoints.
             // See https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxCell-js.html and
             // https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxGeometry-js.html.
+            return new XElement("mxCell",
+                new XAttribute("id", segment.Id),
+                new XAttribute("logicalEdgeId", segment.LogicalEdgeId),
+                new XAttribute("semanticSourceId", segment.SemanticSourceId),
+                new XAttribute("semanticTargetId", segment.SemanticTargetId),
+                new XAttribute("segmentIndex", segment.SegmentIndex),
+                new XAttribute("segmentRole", segment.Role.ToString().ToLowerInvariant()),
+                new XAttribute("routingMode", traversal?.UsesFallback == true ? "fallback" : "traversal"),
+                pathDecision is null ? null : new XAttribute("pathInitialSignature", pathDecision.InitialSignature),
+                pathDecision is null ? null : new XAttribute("pathFinalSignature", pathDecision.FinalSignature),
+                pathDecision is null ? null : new XAttribute("pathDecision", pathDecision.Reason),
+                pathCandidate is null ? null : new XAttribute("pathLocalCost",
+                    $"length={pathCandidate.LocalCost.PathLength};bends={pathCandidate.LocalCost.BendCount};escape={pathCandidate.LocalCost.CanvasEscape}"),
+                pathCandidate?.FanoutMemberships is null || pathCandidate.FanoutMemberships.Count == 0 ? null :
+                    new XAttribute("fanoutGroups", string.Join(" | ", pathCandidate.FanoutMemberships.Select(fanout =>
+                        $"{fanout.GroupId}:terminal={fanout.TerminalOrder},lane={fanout.LaneOrder},remote={fanout.RemoteNodeOrder},side={fanout.Side}"))),
+                pathCandidate?.FanoutMemberships is null ? null :
+                    new XAttribute("fanoutMonotonic", pathCandidate.FanoutMemberships.Count == 0 ? "not-applicable" : "preserved"),
+                rejectedPathEvaluations is null || rejectedPathEvaluations.Count == 0 ? null :
+                    new XAttribute("pathRejectedAlternatives", string.Join(" | ", rejectedPathEvaluations.Select(evaluation =>
+                        $"{evaluation.Signature}: {evaluation.Reason}"))),
+                usesRegionalOptimisation ? new XAttribute("optimisationMode", "regional") : null,
+                !usesRegionalOptimisation ? null : new XAttribute("optimisationRegionId", regionDecision?.RegionId ?? string.Empty),
+                !usesRegionalOptimisation ? null : new XAttribute("regionMutableEdgeCount", regionDecision?.MutableEdgeIds.Count ?? 0),
+                !usesRegionalOptimisation ? null : new XAttribute("regionContextEdgeCount", regionDecision?.FixedContextEdgeIds.Count ?? 0),
+                regionDecision is null ? null : new XAttribute("regionInitialScore", regionDecision.InitialScore),
+                regionDecision is null ? null : new XAttribute("regionFinalScore", regionDecision.FinalScore),
+                !usesRegionalOptimisation ? null : new XAttribute("regionDecision",
+                    regionDecision?.Reason ?? "No local traceability interaction was discovered."),
+                !usesRegionalOptimisation ? null : new XAttribute("regionFallbackReason",
+                    regionDecision?.FallbackReason.ToString() ?? RegionFallbackReason.NoTraceabilityIssue.ToString()),
+                traversal is null || traversal.Diagnostics.Count == 0
+                    ? null
+                    : new XAttribute("routingDiagnostics", string.Join(",", traversal.Diagnostics
+                        .Select(diagnostic => diagnostic.Code)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(code => code, StringComparer.Ordinal))),
+                segment.OwnerProjectId is null ? null : new XAttribute("ownerProjectId", segment.OwnerProjectId),
+                new XAttribute("labelOwner", segment.OwnsLabel ? "1" : "0"),
+                new XAttribute("style", BuildConnectorStyle(_settings.Connector, segment)),
+                new XAttribute("edge", "1"),
+                new XAttribute("parent", segment.ParentId),
+                new XAttribute("source", segment.SourceCellId),
+                new XAttribute("target", segment.TargetCellId),
+                new XElement("mxGeometry",
+                    new XAttribute("relative", "1"),
+                    new XAttribute("as", "geometry"),
+                    new XElement("Array",
+                        new XAttribute("as", "points"),
+                        segment.RelativeWaypoints.Select(point => new XElement("mxPoint",
+                            new XAttribute("x", point.X),
+                            new XAttribute("y", point.Y))))));
+        }
+
+        private XElement Edge(LinkLayout link)
+        {
             return new XElement("mxCell",
                 new XAttribute("id", link.Link.Id),
                 new XAttribute("style", BuildConnectorStyle(_settings.Connector, link)),
@@ -224,10 +355,22 @@ private XElement GraphModel(XElement root)
             return $"{shape}fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};{shadow}{style.ExtraStyle}";
         }
 
+        private static string BuildConnectorStyle(ConnectorStyle style, PhysicalEdgeSegment segment)
+        {
+            var rounded = style.Rounded ? "rounded=1;" : "rounded=0;";
+            var link = segment.LogicalLink;
+            var exitX = segment.SegmentIndex == 0 ? link.ExitX : 0.5;
+            var exitY = segment.SegmentIndex == 0 ? link.ExitY : 0.5;
+            var entryX = segment.HasTargetArrow ? link.EntryX : 0.5;
+            var entryY = segment.HasTargetArrow ? link.EntryY : 0.5;
+            var endArrow = segment.HasTargetArrow ? "endArrow=block;endFill=1;" : "endArrow=none;endFill=0;";
+            return $"edgeStyle=none;noEdgeStyle=1;orthogonal=0;curved=0;html=1;{rounded}startArrow=none;{endArrow}strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(exitX)};exitY={FormatRatio(exitY)};exitPerimeter=0;entryX={FormatRatio(entryX)};entryY={FormatRatio(entryY)};entryPerimeter=0;";
+        }
+
         private static string BuildConnectorStyle(ConnectorStyle style, LinkLayout link)
         {
             var rounded = style.Rounded ? "rounded=1;" : "rounded=0;";
-            return $"edgeStyle=orthogonalEdgeStyle;html=1;{rounded}orthogonalLoop=1;jettySize=auto;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(link.ExitX)};exitY={FormatRatio(link.ExitY)};entryX={FormatRatio(link.EntryX)};entryY={FormatRatio(link.EntryY)};";
+            return $"edgeStyle=none;noEdgeStyle=1;orthogonal=0;curved=0;html=1;{rounded}endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(link.ExitX)};exitY={FormatRatio(link.ExitY)};exitPerimeter=0;entryX={FormatRatio(link.EntryX)};entryY={FormatRatio(link.EntryY)};entryPerimeter=0;";
         }
 
         private static string FormatRatio(double value)
