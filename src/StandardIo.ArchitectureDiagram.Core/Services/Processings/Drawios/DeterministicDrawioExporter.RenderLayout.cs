@@ -380,6 +380,9 @@ internal sealed class RenderLayout
                 .ToDictionary(
                     group => group.Key,
                     group => group
+                        .Where(link => graph.PlacementParentByNode.Count == 0 ||
+                            graph.PlacementParentByNode.TryGetValue(link.TargetId, out var parentId) &&
+                            string.Equals(parentId, link.SourceId, StringComparison.Ordinal))
                         .OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order)
                         .ThenBy(link => link.Order)
                         .ToArray(),
@@ -582,7 +585,9 @@ internal sealed class RenderLayout
             Dictionary<string, NodeLayout> nodes)
         {
             var nodeOrder = graph.Nodes.ToDictionary(node => node.Id, node => node.Order, StringComparer.Ordinal);
-            var placementParentByTarget = graph.Links
+            var placementParentByTarget = graph.PlacementParentByNode.Count > 0
+                ? graph.PlacementParentByNode
+                : graph.Links
                 .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
                 .GroupBy(link => link.TargetId, StringComparer.Ordinal)
                 .ToDictionary(
@@ -1044,7 +1049,8 @@ internal sealed class RenderLayout
             DiagramSettings settings,
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
-            if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            if (graph.PlacementParentByNode.Count == 0 &&
+                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
             {
                 return OptimiseRegionalLinks(
                     graph,

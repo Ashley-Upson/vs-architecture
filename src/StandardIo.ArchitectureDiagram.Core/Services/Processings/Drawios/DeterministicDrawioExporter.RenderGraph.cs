@@ -17,12 +17,14 @@ internal sealed class RenderGraph
             IReadOnlyList<RenderProject> projects,
             IReadOnlyList<RenderNode> nodes,
             IReadOnlyList<RenderLink> links,
-            IReadOnlyList<RenderNode> dataModels)
+            IReadOnlyList<RenderNode> dataModels,
+            IReadOnlyDictionary<string, string>? placementParentByNode = null)
         {
             Projects = projects;
             Nodes = nodes;
             Links = links;
             DataModels = dataModels;
+            PlacementParentByNode = placementParentByNode ?? new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
         public IReadOnlyList<RenderProject> Projects { get; }
@@ -32,6 +34,8 @@ internal sealed class RenderGraph
         public IReadOnlyList<RenderLink> Links { get; }
 
         public IReadOnlyList<RenderNode> DataModels { get; }
+
+        public IReadOnlyDictionary<string, string> PlacementParentByNode { get; }
 
         public static RenderGraph From(DiagramModel diagram)
         {
@@ -207,15 +211,21 @@ internal sealed class RenderGraph
             var clonedNodes = new List<RenderNode>();
             var clonedLinks = new List<RenderLink>();
             var canonicalCloneByOriginalId = new Dictionary<string, string>(StringComparer.Ordinal);
+            var placementParentByNode = new Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var root in roots)
             {
-                Visit(root.Id, root.Id, SafeId(root.Id), new HashSet<string>(StringComparer.Ordinal));
+                Visit(root.Id, root.Id, SafeId(root.Id), null, new HashSet<string>(StringComparer.Ordinal));
             }
 
-            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, graph.DataModels);
+            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, graph.DataModels, placementParentByNode);
 
-            string Visit(string originalNodeId, string rootId, string path, HashSet<string> ancestors)
+            string Visit(
+                string originalNodeId,
+                string rootId,
+                string path,
+                string? placementParentId,
+                HashSet<string> ancestors)
             {
                 var original = nodeById[originalNodeId];
                 var mayDuplicate = duplicationPolicy.AllowsDuplication(original.Name, original.FullName);
@@ -231,6 +241,10 @@ internal sealed class RenderGraph
                 }
 
                 clonedNodes.Add(original with { Id = cloneId, Order = clonedNodes.Count });
+                if (placementParentId is not null)
+                {
+                    placementParentByNode[cloneId] = placementParentId;
+                }
                 if (!mayDuplicate)
                 {
                     canonicalCloneByOriginalId[originalNodeId] = cloneId;
@@ -249,6 +263,7 @@ internal sealed class RenderGraph
                         link.TargetId,
                         rootId,
                         childPath,
+                        cloneId,
                         new HashSet<string>(ancestors, StringComparer.Ordinal));
                     clonedLinks.Add(link with
                     {
