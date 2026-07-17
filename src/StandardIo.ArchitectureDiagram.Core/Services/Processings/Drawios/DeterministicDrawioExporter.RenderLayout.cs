@@ -13,16 +13,18 @@ internal sealed class RenderLayout
     private const int TextWidth = 8;
     private const string ExposureTreeIdPrefix = "tree_";
 
-    private RenderLayout(
+        private RenderLayout(
             RenderGraph graph,
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, ProjectLayout> projects,
-            IReadOnlyDictionary<string, LinkLayout> links)
+            IReadOnlyDictionary<string, LinkLayout> links,
+            TraceabilityValidationResult traceability)
         {
             Graph = graph;
             Nodes = nodes;
             Projects = projects;
             Links = links;
+            Traceability = traceability;
         }
 
         public RenderGraph Graph { get; }
@@ -33,6 +35,8 @@ internal sealed class RenderLayout
 
         public IReadOnlyDictionary<string, LinkLayout> Links { get; }
 
+        public TraceabilityValidationResult Traceability { get; }
+
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var depths = CalculateDepths(graph);
@@ -41,8 +45,9 @@ internal sealed class RenderLayout
             var nodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
             var projects = PositionProjects(graph, settings, nodes);
             var links = PositionLinks(graph, settings, nodes);
+            var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links);
+            return new RenderLayout(graph, nodes, projects, links, traceability);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
