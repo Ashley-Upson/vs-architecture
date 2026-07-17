@@ -4,24 +4,29 @@ This document describes the routing, bounded repair, validation, and advisory-ou
 
 ## Repair and advisory pipeline
 
-The post-selection pipeline is:
+The authoritative post-selection pipeline is:
 
 ```text
-selected logical routes
--> validate
--> attempt bounded local repair
--> expand affected physical layer capacity when required
--> rebuild corridor observations, lanes, and traversals
--> revalidate
--> serialize the best geometry
--> report unresolved advisories
+selected logical route revision
+-> terminal ordering and candidate selection
+-> corridor observation and capacity planning
+-> deterministic lane allocation
+-> traversal compilation
+-> logical normalization
+-> validation
+-> bounded regional repair, when required
+-> coordinate-ownership segmentation
+-> Draw.io XML
+-> unresolved advisory report
 ```
 
-Validation findings are repair inputs, not automatic generation failures. The repair coordinator processes node-interior intersections, shared non-zero-length segments, severe spacing deficits, ambiguous reused bends, and minor spacing in that order. Each proposed route is passed through corridor observation, lane allocation, traversal compilation, and whole-diagram validation. A lower-tier improvement cannot worsen a higher tier, and an equal-score change is not accepted.
+Each logical dependency has one `LogicalRouteState`: stable identity, authoritative points, revision, producer, compilation status, diagnostics, and immutable historical snapshots. A stage accepts geometry by producing a new revision or rejects it while retaining the current authoritative revision. Historical candidates and rejected traversal attempts are diagnostic evidence only; they cannot silently restore geometry derived before the current corridor and lane state.
 
-Default limits are 32 affected routes, four candidates per finding, two passes, and 128 whole-layout trials. Graphs over 128 and 256 routes receive progressively tighter limits. A graph over 256 routes is limited to 16 affected routes, two candidates, one pass, and 24 whole-layout trials. Budget exhaustion retains the best geometry and records an unresolved advisory.
+Validation findings are repair inputs, not automatic generation failures. The repair coordinator processes node-interior intersections, shared non-zero-length segments, severe spacing deficits, ambiguous reused bends, and minor spacing in that order. Candidate trials rebuild and validate a bounded interaction closure containing the changed route, shared-corridor routes, existing conflicts, and envelope-intersecting routes. One whole-graph compile remains the acceptance checkpoint for a promising regional change. A lower-tier improvement cannot worsen a higher tier, and an equal-score change is not accepted.
 
-Node collisions generate compact obstacle-side bypass candidates. Shared, closely spaced, and reused-bend geometry generates deterministic perpendicular offsets. When observed lane demand requires physical room, the affected depth and downstream layers move by a bounded deterministic amount; projects and routes are rebuilt against the moved node geometry. Capacity expansion is never metadata-only.
+Default repair limits are 32 affected routes, four candidates per finding, two passes, and 128 estimated regional work units. Graphs over 128 and 256 routes receive progressively tighter limits. A graph over 256 routes is limited to 16 affected routes, two candidates, one pass, and 24 estimated work units. Budget exhaustion retains the current authoritative geometry and records an unresolved advisory.
+
+Node collisions generate compact obstacle-side bypass candidates. Shared, closely spaced, and reused-bend geometry generates deterministic perpendicular offsets. Insufficient corridor capacity produces a structured capacity request containing route revisions, required and available lanes, bounds, required perpendicular extent, and the smallest deterministic expansion. A bounded downstream dependency closure may move; candidates, corridors, lanes, and traversals are then rebuilt. If capacity remains unavailable, the selected explicit geometry remains authoritative and the failure is diagnosed rather than replaced by manufactured coincident lanes.
 
 Clean perpendicular crossings are explicitly informational. They do not fail strict validation and are preferable to disproportionate exterior detours where route identity remains clear.
 
@@ -48,7 +53,7 @@ semantic dependencies
 → Draw.io XML
 ```
 
-Logical route geometry is immutable between compilation stages. Final validation runs before coordinate-ownership segmentation. Reconstructing the physical Draw.io segments in absolute coordinates must reproduce the selected logical route exactly.
+Logical route history is immutable, while authoritative geometry progresses through explicit `Selected`, `Allocated`, `Compiled`, `Normalized`, and `Validated` revisions. Corridor mappings record the route revision they observed, and compilation rejects stale mappings. Final validation consumes the normalized authoritative points before coordinate-ownership segmentation. Reconstructing physical Draw.io segments in absolute coordinates must reproduce those same normalized points exactly.
 
 ## Traceability priorities
 
@@ -70,7 +75,9 @@ Protected invariants include configured parallel spacing, bottom-edge source exi
 
 ## Corridors, lanes, and junctions
 
-Corridors describe observable horizontal or vertical routing space, theoretical lane capacity, usage, and junction connections. Lane allocation is deterministic and assigns distinct coordinates before geometry compilation.
+Corridors describe observable horizontal or vertical routing space, theoretical lane capacity, usage, and junction connections. Identity includes orientation, contiguous interval, obstacle-boundary context, routing region, and role. Ordinary corridors, source transitions, and target transitions are distinct even when temporarily collinear. Lane allocation is deterministic and assigns distinct coordinates before geometry compilation.
+
+Terminal transition observations carry terminal side, ordered route group, port, protected stub, first ordinary corridor, required transition depth and spread, and lane order. Duplicate-mode fan-out order is resolved before corridor observation; a downstream mapping cannot compile a different route revision.
 
 Supported junction transitions are bounded orthogonal turns and departures for which the traversal and lane allocators can preserve route identity with distinct bend geometry. Straight corridor traversal remains supported.
 
@@ -78,15 +85,17 @@ Arbitrary multi-direction junctions, required lane permutations, or opposing tra
 
 ## Path selection
 
-Small ordinary diagrams use bounded global coordinate descent. Candidate reduction preserves structurally distinct corridor-path signatures before retaining lane variants. The accepted route always remains a candidate.
+Ordinary diagrams use bounded global coordinate descent when the estimated work remains within budget. Candidate reduction preserves structurally distinct corridor-path signatures before retaining lane variants. The accepted route always remains a candidate.
 
 Current global limits are:
 
 ```text
-maximum ordinary-graph edges: 64
 maximum candidates per edge: 8
 maximum improvement passes: 4
+maximum estimated work: 2,000,000
 ```
+
+Estimated work is deterministic and is derived from alternative count, route-pair count, and pass count. There is no fixed 64-edge authority threshold. Work above the limit is routed through bounded regional optimisation.
 
 Large and exposure-tree diagrams use deterministic interaction regions rather than one monolithic optimiser. Regions contain mutable routes and fixed context routes. Context affects scoring but cannot move during that regional decision.
 
@@ -144,7 +153,15 @@ Explicit exporter-owned waypoints also mean arbitrary manual node movement can s
 
 ## Diagnostics
 
-Generated edge cells may include routing mode, path signatures, local cost, rejected alternatives, regional decision and fallback information, fan-out membership, and ownership metadata. Diagnostics explain why accepted geometry was retained, including no issue, no viable alternative, size limit, exposure-locality violation, unsupported junction, or whole-diagram regression.
+Generated edge cells may include routing mode, path signatures, local cost, rejected alternatives, regional decision and fallback information, fan-out membership, and ownership metadata. Diagnostic JSON also records stage timings, route revisions, stale-state rejections, invalidated routes, revalidated pairs, corridor rebuilds, capacity failures and expansions, repair run/skip reason, and diagnostic-result reuse.
+
+`GenerateResult` owns one render preparation and contains the normal document plus all information required for diagnostic JSON and focused diagrams. Requesting diagnostics from that result does not repeat semantic analysis or rendering.
+
+Duplicated exposure mode may skip cosmetic repair only after normalized validation proves that there are no node intersections and no serious shared-route ambiguity. The report records whether repair ran or why it was skipped.
+
+## Visual Studio execution
+
+Visual Studio workspace acquisition, hierarchy/DTE access, settings, and dialogs remain on the UI thread. Semantic analysis and deterministic rendering run behind an explicit background boundary. A modeless progress dialog reports analysis, layout/routing, and output-writing stages and supplies cancellation to analysis and writing, with cancellation checks around synchronous rendering. Route mutation remains single-threaded and deterministic.
 
 ## Defect-driven routing workflow
 

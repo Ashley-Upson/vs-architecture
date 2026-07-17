@@ -2,6 +2,8 @@
 
 Audit baseline: branch `feature/decuplicate-node-option`, version 0.3.9, 17 July 2026. This document describes the implementation as it exists. It does not prescribe a replacement architecture and the audit made no routing or layout changes.
 
+> Historical status: this audit intentionally remains a record of the `0.3.9` baseline. The subsequent pipeline-consolidation tranche introduced authoritative route revisions, pre-validation normalization, revision-aware corridor mappings, structured capacity requests, regional repair closures, diagnostic-result reuse, pipeline telemetry, duplicated-mode conditional repair bypass, and Visual Studio background execution. The current design is documented in [Routing architecture](routing-architecture.md); statements below about missing instrumentation, post-observation fan-out mutation, whole-graph trial validation, or the absence of an explicit route authority model describe the audited baseline only.
+
 ## Executive findings
 
 1. `LinkLayout` is repeatedly replaced. There is no single route object whose identity survives candidate selection, lane compilation, traversal fallback, adaptive expansion and repair. The final `RenderLayout.Links` is authoritative for serialization, while `PathSelection`, `Corridors`, `Lanes` and `Traversals` can describe earlier or partially reconstructed geometry.
