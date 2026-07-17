@@ -63,6 +63,24 @@ public sealed class EdgeTraversalCompilerTests
             string.Join(";", allocatedBends.Select(point => $"{point.X},{point.Y}")));
         Assert.All(result.Geometry.Values, geometry => Assert.False(geometry.UsedFallback));
         Assert.All(result.Geometry.Values, geometry => AssertOrthogonal(geometry.Points));
+        var legacyMetrics = JunctionGeometryMetrics.Measure(
+            links.ToDictionary(
+                link => link.Link.Id,
+                link => (IReadOnlyList<Point>)CompletePoints(link).Skip(1).Take(3).ToArray(),
+                StringComparer.Ordinal),
+            10);
+        var allocatedMetrics = JunctionGeometryMetrics.Measure(
+            result.Geometry.ToDictionary(
+                item => item.Key,
+                item => (IReadOnlyList<Point>)item.Value.Points.Skip(1).Take(3).ToArray(),
+                StringComparer.Ordinal),
+            10);
+        Assert.True(allocatedMetrics.SharedBends < legacyMetrics.SharedBends);
+        Assert.True(allocatedMetrics.Crossings <= legacyMetrics.Crossings,
+            $"legacy crossings={legacyMetrics.Crossings}; allocated crossings={allocatedMetrics.Crossings}");
+        Assert.Equal(0, allocatedMetrics.SharedBends);
+        Assert.Equal(0, allocatedMetrics.OverlapLength);
+        Assert.Equal(0, allocatedMetrics.SpacingDeficits);
     }
 
     [Fact]
@@ -226,8 +244,8 @@ public sealed class EdgeTraversalCompilerTests
             new Point(20 + offset, 20),
             new Point(20 + offset, 60 + offset),
             new Point(100, 60),
-            new Point(100 + offset, 140),
-            new Point(100 + offset, 180)
+            new Point(120 - offset, 140),
+            new Point(120 - offset, 180)
         };
         return new LinkLayout(
             new RenderLink(id, $"source_{id}", $"target_{id}", "internal", order),
