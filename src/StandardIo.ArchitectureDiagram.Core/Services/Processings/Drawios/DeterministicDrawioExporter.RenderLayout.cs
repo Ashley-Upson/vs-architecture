@@ -18,13 +18,15 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, ProjectLayout> projects,
             IReadOnlyDictionary<string, LinkLayout> links,
-            TraceabilityValidationResult traceability)
+            TraceabilityValidationResult traceability,
+            CorridorObservation corridors)
         {
             Graph = graph;
             Nodes = nodes;
             Projects = projects;
             Links = links;
             Traceability = traceability;
+            Corridors = corridors;
         }
 
         public RenderGraph Graph { get; }
@@ -37,6 +39,8 @@ internal sealed class RenderLayout
 
         public TraceabilityValidationResult Traceability { get; }
 
+        public CorridorObservation Corridors { get; }
+
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var depths = CalculateDepths(graph);
@@ -46,8 +50,13 @@ internal sealed class RenderLayout
             var projects = PositionProjects(graph, settings, nodes);
             var links = PositionLinks(graph, settings, nodes);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
+            var corridors = CorridorObserver.Observe(
+                nodes,
+                links,
+                settings.Layout.ParallelLaneSpacing,
+                settings.Layout.LinkPadding);
 
-            return new RenderLayout(graph, nodes, projects, links, traceability);
+            return new RenderLayout(graph, nodes, projects, links, traceability, corridors);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
