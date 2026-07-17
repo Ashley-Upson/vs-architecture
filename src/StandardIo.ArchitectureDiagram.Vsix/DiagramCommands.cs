@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
@@ -19,6 +20,7 @@ using StandardIo.ArchitectureDiagram.Core;
 using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
 using StandardIo.ArchitectureDiagram.Core.Exposures.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using RoslynProject = Microsoft.CodeAnalysis.Project;
 using Task = System.Threading.Tasks.Task;
@@ -75,13 +77,32 @@ internal sealed class DiagramCommands
                     return;
                 }
 
-                var output = await provider
-                    .GetRequiredService<IDiagramGenerationExposure>()
-                    .GenerateAsync(target.Projects, settings);
-                await provider
-                    .GetRequiredService<IDiagramFileBroker>()
-                    .WriteTextAsync(outputPath!, output);
+                using var cancellation = new CancellationTokenSource();
+                using var progress = new DiagramGenerationProgressDialog(cancellation);
+                progress.Show();
+                progress.SetStage("Analyzing the selected project graph...");
+
+                var analysis = provider.GetRequiredService<IDiagramAnalysisProcessingService>();
+                var diagram = await Task.Run(
+                    () => analysis.AnalyzeAsync(target.Projects, settings, cancellation.Token),
+                    cancellation.Token);
+
+                cancellation.Token.ThrowIfCancellationRequested();
+                progress.SetStage("Constructing layout and routing geometry...");
+                var output = await Task.Run(
+                    () => renderer.Render(diagram, settings),
+                    cancellation.Token);
+
+                cancellation.Token.ThrowIfCancellationRequested();
+                progress.SetStage("Writing the generated diagram...");
+                await provider.GetRequiredService<IDiagramFileBroker>()
+                    .WriteTextAsync(outputPath!, output, cancellation.Token);
+                progress.Complete();
                 ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
+            }
+            catch (OperationCanceledException)
+            {
+                ShowMessage("Diagram generation was cancelled.", OLEMSGICON.OLEMSGICON_INFO);
             }
             catch (Exception ex)
             {
