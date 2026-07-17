@@ -81,6 +81,24 @@ public sealed class EdgeTraversalCompilerTests
         Assert.Equal(0, allocatedMetrics.SharedBends);
         Assert.Equal(0, allocatedMetrics.OverlapLength);
         Assert.Equal(0, allocatedMetrics.SpacingDeficits);
+        var validatedLinks = links.ToDictionary(
+            link => link.Link.Id,
+            link =>
+            {
+                var points = result.Geometry[link.Link.Id].Points;
+                return new LinkLayout(
+                    link.Link,
+                    points[0],
+                    points[points.Count - 1],
+                    points.Skip(1).Take(points.Count - 2),
+                    link.ExitX,
+                    link.EntryX);
+            },
+            StringComparer.Ordinal);
+        Assert.True(TraceabilityValidator.Validate(
+            new Dictionary<string, NodeLayout>(StringComparer.Ordinal),
+            validatedLinks,
+            10).IsValid);
     }
 
     [Fact]
