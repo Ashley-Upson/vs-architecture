@@ -37,21 +37,18 @@ internal static class EdgeTraversalCompiler
             var traversal = junctionAllocation.Traversals[link.Link.Id];
             var compiled = Compile(traversal);
             var accepted = CompletePoints(link);
-            var logical = logicalLinks is not null && logicalLinks.TryGetValue(link.Link.Id, out var logicalLink)
-                ? CompletePoints(logicalLink)
-                : accepted;
-            if (!IsOrthogonal(compiled.Points) && IsOrthogonal(logical))
+            if (!IsOrthogonal(compiled.Points) && IsOrthogonal(accepted))
             {
                 var diagnostic = new TraversalDiagnostic(
                     link.Link.Id,
                     "TRAVERSAL_NON_ORTHOGONAL",
-                    "Compiled traversal was not orthogonal; the selected logical route was retained.");
+                    "Compiled traversal was not orthogonal; the current authoritative route was retained.");
                 traversal = traversal with
                 {
-                    AcceptedFallbackPoints = logical,
+                    AcceptedFallbackPoints = accepted,
                     Diagnostics = traversal.Diagnostics.Concat(new[] { diagnostic }).ToArray()
                 };
-                compiled = new CompiledEdgeGeometry(link.Link.Id, logical, true);
+                compiled = new CompiledEdgeGeometry(link.Link.Id, accepted, true);
             }
             else if (!Normalize(compiled.Points).SequenceEqual(Normalize(accepted)) &&
                 !junctionAllocation.AllocatedEdgeIds.Contains(link.Link.Id))
@@ -59,7 +56,7 @@ internal static class EdgeTraversalCompiler
                 var diagnostic = new TraversalDiagnostic(
                     link.Link.Id,
                     "TRAVERSAL_ROUND_TRIP_MISMATCH",
-                    "Compiled traversal did not reconstruct the accepted logical route; the accepted route was retained.");
+                    "Compiled traversal did not reconstruct the current authoritative route; that route was retained.");
                 traversal = traversal with
                 {
                     AcceptedFallbackPoints = accepted,
@@ -116,16 +113,19 @@ internal static class EdgeTraversalCompiler
             link => link.Link.Id,
             link =>
             {
-                var points = compilation.Geometry[link.Link.Id].Points;
-                return new LinkLayout(
-                    link.Link,
-                    points[0],
-                    points[points.Count - 1],
-                    points.Skip(1).Take(points.Count - 2),
-                    link.ExitX,
-                    link.EntryX,
-                    link.ExitY,
-                    link.EntryY);
+                var compiled = compilation.Geometry[link.Link.Id];
+                var diagnostics = compilation.Traversals[link.Link.Id].Diagnostics
+                    .Select(item => $"{item.Code}: {item.Message}")
+                    .ToArray();
+                return compiled.UsedFallback
+                    ? link.RejectGeometry(nameof(EdgeTraversalCompiler), diagnostics)
+                    : link.AcceptGeometry(
+                        compiled.Points,
+                        link.RouteState.Stage > LogicalRouteStage.Compiled
+                            ? link.RouteState.Stage
+                            : LogicalRouteStage.Compiled,
+                        nameof(EdgeTraversalCompiler),
+                        diagnostics: diagnostics);
             },
             StringComparer.Ordinal);
 

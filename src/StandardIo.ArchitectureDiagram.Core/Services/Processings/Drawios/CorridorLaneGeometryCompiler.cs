@@ -79,19 +79,28 @@ internal static class CorridorLaneGeometryCompiler
                     laneCoordinates[index + 1]))
                 .ToArray();
 
-            result[link.Link.Id] = new LinkLayout(
-                link.Link,
-                link.SourcePoint,
-                link.TargetPoint,
-                points,
-                link.ExitX,
-                link.EntryX,
-                link.ExitY,
-                link.EntryY);
+            var complete = new[] { link.SourcePoint }
+                .Concat(points)
+                .Concat(new[] { link.TargetPoint })
+                .ToArray();
+            result[link.Link.Id] = IsOrthogonal(complete)
+                ? link.AcceptGeometry(
+                    complete,
+                    link.RouteState.Stage > LogicalRouteStage.Allocated
+                        ? link.RouteState.Stage
+                        : LogicalRouteStage.Allocated,
+                    nameof(CorridorLaneGeometryCompiler))
+                : link.RejectGeometry(
+                    nameof(CorridorLaneGeometryCompiler),
+                    new[] { "Allocated lane geometry was non-orthogonal; the current authoritative route was retained." });
         }
 
         return result;
     }
+
+    private static bool IsOrthogonal(IReadOnlyList<Point> points) =>
+        points.Zip(points.Skip(1), (start, end) => new Segment(start, end))
+            .All(segment => segment.IsHorizontal || segment.IsVertical);
 
     private static bool SameOrientation(Segment first, Segment second) =>
         first.IsHorizontal && second.IsHorizontal || first.IsVertical && second.IsVertical;

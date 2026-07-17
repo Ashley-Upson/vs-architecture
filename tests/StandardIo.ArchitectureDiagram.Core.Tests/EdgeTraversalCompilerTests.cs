@@ -275,6 +275,12 @@ public sealed class EdgeTraversalCompilerTests
         Assert.Equal("UNSUPPORTED_JUNCTION_TOPOLOGY", diagnostic.Code);
         Assert.True(result.Geometry["edge"].UsedFallback);
         Assert.Equal(selected, result.Geometry["edge"].Points);
+
+        var final = EdgeTraversalCompiler.Apply(Links(link), result)["edge"];
+        Assert.Equal(link.RouteState.Revision, final.RouteState.Revision);
+        Assert.Equal(link.RouteState.AuthoritativePoints, final.RouteState.AuthoritativePoints);
+        Assert.Equal(LogicalRouteCompilationStatus.Rejected, final.RouteState.CompilationStatus);
+        Assert.Contains(final.RouteState.Diagnostics, message => message.Contains("UNSUPPORTED_JUNCTION_TOPOLOGY"));
     }
 
     [Fact]
