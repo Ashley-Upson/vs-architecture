@@ -1,6 +1,33 @@
 # Routing architecture
 
-This document describes the accepted routing architecture as of version 0.3.7. Broad planned routing development is complete. Future routing changes should respond to a concrete defect in a generated diagram.
+This document describes the routing, bounded repair, validation, and advisory-output architecture. Future routing changes should respond to a concrete defect in a generated diagram.
+
+## Repair and advisory pipeline
+
+The post-selection pipeline is:
+
+```text
+selected logical routes
+-> validate
+-> attempt bounded local repair
+-> expand affected physical layer capacity when required
+-> rebuild corridor observations, lanes, and traversals
+-> revalidate
+-> serialize the best geometry
+-> report unresolved advisories
+```
+
+Validation findings are repair inputs, not automatic generation failures. The repair coordinator processes node-interior intersections, shared non-zero-length segments, severe spacing deficits, ambiguous reused bends, and minor spacing in that order. Each proposed route is passed through corridor observation, lane allocation, traversal compilation, and whole-diagram validation. A lower-tier improvement cannot worsen a higher tier, and an equal-score change is not accepted.
+
+Default limits are 32 affected routes, four candidates per finding, two passes, and 128 whole-layout trials. Graphs over 128 and 256 routes receive progressively tighter limits. A graph over 256 routes is limited to 16 affected routes, two candidates, one pass, and 24 whole-layout trials. Budget exhaustion retains the best geometry and records an unresolved advisory.
+
+Node collisions generate compact obstacle-side bypass candidates. Shared, closely spaced, and reused-bend geometry generates deterministic perpendicular offsets. When observed lane demand requires physical room, the affected depth and downstream layers move by a bounded deterministic amount; projects and routes are rebuilt against the moved node geometry. Capacity expansion is never metadata-only.
+
+Clean perpendicular crossings are explicitly informational. They do not fail strict validation and are preferable to disproportionate exterior detours where route identity remains clear.
+
+The typed `DrawioGenerationResult` exposes the document, selected route points, pre-repair findings, repair attempts, post-repair findings, serialization status, and strict-validation outcome. Unresolved findings retain route identities, interacting routes or nodes, exact coordinates or intervals, and spacing measurements.
+
+Normal rendering emits a parseable diagram and reports unresolved geometry as advisories. Analysis, semantic-graph construction, invalid settings, serialization, and output-write failures remain technical failures. The CLI exits zero after successful default generation. `--strict-validation` still writes the diagram and complete diagnostic JSON, but returns non-zero when enforced findings remain. `--emit-on-validation-failure` is retained only as a deprecated strict-mode alias.
 
 ## Pipeline
 
