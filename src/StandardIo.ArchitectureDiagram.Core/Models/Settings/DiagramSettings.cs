@@ -17,6 +17,7 @@ public sealed class DiagramSettings
     public NodeStyle ProjectContainerStyle { get; set; } = NodeStyle.ProjectContainer();
     public NodeStyle ExternalDependencyStyle { get; set; } = NodeStyle.External();
     public ConnectorStyle Connector { get; set; } = new();
+    public NodeDuplicationSettings NodeDuplication { get; set; } = new();
 
     public static DiagramSettings CreateDefault()
     {

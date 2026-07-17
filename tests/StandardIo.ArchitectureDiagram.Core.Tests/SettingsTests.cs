@@ -20,6 +20,8 @@ public sealed class SettingsTests
         Assert.Equal(settings.Layout.BaselineAlignmentPattern, imported.Layout.BaselineAlignmentPattern);
         Assert.Equal(settings.Layout.EdgePortSpacing, imported.Layout.EdgePortSpacing);
         Assert.Equal(settings.ExternalDependencyStyle.Shape, imported.ExternalDependencyStyle.Shape);
+        Assert.True(imported.NodeDuplication.AllowDuplicateNodes);
+        Assert.Empty(imported.NodeDuplication.DuplicationExceptionPatterns);
     }
 
     [Fact]
@@ -134,5 +136,37 @@ public sealed class SettingsTests
         var settings = SettingsSerializer.Import(json);
 
         Assert.Equal(LayoutSettings.DefaultBaselineAlignmentPattern, settings.Layout.BaselineAlignmentPattern);
+    }
+
+    [Fact]
+    public void Node_duplication_settings_round_trip()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.NodeDuplication.AllowDuplicateNodes = false;
+        settings.NodeDuplication.DuplicationExceptionPatterns.Add("Microsoft\\.Extensions\\.Logging\\.ILogger$");
+
+        var imported = SettingsSerializer.Import(SettingsSerializer.Export(settings));
+
+        Assert.False(imported.NodeDuplication.AllowDuplicateNodes);
+        Assert.Equal(settings.NodeDuplication.DuplicationExceptionPatterns, imported.NodeDuplication.DuplicationExceptionPatterns);
+    }
+
+    [Fact]
+    public void Import_rejects_invalid_node_duplication_regex()
+    {
+        var json = """
+            {
+              "version": 1,
+              "nodeDuplication": {
+                "allowDuplicateNodes": false,
+                "duplicationExceptionPatterns": [ "[invalid" ]
+              }
+            }
+            """;
+
+        var exception = Assert.Throws<InvalidDataException>(() => SettingsSerializer.Import(json));
+
+        Assert.Contains("index 0", exception.Message);
+        Assert.Contains("[invalid", exception.Message);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models;
 
@@ -53,6 +54,30 @@ public static class SettingsSerializer
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
         settings.ExternalDependencyStyle ??= NodeStyle.External();
         settings.Connector ??= new ConnectorStyle();
+        settings.NodeDuplication ??= new NodeDuplicationSettings();
+        settings.NodeDuplication.DuplicationExceptionPatterns ??= new();
+        for (var index = 0; index < settings.NodeDuplication.DuplicationExceptionPatterns.Count; index++)
+        {
+            var pattern = settings.NodeDuplication.DuplicationExceptionPatterns[index]?.Trim() ?? string.Empty;
+            if (pattern.Length == 0)
+            {
+                settings.NodeDuplication.DuplicationExceptionPatterns.RemoveAt(index--);
+                continue;
+            }
+
+            try
+            {
+                _ = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException(
+                    $"Node duplication exception pattern at index {index} is not a valid regular expression: {pattern}",
+                    exception);
+            }
+
+            settings.NodeDuplication.DuplicationExceptionPatterns[index] = pattern;
+        }
         settings.Layout.BaselineAlignmentPattern = string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)
             ? LayoutSettings.DefaultBaselineAlignmentPattern
             : settings.Layout.BaselineAlignmentPattern.Trim();
