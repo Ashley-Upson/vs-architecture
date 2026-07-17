@@ -63,6 +63,7 @@ internal sealed class RenderGraph
                 .ToArray();
 
             var knownSourceIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
+            var projectBySourceId = nodes.ToDictionary(node => node.Id, node => node.ProjectId, StringComparer.Ordinal);
             var externalById = diagram.ExternalDependencies.ToDictionary(external => external.Id, StringComparer.Ordinal);
             var externalTargetIds = new Dictionary<string, string>(StringComparer.Ordinal);
             var externalEdgesByTarget = diagram.Edges
@@ -83,7 +84,8 @@ internal sealed class RenderGraph
 
                     if (seenNodeIds.Add(renderNodeId))
                     {
-                        nodes.Add(ToRenderNode(external, renderNodeId, nodes.Count));
+                        projectBySourceId.TryGetValue(edge.SourceId, out var ownerProjectId);
+                        nodes.Add(ToRenderNode(external, renderNodeId, ownerProjectId, nodes.Count));
                     }
 
                     externalTargetIds[edge.Id] = renderNodeId;
@@ -233,11 +235,15 @@ internal sealed class RenderGraph
                 type.MethodCount);
         }
 
-        private static RenderNode ToRenderNode(ExternalDependencyNode external, string id, int order)
+        private static RenderNode ToRenderNode(
+            ExternalDependencyNode external,
+            string id,
+            string? ownerProjectId,
+            int order)
         {
             var fullName = string.IsNullOrWhiteSpace(external.FullName) ? external.Name : external.FullName;
             var tag = string.IsNullOrWhiteSpace(external.Tag) ? "[External]" : external.Tag;
-            return new RenderNode(id, null, external.Name, fullName, "External", true, tag, order, Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
+            return new RenderNode(id, ownerProjectId, external.Name, fullName, "External", true, tag, order, Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
         }
 
         private static string SafeId(string value)

@@ -51,6 +51,29 @@ internal static class CoordinateOwnershipCompiler
         return result;
     }
 
+    public static CoordinateOwnershipCompilation Rebase(
+        CoordinateOwnershipCompilation compilation,
+        IReadOnlyDictionary<string, ProjectLayout> projects)
+    {
+        var anchors = compilation.Anchors
+            .Select(anchor => anchor with
+            {
+                RelativePoint = ToRelative(anchor.AbsolutePoint, projects[anchor.OwnerProjectId].Rect)
+            })
+            .ToArray();
+        var segments = compilation.Segments
+            .Select(segment => segment.OwnerProjectId is null
+                ? segment
+                : segment with
+                {
+                    RelativeWaypoints = segment.AbsoluteWaypoints
+                        .Select(point => ToRelative(point, projects[segment.OwnerProjectId].Rect))
+                        .ToArray()
+                })
+            .ToArray();
+        return new CoordinateOwnershipCompilation(anchors, segments);
+    }
+
     private static CoordinateOwnershipCompilation CompileLink(
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, ProjectLayout> projects,
@@ -167,7 +190,7 @@ internal static class CoordinateOwnershipCompiler
         string nodeId,
         bool enabled)
     {
-        if (!enabled || !nodes.TryGetValue(nodeId, out var node) || node.Node.IsExternal ||
+        if (!enabled || !nodes.TryGetValue(nodeId, out var node) ||
             node.Node.ProjectId is null || !projects.ContainsKey(node.Node.ProjectId))
         {
             return null;

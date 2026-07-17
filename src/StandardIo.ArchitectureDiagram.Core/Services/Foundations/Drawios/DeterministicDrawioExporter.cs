@@ -39,6 +39,17 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             layout.Projects,
             layout.Links,
             settings.ShowProjectContainers);
+        if (settings.ShowProjectContainers)
+        {
+            var projects = ProjectOwnershipBoundsCompiler.Compile(
+                layout.Projects,
+                layout.Nodes,
+                ownership,
+                settings.Layout.ContainerPadding,
+                settings.Layout.ProjectHeaderHeight);
+            layout = layout.WithProjects(projects);
+            ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
+        }
 
         return new DiagramFileBuilder(settings).Build(layout, ownership);
     }

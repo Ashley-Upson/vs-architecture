@@ -65,15 +65,20 @@ internal sealed class DiagramFileBuilder
 
                     root.Add(Vertex(
                         nodeLayout.Node.Id,
-                        NodeLabel(nodeLayout.Node),
-                        BuildNodeStyle(_styleResolver.Resolve(ToTypeNode(nodeLayout.Node))),
+                        nodeLayout.Node.IsExternal
+                            ? $"{nodeLayout.Node.Tag}\n{nodeLayout.Node.Name}\n{nodeLayout.Node.FullName}"
+                            : NodeLabel(nodeLayout.Node),
+                        nodeLayout.Node.IsExternal
+                            ? BuildNodeStyle(_settings.ExternalDependencyStyle)
+                            : BuildNodeStyle(_styleResolver.Resolve(ToTypeNode(nodeLayout.Node))),
                         parent,
                         rect));
                 }
             }
 
             foreach (var nodeLayout in layout.Nodes.Values
-                .Where(node => node.Node.IsExternal)
+                .Where(node => node.Node.IsExternal &&
+                    (!_settings.ShowProjectContainers || node.Node.ProjectId is null || !layout.Projects.ContainsKey(node.Node.ProjectId)))
                 .OrderBy(node => node.Node.Order))
             {
                 root.Add(Vertex(

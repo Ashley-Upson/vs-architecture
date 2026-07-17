@@ -45,6 +45,9 @@ internal sealed class RenderLayout
 
         public CorridorLaneAllocation Lanes { get; }
 
+        public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
+            new(Graph, Nodes, projects, Links, Traceability, Corridors, Lanes);
+
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var depths = CalculateDepths(graph);
