@@ -1118,6 +1118,14 @@ internal sealed class RenderLayout
                         settings,
                         laneOffset + settings.Layout.ParallelLaneSpacing))
                     .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
+                    .Concat(graph.PlacementParentByNode.Count > 0
+                        ? CanonicalSharedNodeRouteCandidateBuilder.BuildExteriorRoutes(
+                            sourceExit,
+                            targetEntry,
+                            obstacles,
+                            settings,
+                            laneOffset).Select(route => route.ToList())
+                        : Enumerable.Empty<List<Point>>())
                     .Select(Simplify)
                     .Where(route => !CrossesNode(route, obstacles))
                     .Select(route => PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, route, false))
@@ -1167,7 +1175,7 @@ internal sealed class RenderLayout
                 {
                     var scope = ExposureScope(layout.Link.Id, exposureTree);
                     var fanouts = FanoutMemberships(graph, nodes, acceptedLayouts, layout.Link);
-                    return PathCandidate(
+                    var candidate = PathCandidate(
                         layout.Link.Id,
                         layout.SourcePoint,
                         layout.TargetPoint,
@@ -1176,6 +1184,13 @@ internal sealed class RenderLayout
                         scope.RootId,
                         scope.BranchId,
                         fanouts);
+                    var obstacles = RoutingObstacles(nodes, layout.Link, settings.Layout.LinkPadding);
+                    return candidate with
+                    {
+                        HasInvalidGeometry = CanonicalSharedNodeRouteCandidateBuilder.HasInvalidGeometry(
+                            candidate.Points,
+                            obstacles)
+                    };
                 },
                 StringComparer.Ordinal);
             var interactions = RegionalCorridorPathOptimizer.DiscoverInteractions(
@@ -1184,6 +1199,9 @@ internal sealed class RenderLayout
             var relevantEdges = new HashSet<string>(
                 interactions.SelectMany(interaction => new[] { interaction.FirstEdgeId, interaction.SecondEdgeId }),
                 StringComparer.Ordinal);
+            relevantEdges.UnionWith(acceptedCandidates.Values
+                .Where(candidate => candidate.HasInvalidGeometry)
+                .Select(candidate => candidate.EdgeId));
             var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
             var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
             foreach (var link in graph.Links.OrderBy(item => item.Order).ThenBy(item => item.Id, StringComparer.Ordinal))
@@ -1216,6 +1234,9 @@ internal sealed class RenderLayout
                         acceptedCandidate.ExposureRootId,
                         acceptedCandidate.ExposureBranchId,
                         acceptedCandidate.FanoutMemberships))
+                    .Concat(graph.PlacementParentByNode.Count > 0
+                        ? CanonicalExteriorCandidates(acceptedCandidate, obstacles, settings, laneOffset)
+                        : Enumerable.Empty<CorridorPathCandidate>())
                     .Where(candidate => PreservesTerminalFanoutGeometry(acceptedCandidate, candidate))
                     .Append(acceptedCandidate)
                     .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
@@ -1282,6 +1303,44 @@ internal sealed class RenderLayout
                 ExposureRootId: exposureRootId,
                 ExposureBranchId: exposureBranchId,
                 FanoutMemberships: fanoutMemberships);
+        }
+
+        private static IEnumerable<CorridorPathCandidate> CanonicalExteriorCandidates(
+            CorridorPathCandidate accepted,
+            IReadOnlyList<Rect> obstacles,
+            DiagramSettings settings,
+            int laneOffset)
+        {
+            var preservedLength = accepted.FanoutMemberships is null || accepted.FanoutMemberships.Count == 0 ? 2 : 3;
+            if (accepted.Points.Count < preservedLength * 2)
+            {
+                return Array.Empty<CorridorPathCandidate>();
+            }
+
+            var sourceAnchorIndex = preservedLength - 1;
+            var targetAnchorIndex = accepted.Points.Count - preservedLength;
+            return CanonicalSharedNodeRouteCandidateBuilder.BuildExteriorRoutes(
+                    accepted.Points[sourceAnchorIndex],
+                    accepted.Points[targetAnchorIndex],
+                    obstacles,
+                    settings,
+                    laneOffset)
+                .Select(exterior =>
+                {
+                    var complete = accepted.Points.Take(sourceAnchorIndex)
+                        .Concat(exterior)
+                        .Concat(accepted.Points.Skip(targetAnchorIndex + 1))
+                        .ToArray();
+                    return PathCandidate(
+                        accepted.EdgeId,
+                        complete[0],
+                        complete[complete.Length - 1],
+                        complete.Skip(1).Take(complete.Length - 2).ToArray(),
+                        false,
+                        accepted.ExposureRootId,
+                        accepted.ExposureBranchId,
+                        accepted.FanoutMemberships);
+                });
         }
 
         private static IReadOnlyList<TerminalFanoutMembership> FanoutMemberships(
