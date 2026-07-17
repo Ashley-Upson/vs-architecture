@@ -656,6 +656,11 @@ internal sealed class RenderLayout
             HashSet<string> ancestors,
             IReadOnlyDictionary<int, int> depthGaps)
         {
+            if (placed.Contains(nodeId))
+            {
+                return;
+            }
+
             if (!ancestors.Add(nodeId))
             {
                 return;
