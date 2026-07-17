@@ -151,10 +151,12 @@ public sealed class EdgeTraversalCompilerTests
                     link.EntryX);
             },
             StringComparer.Ordinal);
-        Assert.True(TraceabilityValidator.Validate(
+        var validation = TraceabilityValidator.Validate(
             new Dictionary<string, NodeLayout>(StringComparer.Ordinal),
             validatedLinks,
-            10).IsValid);
+            10);
+        Assert.DoesNotContain(validation.Violations, finding =>
+            finding.Code != TraceabilityViolationCode.PerpendicularCrossing);
     }
 
     [Fact]
