@@ -24,7 +24,8 @@ public sealed class DeterministicDrawioExporterTests
             Array.Empty<ExternalDependencyNode>(),
             new[] { new DependencyEdge("edge", "source", "target", "internal") });
 
-        var result = new DeterministicDrawioExporter().GenerateResult(diagram, DiagramSettings.CreateDefault());
+        var exporter = new DeterministicDrawioExporter();
+        var result = exporter.GenerateResult(diagram, DiagramSettings.CreateDefault());
 
         Assert.True(result.SerializationSucceeded);
         Assert.True(result.StrictValidationPassed);
@@ -33,6 +34,9 @@ public sealed class DeterministicDrawioExporterTests
         Assert.Equal("edge", route.LogicalRouteId);
         Assert.True(route.Points.Count >= 2);
         Assert.Equal("mxfile", XDocument.Parse(result.Document).Root!.Name.LocalName);
+        Assert.Equal(1, result.PreparationCount);
+        Assert.Same(result.Diagnostics, exporter.ExportDiagnostic(result));
+        Assert.False(string.IsNullOrWhiteSpace(result.Diagnostics.ReportJson));
     }
 
     [Fact]

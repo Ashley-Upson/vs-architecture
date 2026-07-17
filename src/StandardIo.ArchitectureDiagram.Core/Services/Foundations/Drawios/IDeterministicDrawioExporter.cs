@@ -9,4 +9,6 @@ public interface IDeterministicDrawioExporter
     DrawioGenerationResult GenerateResult(DiagramModel diagram, DiagramSettings settings);
 
     DrawioDiagnosticExportResult ExportDiagnostic(DiagramModel diagram, DiagramSettings settings);
+
+    DrawioDiagnosticExportResult ExportDiagnostic(DrawioGenerationResult generationResult);
 }

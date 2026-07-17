@@ -24,6 +24,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             .Select(violation => ToFinding(violation, enforced: false))
             .ToArray();
         var document = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        var diagnostics = BuildDiagnostic(prepared, document);
         return new DrawioGenerationResult(
             document,
             preRepairFindings,
@@ -38,14 +39,26 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                         .ToArray()))
                 .ToArray(),
             serializationSucceeded: true,
-            strictValidationPassed: findings.All(finding => !finding.IsStrictlyEnforced));
+            strictValidationPassed: findings.All(finding => !finding.IsStrictlyEnforced),
+            diagnostics);
     }
 
     public DrawioDiagnosticExportResult ExportDiagnostic(DiagramModel diagram, DiagramSettings settings)
     {
         var prepared = Prepare(diagram, settings);
-        var enforced = prepared.Layout.Traceability.Violations.Where(prepared.IsEnforced).ToArray();
         var content = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        return BuildDiagnostic(prepared, content);
+    }
+
+    public DrawioDiagnosticExportResult ExportDiagnostic(DrawioGenerationResult generationResult)
+    {
+        if (generationResult is null) throw new ArgumentNullException(nameof(generationResult));
+        return generationResult.Diagnostics;
+    }
+
+    private static DrawioDiagnosticExportResult BuildDiagnostic(PreparedExport prepared, string content)
+    {
+        var enforced = prepared.Layout.Traceability.Violations.Where(prepared.IsEnforced).ToArray();
         var reportJson = DrawioDiagnosticReportBuilder.BuildJson(
             prepared.Layout,
             prepared.Ownership,

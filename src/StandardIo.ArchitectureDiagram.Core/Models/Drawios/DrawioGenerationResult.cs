@@ -38,7 +38,9 @@ public sealed class DrawioGenerationResult
         IReadOnlyList<RouteRepairAttempt> repairAttempts,
         IReadOnlyList<GeneratedRoute> routes,
         bool serializationSucceeded,
-        bool strictValidationPassed)
+        bool strictValidationPassed,
+        DrawioDiagnosticExportResult diagnostics,
+        int preparationCount = 1)
     {
         Document = document;
         PreRepairFindings = preRepairFindings;
@@ -47,6 +49,8 @@ public sealed class DrawioGenerationResult
         Routes = routes;
         SerializationSucceeded = serializationSucceeded;
         StrictValidationPassed = strictValidationPassed;
+        Diagnostics = diagnostics;
+        PreparationCount = preparationCount;
     }
 
     public string Document { get; }
@@ -56,4 +60,6 @@ public sealed class DrawioGenerationResult
     public IReadOnlyList<GeneratedRoute> Routes { get; }
     public bool SerializationSucceeded { get; }
     public bool StrictValidationPassed { get; }
+    public DrawioDiagnosticExportResult Diagnostics { get; }
+    public int PreparationCount { get; }
 }

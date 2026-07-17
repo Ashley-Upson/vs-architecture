@@ -89,7 +89,7 @@ public static class Program
         string? reportPath = null;
         if (options.StrictValidation || !string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath))
         {
-            var diagnostic = exporter.ExportDiagnostic(diagram, settings);
+            var diagnostic = exporter.ExportDiagnostic(generation);
             reportPath = string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath)
                 ? Path.ChangeExtension(outputPath, ".validation.json")
                 : Path.GetFullPath(options.DiagnosticsOutputPath);
