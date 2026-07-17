@@ -9,6 +9,39 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class CorridorLaneGeometryCompilerTests
 {
     [Fact]
+    public void Compile_rejects_mapping_from_stale_route_revision()
+    {
+        var original = Link("edge", 0);
+        var revised = original.AcceptGeometry(
+            new[] { original.SourcePoint }.Concat(original.Points).Concat(new[] { original.TargetPoint }),
+            LogicalRouteStage.Selected,
+            "TerminalFanoutOrdering");
+        var corridor = new RoutingCorridor("H:20:80", CorridorOrientation.Horizontal, new Rect(0, 20, 200, 60), 12, 3);
+        var observation = new CorridorObservation(
+            new Dictionary<string, RoutingCorridor> { [corridor.Id] = corridor },
+            new Dictionary<string, CorridorJunction>(),
+            new[] { new CorridorSegmentMapping("edge", 1, corridor.Id, new Segment(revised.Points[0], revised.Points[1]), 0) },
+            new Dictionary<string, CorridorUsage>());
+        var allocation = new CorridorLaneAllocation(
+            new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>
+            {
+                [corridor.Id] = new Dictionary<string, AllocatedCorridorLane>
+                {
+                    ["edge"] = new(corridor.Id, "edge", 0, revised.Points[0].Y)
+                }
+            },
+            Array.Empty<string>());
+
+        var error = Assert.Throws<InvalidOperationException>(() => CorridorLaneGeometryCompiler.Compile(
+            new Dictionary<string, LinkLayout> { ["edge"] = revised },
+            observation,
+            allocation));
+
+        Assert.Contains("revision 0", error.Message);
+        Assert.Contains("revision 1", error.Message);
+    }
+
+    [Fact]
     public void Compile_moves_complete_internal_segment_to_allocated_lane()
     {
         var link = new LinkLayout(

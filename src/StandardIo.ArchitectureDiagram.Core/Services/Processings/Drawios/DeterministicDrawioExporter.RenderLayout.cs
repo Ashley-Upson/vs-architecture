@@ -94,18 +94,7 @@ internal sealed class RenderLayout
                 settings.Layout.LinkPadding);
             var lanes = CorridorLaneAllocator.Allocate(corridors);
             var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
-            IReadOnlyDictionary<string, LinkLayout> logicalFallback = provisionalLinks;
-            if (graph.PlacementParentByNode.Count == 0 &&
-                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
-            {
-                links = OrderExposureFanoutLanes(
-                    links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
-                    graph,
-                    nodes,
-                    settings);
-                logicalFallback = links;
-            }
-            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, logicalFallback);
+            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, provisionalLinks);
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
@@ -478,108 +467,6 @@ internal sealed class RenderLayout
             }
 
             return result;
-        }
-
-        private static Dictionary<string, LinkLayout> OrderExposureFanoutLanes(
-            Dictionary<string, LinkLayout> layouts,
-            RenderGraph graph,
-            IReadOnlyDictionary<string, NodeLayout> nodes,
-            DiagramSettings settings)
-        {
-            foreach (var sourceGroup in graph.Links
-                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
-                .OrderBy(group => group.Key, StringComparer.Ordinal))
-            {
-                var sourceCenter = nodes[sourceGroup.Key].Rect.CenterX;
-                foreach (var side in sourceGroup
-                    .Where(link => nodes[link.TargetId].Rect.CenterX != sourceCenter)
-                    .GroupBy(link => nodes[link.TargetId].Rect.CenterX > sourceCenter))
-                {
-                    var ordered = side
-                        .OrderBy(link => Math.Abs(nodes[link.TargetId].Rect.CenterX - sourceCenter))
-                        .ThenBy(link => link.Id, StringComparer.Ordinal)
-                        .ToArray();
-                    var lanes = ordered
-                        .Select(link => FirstHorizontalLane(layouts[link.Id]))
-                        .ToArray();
-                    if (lanes.Any(lane => lane is null))
-                    {
-                        continue;
-                    }
-
-                    var anchor = lanes.Select(lane => lane!.Value)
-                        .Where(value => value > nodes[sourceGroup.Key].Rect.Bottom)
-                        .DefaultIfEmpty(nodes[sourceGroup.Key].Rect.Bottom + settings.Layout.LinkPadding)
-                        .Max();
-                    var desired = Enumerable.Range(0, ordered.Length)
-                        .Select(index => anchor - index * settings.Layout.ParallelLaneSpacing)
-                        .ToArray();
-                    if (desired[desired.Length - 1] <= nodes[sourceGroup.Key].Rect.Bottom)
-                    {
-                        continue;
-                    }
-                    var replacements = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
-                    for (var index = 0; index < ordered.Length; index++)
-                    {
-                        var link = ordered[index];
-                        var replacement = MoveFirstHorizontalLane(layouts[link.Id], desired[index]);
-                        var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
-                        if (CrossesNode(
-                            new[] { replacement.SourcePoint }.Concat(replacement.Points)
-                                .Concat(new[] { replacement.TargetPoint }).ToList(),
-                            obstacles))
-                        {
-                            replacements.Clear();
-                            break;
-                        }
-
-                        replacements[link.Id] = replacement;
-                    }
-
-                    foreach (var replacement in replacements)
-                    {
-                        layouts[replacement.Key] = replacement.Value;
-                    }
-                }
-            }
-
-            return layouts;
-        }
-
-        private static int? FirstHorizontalLane(LinkLayout link)
-        {
-            var complete = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
-            return complete.Zip(complete.Skip(1), (start, end) => new Segment(start, end))
-                .Where(segment => segment.IsHorizontal && segment.Length > 0)
-                .Select(segment => (int?)segment.Start.Y)
-                .FirstOrDefault();
-        }
-
-        private static LinkLayout MoveFirstHorizontalLane(LinkLayout link, int laneY)
-        {
-            var complete = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
-            for (var index = 0; index < complete.Length - 1; index++)
-            {
-                var segment = new Segment(complete[index], complete[index + 1]);
-                if (!segment.IsHorizontal || segment.Length == 0)
-                {
-                    continue;
-                }
-
-                complete[index] = new Point(complete[index].X, laneY);
-                complete[index + 1] = new Point(complete[index + 1].X, laneY);
-                break;
-            }
-
-            return new LinkLayout(
-                link.Link,
-                complete[0],
-                complete[complete.Length - 1],
-                complete.Skip(1).Take(complete.Length - 2),
-                link.ExitX,
-                link.EntryX,
-                link.ExitY,
-                link.EntryY);
         }
 
         private static Dictionary<string, NodeLayout> PositionExposureTrees(
@@ -1660,6 +1547,7 @@ internal sealed class RenderLayout
                 .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var targetGroups = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            var fanoutLaneY = CalculateExposureFanoutLaneY(graph, nodes, settings);
             foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
             {
                 if (!nodes.TryGetValue(link.SourceId, out var sourceLayout) ||
@@ -1681,7 +1569,8 @@ internal sealed class RenderLayout
                     sourcePoint,
                     targetPoint,
                     RoutingObstacles(nodes, link, settings.Layout.LinkPadding),
-                    settings);
+                    settings,
+                    fanoutLaneY.TryGetValue(link.Id, out var laneY) ? laneY : null);
 
                 result[link.Id] = new LinkLayout(
                     link,
@@ -1699,9 +1588,14 @@ internal sealed class RenderLayout
             Point sourcePoint,
             Point targetPoint,
             IReadOnlyList<Rect> obstacles,
-            DiagramSettings settings)
+            DiagramSettings settings,
+            int? preferredFirstLaneY = null)
         {
-            var direct = DirectExposureTreeRoute(sourcePoint, targetPoint, settings.Layout.ExposureTreeConnectorMinSegment);
+            var direct = DirectExposureTreeRoute(
+                sourcePoint,
+                targetPoint,
+                settings.Layout.ExposureTreeConnectorMinSegment,
+                preferredFirstLaneY);
             if (!CrossesNode(WithTerminals(sourcePoint, direct, targetPoint), obstacles))
             {
                 return direct;
@@ -1720,7 +1614,8 @@ internal sealed class RenderLayout
             IReadOnlyList<Point> best = direct;
             for (var attempt = 0; attempt < settings.Layout.ExposureTreeConnectorDetourAttempts; attempt++)
             {
-                var topY = Math.Max(sourcePoint.Y + clearance, blocked.Min(obstacle => obstacle.Y) - clearance);
+                var topY = preferredFirstLaneY ??
+                    Math.Max(sourcePoint.Y + clearance, blocked.Min(obstacle => obstacle.Y) - clearance);
                 var bottomY = Math.Min(targetPoint.Y - clearance, blocked.Max(obstacle => obstacle.Bottom) + clearance);
                 if (bottomY <= topY)
                 {
@@ -1754,19 +1649,75 @@ internal sealed class RenderLayout
             return best;
         }
 
-        private static IReadOnlyList<Point> DirectExposureTreeRoute(Point sourcePoint, Point targetPoint, int minSegment)
+        private static IReadOnlyList<Point> DirectExposureTreeRoute(
+            Point sourcePoint,
+            Point targetPoint,
+            int minSegment,
+            int? preferredFirstLaneY = null)
         {
             if (sourcePoint.X == targetPoint.X)
             {
                 return Array.Empty<Point>();
             }
 
-            var midY = sourcePoint.Y + Math.Max(minSegment, (targetPoint.Y - sourcePoint.Y) / 2);
+            var midY = preferredFirstLaneY ??
+                sourcePoint.Y + Math.Max(minSegment, (targetPoint.Y - sourcePoint.Y) / 2);
             return new[]
             {
                 new Point(sourcePoint.X, midY),
                 new Point(targetPoint.X, midY)
             };
+        }
+
+        private static IReadOnlyDictionary<string, int> CalculateExposureFanoutLaneY(
+            RenderGraph graph,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            DiagramSettings settings)
+        {
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var sourceGroup in graph.Links
+                .Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId))
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                var source = nodes[sourceGroup.Key].Rect;
+                foreach (var side in sourceGroup
+                    .Where(link => nodes[link.TargetId].Rect.CenterX != source.CenterX)
+                    .GroupBy(link => nodes[link.TargetId].Rect.CenterX > source.CenterX))
+                {
+                    var ordered = side
+                        .OrderBy(link => Math.Abs(nodes[link.TargetId].Rect.CenterX - source.CenterX))
+                        .ThenBy(link => link.Id, StringComparer.Ordinal)
+                        .ToArray();
+                    var anchor = ordered
+                        .Select(link =>
+                        {
+                            var target = nodes[link.TargetId].Rect;
+                            return source.Bottom + Math.Max(
+                                settings.Layout.ExposureTreeConnectorMinSegment,
+                                (target.Y - source.Bottom) / 2);
+                        })
+                        .Max();
+                    var desired = ordered
+                        .Select((link, index) => new
+                        {
+                            link.Id,
+                            Y = anchor - index * settings.Layout.ParallelLaneSpacing
+                        })
+                        .ToArray();
+                    if (desired.Any(item => item.Y <= source.Bottom))
+                    {
+                        continue;
+                    }
+
+                    foreach (var item in desired)
+                    {
+                        result[item.Id] = item.Y;
+                    }
+                }
+            }
+
+            return result;
         }
 
         private static IReadOnlyList<Point> SideExposureTreeRoute(

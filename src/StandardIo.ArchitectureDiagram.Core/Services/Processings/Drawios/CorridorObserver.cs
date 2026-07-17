@@ -37,7 +37,8 @@ internal static class CorridorObserver
                 segment.EdgeId,
                 segment.SegmentIndex,
                 corridorIdBySegment[segment],
-                segment.Segment))
+                segment.Segment,
+                segment.RouteRevision))
             .ToArray();
         var usage = mappings
             .GroupBy(mapping => mapping.CorridorId, StringComparer.Ordinal)
@@ -157,7 +158,7 @@ internal static class CorridorObserver
                 .DefaultIfEmpty(segment.Start.Y + laneSpacing * 2)
                 .Min();
             NormalizeBounds(segment.Start.Y, laneSpacing, ref top, ref bottom);
-            return new ObservedSegment(link.Link.Id, segmentIndex, $"H:{top}:{bottom}", CorridorOrientation.Horizontal, segment);
+            return new ObservedSegment(link.Link.Id, link.RouteState.Revision, segmentIndex, $"H:{top}:{bottom}", CorridorOrientation.Horizontal, segment);
         }
 
         var upper = Math.Min(segment.Start.Y, segment.End.Y);
@@ -172,7 +173,7 @@ internal static class CorridorObserver
             .DefaultIfEmpty(segment.Start.X + laneSpacing * 2)
             .Min();
         NormalizeBounds(segment.Start.X, laneSpacing, ref corridorLeft, ref corridorRight);
-        return new ObservedSegment(link.Link.Id, segmentIndex, $"V:{corridorLeft}:{corridorRight}", CorridorOrientation.Vertical, segment);
+        return new ObservedSegment(link.Link.Id, link.RouteState.Revision, segmentIndex, $"V:{corridorLeft}:{corridorRight}", CorridorOrientation.Vertical, segment);
     }
 
     private static RoutingCorridor BuildCorridor(
@@ -273,6 +274,7 @@ internal static class CorridorObserver
 
     private sealed record ObservedSegment(
         string EdgeId,
+        int RouteRevision,
         int SegmentIndex,
         string CorridorKey,
         CorridorOrientation Orientation,

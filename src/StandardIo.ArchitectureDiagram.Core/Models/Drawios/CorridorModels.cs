@@ -24,7 +24,8 @@ internal sealed record CorridorSegmentMapping(
     string EdgeId,
     int SegmentIndex,
     string CorridorId,
-    Segment Segment);
+    Segment Segment,
+    int RouteRevision = 0);
 
 internal sealed record CorridorUsage(
     RoutingCorridor Corridor,

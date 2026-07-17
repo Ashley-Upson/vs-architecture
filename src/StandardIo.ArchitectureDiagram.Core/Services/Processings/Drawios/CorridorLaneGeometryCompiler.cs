@@ -35,19 +35,17 @@ internal static class CorridorLaneGeometryCompiler
             {
                 foreach (var mapping in mappings)
                 {
+                    if (mapping.RouteRevision != link.RouteState.Revision)
+                    {
+                        throw new InvalidOperationException(
+                            $"Corridor mapping for route {link.Link.Id} revision {mapping.RouteRevision} cannot compile authoritative revision {link.RouteState.Revision}.");
+                    }
+
                     if (mapping.SegmentIndex < 1 || mapping.SegmentIndex >= segments.Length - 1 ||
                         !allocation.TryGetLane(mapping.CorridorId, link.Link.Id, out var lane))
                     {
                         continue;
                     }
-                    if (mapping.SegmentIndex == 1 &&
-                            SameOrientation(segments[0], mapping.Segment) ||
-                        mapping.SegmentIndex == segments.Length - 2 &&
-                            SameOrientation(mapping.Segment, segments[segments.Length - 1]))
-                    {
-                        continue;
-                    }
-
                     var originalCoordinate = mapping.Segment.IsHorizontal
                         ? mapping.Segment.Start.Y
                         : mapping.Segment.Start.X;
@@ -101,9 +99,6 @@ internal static class CorridorLaneGeometryCompiler
     private static bool IsOrthogonal(IReadOnlyList<Point> points) =>
         points.Zip(points.Skip(1), (start, end) => new Segment(start, end))
             .All(segment => segment.IsHorizontal || segment.IsVertical);
-
-    private static bool SameOrientation(Segment first, Segment second) =>
-        first.IsHorizontal && second.IsHorizontal || first.IsVertical && second.IsVertical;
 
     private static bool PreservesTerminalRegion(int original, int candidate, int firstTerminal, int secondTerminal)
     {
