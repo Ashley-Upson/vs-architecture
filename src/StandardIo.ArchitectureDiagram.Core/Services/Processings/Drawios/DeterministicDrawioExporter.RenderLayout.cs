@@ -96,6 +96,7 @@ internal sealed class RenderLayout
             var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
             var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, provisionalLinks);
             links = EdgeTraversalCompiler.Apply(links, traversals);
+            links = LogicalRouteNormalizer.Normalize(nodes, links, settings.Layout.LinkPadding);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
             var originalTraceability = traceability;

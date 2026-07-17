@@ -242,7 +242,10 @@ internal static class RouteRepairCoordinator
         var lanes = CorridorLaneAllocator.Allocate(corridors);
         var laneGeometry = CorridorLaneGeometryCompiler.Compile(logicalLinks, corridors, lanes);
         var traversals = EdgeTraversalCompiler.Compile(laneGeometry, corridors, lanes, nodes, logicalLinks);
-        var links = EdgeTraversalCompiler.Apply(laneGeometry, traversals);
+        var links = LogicalRouteNormalizer.Normalize(
+            nodes,
+            EdgeTraversalCompiler.Apply(laneGeometry, traversals),
+            settings.Layout.LinkPadding);
         var validation = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
         return new Pipeline(links, corridors, lanes, traversals, validation);
     }
