@@ -9,6 +9,14 @@ function Element([string]$name) {
     [System.Xml.Linq.XElement]::new([System.Xml.Linq.XName]::Get($name))
 }
 
+function Save-Drawio($document, [string]$path) {
+    $utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText(
+        $path,
+        $document.Root.ToString([System.Xml.Linq.SaveOptions]::DisableFormatting),
+        $utf8WithoutBom)
+}
+
 function Route([string]$id, [string]$lane, [string]$legacy, [string]$allocated, [string]$diagnostic = "") {
     [pscustomobject]@{ Id = $id; Lane = $lane; Legacy = $legacy; Allocated = $allocated; Diagnostic = $diagnostic }
 }
@@ -134,11 +142,11 @@ for ($index = 0; $index -lt $diagrams.Count; $index++) {
     $singleFile.Add([System.Xml.Linq.XElement]::Parse($diagrams[$index].ToString()))
     $singleDocument = [System.Xml.Linq.XDocument]::new($singleFile)
     $casePath = Join-Path $fixtureDirectory ("{0:D2}-junction-fixture.drawio" -f ($index + 1))
-    $singleDocument.Save($casePath)
+    Save-Drawio $singleDocument $casePath
     if ($index -eq 0) {
-        $singleDocument.Save($resolved)
+        Save-Drawio $singleDocument $resolved
     }
 }
 $catalogPath = Join-Path ([System.IO.Path]::GetDirectoryName($resolved)) "junction-improvement-catalog.drawio"
-$document.Save($catalogPath)
+Save-Drawio $document $catalogPath
 $resolved
