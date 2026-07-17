@@ -1,0 +1,58 @@
+<mxfile host="StandardIo.ArchitectureDiagram" modified="2026-07-17T00:00:00.000Z" agent="Codex" version="26.0.0">
+  <diagram id="segmented-ownership" name="Segmented ownership">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" background="#101010">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="project-a" value="Project A" style="swimlane;html=1;startSize=30;fillColor=#263238;strokeColor=#90a4ae;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="400" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="project-b" value="Project B" style="swimlane;html=1;startSize=30;fillColor=#263238;strokeColor=#90a4ae;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="700" y="100" width="400" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="a-source" value="A Source" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="project-a">
+          <mxGeometry x="50" y="50" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="a-internal" value="A Internal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="project-a">
+          <mxGeometry x="50" y="200" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="b-target" value="B Target" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="project-b">
+          <mxGeometry x="230" y="50" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="external-target" value="External" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="300" width="120" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dep-internal" logicalEdgeId="dep-internal" segmentRole="complete" value="" style="edgeStyle=none;noEdgeStyle=1;orthogonal=0;rounded=0;endArrow=block;endFill=1;strokeColor=#ffffff;" edge="1" parent="project-a" source="a-source" target="a-internal">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="130" /><mxPoint x="110" y="180" /></Array></mxGeometry>
+        </mxCell>
+
+        <mxCell id="dep-ab-source-anchor" logicalEdgeId="dep-ab" anchorRole="source-boundary" value="" style="opacity=0;fillOpacity=0;strokeOpacity=0;movable=0;resizable=0;deletable=0;" vertex="1" parent="project-a">
+          <mxGeometry x="400" y="120" width="0" height="0" as="geometry" />
+        </mxCell>
+        <mxCell id="dep-ab-target-anchor" logicalEdgeId="dep-ab" anchorRole="target-boundary" value="" style="opacity=0;fillOpacity=0;strokeOpacity=0;movable=0;resizable=0;deletable=0;" vertex="1" parent="project-b">
+          <mxGeometry x="0" y="120" width="0" height="0" as="geometry" />
+        </mxCell>
+        <mxCell id="dep-ab-source" logicalEdgeId="dep-ab" segmentRole="source" value="" style="edgeStyle=none;noEdgeStyle=1;orthogonal=0;rounded=0;endArrow=none;strokeColor=#ffffff;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0.5;entryPerimeter=0;" edge="1" parent="project-a" source="a-source" target="dep-ab-source-anchor">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="120" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="dep-ab-middle" logicalEdgeId="dep-ab" segmentRole="middle" value="" style="edgeStyle=none;noEdgeStyle=1;orthogonal=0;rounded=0;endArrow=none;strokeColor=#ffffff;exitX=0.5;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="dep-ab-source-anchor" target="dep-ab-target-anchor">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="560" y="220" /><mxPoint x="640" y="220" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="dep-ab-target" logicalEdgeId="dep-ab" segmentRole="target" value="" style="edgeStyle=none;noEdgeStyle=1;orthogonal=0;rounded=0;endArrow=block;endFill=1;strokeColor=#ffffff;exitX=0.5;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="project-b" source="dep-ab-target-anchor" target="b-target">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="140" y="120" /><mxPoint x="290" y="120" /></Array></mxGeometry>
+        </mxCell>
+
+        <mxCell id="dep-aext-anchor" logicalEdgeId="dep-aext" anchorRole="source-boundary" value="" style="opacity=0;fillOpacity=0;strokeOpacity=0;movable=0;resizable=0;deletable=0;" vertex="1" parent="project-a">
+          <mxGeometry x="400" y="240" width="0" height="0" as="geometry" />
+        </mxCell>
+        <mxCell id="dep-aext-source" logicalEdgeId="dep-aext" segmentRole="source" value="" style="edgeStyle=none;noEdgeStyle=1;orthogonal=0;rounded=0;endArrow=none;strokeColor=#66ccff;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0.5;entryPerimeter=0;" edge="1" parent="project-a" source="a-internal" target="dep-aext-anchor">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="270" /><mxPoint x="300" y="270" /><mxPoint x="300" y="240" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="dep-aext-root" logicalEdgeId="dep-aext" segmentRole="target" value="" style="edgeStyle=none;noEdgeStyle=1;orthogonal=0;rounded=0;endArrow=block;endFill=1;strokeColor=#66ccff;exitX=0.5;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="dep-aext-anchor" target="external-target">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="650" y="340" /><mxPoint x="1260" y="340" /></Array></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
