@@ -270,6 +270,33 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
+    public void Render_emits_exporter_owned_connector_geometry()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_source", "project_api", "Source"),
+                    Node("type_target", "project_api", "Target")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("edge", "type_source", "type_target", "internal") }));
+        var edge = Cell(document, "edge");
+        var style = (string?)edge.Attribute("style") ?? string.Empty;
+
+        Assert.Contains("edgeStyle=none", style);
+        Assert.Contains("noEdgeStyle=1", style);
+        Assert.Contains("orthogonal=0", style);
+        Assert.Contains("exitPerimeter=0", style);
+        Assert.Contains("entryPerimeter=0", style);
+        Assert.DoesNotContain("orthogonalEdgeStyle", style);
+        Assert.DoesNotContain("jettySize", style);
+        Assert.NotEmpty(edge.Descendants("mxPoint"));
+    }
+
+    [Fact]
     public void Render_uses_local_lane_offsets_instead_of_global_edge_order()
     {
         var unrelatedNodes = Enumerable.Range(0, 8)

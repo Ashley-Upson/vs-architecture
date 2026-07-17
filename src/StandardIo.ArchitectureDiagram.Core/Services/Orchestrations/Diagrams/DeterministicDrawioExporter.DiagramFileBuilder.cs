@@ -227,7 +227,7 @@ private XElement GraphModel(XElement root)
         private static string BuildConnectorStyle(ConnectorStyle style, LinkLayout link)
         {
             var rounded = style.Rounded ? "rounded=1;" : "rounded=0;";
-            return $"edgeStyle=orthogonalEdgeStyle;html=1;{rounded}orthogonalLoop=1;jettySize=auto;endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(link.ExitX)};exitY={FormatRatio(link.ExitY)};entryX={FormatRatio(link.EntryX)};entryY={FormatRatio(link.EntryY)};";
+            return $"edgeStyle=none;noEdgeStyle=1;orthogonal=0;curved=0;html=1;{rounded}endArrow=block;endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(link.ExitX)};exitY={FormatRatio(link.ExitY)};exitPerimeter=0;entryX={FormatRatio(link.EntryX)};entryY={FormatRatio(link.EntryY)};entryPerimeter=0;";
         }
 
         private static string FormatRatio(double value)
