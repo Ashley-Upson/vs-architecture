@@ -861,13 +861,16 @@ internal sealed class RenderLayout
             var targetGroups = graph.Links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var usedCorners = new HashSet<string>(StringComparer.Ordinal);
             var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
+            var terminalLaneSpacing = Math.Max(
+                settings.Layout.EdgePortSpacing,
+                settings.Layout.ParallelLaneSpacing * 2);
 
             foreach (var link in graph.Links.OrderBy(link => link.Order))
             {
                 var source = nodes[link.SourceId].Rect;
                 var target = nodes[link.TargetId].Rect;
-                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, settings.Layout.EdgePortSpacing);
-                var targetOffset = PortOffset(targetGroups[link.TargetId], link, settings.Layout.EdgePortSpacing);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
@@ -892,6 +895,10 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
+            var sourceGroups = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+            var targetGroups = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             foreach (var link in graph.Links.OrderBy(link => link.Order))
             {
                 if (!nodes.TryGetValue(link.SourceId, out var sourceLayout) ||
@@ -902,8 +909,13 @@ internal sealed class RenderLayout
 
                 var source = sourceLayout.Rect;
                 var target = targetLayout.Rect;
-                var sourcePoint = new Point(source.CenterX, source.Bottom);
-                var targetPoint = new Point(target.CenterX, target.Y);
+                var terminalLaneSpacing = Math.Max(
+                    settings.Layout.EdgePortSpacing,
+                    settings.Layout.ParallelLaneSpacing * 2);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing);
+                var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
+                var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var points = BuildExposureTreeRoute(
                     sourcePoint,
                     targetPoint,

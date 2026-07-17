@@ -33,6 +33,26 @@ internal sealed class TraceabilityValidationResult
 
 internal static class TraceabilityValidator
 {
+    public static void ThrowIfInvalid(
+        TraceabilityValidationResult result,
+        Func<TraceabilityViolation, bool>? isEnforced = null)
+    {
+        var enforced = result.Violations
+            .Where(violation => isEnforced is null || isEnforced(violation))
+            .ToArray();
+        if (enforced.Length == 0)
+        {
+            return;
+        }
+
+        var examples = string.Join(
+            Environment.NewLine,
+            enforced.Take(10).Select(violation => violation.Description));
+        throw new InvalidOperationException(
+            $"Final routed geometry failed traceability validation with {enforced.Length} violation(s) in lane-owned geometry." +
+            Environment.NewLine + examples);
+    }
+
     public static TraceabilityValidationResult Validate(
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, LinkLayout> links,

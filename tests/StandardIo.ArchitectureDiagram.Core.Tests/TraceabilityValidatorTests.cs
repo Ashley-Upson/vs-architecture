@@ -9,6 +9,26 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class TraceabilityValidatorTests
 {
     [Fact]
+    public void ThrowIfInvalid_prevents_invalid_geometry_from_reaching_serialization()
+    {
+        var result = new TraceabilityValidationResult(new[]
+        {
+            new TraceabilityViolation(
+                TraceabilityViolationCode.SharedSegment,
+                "edge_a",
+                "edge_b",
+                40,
+                "Edges share 40px of route.")
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            TraceabilityValidator.ThrowIfInvalid(result));
+
+        Assert.Contains("1 violation", exception.Message);
+        Assert.Contains("share 40px", exception.Message);
+    }
+
+    [Fact]
     public void Validate_reports_shared_segments_spacing_and_reused_bends()
     {
         var links = new Dictionary<string, LinkLayout>

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
@@ -15,6 +17,23 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         settings ??= DiagramSettings.CreateDefault();
         var graph = RenderGraph.From(diagram, settings);
         var layout = RenderLayout.Build(graph, settings);
+        var successfulCorridorsByEdge = layout.Corridors.SegmentMappings
+            .Where(mapping => !layout.Lanes.FailedCorridorIds.Contains(mapping.CorridorId))
+            .GroupBy(mapping => mapping.EdgeId)
+            .ToDictionary(
+                group => group.Key,
+                group => new HashSet<string>(group.Select(mapping => mapping.CorridorId)));
+        TraceabilityValidator.ThrowIfInvalid(layout.Traceability, violation =>
+        {
+            if (!successfulCorridorsByEdge.TryGetValue(violation.EdgeId, out var edgeCorridors))
+            {
+                return false;
+            }
+
+            return violation.OtherEdgeId is null ||
+                successfulCorridorsByEdge.TryGetValue(violation.OtherEdgeId, out var otherCorridors) &&
+                edgeCorridors.Overlaps(otherCorridors);
+        });
 
         return new DiagramFileBuilder(settings).Build(layout);
     }

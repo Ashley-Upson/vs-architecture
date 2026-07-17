@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using Xunit;
 
@@ -81,6 +82,46 @@ public sealed class CorridorLaneGeometryCompilerTests
         Array.Sort(coordinates);
         Assert.True(coordinates[1] - coordinates[0] >= 12);
         Assert.True(coordinates[2] - coordinates[1] >= 12);
+    }
+
+    [Fact]
+    public void Compile_intersects_adjacent_allocated_lanes_without_diagonal_corrections()
+    {
+        var link = new LinkLayout(
+            new RenderLink("edge", "source", "target", "internal", 0),
+            new Point(20, 0), new Point(100, 100),
+            new[] { new Point(20, 20), new Point(80, 20), new Point(80, 80), new Point(100, 80) },
+            0.5, 0.5);
+        var horizontal = new RoutingCorridor("H:0:40:20:80", CorridorOrientation.Horizontal, new Rect(20, 0, 60, 40), 12, 2);
+        var vertical = new RoutingCorridor("V:60:100:20:80", CorridorOrientation.Vertical, new Rect(60, 20, 40, 60), 12, 2);
+        var observation = new CorridorObservation(
+            new Dictionary<string, RoutingCorridor> { [horizontal.Id] = horizontal, [vertical.Id] = vertical },
+            new Dictionary<string, CorridorJunction>(),
+            new[]
+            {
+                new CorridorSegmentMapping("edge", 1, horizontal.Id, new Segment(new Point(20, 20), new Point(80, 20))),
+                new CorridorSegmentMapping("edge", 2, vertical.Id, new Segment(new Point(80, 20), new Point(80, 80)))
+            },
+            new Dictionary<string, CorridorUsage>());
+        var allocation = new CorridorLaneAllocation(
+            new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>
+            {
+                [horizontal.Id] = new Dictionary<string, AllocatedCorridorLane> { ["edge"] = new(horizontal.Id, "edge", 0, 30) },
+                [vertical.Id] = new Dictionary<string, AllocatedCorridorLane> { ["edge"] = new(vertical.Id, "edge", 0, 90) }
+            },
+            Array.Empty<string>());
+
+        var result = CorridorLaneGeometryCompiler.Compile(
+            new Dictionary<string, LinkLayout> { ["edge"] = link }, observation, allocation)["edge"];
+
+        Assert.Equal(new[] { new Point(20, 30), new Point(90, 30), new Point(90, 80), new Point(100, 80) }, result.Points);
+        Assert.All(CompleteSegments(result), segment => Assert.True(segment.IsHorizontal || segment.IsVertical));
+    }
+
+    private static IEnumerable<Segment> CompleteSegments(LinkLayout link)
+    {
+        var points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+        return Enumerable.Range(0, points.Length - 1).Select(index => new Segment(points[index], points[index + 1]));
     }
 
     private static LinkLayout Link(string id, int order) =>

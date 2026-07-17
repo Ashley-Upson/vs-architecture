@@ -710,6 +710,63 @@ public sealed class DeterministicDrawioExporterTests
             Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
     }
 
+    [Fact]
+    public void Render_keeps_busy_exposure_tree_dependencies_traceable_end_to_end()
+    {
+        var childIds = new[] { "json", "template", "component", "resource", "app", "script", "cache" };
+        var nodes = new List<TypeNode> { Node("processing", "project", "TemplateRenderProcessingService") };
+        nodes.AddRange(childIds.Select(id => Node(id, "project", id + "Service")));
+        nodes.AddRange(new[]
+        {
+            Node("template_broker", "project", "TemplateBroker"),
+            Node("component_broker", "project", "ComponentBroker"),
+            Node("resource_broker", "project", "ResourceBroker"),
+            Node("app_broker", "project", "AppBroker")
+        });
+        var edges = childIds.Select((id, index) =>
+                new DependencyEdge("edge_" + id, "processing", id, "internal"))
+            .Concat(new[]
+            {
+                new DependencyEdge("edge_template_broker", "template", "template_broker", "internal"),
+                new DependencyEdge("edge_component_broker", "component", "component_broker", "internal"),
+                new DependencyEdge("edge_resource_broker", "resource", "resource_broker", "internal"),
+                new DependencyEdge("edge_app_broker", "app", "app_broker", "internal")
+            })
+            .ToArray();
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ExposureTreeLayoutThreshold = 1;
+        var document = Render(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", nodes) },
+            Array.Empty<ExternalDependencyNode>(),
+            edges), settings);
+        var routes = childIds.ToDictionary(
+            id => id,
+            id => CompleteEdgePointsBetween(document, "TemplateRenderProcessingService", id + "Service"));
+
+        foreach (var id in childIds)
+        {
+            var route = routes[id];
+            var source = NodeRect(document, CellIdByValue(document, "TemplateRenderProcessingService"));
+            var target = NodeRect(document, CellIdByValue(document, id + "Service"));
+            Assert.True(route.Count >= 2);
+            Assert.Equal(source.Y + source.Height, route[0].Y);
+            Assert.Equal(route[0].X, route[1].X);
+            Assert.True(route[1].Y > route[0].Y);
+            Assert.Equal(target.Y, route[^1].Y);
+            Assert.Equal(route[^1].X, route[^2].X);
+            Assert.True(route[^2].Y < route[^1].Y);
+            Assert.All(TestSegments(route), segment =>
+                Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+        }
+
+        var routePairs = childIds.SelectMany((left, index) => childIds.Skip(index + 1).Select(right => (left, right)));
+        foreach (var (left, right) in routePairs)
+        {
+            Assert.Equal(0, SharedLength(routes[left], routes[right]));
+            AssertParallelSegmentsSeparated(routes[left], routes[right], settings.Layout.ParallelLaneSpacing);
+        }
+    }
+
     private static XDocument Render(DiagramModel diagram, DiagramSettings? settings = null)
     {
         return XDocument.Parse(new DrawioDiagramRenderer().Render(diagram, settings ?? DiagramSettings.CreateDefault()));
@@ -989,6 +1046,55 @@ public sealed class DeterministicDrawioExporterTests
             yield return (points[index], points[index + 1]);
         }
     }
+
+    private static IReadOnlyList<(int X, int Y)> CompleteEdgePointsBetween(
+        XDocument document,
+        string sourceValue,
+        string targetValue)
+    {
+        var sourceId = CellIdByValue(document, sourceValue);
+        var targetId = CellIdByValue(document, targetValue);
+        var edge = document.Descendants("mxCell").Single(cell =>
+            (string?)cell.Attribute("edge") == "1" &&
+            (string?)cell.Attribute("source") == sourceId &&
+            (string?)cell.Attribute("target") == targetId);
+        var edgeId = (string)edge.Attribute("id")!;
+        var points = new List<(int X, int Y)>
+        {
+            RatioPoint(NodeRect(document, (string)edge.Attribute("source")!), StyleValue(edge, "exitX"), StyleValue(edge, "exitY"))
+        };
+        points.AddRange(EdgePoints(document, edgeId));
+        points.Add(RatioPoint(NodeRect(document, (string)edge.Attribute("target")!), StyleValue(edge, "entryX"), StyleValue(edge, "entryY")));
+        return points;
+    }
+
+    private static string CellIdByValue(XDocument document, string value) =>
+        (string)document.Descendants("mxCell").Single(cell =>
+            ((string?)cell.Attribute("value"))?.StartsWith(value, StringComparison.Ordinal) == true).Attribute("id")!;
+
+    private static int SharedLength(IReadOnlyList<(int X, int Y)> left, IReadOnlyList<(int X, int Y)> right)
+    {
+        return TestSegments(left).Sum(leftSegment => TestSegments(right).Sum(rightSegment =>
+        {
+            if (leftSegment.Start.Y == leftSegment.End.Y && rightSegment.Start.Y == rightSegment.End.Y &&
+                leftSegment.Start.Y == rightSegment.Start.Y)
+            {
+                return RangeOverlapLength(leftSegment.Start.X, leftSegment.End.X, rightSegment.Start.X, rightSegment.End.X);
+            }
+
+            if (leftSegment.Start.X == leftSegment.End.X && rightSegment.Start.X == rightSegment.End.X &&
+                leftSegment.Start.X == rightSegment.Start.X)
+            {
+                return RangeOverlapLength(leftSegment.Start.Y, leftSegment.End.Y, rightSegment.Start.Y, rightSegment.End.Y);
+            }
+
+            return 0;
+        }));
+    }
+
+    private static int RangeOverlapLength(int leftStart, int leftEnd, int rightStart, int rightEnd) =>
+        Math.Max(0, Math.Min(Math.Max(leftStart, leftEnd), Math.Max(rightStart, rightEnd)) -
+            Math.Max(Math.Min(leftStart, leftEnd), Math.Min(rightStart, rightEnd)));
 
     private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd)
     {
