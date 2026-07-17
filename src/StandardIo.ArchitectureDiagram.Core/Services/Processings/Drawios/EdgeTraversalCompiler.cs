@@ -17,15 +17,22 @@ internal static class EdgeTraversalCompiler
                 group => group.Key,
                 group => group.ToDictionary(mapping => mapping.SegmentIndex),
                 StringComparer.Ordinal);
-        var traversals = new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal);
+        var mapped = new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal);
         var geometry = new Dictionary<string, CompiledEdgeGeometry>(StringComparer.Ordinal);
         var diagnostics = new List<TraversalDiagnostic>();
 
         foreach (var link in links.Values.OrderBy(item => item.Link.Order).ThenBy(item => item.Link.Id, StringComparer.Ordinal))
         {
-            var traversal = Map(link, observation, allocation, mappings.TryGetValue(link.Link.Id, out var edgeMappings)
+            mapped[link.Link.Id] = Map(link, observation, allocation, mappings.TryGetValue(link.Link.Id, out var edgeMappings)
                 ? edgeMappings
                 : new Dictionary<int, CorridorSegmentMapping>());
+        }
+
+        var junctionAllocation = SimpleJunctionAllocator.Allocate(mapped);
+        var traversals = new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal);
+        foreach (var link in links.Values.OrderBy(item => item.Link.Order).ThenBy(item => item.Link.Id, StringComparer.Ordinal))
+        {
+            var traversal = junctionAllocation.Traversals[link.Link.Id];
             var compiled = Compile(traversal);
             var accepted = CompletePoints(link);
             if (!Normalize(compiled.Points).SequenceEqual(Normalize(accepted)))
@@ -146,7 +153,7 @@ internal static class EdgeTraversalCompiler
 
     private static CompiledEdgeGeometry Compile(EdgeTraversal traversal)
     {
-        if (traversal.UsesFallback || traversal.Corridors.Count == 0)
+        if (traversal.UsesFallback)
         {
             return new CompiledEdgeGeometry(traversal.Link.Id, traversal.AcceptedFallbackPoints, true);
         }
