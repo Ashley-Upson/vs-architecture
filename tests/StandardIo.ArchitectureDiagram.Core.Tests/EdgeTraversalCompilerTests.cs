@@ -39,6 +39,32 @@ public sealed class EdgeTraversalCompilerTests
         Assert.All(result.Diagnostics, diagnostic => Assert.NotEqual("UNSUPPORTED_JUNCTION_TOPOLOGY", diagnostic.Code));
     }
 
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Compile_separates_parallel_turns_that_legacy_geometry_routes_through_one_bend(int routeCount)
+    {
+        var links = Enumerable.Range(0, routeCount)
+            .Select(index => AmbiguousTurnLink(((char)('a' + index)).ToString(), index, index * 10))
+            .ToArray();
+        var context = CreateTurnContext(links, includeJunction: true);
+        var legacyBends = links.Select(link => CompletePoints(link)[2]).ToArray();
+        Assert.Equal(routeCount, context.Allocation.Corridors["horizontal"].Values.Select(lane => lane.Coordinate).Distinct().Count());
+        Assert.Equal(routeCount, context.Allocation.Corridors["vertical"].Values.Select(lane => lane.Coordinate).Distinct().Count());
+
+        var result = EdgeTraversalCompiler.Compile(Links(links), context.Observation, context.Allocation);
+
+        Assert.Single(legacyBends.Distinct());
+        Assert.Empty(result.Diagnostics);
+        var allocatedBends = result.Geometry.Values
+            .Select(geometry => result.Traversals[geometry.EdgeId].Junctions[0].TransitionPoint)
+            .ToArray();
+        Assert.True(allocatedBends.Distinct().Count() == routeCount,
+            string.Join(";", allocatedBends.Select(point => $"{point.X},{point.Y}")));
+        Assert.All(result.Geometry.Values, geometry => Assert.False(geometry.UsedFallback));
+        Assert.All(result.Geometry.Values, geometry => AssertOrthogonal(geometry.Points));
+    }
+
     [Fact]
     public void Compile_falls_back_when_parallel_turn_lane_order_is_inverted()
     {
@@ -168,7 +194,7 @@ public sealed class EdgeTraversalCompilerTests
                     corridorId,
                     link.Link.Id,
                     link.Link.Order,
-                    corridorId == horizontal ? link.Points[0].Y : link.Points[1].X),
+                    corridorId == horizontal ? link.Points[0].Y : link.Points[2].X),
                 StringComparer.Ordinal),
             StringComparer.Ordinal);
         return new TurnContext(observation, new CorridorLaneAllocation(allocated, Array.Empty<string>()));
@@ -191,6 +217,31 @@ public sealed class EdgeTraversalCompilerTests
             points.Skip(1).Take(points.Length - 2),
             0.5,
             0.5);
+    }
+
+    private static LinkLayout AmbiguousTurnLink(string id, int order, int offset)
+    {
+        var points = new[]
+        {
+            new Point(20 + offset, 20),
+            new Point(20 + offset, 60 + offset),
+            new Point(100, 60),
+            new Point(100 + offset, 140),
+            new Point(100 + offset, 180)
+        };
+        return new LinkLayout(
+            new RenderLink(id, $"source_{id}", $"target_{id}", "internal", order),
+            points[0],
+            points[points.Length - 1],
+            points.Skip(1).Take(points.Length - 2),
+            0.5,
+            0.5);
+    }
+
+    private static void AssertOrthogonal(IReadOnlyList<Point> points)
+    {
+        Assert.All(points.Zip(points.Skip(1), (start, end) => new Segment(start, end)), segment =>
+            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
     }
 
     private static IReadOnlyDictionary<string, LinkLayout> Links(params LinkLayout[] links) => Links((IEnumerable<LinkLayout>)links);
