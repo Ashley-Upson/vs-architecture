@@ -20,7 +20,11 @@ internal sealed record RouteRepairResult(
     TraceabilityValidationResult PostRepairValidation,
     IReadOnlyList<RouteRepairAttempt> Attempts,
     int EstimatedWorkUsed,
-    bool WorkBudgetExhausted);
+    bool WorkBudgetExhausted,
+    int RoutesInvalidated = 0,
+    long RoutePairsRevalidated = 0,
+    int CorridorRebuildCount = 0,
+    string RunReason = "RepairableFindingsPresent");
 
 internal static class RouteRepairCoordinator
 {
@@ -37,6 +41,9 @@ internal static class RouteRepairCoordinator
         var affected = new HashSet<string>(StringComparer.Ordinal);
         var work = 0;
         var exhausted = false;
+        var invalidatedRoutes = 0;
+        long revalidatedPairs = 0;
+        var corridorRebuilds = 1;
 
         for (var pass = 0; pass < budget.MaximumPasses; pass++)
         {
@@ -71,9 +78,11 @@ internal static class RouteRepairCoordinator
 
                     candidateCount++;
                     work++;
-                    var trialLinks = current.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-                    trialLinks[finding.EdgeId] = candidate;
-                    var trial = Compile(nodes, trialLinks, settings);
+                    var closure = InteractionClosure(current, candidate, finding.EdgeId, settings.Layout.ParallelLaneSpacing);
+                    invalidatedRoutes += closure.Count;
+                    revalidatedPairs += (long)closure.Count * Math.Max(0, closure.Count - 1) / 2;
+                    var trial = CompileRegional(nodes, current, candidate, closure, settings);
+                    corridorRebuilds++;
                     var score = Score(trial.Validation);
                     if (score.CompareTo(bestScore) < 0)
                     {
@@ -85,9 +94,18 @@ internal static class RouteRepairCoordinator
                 var applied = !ReferenceEquals(best, current);
                 if (applied)
                 {
-                    current = best;
-                    affected.Add(finding.EdgeId);
-                    improved = true;
+                    var globallyCompiled = Compile(nodes, best.Links, settings);
+                    corridorRebuilds++;
+                    if (Score(globallyCompiled.Validation).CompareTo(Score(current.Validation)) < 0)
+                    {
+                        current = globallyCompiled;
+                        affected.Add(finding.EdgeId);
+                        improved = true;
+                    }
+                    else
+                    {
+                        applied = false;
+                    }
                 }
 
                 attempts.Add(new RouteRepairAttempt(
@@ -123,7 +141,10 @@ internal static class RouteRepairCoordinator
             current.Validation,
             attempts,
             work,
-            exhausted);
+            exhausted,
+            invalidatedRoutes,
+            revalidatedPairs,
+            corridorRebuilds);
     }
 
     private static bool IsRepairInput(TraceabilityViolation finding) =>
@@ -250,6 +271,79 @@ internal static class RouteRepairCoordinator
         return new Pipeline(links, corridors, lanes, traversals, validation);
     }
 
+    private static Pipeline CompileRegional(
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        Pipeline current,
+        LinkLayout candidate,
+        IReadOnlyCollection<string> closure,
+        DiagramSettings settings)
+    {
+        var regionalInput = current.Links
+            .Where(item => closure.Contains(item.Key))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        regionalInput[candidate.Link.Id] = candidate;
+        var regional = Compile(nodes, regionalInput, settings);
+        var mergedLinks = current.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var item in regional.Links)
+        {
+            mergedLinks[item.Key] = item.Value;
+        }
+
+        var unaffected = current.Validation.Violations.Where(violation =>
+            !closure.Contains(violation.EdgeId) &&
+            (violation.OtherEdgeId is null || !closure.Contains(violation.OtherEdgeId)));
+        var validation = new TraceabilityValidationResult(unaffected.Concat(regional.Validation.Violations));
+        return new Pipeline(mergedLinks, regional.Corridors, regional.Lanes, regional.Traversals, validation);
+    }
+
+    private static IReadOnlyCollection<string> InteractionClosure(
+        Pipeline current,
+        LinkLayout candidate,
+        string changedEdgeId,
+        int spacing)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal) { changedEdgeId };
+        var corridorIds = new HashSet<string>(current.Corridors.SegmentMappings
+            .Where(mapping => mapping.EdgeId == changedEdgeId)
+            .Select(mapping => mapping.CorridorId), StringComparer.Ordinal);
+        foreach (var edgeId in current.Corridors.SegmentMappings
+            .Where(mapping => corridorIds.Contains(mapping.CorridorId))
+            .Select(mapping => mapping.EdgeId))
+        {
+            result.Add(edgeId);
+        }
+
+        foreach (var violation in current.Validation.Violations.Where(violation =>
+            violation.EdgeId == changedEdgeId || violation.OtherEdgeId == changedEdgeId))
+        {
+            result.Add(violation.EdgeId);
+            if (violation.OtherEdgeId is not null) result.Add(violation.OtherEdgeId);
+        }
+
+        var candidateBounds = Bounds(CompletePoints(candidate), spacing);
+        foreach (var link in current.Links.Values)
+        {
+            if (Intersects(candidateBounds, Bounds(CompletePoints(link), spacing)))
+            {
+                result.Add(link.Link.Id);
+            }
+        }
+
+        return result;
+    }
+
+    private static Rect Bounds(IReadOnlyList<Point> points, int padding)
+    {
+        var left = points.Min(point => point.X) - padding;
+        var top = points.Min(point => point.Y) - padding;
+        var right = points.Max(point => point.X) + padding;
+        var bottom = points.Max(point => point.Y) + padding;
+        return new Rect(left, top, Math.Max(1, right - left), Math.Max(1, bottom - top));
+    }
+
+    private static bool Intersects(Rect left, Rect right) =>
+        left.X < right.Right && right.X < left.Right && left.Y < right.Bottom && right.Y < left.Bottom;
+
     private static RepairScore Score(TraceabilityValidationResult validation) => new(
         validation.Violations.Count(item => item.Code == TraceabilityViolationCode.NodeCollision),
         validation.Violations.Where(item => item.Code == TraceabilityViolationCode.SharedSegment).Sum(item => item.Magnitude),
@@ -283,9 +377,8 @@ internal static class RouteRepairCoordinator
             nodes.Values.Where(node => node.Node.Id != link.Link.SourceId && node.Node.Id != link.Link.TargetId)
                 .All(node => !segment.Intersects(node.Rect)));
 
-    private static LinkLayout ToLink(LinkLayout original, IReadOnlyList<Point> points) => new(
-        original.Link, points[0], points[points.Count - 1], points.Skip(1).Take(points.Count - 2),
-        original.ExitX, original.EntryX, original.ExitY, original.EntryY);
+    private static LinkLayout ToLink(LinkLayout original, IReadOnlyList<Point> points) =>
+        original.ProposeSelectedGeometry(points, "RouteRepairCandidate");
 
     private static IReadOnlyList<Point> CompletePoints(LinkLayout link) =>
         new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();

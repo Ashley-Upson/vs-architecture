@@ -20,7 +20,8 @@ public sealed class RouteRepairCoordinatorTests
         };
         var links = new Dictionary<string, LinkLayout>
         {
-            ["edge"] = Link("edge", "source", "target", new Point(20, 50), new Point(110, 50))
+            ["edge"] = Link("edge", "source", "target", new Point(20, 50), new Point(110, 50)),
+            ["unrelated"] = Link("unrelated", "far_source", "far_target", new Point(1000, 500), new Point(1100, 500), 1)
         };
 
         var result = RouteRepairCoordinator.Repair(nodes, links, DiagramSettings.CreateDefault());
@@ -28,6 +29,9 @@ public sealed class RouteRepairCoordinatorTests
         Assert.Contains(result.PreRepairValidation.Violations, x => x.Code == TraceabilityViolationCode.NodeCollision);
         Assert.DoesNotContain(result.PostRepairValidation.Violations, x => x.Code == TraceabilityViolationCode.NodeCollision);
         Assert.Contains(result.Attempts, x => x.FindingCategory == "NodeInteriorIntersection" && x.Applied);
+        Assert.True(result.RoutesInvalidated < result.EstimatedWorkUsed * links.Count);
+        Assert.Equal(0, result.RoutePairsRevalidated);
+        Assert.True(result.CorridorRebuildCount >= 2);
     }
 
     [Fact]

@@ -171,6 +171,27 @@ internal sealed record RenderProject(string Id, string Name, int Order);
                         LogicalRouteCompilationStatus.Rejected,
                         diagnostics.ToArray())
                 }));
+
+        public LogicalRouteState Reselect(string producer, IEnumerable<Point> points) =>
+            new(
+                LogicalEdgeId,
+                SelectedCandidate,
+                Revision + 1,
+                LogicalRouteStage.Selected,
+                producer,
+                points,
+                LogicalRouteCompilationStatus.Pending,
+                Array.Empty<string>(),
+                _history.Concat(new[]
+                {
+                    new LogicalRouteSnapshot(
+                        Revision,
+                        Stage,
+                        Producer,
+                        _authoritativePoints.ToArray(),
+                        CompilationStatus,
+                        _diagnostics.ToArray())
+                }));
     }
 
     internal sealed record LinkLayout(
@@ -244,6 +265,21 @@ internal sealed record RenderProject(string Id, string Name, int Order);
 
         public LinkLayout RejectGeometry(string producer, IEnumerable<string> diagnostics) =>
             this with { State = RouteState.Reject(producer, diagnostics) };
+
+        public LinkLayout ProposeSelectedGeometry(IEnumerable<Point> completePoints, string producer)
+        {
+            var points = completePoints.ToArray();
+            return new LinkLayout(
+                Link,
+                points[0],
+                points[points.Length - 1],
+                new RoutedEdgeGeometry(points.Skip(1).Take(points.Length - 2)),
+                ExitX,
+                EntryX,
+                ExitY,
+                EntryY,
+                RouteState.Reselect(producer, points));
+        }
     }
 
     internal sealed class RoutedEdgeGeometry
