@@ -19,6 +19,7 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, ProjectLayout> projects,
             IReadOnlyDictionary<string, LinkLayout> links,
+            CorridorPathSelectionResult? pathSelection,
             EdgeTraversalCompilation traversals,
             TraceabilityValidationResult traceability,
             CorridorObservation corridors,
@@ -28,6 +29,7 @@ internal sealed class RenderLayout
             Nodes = nodes;
             Projects = projects;
             Links = links;
+            PathSelection = pathSelection;
             Traversals = traversals;
             Traceability = traceability;
             Corridors = corridors;
@@ -42,6 +44,8 @@ internal sealed class RenderLayout
 
         public IReadOnlyDictionary<string, LinkLayout> Links { get; }
 
+        public CorridorPathSelectionResult? PathSelection { get; }
+
         public EdgeTraversalCompilation Traversals { get; }
 
         public TraceabilityValidationResult Traceability { get; }
@@ -51,7 +55,7 @@ internal sealed class RenderLayout
         public CorridorLaneAllocation Lanes { get; }
 
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
-            new(Graph, Nodes, projects, Links, Traversals, Traceability, Corridors, Lanes);
+            new(Graph, Nodes, projects, Links, PathSelection, Traversals, Traceability, Corridors, Lanes);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -60,7 +64,8 @@ internal sealed class RenderLayout
             var widths = CalculateWidths(graph, settings);
             var nodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
             var projects = PositionProjects(graph, settings, nodes);
-            var provisionalLinks = PositionLinks(graph, settings, nodes);
+            var positionedLinks = PositionLinks(graph, settings, nodes);
+            var provisionalLinks = positionedLinks.Links;
             var corridors = CorridorObserver.Observe(
                 nodes,
                 provisionalLinks,
@@ -72,7 +77,7 @@ internal sealed class RenderLayout
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links, traversals, traceability, corridors, lanes);
+            return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, traversals, traceability, corridors, lanes);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
@@ -859,14 +864,14 @@ internal sealed class RenderLayout
             return projects;
         }
 
-        private static Dictionary<string, LinkLayout> PositionLinks(
+        private static PositionedLinkLayouts PositionLinks(
             RenderGraph graph,
             DiagramSettings settings,
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
             if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
             {
-                return PositionExposureTreeLinks(graph, settings, nodes);
+                return new PositionedLinkLayouts(PositionExposureTreeLinks(graph, settings, nodes), null);
             }
 
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
@@ -901,7 +906,7 @@ internal sealed class RenderLayout
 
             if (result.Count > MaximumGlobalPathSelectionEdges)
             {
-                return result;
+                return new PositionedLinkLayouts(result, null);
             }
 
             var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
@@ -944,7 +949,7 @@ internal sealed class RenderLayout
                 new Dictionary<string, int>(StringComparer.Ordinal),
                 settings.Layout.ParallelLaneSpacing,
                 4);
-            return result.Values.ToDictionary(
+            var selectedLayouts = result.Values.ToDictionary(
                 layout => layout.Link.Id,
                 layout =>
                 {
@@ -960,6 +965,7 @@ internal sealed class RenderLayout
                         layout.EntryY);
                 },
                 StringComparer.Ordinal);
+            return new PositionedLinkLayouts(selectedLayouts, selection);
         }
 
         private static CorridorPathCandidate PathCandidate(
@@ -1459,4 +1465,8 @@ internal sealed class RenderLayout
                 depth * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing) +
                 (depthOffsets.TryGetValue(depth, out var offset) ? offset : 0);
         }
+
+        private sealed record PositionedLinkLayouts(
+            IReadOnlyDictionary<string, LinkLayout> Links,
+            CorridorPathSelectionResult? Selection);
     }

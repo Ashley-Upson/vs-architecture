@@ -9,6 +9,43 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DeterministicDrawioExporterTests
 {
     [Fact]
+    public void Render_emits_global_path_selection_diagnostics_on_physical_segments()
+    {
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_source", "project_api", "Source"),
+                    Node("type_left", "project_api", "Left"),
+                    Node("type_right", "project_api", "Right")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_source_left", "type_source", "type_left", "internal"),
+                new DependencyEdge("edge_source_right", "type_source", "type_right", "internal")
+            }));
+
+        var edges = document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("edge") == "1")
+            .ToArray();
+
+        Assert.NotEmpty(edges);
+        Assert.All(edges, edge =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathInitialSignature")));
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathFinalSignature")));
+            Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathDecision")));
+            var localCost = (string?)edge.Attribute("pathLocalCost");
+            Assert.Contains("length=", localCost);
+            Assert.Contains(";bends=", localCost);
+            Assert.Contains(";escape=", localCost);
+        });
+    }
+
+    [Fact]
     public void Render_aligns_nodes_by_dependency_depth()
     {
         var document = Render(new DiagramModel(

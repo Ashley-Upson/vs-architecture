@@ -101,7 +101,14 @@ internal sealed class DiagramFileBuilder
                 .ThenBy(segment => segment.SegmentIndex))
             {
                 layout.Traversals.Traversals.TryGetValue(segment.LogicalEdgeId, out var traversal);
-                root.Add(Edge(segment, traversal));
+                var pathDecision = layout.PathSelection?.Decisions.FirstOrDefault(decision =>
+                    string.Equals(decision.EdgeId, segment.LogicalEdgeId, StringComparison.Ordinal));
+                CorridorPathCandidate? pathCandidate = null;
+                if (layout.PathSelection is not null)
+                {
+                    layout.PathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
+                }
+                root.Add(Edge(segment, traversal, pathDecision, pathCandidate));
             }
 
             return root;
@@ -225,7 +232,11 @@ private XElement GraphModel(XElement root)
                     new XAttribute("as", "geometry")));
         }
 
-        private XElement Edge(PhysicalEdgeSegment segment, EdgeTraversal? traversal)
+        private XElement Edge(
+            PhysicalEdgeSegment segment,
+            EdgeTraversal? traversal,
+            CorridorPathDecision? pathDecision,
+            CorridorPathCandidate? pathCandidate)
         {
             // mxCell stores edge terminals in source/target, style as key=value pairs, and mxGeometry points as waypoints.
             // See https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxCell-js.html and
@@ -238,6 +249,11 @@ private XElement GraphModel(XElement root)
                 new XAttribute("segmentIndex", segment.SegmentIndex),
                 new XAttribute("segmentRole", segment.Role.ToString().ToLowerInvariant()),
                 new XAttribute("routingMode", traversal?.UsesFallback == true ? "fallback" : "traversal"),
+                pathDecision is null ? null : new XAttribute("pathInitialSignature", pathDecision.InitialSignature),
+                pathDecision is null ? null : new XAttribute("pathFinalSignature", pathDecision.FinalSignature),
+                pathDecision is null ? null : new XAttribute("pathDecision", pathDecision.Reason),
+                pathCandidate is null ? null : new XAttribute("pathLocalCost",
+                    $"length={pathCandidate.LocalCost.PathLength};bends={pathCandidate.LocalCost.BendCount};escape={pathCandidate.LocalCost.CanvasEscape}"),
                 traversal is null || traversal.Diagnostics.Count == 0
                     ? null
                     : new XAttribute("routingDiagnostics", string.Join(",", traversal.Diagnostics
