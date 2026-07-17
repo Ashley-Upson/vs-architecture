@@ -9,6 +9,33 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
     public string Export(DiagramModel diagram, DiagramSettings settings)
     {
+        var prepared = Prepare(diagram, settings);
+        TraceabilityValidator.ThrowIfInvalid(prepared.Layout.Traceability, prepared.IsEnforced);
+        return new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+    }
+
+    public DrawioDiagnosticExportResult ExportDiagnostic(DiagramModel diagram, DiagramSettings settings)
+    {
+        var prepared = Prepare(diagram, settings);
+        var enforced = prepared.Layout.Traceability.Violations.Where(prepared.IsEnforced).ToArray();
+        var content = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        var reportJson = DrawioDiagnosticReportBuilder.BuildJson(
+            prepared.Layout,
+            prepared.Ownership,
+            enforced,
+            prepared.Settings.Layout.ParallelLaneSpacing);
+        var annotated = DrawioDiagnosticReportBuilder.Annotate(content, enforced, "All enforced findings");
+        var focused = DrawioDiagnosticReportBuilder.FocusedOutputs(content, enforced);
+        return new DrawioDiagnosticExportResult(
+            annotated,
+            reportJson,
+            focused,
+            enforced.Length,
+            enforced.Select(violation => violation.EdgeId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    private static PreparedExport Prepare(DiagramModel diagram, DiagramSettings settings)
+    {
         if (diagram is null)
         {
             throw new ArgumentNullException(nameof(diagram));
@@ -23,7 +50,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             .ToDictionary(
                 group => group.Key,
                 group => new HashSet<string>(group.Select(mapping => mapping.CorridorId)));
-        TraceabilityValidator.ThrowIfInvalid(layout.Traceability, violation =>
+        bool IsEnforced(TraceabilityViolation violation)
         {
             // Traversal compilation can contain collinear terminal-access redundancy;
             // ownership serialization removes that redundancy before XML emission.
@@ -40,7 +67,8 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             return violation.OtherEdgeId is null ||
                 successfulCorridorsByEdge.TryGetValue(violation.OtherEdgeId, out var otherCorridors) &&
                 edgeCorridors.Overlaps(otherCorridors);
-        });
+        }
+
         var ownership = CoordinateOwnershipCompiler.Compile(
             layout.Nodes,
             layout.Projects,
@@ -58,6 +86,12 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
         }
 
-        return new DiagramFileBuilder(settings).Build(layout, ownership);
+        return new PreparedExport(settings, layout, ownership, IsEnforced);
     }
+
+    private sealed record PreparedExport(
+        DiagramSettings Settings,
+        RenderLayout Layout,
+        CoordinateOwnershipCompilation Ownership,
+        Func<TraceabilityViolation, bool> IsEnforced);
 }

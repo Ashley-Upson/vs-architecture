@@ -18,7 +18,13 @@ internal sealed record TraceabilityViolation(
     string EdgeId,
     string? OtherEdgeId,
     int Magnitude,
-    string Description);
+    string Description,
+    string? OtherNodeId = null,
+    IReadOnlyList<Point>? Locations = null,
+    IReadOnlyList<Segment>? OffendingSegments = null,
+    int? RequiredSpacing = null,
+    int? ActualSpacing = null,
+    int? ParallelOverlapLength = null);
 
 internal sealed class TraceabilityValidationResult
 {
@@ -91,14 +97,18 @@ internal static class TraceabilityValidator
                 !string.Equals(node.Node.Id, link.Link.SourceId, StringComparison.Ordinal) &&
                 !string.Equals(node.Node.Id, link.Link.TargetId, StringComparison.Ordinal)))
             {
-                if (route.Any(segment => segment.Intersects(node.Rect)))
+                var collidingSegments = route.Where(segment => segment.Intersects(node.Rect)).ToArray();
+                if (collidingSegments.Length > 0)
                 {
                     violations.Add(new TraceabilityViolation(
                         TraceabilityViolationCode.NodeCollision,
                         link.Link.Id,
                         null,
                         1,
-                        $"Edge {link.Link.Id} intersects node {node.Node.Id}."));
+                        $"Edge {link.Link.Id} intersects node {node.Node.Id}.",
+                        node.Node.Id,
+                        collidingSegments.Select(segment => CollisionLocation(segment, node.Rect)).Distinct().ToArray(),
+                        collidingSegments));
                 }
             }
         }
@@ -113,8 +123,12 @@ internal static class TraceabilityValidator
                 var right = orderedLinks[rightIndex];
                 var rightSegments = CompleteSegments(right);
                 var rightBends = InteriorPoints(right);
-                var sharedLength = leftSegments.Sum(leftSegment =>
-                    rightSegments.Sum(rightSegment => leftSegment.OverlapLength(rightSegment)));
+                var sharedSegments = leftSegments.SelectMany(leftSegment =>
+                    rightSegments.Select(rightSegment => SharedSegment(leftSegment, rightSegment)))
+                    .Where(segment => segment is not null)
+                    .Select(segment => segment!.Value)
+                    .ToArray();
+                var sharedLength = sharedSegments.Sum(segment => segment.Length);
                 if (sharedLength > 0)
                 {
                     violations.Add(new TraceabilityViolation(
@@ -122,10 +136,14 @@ internal static class TraceabilityValidator
                         left.Link.Id,
                         right.Link.Id,
                         sharedLength,
-                        $"Edges {left.Link.Id} and {right.Link.Id} share {sharedLength}px of route."));
+                        $"Edges {left.Link.Id} and {right.Link.Id} share {sharedLength}px of route.",
+                        Locations: sharedSegments.Select(segment => Midpoint(segment)).Distinct().ToArray(),
+                        OffendingSegments: sharedSegments,
+                        ParallelOverlapLength: sharedLength));
                 }
 
-                var spacingDeficit = ParallelSpacingDeficit(leftSegments, rightSegments, requiredParallelSpacing);
+                var spacing = ParallelSpacing(leftSegments, rightSegments, requiredParallelSpacing);
+                var spacingDeficit = spacing.Deficit;
                 if (spacingDeficit > 0)
                 {
                     violations.Add(new TraceabilityViolation(
@@ -133,7 +151,12 @@ internal static class TraceabilityValidator
                         left.Link.Id,
                         right.Link.Id,
                         spacingDeficit,
-                        $"Edges {left.Link.Id} and {right.Link.Id} violate parallel spacing by up to {spacingDeficit}px."));
+                        $"Edges {left.Link.Id} and {right.Link.Id} violate parallel spacing by up to {spacingDeficit}px.",
+                        Locations: spacing.Segments.Select(segment => Midpoint(segment)).Distinct().ToArray(),
+                        OffendingSegments: spacing.Segments,
+                        RequiredSpacing: requiredParallelSpacing,
+                        ActualSpacing: spacing.Actual,
+                        ParallelOverlapLength: spacing.OverlapLength));
                 }
 
                 var reusedBends = leftBends.Intersect(rightBends).Count();
@@ -144,7 +167,8 @@ internal static class TraceabilityValidator
                         left.Link.Id,
                         right.Link.Id,
                         reusedBends,
-                        $"Edges {left.Link.Id} and {right.Link.Id} reuse {reusedBends} bend point(s)."));
+                        $"Edges {left.Link.Id} and {right.Link.Id} reuse {reusedBends} bend point(s).",
+                        Locations: leftBends.Intersect(rightBends).ToArray()));
                 }
             }
         }
@@ -183,12 +207,15 @@ internal static class TraceabilityValidator
             : points.Skip(1).Take(points.Length - 2).ToArray();
     }
 
-    private static int ParallelSpacingDeficit(
+    private static (int Deficit, int Actual, int OverlapLength, IReadOnlyList<Segment> Segments) ParallelSpacing(
         IReadOnlyList<Segment> leftSegments,
         IReadOnlyList<Segment> rightSegments,
         int requiredSpacing)
     {
         var maximumDeficit = 0;
+        var actual = requiredSpacing;
+        var overlapLength = 0;
+        var offending = new List<Segment>();
         foreach (var left in leftSegments)
         {
             foreach (var right in rightSegments)
@@ -196,26 +223,81 @@ internal static class TraceabilityValidator
                 if (left.IsHorizontal && right.IsHorizontal && RangesOverlap(left.Start.X, left.End.X, right.Start.X, right.End.X))
                 {
                     var distance = Math.Abs(left.Start.Y - right.Start.Y);
-                    if (distance > 0)
+                    if (distance > 0 && distance < requiredSpacing)
                     {
                         maximumDeficit = Math.Max(maximumDeficit, requiredSpacing - distance);
+                        actual = Math.Min(actual, distance);
+                        var overlap = AxisOverlap(left.Start.X, left.End.X, right.Start.X, right.End.X);
+                        overlapLength += overlap.End - overlap.Start;
+                        offending.Add(new Segment(new Point(overlap.Start, left.Start.Y), new Point(overlap.End, left.Start.Y)));
                     }
                 }
                 else if (left.IsVertical && right.IsVertical && RangesOverlap(left.Start.Y, left.End.Y, right.Start.Y, right.End.Y))
                 {
                     var distance = Math.Abs(left.Start.X - right.Start.X);
-                    if (distance > 0)
+                    if (distance > 0 && distance < requiredSpacing)
                     {
                         maximumDeficit = Math.Max(maximumDeficit, requiredSpacing - distance);
+                        actual = Math.Min(actual, distance);
+                        var overlap = AxisOverlap(left.Start.Y, left.End.Y, right.Start.Y, right.End.Y);
+                        overlapLength += overlap.End - overlap.Start;
+                        offending.Add(new Segment(new Point(left.Start.X, overlap.Start), new Point(left.Start.X, overlap.End)));
                     }
                 }
             }
         }
 
-        return Math.Max(0, maximumDeficit);
+        return (Math.Max(0, maximumDeficit), actual, overlapLength, offending);
     }
 
     private static bool RangesOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd) =>
         Math.Min(firstStart, firstEnd) < Math.Max(secondStart, secondEnd) &&
         Math.Min(secondStart, secondEnd) < Math.Max(firstStart, firstEnd);
+
+    private static (int Start, int End) AxisOverlap(int firstStart, int firstEnd, int secondStart, int secondEnd) =>
+        (Math.Max(Math.Min(firstStart, firstEnd), Math.Min(secondStart, secondEnd)),
+            Math.Min(Math.Max(firstStart, firstEnd), Math.Max(secondStart, secondEnd)));
+
+    private static Segment? SharedSegment(Segment left, Segment right)
+    {
+        if (left.IsHorizontal && right.IsHorizontal && left.Start.Y == right.Start.Y)
+        {
+            var overlap = AxisOverlap(left.Start.X, left.End.X, right.Start.X, right.End.X);
+            return overlap.End > overlap.Start
+                ? new Segment(new Point(overlap.Start, left.Start.Y), new Point(overlap.End, left.Start.Y))
+                : null;
+        }
+
+        if (left.IsVertical && right.IsVertical && left.Start.X == right.Start.X)
+        {
+            var overlap = AxisOverlap(left.Start.Y, left.End.Y, right.Start.Y, right.End.Y);
+            return overlap.End > overlap.Start
+                ? new Segment(new Point(left.Start.X, overlap.Start), new Point(left.Start.X, overlap.End))
+                : null;
+        }
+
+        return null;
+    }
+
+    private static Point CollisionLocation(Segment segment, Rect rect)
+    {
+        if (segment.IsHorizontal)
+        {
+            var start = Math.Max(Math.Min(segment.Start.X, segment.End.X), rect.X);
+            var end = Math.Min(Math.Max(segment.Start.X, segment.End.X), rect.Right);
+            return new Point((start + end) / 2, segment.Start.Y);
+        }
+
+        if (segment.IsVertical)
+        {
+            var start = Math.Max(Math.Min(segment.Start.Y, segment.End.Y), rect.Y);
+            var end = Math.Min(Math.Max(segment.Start.Y, segment.End.Y), rect.Bottom);
+            return new Point(segment.Start.X, (start + end) / 2);
+        }
+
+        return Midpoint(segment);
+    }
+
+    private static Point Midpoint(Segment segment) =>
+        new((segment.Start.X + segment.End.X) / 2, (segment.Start.Y + segment.End.Y) / 2);
 }

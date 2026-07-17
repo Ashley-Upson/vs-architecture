@@ -82,8 +82,38 @@ public sealed class TraceabilityValidatorTests
 
         var result = TraceabilityValidator.Validate(nodes, links, 12);
 
-        Assert.Contains(result.Violations, violation =>
-            violation.Code == TraceabilityViolationCode.NodeCollision);
+        var violation = Assert.Single(result.Violations, item =>
+            item.Code == TraceabilityViolationCode.NodeCollision);
+        Assert.Equal("obstacle", violation.OtherNodeId);
+        Assert.Equal(new Point(60, 60), Assert.Single(violation.Locations!));
+        Assert.Equal(new Segment(new Point(20, 60), new Point(100, 60)), Assert.Single(violation.OffendingSegments!));
+    }
+
+    [Fact]
+    public void Validate_reports_exact_shared_and_spacing_geometry()
+    {
+        var links = new Dictionary<string, LinkLayout>
+        {
+            ["edge_a"] = Link("edge_a", 0, new Point(0, 20), new Point(100, 20), Array.Empty<Point>()),
+            ["edge_b"] = Link("edge_b", 1, new Point(20, 20), new Point(80, 20), Array.Empty<Point>()),
+            ["edge_c"] = Link("edge_c", 2, new Point(10, 25), new Point(90, 25), Array.Empty<Point>())
+        };
+
+        var result = TraceabilityValidator.Validate(new Dictionary<string, NodeLayout>(), links, 12);
+
+        var shared = Assert.Single(result.Violations, item =>
+            item.Code == TraceabilityViolationCode.SharedSegment);
+        Assert.Equal(60, shared.ParallelOverlapLength);
+        Assert.Equal(new Segment(new Point(20, 20), new Point(80, 20)), Assert.Single(shared.OffendingSegments!));
+
+        var spacing = result.Violations.First(item =>
+            item.Code == TraceabilityViolationCode.ParallelSpacing &&
+            item.EdgeId == "edge_a" &&
+            item.OtherEdgeId == "edge_c");
+        Assert.Equal(12, spacing.RequiredSpacing);
+        Assert.Equal(5, spacing.ActualSpacing);
+        Assert.Equal(7, spacing.Magnitude);
+        Assert.Equal(80, spacing.ParallelOverlapLength);
     }
 
     [Fact]
