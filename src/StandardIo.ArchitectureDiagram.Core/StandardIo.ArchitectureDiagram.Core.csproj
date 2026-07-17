@@ -6,7 +6,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <VersionMajor>0</VersionMajor>
     <VersionMinor>3</VersionMinor>
-    <VersionPatch>3</VersionPatch>
+    <VersionPatch>4</VersionPatch>
     <Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
   </PropertyGroup>
   <ItemGroup>
