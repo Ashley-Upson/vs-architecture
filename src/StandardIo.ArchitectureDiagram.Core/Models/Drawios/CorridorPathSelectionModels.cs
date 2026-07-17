@@ -16,7 +16,9 @@ internal sealed record CorridorPathCandidate(
     IReadOnlyList<Point> Points,
     bool HasInvalidGeometry = false,
     int AmbiguousTransitions = 0,
-    bool IsAcceptedPath = false);
+    bool IsAcceptedPath = false,
+    string? ExposureRootId = null,
+    string? ExposureBranchId = null);
 
 internal sealed record GlobalRouteScore(
     int InvalidGeometry,

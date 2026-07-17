@@ -12,13 +12,24 @@ internal static class RegionalCorridorPathOptimizer
         int minimumSpacing,
         RegionalOptimisationLimits limits)
     {
+        var localityViolationEdges = new HashSet<string>(StringComparer.Ordinal);
         var retained = candidates.OrderBy(item => item.Key, StringComparer.Ordinal).ToDictionary(
             item => item.Key,
-            item => (IReadOnlyList<CorridorPathCandidate>)item.Value
+            item =>
+            {
+                var accepted = item.Value.FirstOrDefault(candidate => candidate.IsAcceptedPath) ?? item.Value.First();
+                var local = item.Value.Where(candidate => SameExposureScope(accepted, candidate)).ToArray();
+                if (local.Length != item.Value.Count)
+                {
+                    localityViolationEdges.Add(item.Key);
+                }
+
+                return (IReadOnlyList<CorridorPathCandidate>)local
                 .OrderBy(candidate => candidate.IsAcceptedPath ? 0 : 1)
                 .ThenBy(candidate => candidate.Signature.Value, StringComparer.Ordinal)
                 .Take(limits.MaximumCandidatesPerEdge)
-                .ToArray(),
+                .ToArray();
+            },
             StringComparer.Ordinal);
         var selected = retained.ToDictionary(
             item => item.Key,
@@ -42,8 +53,16 @@ internal static class RegionalCorridorPathOptimizer
 
             if (region.MutableEdgeIds.Count == 0)
             {
+                var localityViolation = region.FixedContextEdgeIds.Any(localityViolationEdges.Contains);
                 decisions.Add(Decision(region, beforeWhole, beforeWhole, false, RegionFallbackReason.NoAlternativeCandidate,
-                    "No interacting edge has a viable alternative candidate."));
+                    localityViolation
+                        ? "Alternatives were rejected because they leave the accepted exposure root or branch."
+                        : "No interacting edge has a viable alternative candidate.") with
+                {
+                    FallbackReason = localityViolation
+                        ? RegionFallbackReason.ExposureLocalityViolation
+                        : RegionFallbackReason.NoAlternativeCandidate
+                });
                 continue;
             }
 
@@ -102,6 +121,10 @@ internal static class RegionalCorridorPathOptimizer
             {
                 var left = ordered[leftIndex];
                 var right = ordered[rightIndex];
+                if (!Intersects(Bounds(left.Value.Points).Inflate(minimumSpacing), Bounds(right.Value.Points).Inflate(minimumSpacing)))
+                {
+                    continue;
+                }
                 var pair = new Dictionary<string, CorridorPathCandidate>(StringComparer.Ordinal)
                 {
                     [left.Key] = left.Value,
@@ -204,4 +227,11 @@ internal static class RegionalCorridorPathOptimizer
         var y = Math.Min(left.Y, right.Y);
         return new Rect(x, y, Math.Max(left.Right, right.Right) - x, Math.Max(left.Bottom, right.Bottom) - y);
     }
+
+    private static bool Intersects(Rect left, Rect right) =>
+        left.X <= right.Right && left.Right >= right.X && left.Y <= right.Bottom && left.Bottom >= right.Y;
+
+    private static bool SameExposureScope(CorridorPathCandidate accepted, CorridorPathCandidate candidate) =>
+        string.Equals(accepted.ExposureRootId, candidate.ExposureRootId, StringComparison.Ordinal) &&
+        string.Equals(accepted.ExposureBranchId, candidate.ExposureBranchId, StringComparison.Ordinal);
 }

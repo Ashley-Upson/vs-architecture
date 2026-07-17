@@ -20,6 +20,7 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, ProjectLayout> projects,
             IReadOnlyDictionary<string, LinkLayout> links,
             CorridorPathSelectionResult? pathSelection,
+            RegionalPathSelectionResult? regionalPathSelection,
             EdgeTraversalCompilation traversals,
             TraceabilityValidationResult traceability,
             CorridorObservation corridors,
@@ -30,6 +31,7 @@ internal sealed class RenderLayout
             Projects = projects;
             Links = links;
             PathSelection = pathSelection;
+            RegionalPathSelection = regionalPathSelection;
             Traversals = traversals;
             Traceability = traceability;
             Corridors = corridors;
@@ -46,6 +48,8 @@ internal sealed class RenderLayout
 
         public CorridorPathSelectionResult? PathSelection { get; }
 
+        public RegionalPathSelectionResult? RegionalPathSelection { get; }
+
         public EdgeTraversalCompilation Traversals { get; }
 
         public TraceabilityValidationResult Traceability { get; }
@@ -55,7 +59,7 @@ internal sealed class RenderLayout
         public CorridorLaneAllocation Lanes { get; }
 
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
-            new(Graph, Nodes, projects, Links, PathSelection, Traversals, Traceability, Corridors, Lanes);
+            new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -77,7 +81,7 @@ internal sealed class RenderLayout
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, traversals, traceability, corridors, lanes);
+            return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection, traversals, traceability, corridors, lanes);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
@@ -871,7 +875,12 @@ internal sealed class RenderLayout
         {
             if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
             {
-                return new PositionedLinkLayouts(PositionExposureTreeLinks(graph, settings, nodes), null);
+                return OptimiseRegionalLinks(
+                    graph,
+                    settings,
+                    nodes,
+                    PositionExposureTreeLinks(graph, settings, nodes),
+                    true);
             }
 
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
@@ -906,7 +915,7 @@ internal sealed class RenderLayout
 
             if (result.Count > MaximumGlobalPathSelectionEdges)
             {
-                return new PositionedLinkLayouts(result, null);
+                return OptimiseRegionalLinks(graph, settings, nodes, result, false);
             }
 
             var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
@@ -965,7 +974,104 @@ internal sealed class RenderLayout
                         layout.EntryY);
                 },
                 StringComparer.Ordinal);
-            return new PositionedLinkLayouts(selectedLayouts, selection);
+            return new PositionedLinkLayouts(selectedLayouts, selection, null);
+        }
+
+        private static PositionedLinkLayouts OptimiseRegionalLinks(
+            RenderGraph graph,
+            DiagramSettings settings,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, LinkLayout> acceptedLayouts,
+            bool exposureTree)
+        {
+            var acceptedCandidates = acceptedLayouts.Values.ToDictionary(
+                layout => layout.Link.Id,
+                layout =>
+                {
+                    var scope = ExposureScope(layout.Link.Id, exposureTree);
+                    return PathCandidate(
+                        layout.Link.Id,
+                        layout.SourcePoint,
+                        layout.TargetPoint,
+                        layout.Points.ToList(),
+                        true,
+                        scope.RootId,
+                        scope.BranchId);
+                },
+                StringComparer.Ordinal);
+            var interactions = RegionalCorridorPathOptimizer.DiscoverInteractions(
+                acceptedCandidates,
+                settings.Layout.ParallelLaneSpacing);
+            var relevantEdges = new HashSet<string>(
+                interactions.SelectMany(interaction => new[] { interaction.FirstEdgeId, interaction.SecondEdgeId }),
+                StringComparer.Ordinal);
+            var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
+            var sourceDemand = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            var targetDemand = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
+            foreach (var link in graph.Links.OrderBy(item => item.Order).ThenBy(item => item.Id, StringComparer.Ordinal))
+            {
+                var accepted = acceptedLayouts[link.Id];
+                var acceptedCandidate = acceptedCandidates[link.Id];
+                if (!relevantEdges.Contains(link.Id) || accepted.Points.Count == 0 ||
+                    sourceDemand[link.SourceId] > 1 || targetDemand[link.TargetId] > 1)
+                {
+                    candidatesByEdge[link.Id] = new[] { acceptedCandidate };
+                    continue;
+                }
+
+                var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
+                var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
+                var laneOffset = routeLaneIndex * settings.Layout.ParallelLaneSpacing;
+                var sourceExit = accepted.Points[0];
+                var targetEntry = accepted.Points[accepted.Points.Count - 1];
+                var alternatives = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                    .Concat(BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings,
+                        laneOffset + settings.Layout.ParallelLaneSpacing))
+                    .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
+                    .Select(Simplify)
+                    .Where(route => !CrossesNode(route, obstacles))
+                    .Select(route => PathCandidate(
+                        link.Id,
+                        accepted.SourcePoint,
+                        accepted.TargetPoint,
+                        route,
+                        false,
+                        acceptedCandidate.ExposureRootId,
+                        acceptedCandidate.ExposureBranchId))
+                    .Append(acceptedCandidate)
+                    .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
+                    .Select(group => group.First());
+                candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
+                    alternatives,
+                    8,
+                    settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+            }
+
+            var regional = RegionalCorridorPathOptimizer.Optimise(
+                candidatesByEdge,
+                new Dictionary<string, int>(StringComparer.Ordinal),
+                settings.Layout.ParallelLaneSpacing,
+                new RegionalOptimisationLimits());
+            var selectedLayouts = acceptedLayouts.Values.ToDictionary(
+                layout => layout.Link.Id,
+                layout =>
+                {
+                    var points = regional.Selected[layout.Link.Id].Points;
+                    return new LinkLayout(
+                        layout.Link,
+                        points[0],
+                        points[points.Count - 1],
+                        points.Skip(1).Take(points.Count - 2),
+                        layout.ExitX,
+                        layout.EntryX,
+                        layout.ExitY,
+                        layout.EntryY);
+                },
+                StringComparer.Ordinal);
+            return new PositionedLinkLayouts(selectedLayouts, null, regional);
         }
 
         private static CorridorPathCandidate PathCandidate(
@@ -973,7 +1079,9 @@ internal sealed class RenderLayout
             Point source,
             Point target,
             IReadOnlyList<Point> route,
-            bool isAcceptedPath)
+            bool isAcceptedPath,
+            string? exposureRootId = null,
+            string? exposureBranchId = null)
         {
             var complete = new[] { source }.Concat(route).Concat(new[] { target }).ToArray();
             var length = Segments(complete).Sum(segment => segment.Length);
@@ -993,7 +1101,20 @@ internal sealed class RenderLayout
                 new CorridorPathSignature(signature),
                 new CorridorPathLocalCost(length, Math.Max(0, complete.Length - 2), escape),
                 complete,
-                IsAcceptedPath: isAcceptedPath);
+                IsAcceptedPath: isAcceptedPath,
+                ExposureRootId: exposureRootId,
+                ExposureBranchId: exposureBranchId);
+        }
+
+        private static (string? RootId, string? BranchId) ExposureScope(string edgeId, bool exposureTree)
+        {
+            if (!exposureTree || !edgeId.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal))
+            {
+                return (null, null);
+            }
+
+            var parts = edgeId.Split(new[] { "__" }, StringSplitOptions.None);
+            return (parts.Length > 0 ? parts[0] : edgeId, parts.Length > 1 ? parts[1] : edgeId);
         }
 
         private static string RoutePathSignature(IReadOnlyList<Point> points, Point source, Point target)
@@ -1468,5 +1589,6 @@ internal sealed class RenderLayout
 
         private sealed record PositionedLinkLayouts(
             IReadOnlyDictionary<string, LinkLayout> Links,
-            CorridorPathSelectionResult? Selection);
+            CorridorPathSelectionResult? Selection,
+            RegionalPathSelectionResult? RegionalSelection);
     }

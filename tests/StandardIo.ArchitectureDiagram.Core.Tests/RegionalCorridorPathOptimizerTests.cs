@@ -111,6 +111,62 @@ public sealed class RegionalCorridorPathOptimizerTests
         Assert.Equal(first.Regions.Select(region => region.Id), second.Regions.Select(region => region.Id));
     }
 
+    [Fact]
+    public void Optimise_accepts_same_branch_exposure_alternative_for_higher_tier_improvement()
+    {
+        var candidates = ConflictCandidates("exposure", 0).ToDictionary(item => item.Key, item =>
+            (IReadOnlyList<CorridorPathCandidate>)item.Value.Select(candidate => candidate with
+            {
+                ExposureRootId = "root-a",
+                ExposureBranchId = "branch-a"
+            }).ToArray(), StringComparer.Ordinal);
+
+        var result = RegionalCorridorPathOptimizer.Optimise(candidates, Capacities(), 10, new RegionalOptimisationLimits());
+
+        Assert.Equal("upper", result.Selected["exposure-blocker"].Signature.Value);
+        Assert.Contains(result.Decisions, decision => decision.Changed);
+    }
+
+    [Fact]
+    public void Optimise_rejects_sibling_branch_escape_without_higher_tier_necessity()
+    {
+        var candidates = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+        {
+            ["mutable"] = new[]
+            {
+                Candidate("mutable", "accepted", P(0, 0, 100, 0), accepted: true, root: "root-a", branch: "branch-a"),
+                Candidate("mutable", "sibling", P(0, 0, 0, -20, 100, -20, 100, 0), root: "root-a", branch: "branch-b")
+            },
+            ["fixed"] = new[] { Candidate("fixed", "fixed", P(20, 0, 80, 0), accepted: true, root: "root-a", branch: "branch-a") }
+        };
+
+        var result = RegionalCorridorPathOptimizer.Optimise(candidates, Capacities(), 10, new RegionalOptimisationLimits());
+
+        Assert.Equal("accepted", result.Selected["mutable"].Signature.Value);
+        Assert.Equal(RegionFallbackReason.ExposureLocalityViolation, Assert.Single(result.Decisions).FallbackReason);
+    }
+
+    [Fact]
+    public void Optimise_reverts_local_change_that_regresses_whole_diagram_score()
+    {
+        var candidates = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+        {
+            ["mutable"] = new[]
+            {
+                Candidate("mutable", "accepted", P(0, 0, 100, 0), accepted: true),
+                Candidate("mutable", "locally-clean", P(0, 20, 100, 20))
+            },
+            ["local-trigger"] = new[] { Candidate("local-trigger", "fixed", P(20, 0, 80, 0), accepted: true) },
+            ["outside-context"] = new[] { Candidate("outside-context", "fixed", P(20, 20, 80, 20), accepted: true) }
+        };
+
+        var result = RegionalCorridorPathOptimizer.Optimise(candidates, Capacities(), 10, new RegionalOptimisationLimits());
+
+        Assert.Equal("accepted", result.Selected["mutable"].Signature.Value);
+        Assert.Contains(result.Decisions, decision =>
+            !decision.Changed && decision.FallbackReason == RegionFallbackReason.WholeDiagramRegression);
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<CorridorPathCandidate>> OneHundredEdgeCandidates()
     {
         var result = ConflictCandidates(string.Empty, 0).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -145,14 +201,18 @@ public sealed class RegionalCorridorPathOptimizerTests
         string signature,
         IReadOnlyList<Point> points,
         bool accepted = false,
-        int escape = 0) =>
+        int escape = 0,
+        string? root = null,
+        string? branch = null) =>
         new(edgeId, new[] { signature }, Array.Empty<string>(), new CorridorPathSignature(signature),
             new CorridorPathLocalCost(
                 points.Zip(points.Skip(1), (left, right) => Math.Abs(left.X - right.X) + Math.Abs(left.Y - right.Y)).Sum(),
                 Math.Max(0, points.Count - 2),
                 escape),
             points,
-            IsAcceptedPath: accepted);
+            IsAcceptedPath: accepted,
+            ExposureRootId: root,
+            ExposureBranchId: branch);
 
     private static IReadOnlyDictionary<string, int> Capacities() => new Dictionary<string, int>(StringComparer.Ordinal);
 
