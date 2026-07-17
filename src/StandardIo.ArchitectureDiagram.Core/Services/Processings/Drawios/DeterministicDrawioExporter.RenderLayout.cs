@@ -181,6 +181,7 @@ internal sealed class RenderLayout
                     return item.Value with { Rect = item.Value.Rect with { Y = item.Value.Rect.Y + delta } };
                 },
                 StringComparer.Ordinal);
+            AlignBaselineNodes(settings, expanded);
             var attempts = demandByDepth.OrderBy(item => item.Key).Select(item => new RouteRepairAttempt(
                 $"layer-depth-{item.Key}",
                 "AdaptiveLayerSpacing",
