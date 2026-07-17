@@ -21,7 +21,14 @@ internal sealed record RenderProject(string Id, string Name, int Order);
         IReadOnlyList<string> Interfaces,
         IReadOnlyList<TypeProperty> Properties,
         int MethodCount);
-    internal sealed record RenderLink(string Id, string SourceId, string TargetId, string Kind, int Order);
+    internal sealed record RenderLink(
+        string Id,
+        string SourceId,
+        string TargetId,
+        string Kind,
+        int Order,
+        string? SemanticSourceId = null,
+        string? SemanticTargetId = null);
     internal sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth, bool IsStandalone);
     internal sealed record ProjectLayout(RenderProject Project, Rect Rect);
     internal sealed record LinkLayout(

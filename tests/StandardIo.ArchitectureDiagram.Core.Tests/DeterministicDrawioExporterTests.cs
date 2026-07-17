@@ -827,7 +827,13 @@ public sealed class DeterministicDrawioExporterTests
 
     private static XElement Cell(XDocument document, string id)
     {
-        return document.Descendants("mxCell").Single(cell => (string?)cell.Attribute("id") == id);
+        var exact = document.Descendants("mxCell").SingleOrDefault(cell => (string?)cell.Attribute("id") == id);
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        return LogicalEdgeCells(document, id).OrderByDescending(SegmentIndex).First();
     }
 
     private static int AbsoluteX(XDocument document, string id)
@@ -867,12 +873,66 @@ public sealed class DeterministicDrawioExporterTests
 
     private static IReadOnlyList<(int X, int Y)> EdgePoints(XDocument document, string id)
     {
-        return Cell(document, id)
-            .Descendants("mxPoint")
-            .Select(point => (
-                int.Parse((string)point.Attribute("x")!),
-                int.Parse((string)point.Attribute("y")!)))
+        var segments = LogicalEdgeCells(document, id).OrderBy(SegmentIndex).ToArray();
+        if (segments.Length == 0)
+        {
+            segments = new[] { Cell(document, id) };
+        }
+
+        var points = new List<(int X, int Y)>();
+        for (var index = 0; index < segments.Length; index++)
+        {
+            var segment = segments[index];
+            var parentId = (string?)segment.Attribute("parent");
+            var offsetX = string.IsNullOrWhiteSpace(parentId) || parentId == "1" ? 0 : AbsoluteX(document, parentId);
+            var offsetY = string.IsNullOrWhiteSpace(parentId) || parentId == "1" ? 0 : AbsoluteY(document, parentId);
+            if (index > 0)
+            {
+                var source = Cell(document, (string)segment.Attribute("source")!);
+                points.Add((AbsoluteX(document, (string)source.Attribute("id")!), AbsoluteY(document, (string)source.Attribute("id")!)));
+            }
+
+            points.AddRange(segment.Descendants("mxPoint").Select(point => (
+                int.Parse((string)point.Attribute("x")!) + offsetX,
+                int.Parse((string)point.Attribute("y")!) + offsetY)));
+            if (index < segments.Length - 1)
+            {
+                var target = Cell(document, (string)segment.Attribute("target")!);
+                points.Add((AbsoluteX(document, (string)target.Attribute("id")!), AbsoluteY(document, (string)target.Attribute("id")!)));
+            }
+        }
+
+        return NormalizeRoutePoints(points);
+    }
+
+    private static XElement[] LogicalEdgeCells(XDocument document, string id) =>
+        document.Descendants("mxCell")
+            .Where(cell => (string?)cell.Attribute("edge") == "1" &&
+                (string?)cell.Attribute("logicalEdgeId") == id)
             .ToArray();
+
+    private static int SegmentIndex(XElement edge) =>
+        int.TryParse((string?)edge.Attribute("segmentIndex"), out var index) ? index : 0;
+
+    private static IReadOnlyList<(int X, int Y)> NormalizeRoutePoints(IEnumerable<(int X, int Y)> source)
+    {
+        var result = new List<(int X, int Y)>();
+        foreach (var point in source)
+        {
+            if (result.Count == 0 || result[^1] != point)
+            {
+                result.Add(point);
+            }
+
+            while (result.Count >= 3 &&
+                (result[^3].X == result[^2].X && result[^2].X == result[^1].X ||
+                 result[^3].Y == result[^2].Y && result[^2].Y == result[^1].Y))
+            {
+                result.RemoveAt(result.Count - 2);
+            }
+        }
+
+        return result;
     }
 
     private static void AssertNoWaypointSegmentsCrossNonEndpointNodes(XDocument document)
@@ -1086,17 +1146,21 @@ public sealed class DeterministicDrawioExporterTests
     {
         var sourceId = CellIdByValue(document, sourceValue);
         var targetId = CellIdByValue(document, targetValue);
-        var edge = document.Descendants("mxCell").Single(cell =>
+        var logicalEdges = document.Descendants("mxCell").Where(cell =>
             (string?)cell.Attribute("edge") == "1" &&
-            (string?)cell.Attribute("source") == sourceId &&
-            (string?)cell.Attribute("target") == targetId);
-        var edgeId = (string)edge.Attribute("id")!;
+            ((string?)cell.Attribute("semanticSourceId") == sourceId &&
+             (string?)cell.Attribute("semanticTargetId") == targetId ||
+             (string?)cell.Attribute("source") == sourceId &&
+             (string?)cell.Attribute("target") == targetId)).ToArray();
+        var firstEdge = logicalEdges.OrderBy(SegmentIndex).First();
+        var lastEdge = logicalEdges.OrderByDescending(SegmentIndex).First();
+        var logicalEdgeId = (string?)firstEdge.Attribute("logicalEdgeId") ?? (string)firstEdge.Attribute("id")!;
         var points = new List<(int X, int Y)>
         {
-            RatioPoint(NodeRect(document, (string)edge.Attribute("source")!), StyleValue(edge, "exitX"), StyleValue(edge, "exitY"))
+            RatioPoint(NodeRect(document, sourceId), StyleValue(firstEdge, "exitX"), StyleValue(firstEdge, "exitY"))
         };
-        points.AddRange(EdgePoints(document, edgeId));
-        points.Add(RatioPoint(NodeRect(document, (string)edge.Attribute("target")!), StyleValue(edge, "entryX"), StyleValue(edge, "entryY")));
+        points.AddRange(EdgePoints(document, logicalEdgeId));
+        points.Add(RatioPoint(NodeRect(document, targetId), StyleValue(lastEdge, "entryX"), StyleValue(lastEdge, "entryY")));
         return points;
     }
 

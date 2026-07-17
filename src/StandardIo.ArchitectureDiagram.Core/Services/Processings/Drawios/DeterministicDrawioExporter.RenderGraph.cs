@@ -92,11 +92,20 @@ internal sealed class RenderGraph
 
             var nodeIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
             var links = diagram.Edges
-                .Select(edge => externalTargetIds.TryGetValue(edge.Id, out var targetId)
-                    ? new DependencyEdge(edge.Id, edge.SourceId, targetId, edge.Kind)
-                    : edge)
-                .Where(edge => nodeIds.Contains(edge.SourceId) && nodeIds.Contains(edge.TargetId))
-                .Select((edge, order) => new RenderLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, order))
+                .Select(edge => new
+                {
+                    Edge = edge,
+                    RenderTargetId = externalTargetIds.TryGetValue(edge.Id, out var targetId) ? targetId : edge.TargetId
+                })
+                .Where(item => nodeIds.Contains(item.Edge.SourceId) && nodeIds.Contains(item.RenderTargetId))
+                .Select((item, order) => new RenderLink(
+                    item.Edge.Id,
+                    item.Edge.SourceId,
+                    item.RenderTargetId,
+                    item.Edge.Kind,
+                    order,
+                    item.Edge.SourceId,
+                    item.Edge.TargetId))
                 .ToArray();
 
             return new RenderGraph(projects, nodes, links, dataModels);

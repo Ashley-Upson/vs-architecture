@@ -19,9 +19,9 @@ internal sealed class DiagramFileBuilder
             _styleResolver = new StyleResolver(settings);
         }
 
-        public string Build(RenderLayout layout)
+        public string Build(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
-            var architectureRoot = new ArchitectureGenerator(this).Generate(layout);
+            var architectureRoot = new ArchitectureGenerator(this).Generate(layout, ownership);
             var dataModelRoot = new DataModelGenerator(this).Generate(layout.Graph.DataModels);
 
             var file = new XElement("mxfile",
@@ -32,7 +32,7 @@ internal sealed class DiagramFileBuilder
             return new XDocument(file).ToString(SaveOptions.DisableFormatting);
         }
 
-        private XElement ArchitectureRoot(RenderLayout layout)
+        private XElement ArchitectureRoot(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
             var root = new XElement("root",
                 new XElement("mxCell", new XAttribute("id", "0")),
@@ -84,9 +84,18 @@ internal sealed class DiagramFileBuilder
                     nodeLayout.Rect));
             }
 
-            foreach (var linkLayout in layout.Links.Values.OrderBy(link => link.Link.Order))
+            foreach (var anchor in ownership.Anchors
+                .OrderBy(anchor => anchor.LogicalEdgeId, StringComparer.Ordinal)
+                .ThenBy(anchor => anchor.TransitionIndex))
             {
-                root.Add(Edge(linkLayout));
+                root.Add(Anchor(anchor));
+            }
+
+            foreach (var segment in ownership.Segments
+                .OrderBy(segment => segment.LogicalLink.Link.Order)
+                .ThenBy(segment => segment.SegmentIndex))
+            {
+                root.Add(Edge(segment));
             }
 
             return root;
@@ -101,9 +110,9 @@ internal sealed class DiagramFileBuilder
                 _builder = builder;
             }
 
-            public XElement Generate(RenderLayout layout)
+            public XElement Generate(RenderLayout layout, CoordinateOwnershipCompilation ownership)
             {
-                return _builder.ArchitectureRoot(layout);
+                return _builder.ArchitectureRoot(layout, ownership);
             }
         }
 
@@ -190,11 +199,57 @@ private XElement GraphModel(XElement root)
                     new XAttribute("as", "geometry")));
         }
 
-        private XElement Edge(LinkLayout link)
+        private static XElement Anchor(BoundaryAnchor anchor)
+        {
+            return new XElement("mxCell",
+                new XAttribute("id", anchor.Id),
+                new XAttribute("logicalEdgeId", anchor.LogicalEdgeId),
+                new XAttribute("anchorRole", "ownership-boundary"),
+                new XAttribute("ownerProjectId", anchor.OwnerProjectId),
+                new XAttribute("transitionIndex", anchor.TransitionIndex),
+                new XAttribute("value", string.Empty),
+                new XAttribute("style", "opacity=0;fillOpacity=0;strokeOpacity=0;movable=0;resizable=0;deletable=0;"),
+                new XAttribute("vertex", "1"),
+                new XAttribute("parent", anchor.OwnerProjectId),
+                new XElement("mxGeometry",
+                    new XAttribute("x", anchor.RelativePoint.X),
+                    new XAttribute("y", anchor.RelativePoint.Y),
+                    new XAttribute("width", 0),
+                    new XAttribute("height", 0),
+                    new XAttribute("as", "geometry")));
+        }
+
+        private XElement Edge(PhysicalEdgeSegment segment)
         {
             // mxCell stores edge terminals in source/target, style as key=value pairs, and mxGeometry points as waypoints.
             // See https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxCell-js.html and
             // https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxGeometry-js.html.
+            return new XElement("mxCell",
+                new XAttribute("id", segment.Id),
+                new XAttribute("logicalEdgeId", segment.LogicalEdgeId),
+                new XAttribute("semanticSourceId", segment.SemanticSourceId),
+                new XAttribute("semanticTargetId", segment.SemanticTargetId),
+                new XAttribute("segmentIndex", segment.SegmentIndex),
+                new XAttribute("segmentRole", segment.Role.ToString().ToLowerInvariant()),
+                segment.OwnerProjectId is null ? null : new XAttribute("ownerProjectId", segment.OwnerProjectId),
+                new XAttribute("labelOwner", segment.OwnsLabel ? "1" : "0"),
+                new XAttribute("style", BuildConnectorStyle(_settings.Connector, segment)),
+                new XAttribute("edge", "1"),
+                new XAttribute("parent", segment.ParentId),
+                new XAttribute("source", segment.SourceCellId),
+                new XAttribute("target", segment.TargetCellId),
+                new XElement("mxGeometry",
+                    new XAttribute("relative", "1"),
+                    new XAttribute("as", "geometry"),
+                    new XElement("Array",
+                        new XAttribute("as", "points"),
+                        segment.RelativeWaypoints.Select(point => new XElement("mxPoint",
+                            new XAttribute("x", point.X),
+                            new XAttribute("y", point.Y))))));
+        }
+
+        private XElement Edge(LinkLayout link)
+        {
             return new XElement("mxCell",
                 new XAttribute("id", link.Link.Id),
                 new XAttribute("style", BuildConnectorStyle(_settings.Connector, link)),
@@ -222,6 +277,18 @@ private XElement GraphModel(XElement root)
             var shape = style.Shape == "rounded" ? "rounded=1;whiteSpace=wrap;html=1;" : $"shape={style.Shape};whiteSpace=wrap;html=1;";
             var shadow = style.Shadow ? "shadow=1;" : string.Empty;
             return $"{shape}fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};{shadow}{style.ExtraStyle}";
+        }
+
+        private static string BuildConnectorStyle(ConnectorStyle style, PhysicalEdgeSegment segment)
+        {
+            var rounded = style.Rounded ? "rounded=1;" : "rounded=0;";
+            var link = segment.LogicalLink;
+            var exitX = segment.SegmentIndex == 0 ? link.ExitX : 0.5;
+            var exitY = segment.SegmentIndex == 0 ? link.ExitY : 0.5;
+            var entryX = segment.HasTargetArrow ? link.EntryX : 0.5;
+            var entryY = segment.HasTargetArrow ? link.EntryY : 0.5;
+            var endArrow = segment.HasTargetArrow ? "endArrow=block;endFill=1;" : "endArrow=none;endFill=0;";
+            return $"edgeStyle=none;noEdgeStyle=1;orthogonal=0;curved=0;html=1;{rounded}startArrow=none;{endArrow}strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(exitX)};exitY={FormatRatio(exitY)};exitPerimeter=0;entryX={FormatRatio(entryX)};entryY={FormatRatio(entryY)};entryPerimeter=0;";
         }
 
         private static string BuildConnectorStyle(ConnectorStyle style, LinkLayout link)

@@ -34,7 +34,12 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 successfulCorridorsByEdge.TryGetValue(violation.OtherEdgeId, out var otherCorridors) &&
                 edgeCorridors.Overlaps(otherCorridors);
         });
+        var ownership = CoordinateOwnershipCompiler.Compile(
+            layout.Nodes,
+            layout.Projects,
+            layout.Links,
+            settings.ShowProjectContainers);
 
-        return new DiagramFileBuilder(settings).Build(layout);
+        return new DiagramFileBuilder(settings).Build(layout, ownership);
     }
 }

@@ -79,13 +79,16 @@ internal static class CoordinateOwnershipCompiler
             var left = runs[transitionIndex];
             var right = runs[transitionIndex + 1];
             var ownerProjectId = left.OwnerProjectId ?? right.OwnerProjectId;
-            if (ownerProjectId is null ||
-                left.OwnerProjectId is not null && right.OwnerProjectId is not null &&
-                !string.Equals(left.OwnerProjectId, right.OwnerProjectId, StringComparison.Ordinal))
+            if (ownerProjectId is null)
             {
                 throw new InvalidOperationException(
                     $"Logical edge {link.Link.Id} transitions directly between incompatible coordinate owners.");
             }
+
+            // Adjacent project rectangles can produce a direct project-to-project handoff with no
+            // positive-length root interval. Keep one anchor in the source-side owner and connect
+            // the next owner-parented segment to it; emitting a zero-length root edge would add no
+            // visible geometry and would violate zero-length segment suppression.
 
             var absolutePoint = left.Points[left.Points.Count - 1];
             var anchorId = $"{link.Link.Id}__anchor__{transitionIndex:D3}";
@@ -115,10 +118,10 @@ internal static class CoordinateOwnershipCompiler
                         ? PhysicalEdgeSegmentRole.Target
                         : PhysicalEdgeSegmentRole.Middle;
             physicalSegments.Add(new PhysicalEdgeSegment(
-                $"{link.Link.Id}__segment__{index:D3}",
+                runs.Count == 1 ? link.Link.Id : $"{link.Link.Id}__segment__{index:D3}",
                 link.Link.Id,
-                link.Link.SourceId,
-                link.Link.TargetId,
+                link.Link.SemanticSourceId ?? link.Link.SourceId,
+                link.Link.SemanticTargetId ?? link.Link.TargetId,
                 index,
                 role,
                 run.OwnerProjectId ?? RootParentId,
