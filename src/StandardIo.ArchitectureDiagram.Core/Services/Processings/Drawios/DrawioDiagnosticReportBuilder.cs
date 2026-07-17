@@ -105,7 +105,7 @@ internal static class DrawioDiagnosticReportBuilder
             .Select((violation, index) => Finding(violation, index + 1, requiredSpacing))
             .ToArray();
         var categories = enforced
-            .GroupBy(Category)
+            .GroupBy(CategoryName)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => new
             {
@@ -199,7 +199,7 @@ internal static class DrawioDiagnosticReportBuilder
     private static object Finding(TraceabilityViolation violation, int number, int requiredSpacing) => new
     {
         number,
-        category = Category(violation),
+        category = CategoryName(violation),
         validatorCode = violation.Code.ToString(),
         logicalRouteId = violation.EdgeId,
         otherRouteId = violation.OtherEdgeId,
@@ -214,7 +214,7 @@ internal static class DrawioDiagnosticReportBuilder
         parallelOverlapLength = violation.ParallelOverlapLength
     };
 
-    private static string Category(TraceabilityViolation violation) => violation.Code switch
+    internal static string CategoryName(TraceabilityViolation violation) => violation.Code switch
     {
         TraceabilityViolationCode.NodeCollision => "NodeInteriorIntersection",
         TraceabilityViolationCode.SharedSegment => "SharedNonZeroLengthSegment",
@@ -258,7 +258,7 @@ internal static class DrawioDiagnosticReportBuilder
             var routeLabel = layout is not null && layout.Links.TryGetValue(violation.EdgeId, out var link)
                 ? $"{layout.Nodes[link.Link.SourceId].Node.Name} → {layout.Nodes[link.Link.TargetId].Node.Name}"
                 : violation.EdgeId;
-            var value = $"{number}: {routeLabel} | {Category(violation)} | {violation.EdgeId}" +
+            var value = $"{number}: {routeLabel} | {CategoryName(violation)} | {violation.EdgeId}" +
                 (violation.OtherEdgeId is null ? string.Empty : $" / {violation.OtherEdgeId}") +
                 (violation.OtherNodeId is null ? string.Empty : $" / node {violation.OtherNodeId}") +
                 $" | ({x},{y})";

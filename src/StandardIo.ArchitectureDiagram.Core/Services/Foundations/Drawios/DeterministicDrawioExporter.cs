@@ -14,6 +14,30 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         return new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
     }
 
+    public DrawioGenerationResult GenerateResult(DiagramModel diagram, DiagramSettings settings)
+    {
+        var prepared = Prepare(diagram, settings);
+        var findings = prepared.Layout.Traceability.Violations
+            .Select(violation => ToFinding(violation, prepared.IsEnforced(violation)))
+            .ToArray();
+        var document = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        return new DrawioGenerationResult(
+            document,
+            findings,
+            findings,
+            Array.Empty<RouteRepairAttempt>(),
+            prepared.Layout.Links.Values
+                .OrderBy(link => link.Link.Id, StringComparer.Ordinal)
+                .Select(link => new GeneratedRoute(
+                    link.Link.Id,
+                    new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint })
+                        .Select(point => new ValidationPoint(point.X, point.Y))
+                        .ToArray()))
+                .ToArray(),
+            serializationSucceeded: true,
+            strictValidationPassed: findings.All(finding => !finding.IsStrictlyEnforced));
+    }
+
     public DrawioDiagnosticExportResult ExportDiagnostic(DiagramModel diagram, DiagramSettings settings)
     {
         var prepared = Prepare(diagram, settings);
@@ -94,4 +118,25 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         RenderLayout Layout,
         CoordinateOwnershipCompilation Ownership,
         Func<TraceabilityViolation, bool> IsEnforced);
+
+    private static ValidationFinding ToFinding(TraceabilityViolation violation, bool enforced) =>
+        new(
+            DrawioDiagnosticReportBuilder.CategoryName(violation),
+            violation.EdgeId,
+            violation.OtherEdgeId,
+            violation.OtherNodeId,
+            violation.Magnitude,
+            violation.Description,
+            (violation.Locations ?? Array.Empty<Point>())
+                .Select(point => new ValidationPoint(point.X, point.Y))
+                .ToArray(),
+            (violation.OffendingSegments ?? Array.Empty<Segment>())
+                .Select(segment => new ValidationSegment(
+                    new ValidationPoint(segment.Start.X, segment.Start.Y),
+                    new ValidationPoint(segment.End.X, segment.End.Y)))
+                .ToArray(),
+            violation.RequiredSpacing,
+            violation.ActualSpacing,
+            violation.ParallelOverlapLength,
+            enforced);
 }

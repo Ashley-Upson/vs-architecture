@@ -2,12 +2,39 @@ using System.Globalization;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
 public sealed class DeterministicDrawioExporterTests
 {
+    [Fact]
+    public void GenerateResult_exposes_document_routes_and_validation_without_console_parsing()
+    {
+        var diagram = new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project", "Project", new[]
+                {
+                    Node("source", "project", "Source"),
+                    Node("target", "project", "Target")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("edge", "source", "target", "internal") });
+
+        var result = new DeterministicDrawioExporter().GenerateResult(diagram, DiagramSettings.CreateDefault());
+
+        Assert.True(result.SerializationSucceeded);
+        Assert.True(result.StrictValidationPassed);
+        Assert.Empty(result.RepairAttempts);
+        var route = Assert.Single(result.Routes);
+        Assert.Equal("edge", route.LogicalRouteId);
+        Assert.True(route.Points.Count >= 2);
+        Assert.Equal("mxfile", XDocument.Parse(result.Document).Root!.Name.LocalName);
+    }
+
     [Fact]
     public void Render_emits_regional_optimisation_diagnostics_for_exposure_tree_edges()
     {
