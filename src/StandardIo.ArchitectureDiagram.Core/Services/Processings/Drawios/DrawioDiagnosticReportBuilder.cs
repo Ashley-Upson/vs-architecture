@@ -144,7 +144,8 @@ internal static class DrawioDiagnosticReportBuilder
                 repairAttempts = layout.RepairAttempts.Count,
                 repairsApplied = layout.RepairAttempts.Count(attempt => attempt.Applied),
                 repairWorkUsed = layout.RepairWorkUsed,
-                repairBudgetExhausted = layout.RepairBudgetExhausted
+                repairBudgetExhausted = layout.RepairBudgetExhausted,
+                repairRunReason = layout.RepairRunReason
             },
             categories,
             findings,
@@ -158,7 +159,8 @@ internal static class DrawioDiagnosticReportBuilder
                 postRepairFindings = layout.Traceability.Violations.Select((finding, index) =>
                     Finding(finding, index + 1, requiredSpacing)).ToArray(),
                 layout.RepairWorkUsed,
-                layout.RepairBudgetExhausted
+                layout.RepairBudgetExhausted,
+                layout.RepairRunReason
             }
         }, JsonOptions);
     }

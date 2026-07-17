@@ -28,6 +28,29 @@ internal sealed record RouteRepairResult(
 
 internal static class RouteRepairCoordinator
 {
+    public static RouteRepairResult CompileOnly(
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> selectedLinks,
+        DiagramSettings settings,
+        string reason)
+    {
+        var compiled = Compile(nodes, selectedLinks, settings);
+        return new RouteRepairResult(
+            compiled.Links,
+            compiled.Corridors,
+            compiled.Lanes,
+            compiled.Traversals,
+            compiled.Validation,
+            compiled.Validation,
+            Array.Empty<RouteRepairAttempt>(),
+            0,
+            false,
+            0,
+            0,
+            1,
+            reason);
+    }
+
     public static RouteRepairResult Repair(
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, LinkLayout> selectedLinks,

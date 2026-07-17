@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 using Xunit;
 
@@ -66,6 +67,19 @@ public sealed class NodeDuplicationExporterTests
         var document = XDocument.Parse(Render(Model(), settings));
 
         Assert.Equal(2, Vertices(document).Count(cell => Value(cell).StartsWith("SharedService", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Duplicated_exposure_graph_skips_repair_when_validation_has_only_non_blocking_advisories()
+    {
+        var settings = Settings();
+        var graph = RenderGraph.From(Model(), settings);
+
+        var layout = RenderLayout.Build(graph, settings);
+
+        Assert.Equal("SkippedDuplicatedModeNonBlockingAdvisories", layout.RepairRunReason);
+        Assert.Empty(layout.RepairAttempts);
+        Assert.Equal(0, layout.RepairWorkUsed);
     }
 
     private static DiagramSettings Settings(bool allowDuplicates = true)

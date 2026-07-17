@@ -28,7 +28,8 @@ internal sealed class RenderLayout
             TraceabilityValidationResult? preRepairTraceability = null,
             IReadOnlyList<RouteRepairAttempt>? repairAttempts = null,
             int repairWorkUsed = 0,
-            bool repairBudgetExhausted = false)
+            bool repairBudgetExhausted = false,
+            string repairRunReason = "RepairableFindingsPresent")
         {
             Graph = graph;
             Nodes = nodes;
@@ -44,6 +45,7 @@ internal sealed class RenderLayout
             RepairAttempts = repairAttempts ?? Array.Empty<RouteRepairAttempt>();
             RepairWorkUsed = repairWorkUsed;
             RepairBudgetExhausted = repairBudgetExhausted;
+            RepairRunReason = repairRunReason;
         }
 
         public RenderGraph Graph { get; }
@@ -74,9 +76,11 @@ internal sealed class RenderLayout
 
         public bool RepairBudgetExhausted { get; }
 
+        public string RepairRunReason { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
             new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
-                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted);
+                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -141,7 +145,20 @@ internal sealed class RenderLayout
                 : links.Count > 128
                     ? new RouteRepairBudget(32, 4, 2, 128)
                     : new RouteRepairBudget();
-            var repair = RouteRepairCoordinator.Repair(nodes, links, settings, repairBudget);
+            var duplicateExposureMode = settings.NodeDuplication.AllowDuplicateNodes &&
+                graph.PlacementParentByNode.Count == 0 &&
+                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal));
+            var duplicateNeedsRepair = traceability.Violations.Any(violation =>
+                violation.Code == TraceabilityViolationCode.NodeCollision ||
+                violation.Code == TraceabilityViolationCode.SharedSegment &&
+                violation.Magnitude >= settings.Layout.NodeWidth);
+            var repair = duplicateExposureMode && !duplicateNeedsRepair
+                ? RouteRepairCoordinator.CompileOnly(
+                    nodes,
+                    links,
+                    settings,
+                    "SkippedDuplicatedModeNonBlockingAdvisories")
+                : RouteRepairCoordinator.Repair(nodes, links, settings, repairBudget);
             links = repair.Links;
             corridors = repair.Corridors;
             lanes = repair.Lanes;
@@ -151,7 +168,7 @@ internal sealed class RenderLayout
             return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection,
                 traversals, traceability, corridors, lanes, originalTraceability,
                 expansionAttempts.Concat(repair.Attempts).ToArray(),
-                repair.EstimatedWorkUsed, repair.WorkBudgetExhausted);
+                repair.EstimatedWorkUsed, repair.WorkBudgetExhausted, repair.RunReason);
         }
 
         internal static LayerExpansionResult ExpandLayersForLaneDemand(
