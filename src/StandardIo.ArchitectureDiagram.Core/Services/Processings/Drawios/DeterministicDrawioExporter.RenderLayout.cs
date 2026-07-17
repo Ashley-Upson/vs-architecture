@@ -18,6 +18,7 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, ProjectLayout> projects,
             IReadOnlyDictionary<string, LinkLayout> links,
+            EdgeTraversalCompilation traversals,
             TraceabilityValidationResult traceability,
             CorridorObservation corridors,
             CorridorLaneAllocation lanes)
@@ -26,6 +27,7 @@ internal sealed class RenderLayout
             Nodes = nodes;
             Projects = projects;
             Links = links;
+            Traversals = traversals;
             Traceability = traceability;
             Corridors = corridors;
             Lanes = lanes;
@@ -39,6 +41,8 @@ internal sealed class RenderLayout
 
         public IReadOnlyDictionary<string, LinkLayout> Links { get; }
 
+        public EdgeTraversalCompilation Traversals { get; }
+
         public TraceabilityValidationResult Traceability { get; }
 
         public CorridorObservation Corridors { get; }
@@ -46,7 +50,7 @@ internal sealed class RenderLayout
         public CorridorLaneAllocation Lanes { get; }
 
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
-            new(Graph, Nodes, projects, Links, Traceability, Corridors, Lanes);
+            new(Graph, Nodes, projects, Links, Traversals, Traceability, Corridors, Lanes);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -63,9 +67,11 @@ internal sealed class RenderLayout
                 settings.Layout.LinkPadding);
             var lanes = CorridorLaneAllocator.Allocate(corridors);
             var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
+            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes);
+            links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links, traceability, corridors, lanes);
+            return new RenderLayout(graph, nodes, projects, links, traversals, traceability, corridors, lanes);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
