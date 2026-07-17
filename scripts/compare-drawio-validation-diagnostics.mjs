@@ -57,12 +57,31 @@ const changedRoutes = allRouteIds.filter(routeId =>
   JSON.stringify(baselineGeometry.get(routeId).points) !== JSON.stringify(currentGeometry.get(routeId).points));
 const changedRouteSet = new Set(changedRoutes);
 
+const routeChangeCause = routeId => {
+  const before = baselineGeometry.get(routeId);
+  const after = currentGeometry.get(routeId);
+  if (!before || !after || JSON.stringify(before.points) === JSON.stringify(after.points)) return null;
+  const candidateUnchanged =
+    JSON.stringify(before.selectedCandidatePoints) === JSON.stringify(after.selectedCandidatePoints);
+  const beforeMatchesCandidate =
+    JSON.stringify(before.points) === JSON.stringify(before.selectedCandidatePoints);
+  const afterMatchesCandidate =
+    JSON.stringify(after.points) === JSON.stringify(after.selectedCandidatePoints);
+  if (candidateUnchanged && !beforeMatchesCandidate && afterMatchesCandidate) {
+    return "0c62c50 retained the unchanged selected candidate as the authoritative traversal fallback; the 81-build traversal compiler had rewritten it.";
+  }
+  if (candidateUnchanged) {
+    return "The selected candidate is unchanged; 0c62c50 changed post-selection terminal/lane/traversal compilation.";
+  }
+  return "0c62c50 changed the selected candidate during global or regional selection.";
+};
+
 const cause = finding => {
-  const primaryChanged = changedRouteSet.has(finding.logicalRouteId);
-  const otherChanged = finding.otherRouteId && changedRouteSet.has(finding.otherRouteId);
-  if (primaryChanged && otherChanged) return "Both involved routes changed geometry in 0c62c50.";
-  if (primaryChanged) return "The rejected route changed geometry in 0c62c50.";
-  if (otherChanged) return "The interacting route changed geometry in 0c62c50.";
+  const primaryCause = routeChangeCause(finding.logicalRouteId);
+  const otherCause = finding.otherRouteId ? routeChangeCause(finding.otherRouteId) : null;
+  if (primaryCause && otherCause) return `Both involved routes changed. Primary: ${primaryCause} Other: ${otherCause}`;
+  if (primaryCause) return `Rejected route: ${primaryCause}`;
+  if (otherCause) return `Interacting route: ${otherCause}`;
   return "Neither serialized route changed; corridor-success enforcement eligibility changed.";
 };
 
@@ -129,8 +148,11 @@ const delta = {
   changedCategory,
   changedRoutes: changedRoutes.map(routeId => ({
     logicalRouteId: routeId,
+    directCause: routeChangeCause(routeId),
     before: baselineGeometry.get(routeId).points,
-    after: currentGeometry.get(routeId).points
+    after: currentGeometry.get(routeId).points,
+    selectedCandidateBefore: baselineGeometry.get(routeId).selectedCandidatePoints,
+    selectedCandidateAfter: currentGeometry.get(routeId).selectedCandidatePoints
   })),
   unchangedGeometryWithAddedValidation: [...new Set(added
     .filter(finding => !changedRouteSet.has(finding.logicalRouteId) &&
@@ -200,21 +222,33 @@ fs.writeFileSync(path.join(outputDirectory, "validation-decision-report.md"), ma
 
 if (currentDrawioPath) {
   const regressionDrawioPath = path.join(outputDirectory, "new-81-to-93-regressions.drawio");
-  const markers = added.map((finding, index) => {
-    const point = finding.locations?.[0] ?? finding.offendingSegments?.[0]?.start ?? { x: 20 + index * 6, y: 60 + index * 6 };
-    const label = escapeXml(`${index + 1}: ${finding.category} | ${finding.logicalRouteId} | (${point.x},${point.y})`);
-    return `<mxCell id="delta_marker_${String(index + 1).padStart(4, "0")}" value="${label}" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#ff0000;strokeColor=#ffffff;fontColor=#ffffff;fontSize=10;" vertex="1" parent="1"><mxGeometry x="${point.x - 9}" y="${point.y - 9}" width="18" height="18" as="geometry"/></mxCell>`;
-  }).join("");
-  let drawio = fs.readFileSync(currentDrawioPath, "utf8");
-  drawio = drawio.replace(/<mxCell id="diagnostic_(?:marker|banner)_[^"]*"[\s\S]*?<\/mxCell>/g, "");
-  drawio = drawio.replace(/<diagram name="Diagnostics - [^"]*"[\s\S]*?<\/diagram>/g, "");
-  drawio = drawio.replace(/(<diagram name="Architecture"[\s\S]*?<root>[\s\S]*?)(<\/root>)/, `$1${markers}$2`);
-  drawio = drawio.replace("<mxfile ", `<mxfile deltaDiagnostic="81-to-93" deltaFindings="${added.length}" `);
-  fs.writeFileSync(regressionDrawioPath, drawio);
+  fs.writeFileSync(regressionDrawioPath, focusedDrawio(added, "81-to-93", currentDrawioPath));
+  const representativeFindings = representative.flatMap(group =>
+    group.examples.flatMap(example => example.violations.slice(0, 1)));
+  fs.writeFileSync(
+    path.join(outputDirectory, "representative-examples.drawio"),
+    focusedDrawio(representativeFindings, "representative-examples", currentDrawioPath));
 }
 
 console.log(path.join(outputDirectory, "validation-delta.json"));
 console.log(path.join(outputDirectory, "validation-decision-report.md"));
+
+function focusedDrawio(findings, diagnosticName, drawioPath) {
+  const markers = findings.map((finding, index) => {
+    const point = finding.locations?.[0] ?? finding.offendingSegments?.[0]?.start ?? { x: 20 + index * 6, y: 60 + index * 6 };
+    const route = routeById.get(finding.logicalRouteId);
+    const routeName = route
+      ? `${route.sourceNode.name} -> ${route.targetNode.name}`
+      : finding.logicalRouteId;
+    const label = escapeXml(`${index + 1}: ${routeName} | ${finding.category} | ${finding.logicalRouteId} | (${point.x},${point.y})`);
+    return `<mxCell id="delta_marker_${String(index + 1).padStart(4, "0")}" value="${label}" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#ff0000;strokeColor=#ffffff;fontColor=#ffffff;fontSize=10;" vertex="1" parent="1"><mxGeometry x="${point.x - 9}" y="${point.y - 9}" width="18" height="18" as="geometry"/></mxCell>`;
+  }).join("");
+  let drawio = fs.readFileSync(drawioPath, "utf8");
+  drawio = drawio.replace(/<mxCell id="diagnostic_(?:marker|banner)_[^"]*"[\s\S]*?<\/mxCell>/g, "");
+  drawio = drawio.replace(/<diagram name="Diagnostics - [^"]*"[\s\S]*?<\/diagram>/g, "");
+  drawio = drawio.replace(/(<diagram name="Architecture"[\s\S]*?<root>[\s\S]*?)(<\/root>)/, `$1${markers}$2`);
+  return drawio.replace("<mxfile ", `<mxfile deltaDiagnostic="${diagnosticName}" deltaFindings="${findings.length}" `);
+}
 
 function escapeXml(value) {
   return value

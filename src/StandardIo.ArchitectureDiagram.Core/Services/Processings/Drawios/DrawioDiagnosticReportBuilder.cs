@@ -126,6 +126,7 @@ internal static class DrawioDiagnosticReportBuilder
                 sourceId = link.Link.SourceId,
                 targetId = link.Link.TargetId,
                 selectedCandidateId = SelectedCandidate(layout, link.Link.Id)?.Signature.Value,
+                selectedCandidatePoints = SelectedCandidate(layout, link.Link.Id)?.Points.Select(ToPoint).ToArray(),
                 points = CompletePoints(link).Select(ToPoint).ToArray()
             })
             .ToArray();
@@ -149,18 +150,20 @@ internal static class DrawioDiagnosticReportBuilder
 
     public static IReadOnlyDictionary<string, string> FocusedOutputs(
         string content,
-        IReadOnlyList<TraceabilityViolation> violations) =>
+        IReadOnlyList<TraceabilityViolation> violations,
+        RenderLayout? layout = null) =>
         violations.GroupBy(FocusGroup)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => Annotate(content, group.ToArray(), group.Key),
+                group => Annotate(content, group.ToArray(), group.Key, layout),
                 StringComparer.Ordinal);
 
     public static string Annotate(
         string content,
         IReadOnlyList<TraceabilityViolation> violations,
-        string title)
+        string title,
+        RenderLayout? layout = null)
     {
         var document = XDocument.Parse(content, LoadOptions.PreserveWhitespace);
         var file = document.Root ?? throw new InvalidOperationException("Draw.io document has no root.");
@@ -170,7 +173,7 @@ internal static class DrawioDiagnosticReportBuilder
         var architectureRoot = architecture.Descendants("root").First();
         architectureRoot.Add(Banner(title, violations.Count));
 
-        var markerCells = MarkerCells(violations).ToArray();
+        var markerCells = MarkerCells(violations, layout).ToArray();
         foreach (var marker in markerCells)
         {
             architectureRoot.Add(new XElement(marker));
@@ -230,7 +233,9 @@ internal static class DrawioDiagnosticReportBuilder
         _ => "other"
     };
 
-    private static IEnumerable<XElement> MarkerCells(IReadOnlyList<TraceabilityViolation> violations)
+    private static IEnumerable<XElement> MarkerCells(
+        IReadOnlyList<TraceabilityViolation> violations,
+        RenderLayout? layout)
     {
         var number = 0;
         foreach (var violation in violations
@@ -250,7 +255,10 @@ internal static class DrawioDiagnosticReportBuilder
                 TraceabilityViolationCode.ReusedBend => "#a64dff",
                 _ => "#cc0000"
             };
-            var value = $"{number}: {Category(violation)} | {violation.EdgeId}" +
+            var routeLabel = layout is not null && layout.Links.TryGetValue(violation.EdgeId, out var link)
+                ? $"{layout.Nodes[link.Link.SourceId].Node.Name} → {layout.Nodes[link.Link.TargetId].Node.Name}"
+                : violation.EdgeId;
+            var value = $"{number}: {routeLabel} | {Category(violation)} | {violation.EdgeId}" +
                 (violation.OtherEdgeId is null ? string.Empty : $" / {violation.OtherEdgeId}") +
                 (violation.OtherNodeId is null ? string.Empty : $" / node {violation.OtherNodeId}") +
                 $" | ({x},{y})";

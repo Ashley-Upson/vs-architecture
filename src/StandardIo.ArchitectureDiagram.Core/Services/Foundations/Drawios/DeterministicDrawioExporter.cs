@@ -24,8 +24,8 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             prepared.Ownership,
             enforced,
             prepared.Settings.Layout.ParallelLaneSpacing);
-        var annotated = DrawioDiagnosticReportBuilder.Annotate(content, enforced, "All enforced findings");
-        var focused = DrawioDiagnosticReportBuilder.FocusedOutputs(content, enforced);
+        var annotated = DrawioDiagnosticReportBuilder.Annotate(content, enforced, "All enforced findings", prepared.Layout);
+        var focused = DrawioDiagnosticReportBuilder.FocusedOutputs(content, enforced, prepared.Layout);
         return new DrawioDiagnosticExportResult(
             annotated,
             reportJson,
