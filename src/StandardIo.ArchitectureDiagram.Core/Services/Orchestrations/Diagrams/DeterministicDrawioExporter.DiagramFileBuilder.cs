@@ -100,7 +100,8 @@ internal sealed class DiagramFileBuilder
                 .OrderBy(segment => segment.LogicalLink.Link.Order)
                 .ThenBy(segment => segment.SegmentIndex))
             {
-                root.Add(Edge(segment));
+                layout.Traversals.Traversals.TryGetValue(segment.LogicalEdgeId, out var traversal);
+                root.Add(Edge(segment, traversal));
             }
 
             return root;
@@ -224,7 +225,7 @@ private XElement GraphModel(XElement root)
                     new XAttribute("as", "geometry")));
         }
 
-        private XElement Edge(PhysicalEdgeSegment segment)
+        private XElement Edge(PhysicalEdgeSegment segment, EdgeTraversal? traversal)
         {
             // mxCell stores edge terminals in source/target, style as key=value pairs, and mxGeometry points as waypoints.
             // See https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxCell-js.html and
@@ -236,6 +237,13 @@ private XElement GraphModel(XElement root)
                 new XAttribute("semanticTargetId", segment.SemanticTargetId),
                 new XAttribute("segmentIndex", segment.SegmentIndex),
                 new XAttribute("segmentRole", segment.Role.ToString().ToLowerInvariant()),
+                new XAttribute("routingMode", traversal?.UsesFallback == true ? "fallback" : "traversal"),
+                traversal is null || traversal.Diagnostics.Count == 0
+                    ? null
+                    : new XAttribute("routingDiagnostics", string.Join(",", traversal.Diagnostics
+                        .Select(diagnostic => diagnostic.Code)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(code => code, StringComparer.Ordinal))),
                 segment.OwnerProjectId is null ? null : new XAttribute("ownerProjectId", segment.OwnerProjectId),
                 new XAttribute("labelOwner", segment.OwnsLabel ? "1" : "0"),
                 new XAttribute("style", BuildConnectorStyle(_settings.Connector, segment)),

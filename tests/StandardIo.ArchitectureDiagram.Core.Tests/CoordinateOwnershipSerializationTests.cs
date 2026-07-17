@@ -29,6 +29,7 @@ public sealed class CoordinateOwnershipSerializationTests
         {
             Assert.Equal("source", (string?)segment.Attribute("semanticSourceId"));
             Assert.Equal("target", (string?)segment.Attribute("semanticTargetId"));
+            Assert.Contains((string?)segment.Attribute("routingMode"), new[] { "traversal", "fallback" });
         });
         Assert.Contains("endArrow=none", Style(segments[0]));
         Assert.All(segments.Skip(1).Take(segments.Length - 2), segment =>
