@@ -5,7 +5,7 @@
 		<Nullable>enable</Nullable>
 		<VersionMajor>0</VersionMajor>
 		<VersionMinor>3</VersionMinor>
-		<VersionPatch>4</VersionPatch>
+		<VersionPatch>5</VersionPatch>
 		<Version>$(VersionMajor).$(VersionMinor).$(VersionPatch)</Version>
 		<!-- VSIXInstaller parses Version with System.Version, so each segment must fit Int32. yyyyMMddHHmm overflows; HHmm keeps a build-time stamp safely installable. -->
 		<VsixVersionTimestamp>$([System.DateTime]::UtcNow.ToString('HHmm'))</VsixVersionTimestamp>
