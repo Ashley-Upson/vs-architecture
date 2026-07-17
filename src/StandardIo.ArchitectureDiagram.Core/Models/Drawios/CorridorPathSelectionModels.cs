@@ -15,7 +15,8 @@ internal sealed record CorridorPathCandidate(
     CorridorPathLocalCost LocalCost,
     IReadOnlyList<Point> Points,
     bool HasInvalidGeometry = false,
-    int AmbiguousTransitions = 0);
+    int AmbiguousTransitions = 0,
+    bool IsAcceptedPath = false);
 
 internal sealed record GlobalRouteScore(
     int InvalidGeometry,

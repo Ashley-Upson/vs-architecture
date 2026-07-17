@@ -20,7 +20,10 @@ internal static class GlobalCorridorPathSelector
                 .ThenBy(candidate => candidate.Signature.Value, StringComparer.Ordinal)
                 .ToArray(),
             StringComparer.Ordinal);
-        var selected = retained.ToDictionary(item => item.Key, item => item.Value.First(), StringComparer.Ordinal);
+        var selected = retained.ToDictionary(
+            item => item.Key,
+            item => item.Value.FirstOrDefault(candidate => candidate.IsAcceptedPath) ?? item.Value.First(),
+            StringComparer.Ordinal);
         var initial = Score(selected, corridorCapacities, minimumSpacing);
         var decisions = selected.ToDictionary(
             item => item.Key,
@@ -89,12 +92,16 @@ internal static class GlobalCorridorPathSelector
         var shared = 0;
         var spacing = 0;
         var crossings = 0;
+        var reusedBends = 0;
         for (var leftIndex = 0; leftIndex < routes.Length; leftIndex++)
         {
             var left = Segments(routes[leftIndex].Value.Points).ToArray();
+            var leftBends = routes[leftIndex].Value.Points.Skip(1).Take(Math.Max(0, routes[leftIndex].Value.Points.Count - 2));
             for (var rightIndex = leftIndex + 1; rightIndex < routes.Length; rightIndex++)
             {
                 var right = Segments(routes[rightIndex].Value.Points).ToArray();
+                var rightBends = routes[rightIndex].Value.Points.Skip(1).Take(Math.Max(0, routes[rightIndex].Value.Points.Count - 2));
+                reusedBends += leftBends.Intersect(rightBends).Count();
                 foreach (var leftSegment in left)
                 {
                     foreach (var rightSegment in right)
@@ -119,7 +126,7 @@ internal static class GlobalCorridorPathSelector
             invalid,
             shared,
             spacing,
-            routes.Sum(route => route.Value.AmbiguousTransitions),
+            routes.Sum(route => route.Value.AmbiguousTransitions) + reusedBends,
             capacityFailure,
             crossings,
             routes.Sum(route => route.Value.LocalCost.CanvasEscape),

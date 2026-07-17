@@ -15,7 +15,8 @@ internal static class CorridorPathCandidateReducer
             .Where(candidate => !candidate.HasInvalidGeometry)
             .GroupBy(candidate => candidate.Signature.Value, StringComparer.Ordinal)
             .Select(group => group
-                .OrderBy(candidate => candidate.LocalCost.PathLength)
+                .OrderByDescending(candidate => candidate.IsAcceptedPath)
+                .ThenBy(candidate => candidate.LocalCost.PathLength)
                 .ThenBy(candidate => candidate.LocalCost.BendCount)
                 .ThenBy(candidate => PointKey(candidate.Points), StringComparer.Ordinal)
                 .First())
@@ -27,8 +28,9 @@ internal static class CorridorPathCandidateReducer
 
         var shortest = valid.Min(candidate => candidate.LocalCost.PathLength);
         return valid
-            .Where(candidate => candidate.LocalCost.PathLength <= shortest + maximumDetour)
-            .OrderBy(candidate => candidate.LocalCost.PathLength)
+            .Where(candidate => candidate.IsAcceptedPath || candidate.LocalCost.PathLength <= shortest + maximumDetour)
+            .OrderByDescending(candidate => candidate.IsAcceptedPath)
+            .ThenBy(candidate => candidate.LocalCost.PathLength)
             .ThenBy(candidate => candidate.LocalCost.BendCount)
             .ThenBy(candidate => candidate.Signature.Value, StringComparer.Ordinal)
             .Take(maximumCandidates)
