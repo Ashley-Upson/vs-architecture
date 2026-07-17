@@ -24,7 +24,62 @@ internal sealed record RenderProject(string Id, string Name, int Order);
     internal sealed record RenderLink(string Id, string SourceId, string TargetId, string Kind, int Order);
     internal sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth, bool IsStandalone);
     internal sealed record ProjectLayout(RenderProject Project, Rect Rect);
-    internal sealed record LinkLayout(RenderLink Link, Point SourcePoint, Point TargetPoint, IReadOnlyList<Point> Points, double ExitX, double EntryX, double ExitY = 1, double EntryY = 0);
+    internal sealed record LinkLayout(
+        RenderLink Link,
+        Point SourcePoint,
+        Point TargetPoint,
+        RoutedEdgeGeometry Geometry,
+        double ExitX,
+        double EntryX,
+        double ExitY = 1,
+        double EntryY = 0)
+    {
+        public LinkLayout(
+            RenderLink link,
+            Point sourcePoint,
+            Point targetPoint,
+            IEnumerable<Point> points,
+            double exitX,
+            double entryX,
+            double exitY = 1,
+            double entryY = 0)
+            : this(
+                link,
+                sourcePoint,
+                targetPoint,
+                new RoutedEdgeGeometry(points),
+                exitX,
+                entryX,
+                exitY,
+                entryY)
+        {
+        }
+
+        public IReadOnlyList<Point> Points => Geometry.Points;
+    }
+
+    internal sealed class RoutedEdgeGeometry
+    {
+        private readonly Point[] _points;
+        private readonly Segment[] _segments;
+
+        public RoutedEdgeGeometry(IEnumerable<Point> points)
+        {
+            if (points is null)
+            {
+                throw new ArgumentNullException(nameof(points));
+            }
+
+            _points = points.ToArray();
+            _segments = Enumerable.Range(0, Math.Max(0, _points.Length - 1))
+                .Select(index => new Segment(_points[index], _points[index + 1]))
+                .ToArray();
+        }
+
+        public IReadOnlyList<Point> Points => _points;
+
+        public IReadOnlyList<Segment> Segments => _segments;
+    }
     internal sealed record SubtreeMeasure(int Width, int Height);
     internal sealed record DataModelRelationship(string SourceId, string TargetId, string PropertyName);
 
