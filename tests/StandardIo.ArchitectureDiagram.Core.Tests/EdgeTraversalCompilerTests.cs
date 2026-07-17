@@ -35,7 +35,70 @@ public sealed class EdgeTraversalCompilerTests
 
         Assert.Equal(new[] { 0, 1, 2 }, links.Select(link => result.Traversals[link.Link.Id].Corridors[0].Lane.LaneIndex));
         Assert.Equal(new[] { 0, 1, 2 }, links.Select(link => result.Traversals[link.Link.Id].Corridors[1].Lane.LaneIndex));
+        Assert.Equal(3, links.Select(link => result.Traversals[link.Link.Id].Junctions[0].TransitionPoint).Distinct().Count());
         Assert.All(result.Diagnostics, diagnostic => Assert.NotEqual("UNSUPPORTED_JUNCTION_TOPOLOGY", diagnostic.Code));
+    }
+
+    [Fact]
+    public void Compile_falls_back_when_parallel_turn_lane_order_is_inverted()
+    {
+        var links = new[] { TurnLink("a", 0, 0), TurnLink("b", 1, 10), TurnLink("c", 2, 20) };
+        var context = CreateTurnContext(links, includeJunction: true);
+        var vertical = context.Allocation.Corridors["vertical"].ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        vertical["a"] = vertical["a"] with { LaneIndex = 2 };
+        vertical["b"] = vertical["b"] with { LaneIndex = 1 };
+        vertical["c"] = vertical["c"] with { LaneIndex = 0 };
+        var corridors = context.Allocation.Corridors.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        corridors["vertical"] = vertical;
+
+        var result = EdgeTraversalCompiler.Compile(
+            Links(links),
+            context.Observation,
+            new CorridorLaneAllocation(corridors, Array.Empty<string>()));
+
+        Assert.Equal(3, result.Diagnostics.Count(diagnostic => diagnostic.Code == "JUNCTION_LANE_ORDER_INVERSION"));
+        Assert.All(links, link =>
+        {
+            Assert.True(result.Geometry[link.Link.Id].UsedFallback);
+            Assert.Equal(CompletePoints(link), result.Geometry[link.Link.Id].Points);
+        });
+    }
+
+    [Fact]
+    public void Compile_keeps_straight_route_distinct_when_neighbor_departs()
+    {
+        var departing = TurnLink("departing", 0, 0);
+        var context = CreateTurnContext(new[] { departing }, includeJunction: true);
+        var straight = new LinkLayout(
+            new RenderLink("straight", "source_straight", "target_straight", "internal", 1),
+            new Point(40, 20),
+            new Point(160, 60),
+            new[] { new Point(40, 70), new Point(140, 70) },
+            0.5,
+            0.5);
+        var horizontal = context.Observation.Corridors["horizontal"];
+        var mappings = context.Observation.SegmentMappings.Concat(new[]
+        {
+            new CorridorSegmentMapping("straight", 1, "horizontal", new Segment(straight.Points[0], straight.Points[1]))
+        }).ToArray();
+        var usage = context.Observation.Usage.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        usage["horizontal"] = new CorridorUsage(horizontal, new[] { "departing", "straight" }, 2);
+        var observation = context.Observation with { SegmentMappings = mappings, Usage = usage };
+        var allocations = context.Allocation.Corridors.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var horizontalLanes = allocations["horizontal"].ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        horizontalLanes["straight"] = new AllocatedCorridorLane("horizontal", "straight", 1, 70);
+        allocations["horizontal"] = horizontalLanes;
+
+        var result = EdgeTraversalCompiler.Compile(
+            Links(new[] { departing, straight }),
+            observation,
+            new CorridorLaneAllocation(allocations, Array.Empty<string>()));
+
+        Assert.Equal(CompletePoints(departing), result.Geometry["departing"].Points);
+        Assert.Equal(CompletePoints(straight), result.Geometry["straight"].Points);
+        Assert.NotEqual(
+            result.Traversals["departing"].Junctions[0].TransitionPoint,
+            result.Traversals["straight"].Corridors[0].End);
     }
 
     [Fact]
@@ -101,7 +164,11 @@ public sealed class EdgeTraversalCompilerTests
             corridorId => corridorId,
             corridorId => (IReadOnlyDictionary<string, AllocatedCorridorLane>)links.ToDictionary(
                 link => link.Link.Id,
-                link => new AllocatedCorridorLane(corridorId, link.Link.Id, link.Link.Order, 50 + link.Link.Order * 10),
+                link => new AllocatedCorridorLane(
+                    corridorId,
+                    link.Link.Id,
+                    link.Link.Order,
+                    corridorId == horizontal ? link.Points[0].Y : link.Points[1].X),
                 StringComparer.Ordinal),
             StringComparer.Ordinal);
         return new TurnContext(observation, new CorridorLaneAllocation(allocated, Array.Empty<string>()));
