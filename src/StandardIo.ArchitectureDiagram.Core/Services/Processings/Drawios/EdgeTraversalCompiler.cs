@@ -9,7 +9,8 @@ internal static class EdgeTraversalCompiler
     public static EdgeTraversalCompilation Compile(
         IReadOnlyDictionary<string, LinkLayout> links,
         CorridorObservation observation,
-        CorridorLaneAllocation allocation)
+        CorridorLaneAllocation allocation,
+        IReadOnlyDictionary<string, NodeLayout>? nodes = null)
     {
         var mappings = observation.SegmentMappings
             .GroupBy(mapping => mapping.EdgeId, StringComparer.Ordinal)
@@ -49,6 +50,21 @@ internal static class EdgeTraversalCompiler
                 };
                 compiled = new CompiledEdgeGeometry(link.Link.Id, accepted, true);
             }
+            else if (nodes is not null &&
+                CrossesNode(compiled.Points, link, nodes) &&
+                !CrossesNode(accepted, link, nodes))
+            {
+                var diagnostic = new TraversalDiagnostic(
+                    link.Link.Id,
+                    "TRAVERSAL_NODE_COLLISION",
+                    "Compiled traversal crossed a node while the accepted lane geometry did not; the accepted route was retained.");
+                traversal = traversal with
+                {
+                    AcceptedFallbackPoints = accepted,
+                    Diagnostics = traversal.Diagnostics.Concat(new[] { diagnostic }).ToArray()
+                };
+                compiled = new CompiledEdgeGeometry(link.Link.Id, accepted, true);
+            }
 
             traversals[link.Link.Id] = traversal;
             geometry[link.Link.Id] = compiled;
@@ -56,6 +72,20 @@ internal static class EdgeTraversalCompiler
         }
 
         return new EdgeTraversalCompilation(traversals, geometry, diagnostics);
+    }
+
+    private static bool CrossesNode(
+        IReadOnlyList<Point> points,
+        LinkLayout link,
+        IReadOnlyDictionary<string, NodeLayout> nodes)
+    {
+        var obstacles = nodes
+            .Where(item => !string.Equals(item.Key, link.Link.SourceId, StringComparison.Ordinal) &&
+                !string.Equals(item.Key, link.Link.TargetId, StringComparison.Ordinal))
+            .Select(item => item.Value.Rect)
+            .ToArray();
+        return points.Zip(points.Skip(1), (start, end) => new Segment(start, end))
+            .Any(segment => obstacles.Any(segment.Intersects));
     }
 
     public static IReadOnlyDictionary<string, LinkLayout> Apply(

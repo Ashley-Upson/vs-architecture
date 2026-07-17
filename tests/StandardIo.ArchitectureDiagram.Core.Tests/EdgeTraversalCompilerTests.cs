@@ -39,6 +39,44 @@ public sealed class EdgeTraversalCompilerTests
         Assert.All(result.Diagnostics, diagnostic => Assert.NotEqual("UNSUPPORTED_JUNCTION_TOPOLOGY", diagnostic.Code));
     }
 
+    [Fact]
+    public void Compile_retains_selected_lane_geometry_when_allocated_junction_crosses_a_node()
+    {
+        var links = new[] { AmbiguousTurnLink("a", 0, 0), AmbiguousTurnLink("b", 1, 10) };
+        var context = CreateTurnContext(links, includeJunction: true);
+        var withoutNodes = EdgeTraversalCompiler.Compile(Links(links), context.Observation, context.Allocation);
+        var changed = links.First(link =>
+            !withoutNodes.Geometry[link.Link.Id].Points.SequenceEqual(CompletePoints(link)));
+        var compiledBend = withoutNodes.Traversals[changed.Link.Id].Junctions[0].TransitionPoint;
+        var obstacle = new NodeLayout(
+            new RenderNode(
+                "obstacle",
+                null,
+                "Obstacle",
+                "Fixture.Obstacle",
+                "Class",
+                false,
+                string.Empty,
+                0,
+                Array.Empty<string>(),
+                Array.Empty<TypeProperty>(),
+                0),
+            new Rect(compiledBend.X - 2, compiledBend.Y - 2, 4, 4),
+            0,
+            false);
+
+        var result = EdgeTraversalCompiler.Compile(
+            Links(links),
+            context.Observation,
+            context.Allocation,
+            new Dictionary<string, NodeLayout> { [obstacle.Node.Id] = obstacle });
+
+        Assert.Equal(CompletePoints(changed), result.Geometry[changed.Link.Id].Points);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.EdgeId == changed.Link.Id &&
+            diagnostic.Code == "TRAVERSAL_NODE_COLLISION");
+    }
+
     [Theory]
     [InlineData(3)]
     [InlineData(4)]

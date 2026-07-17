@@ -77,7 +77,7 @@ internal sealed class RenderLayout
                 settings.Layout.LinkPadding);
             var lanes = CorridorLaneAllocator.Allocate(corridors);
             var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
-            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes);
+            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes);
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
