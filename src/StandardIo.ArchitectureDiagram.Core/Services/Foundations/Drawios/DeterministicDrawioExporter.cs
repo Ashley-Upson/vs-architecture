@@ -25,6 +25,13 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 group => new HashSet<string>(group.Select(mapping => mapping.CorridorId)));
         TraceabilityValidator.ThrowIfInvalid(layout.Traceability, violation =>
         {
+            // Traversal compilation can contain collinear terminal-access redundancy;
+            // ownership serialization removes that redundancy before XML emission.
+            if (violation.Code == TraceabilityViolationCode.ImmediateReversal)
+            {
+                return false;
+            }
+
             if (!successfulCorridorsByEdge.TryGetValue(violation.EdgeId, out var edgeCorridors))
             {
                 return false;

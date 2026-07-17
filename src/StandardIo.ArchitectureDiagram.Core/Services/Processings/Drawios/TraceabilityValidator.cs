@@ -9,7 +9,8 @@ internal enum TraceabilityViolationCode
     NodeCollision,
     SharedSegment,
     ParallelSpacing,
-    ReusedBend
+    ReusedBend,
+    ImmediateReversal
 }
 
 internal sealed record TraceabilityViolation(
@@ -66,7 +67,26 @@ internal static class TraceabilityValidator
 
         foreach (var link in orderedLinks)
         {
+            var points = CompletePoints(link);
             var route = CompleteSegments(link);
+            for (var index = 0; index + 2 < points.Length; index++)
+            {
+                var first = points[index];
+                var middle = points[index + 1];
+                var last = points[index + 2];
+                if (!IsImmediateReversal(first, middle, last))
+                {
+                    continue;
+                }
+
+                violations.Add(new TraceabilityViolation(
+                    TraceabilityViolationCode.ImmediateReversal,
+                    link.Link.Id,
+                    null,
+                    Distance(first, middle) + Distance(middle, last),
+                    $"Edge {link.Link.Id} immediately reverses at ({middle.X},{middle.Y})."));
+            }
+
             foreach (var node in nodes.Values.Where(node =>
                 !string.Equals(node.Node.Id, link.Link.SourceId, StringComparison.Ordinal) &&
                 !string.Equals(node.Node.Id, link.Link.TargetId, StringComparison.Ordinal)))
@@ -131,6 +151,15 @@ internal static class TraceabilityValidator
 
         return new TraceabilityValidationResult(violations);
     }
+
+    internal static bool IsImmediateReversal(Point first, Point middle, Point last) =>
+        first.X == middle.X && middle.X == last.X &&
+            (middle.Y < Math.Min(first.Y, last.Y) || middle.Y > Math.Max(first.Y, last.Y)) ||
+        first.Y == middle.Y && middle.Y == last.Y &&
+            (middle.X < Math.Min(first.X, last.X) || middle.X > Math.Max(first.X, last.X));
+
+    private static int Distance(Point first, Point second) =>
+        Math.Abs(first.X - second.X) + Math.Abs(first.Y - second.Y);
 
     private static Point[] CompletePoints(LinkLayout link) =>
         new[] { link.SourcePoint }

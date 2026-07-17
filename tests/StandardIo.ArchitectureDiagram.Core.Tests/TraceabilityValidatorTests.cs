@@ -103,6 +103,27 @@ public sealed class TraceabilityValidatorTests
         Assert.True(result.IsValid);
     }
 
+    [Fact]
+    public void Validate_reports_same_axis_immediate_reversal()
+    {
+        var links = new Dictionary<string, LinkLayout>
+        {
+            ["edge"] = Link("edge", 0, new Point(20, 20), new Point(20, 100), new[]
+            {
+                new Point(20, 120),
+                new Point(20, 80)
+            })
+        };
+
+        var result = TraceabilityValidator.Validate(
+            new Dictionary<string, NodeLayout>(),
+            links,
+            requiredParallelSpacing: 12);
+
+        Assert.Contains(result.Violations, violation =>
+            violation.Code == TraceabilityViolationCode.ImmediateReversal);
+    }
+
     private static LinkLayout Link(
         string id,
         int order,

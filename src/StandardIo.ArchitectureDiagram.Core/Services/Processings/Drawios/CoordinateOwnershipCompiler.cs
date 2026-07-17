@@ -80,7 +80,16 @@ internal static class CoordinateOwnershipCompiler
         LinkLayout link,
         bool projectContainersEnabled)
     {
-        var logicalPoints = CompletePoints(link);
+        var completePoints = CompletePoints(link);
+        var normalizedPoints = NormalizePolyline(completePoints);
+        var logicalPoints = completePoints.Length >= 4 && normalizedPoints.Count == 2 &&
+            Enumerable.Range(0, completePoints.Length - 2).Any(index =>
+                TraceabilityValidator.IsImmediateReversal(
+                    completePoints[index],
+                    completePoints[index + 1],
+                    completePoints[index + 2]))
+                ? normalizedPoints
+                : completePoints;
         var sourceProjectId = OwnedProjectId(nodes, projects, link.Link.SourceId, projectContainersEnabled);
         var targetProjectId = OwnedProjectId(nodes, projects, link.Link.TargetId, projectContainersEnabled);
         var relevantProjects = new[] { sourceProjectId, targetProjectId }
