@@ -319,9 +319,16 @@ internal static class DrawioDiagnosticReportBuilder
         ambiguousTransitions = score.AmbiguousTransitions,
         capacityFailure = score.CapacityFailure,
         perpendicularCrossingsAndCongestion = score.CrossingsAndCongestion,
-        routeEnvelopeExpansion = score.RouteEnvelopeExpansion,
+        routeEnvelopeExpansion = RouteEnvelopeExpansion(score),
         pathEconomy = score.PathEconomy
     };
+
+    private static int RouteEnvelopeExpansion(GlobalRouteScore score)
+    {
+        var property = score.GetType().GetProperty("RouteEnvelopeExpansion") ??
+            score.GetType().GetProperty("CanvasEscape");
+        return property?.GetValue(score) is int value ? value : 0;
+    }
 
     private static string SafeId(string value) =>
         new(value.Select(character => char.IsLetterOrDigit(character) ? character : '_').ToArray());
