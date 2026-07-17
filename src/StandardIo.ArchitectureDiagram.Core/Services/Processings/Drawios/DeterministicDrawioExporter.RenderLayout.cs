@@ -1219,11 +1219,13 @@ internal sealed class RenderLayout
                 var laneOffset = routeLaneIndex * settings.Layout.ParallelLaneSpacing;
                 var sourceExit = accepted.Points[0];
                 var targetEntry = accepted.Points[accepted.Points.Count - 1];
-                var alternatives = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                var localCandidates = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
                     .Concat(BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings,
                         laneOffset + settings.Layout.ParallelLaneSpacing))
                     .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
                     .Select(Simplify)
+                    .ToArray();
+                var nodeSafeLocalCandidates = localCandidates
                     .Where(route => !CrossesNode(route, obstacles))
                     .Select(route => PathCandidate(
                         link.Id,
@@ -1234,10 +1236,15 @@ internal sealed class RenderLayout
                         acceptedCandidate.ExposureRootId,
                         acceptedCandidate.ExposureBranchId,
                         acceptedCandidate.FanoutMemberships))
-                    .Concat(graph.PlacementParentByNode.Count > 0
-                        ? CanonicalExteriorCandidates(acceptedCandidate, obstacles, settings, laneOffset)
-                        : Enumerable.Empty<CorridorPathCandidate>())
+                    .ToArray();
+                var exteriorCandidates = (graph.PlacementParentByNode.Count > 0
+                    ? CanonicalExteriorCandidates(acceptedCandidate, obstacles, settings, laneOffset)
+                    : Enumerable.Empty<CorridorPathCandidate>()).ToArray();
+                var compatibleCandidates = nodeSafeLocalCandidates
+                    .Concat(exteriorCandidates)
                     .Where(candidate => PreservesTerminalFanoutGeometry(acceptedCandidate, candidate))
+                    .ToArray();
+                var alternatives = compatibleCandidates
                     .Append(acceptedCandidate)
                     .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
                     .Select(group => group.First());
@@ -1270,6 +1277,7 @@ internal sealed class RenderLayout
                 StringComparer.Ordinal);
             return new PositionedLinkLayouts(selectedLayouts, null, regional);
         }
+
 
         private static CorridorPathCandidate PathCandidate(
             string edgeId,
@@ -1311,7 +1319,7 @@ internal sealed class RenderLayout
             DiagramSettings settings,
             int laneOffset)
         {
-            var preservedLength = accepted.FanoutMemberships is null || accepted.FanoutMemberships.Count == 0 ? 2 : 3;
+            var preservedLength = 2;
             if (accepted.Points.Count < preservedLength * 2)
             {
                 return Array.Empty<CorridorPathCandidate>();
@@ -1389,11 +1397,7 @@ internal sealed class RenderLayout
                 return true;
             }
 
-            var prefixLength = Math.Min(3, accepted.Points.Count);
-            var suffixLength = Math.Min(3, accepted.Points.Count);
-            return candidate.Points.Take(prefixLength).SequenceEqual(accepted.Points.Take(prefixLength)) &&
-                candidate.Points.Skip(candidate.Points.Count - suffixLength)
-                    .SequenceEqual(accepted.Points.Skip(accepted.Points.Count - suffixLength));
+            return TerminalRouteCompatibility.Preserves(accepted, candidate);
         }
 
         private static (string? RootId, string? BranchId) ExposureScope(string edgeId, bool exposureTree)
