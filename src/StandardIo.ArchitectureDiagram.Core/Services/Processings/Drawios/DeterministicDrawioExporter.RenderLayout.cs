@@ -290,7 +290,8 @@ internal sealed class RenderLayout
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths)
         {
-            if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)) &&
+                (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold || IsRootedExposureForest(graph)))
             {
                 return PositionExposureTrees(graph, settings, depths, widths);
             }
@@ -464,6 +465,46 @@ internal sealed class RenderLayout
             }
 
             return result;
+        }
+
+        private static bool IsRootedExposureForest(RenderGraph graph)
+        {
+            var incoming = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
+            var outgoing = graph.Nodes.ToDictionary(
+                node => node.Id,
+                node => graph.Links.Where(link => link.SourceId == node.Id).Select(link => link.TargetId).ToArray(),
+                StringComparer.Ordinal);
+            foreach (var link in graph.Links)
+            {
+                if (!incoming.ContainsKey(link.TargetId) || ++incoming[link.TargetId] > 1)
+                {
+                    return false;
+                }
+            }
+
+            var roots = incoming.Where(item => item.Value == 0).Select(item => item.Key).ToArray();
+            if (roots.Length == 0)
+            {
+                return false;
+            }
+
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            var queue = new Queue<string>(roots);
+            while (queue.Count > 0)
+            {
+                var nodeId = queue.Dequeue();
+                if (!visited.Add(nodeId))
+                {
+                    return false;
+                }
+
+                foreach (var targetId in outgoing[nodeId])
+                {
+                    queue.Enqueue(targetId);
+                }
+            }
+
+            return visited.Count == graph.Nodes.Count;
         }
 
         private static IReadOnlyDictionary<string, int> CalculateExposureTraversalDepths(
