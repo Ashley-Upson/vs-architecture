@@ -37,9 +37,9 @@ public static class Program
             using var provider = new ServiceCollection()
                 .AddArchitectureDiagram()
                 .BuildServiceProvider();
-            if (options.EmitOnValidationFailure)
+            if (string.Equals(settings.OutputRenderer, "drawio", StringComparison.OrdinalIgnoreCase))
             {
-                return await GenerateDiagnosticAsync(provider, options, settings).ConfigureAwait(false);
+                return await GenerateDrawioAsync(provider, options, settings).ConfigureAwait(false);
             }
 
             var result = await provider
@@ -62,19 +62,14 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--emit-on-validation-failure] [--diagnostics-output <json>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>]");
     }
 
-    private static async Task<int> GenerateDiagnosticAsync(
+    private static async Task<int> GenerateDrawioAsync(
         ServiceProvider provider,
         CliOptions options,
         DiagramSettings settings)
     {
-        if (!string.Equals(settings.OutputRenderer, "drawio", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("--emit-on-validation-failure is supported only by the drawio renderer.");
-        }
-
         var target = await provider.GetRequiredService<IWorkspacePathBroker>()
             .LoadAsync(
                 options.InputPath!,
@@ -83,39 +78,51 @@ public static class Program
         var diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
             .AnalyzeAsync(target.Projects, settings)
             .ConfigureAwait(false);
-        var diagnostic = provider.GetRequiredService<IDeterministicDrawioExporter>()
-            .ExportDiagnostic(diagram, settings);
+        var exporter = provider.GetRequiredService<IDeterministicDrawioExporter>();
+        var generation = exporter.GenerateResult(diagram, settings);
         var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
             ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
             : Path.GetFullPath(options.OutputPath);
-        var reportPath = string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath)
-            ? Path.ChangeExtension(outputPath, ".validation.json")
-            : Path.GetFullPath(options.DiagnosticsOutputPath);
         var broker = provider.GetRequiredService<IDiagramFileBroker>();
-        await broker.WriteTextAsync(outputPath, diagnostic.Content).ConfigureAwait(false);
-        await broker.WriteTextAsync(reportPath, diagnostic.ReportJson).ConfigureAwait(false);
+        await broker.WriteTextAsync(outputPath, generation.Document).ConfigureAwait(false);
 
-        var focusedDirectory = Path.Combine(
-            Path.GetDirectoryName(outputPath) ?? Directory.GetCurrentDirectory(),
-            $"{Path.GetFileNameWithoutExtension(outputPath)}-focused");
-        foreach (var focused in diagnostic.FocusedOutputs.OrderBy(item => item.Key, StringComparer.Ordinal))
+        string? reportPath = null;
+        if (options.StrictValidation || !string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath))
         {
-            var focusedPath = Path.Combine(focusedDirectory, $"{focused.Key}.drawio");
-            await broker.WriteTextAsync(focusedPath, focused.Value).ConfigureAwait(false);
-            Console.WriteLine(focusedPath);
+            var diagnostic = exporter.ExportDiagnostic(diagram, settings);
+            reportPath = string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath)
+                ? Path.ChangeExtension(outputPath, ".validation.json")
+                : Path.GetFullPath(options.DiagnosticsOutputPath);
+            await broker.WriteTextAsync(reportPath, diagnostic.ReportJson).ConfigureAwait(false);
+            var focusedDirectory = Path.Combine(
+                Path.GetDirectoryName(outputPath) ?? Directory.GetCurrentDirectory(),
+                $"{Path.GetFileNameWithoutExtension(outputPath)}-focused");
+            foreach (var focused in diagnostic.FocusedOutputs.OrderBy(item => item.Key, StringComparer.Ordinal))
+            {
+                var focusedPath = Path.Combine(focusedDirectory, $"{focused.Key}.drawio");
+                await broker.WriteTextAsync(focusedPath, focused.Value).ConfigureAwait(false);
+            }
         }
 
-        Console.WriteLine(outputPath);
-        Console.WriteLine(reportPath);
-        if (diagnostic.EnforcedFindingCount == 0)
+        var unresolved = generation.ValidationFindings.Where(finding => finding.IsStrictlyEnforced).ToArray();
+        if (unresolved.Length > 0)
         {
-            return 0;
+            Console.WriteLine("Diagram generated with geometry advisories:");
+            foreach (var category in unresolved.GroupBy(finding => finding.Category).OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                Console.WriteLine($"  {category.Key}: {category.Count()}");
+            }
         }
 
-        Console.Error.WriteLine(
-            $"Diagnostic output emitted after strict validation failure: " +
-            $"{diagnostic.EnforcedFindingCount} finding(s), {diagnostic.UniqueRejectedRouteCount} unique route(s).");
-        return 1;
+        Console.WriteLine($"Output: {outputPath}");
+        if (reportPath is not null) Console.WriteLine($"Diagnostics: {reportPath}");
+        if (options.StrictValidation && unresolved.Length > 0)
+        {
+            Console.Error.WriteLine($"Strict validation failed with {unresolved.Length} unresolved finding(s); the diagram was still written.");
+            return 1;
+        }
+
+        return 0;
     }
 
     private sealed class CliOptions
@@ -132,7 +139,7 @@ public static class Program
 
         public string? DiagnosticsOutputPath { get; private set; }
 
-        public bool EmitOnValidationFailure { get; private set; }
+        public bool StrictValidation { get; private set; }
 
         public bool ShowHelp { get; private set; }
 
@@ -161,7 +168,11 @@ public static class Program
                         options.ProjectFilter = ReadValue(args, ref index, arg);
                         break;
                     case "--emit-on-validation-failure":
-                        options.EmitOnValidationFailure = true;
+                        Console.Error.WriteLine("--emit-on-validation-failure is deprecated; use --strict-validation.");
+                        options.StrictValidation = true;
+                        break;
+                    case "--strict-validation":
+                        options.StrictValidation = true;
                         break;
                     case "--diagnostics-output":
                         options.DiagnosticsOutputPath = ReadValue(args, ref index, arg);

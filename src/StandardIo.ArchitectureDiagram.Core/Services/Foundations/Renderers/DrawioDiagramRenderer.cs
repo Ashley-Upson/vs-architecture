@@ -27,6 +27,6 @@ public sealed class DrawioDiagramRenderer : IDiagramRenderer
 
     public string Render(DiagramModel diagram, DiagramSettings settings)
     {
-        return _exporter.Export(diagram, settings);
+        return _exporter.GenerateResult(diagram, settings).Document;
     }
 }
