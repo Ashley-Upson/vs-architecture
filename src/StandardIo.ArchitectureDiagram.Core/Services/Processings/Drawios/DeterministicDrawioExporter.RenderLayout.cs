@@ -109,6 +109,17 @@ internal sealed class RenderLayout
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
+            var originalTraceability = traceability;
+            var expansion = ExpandLayersForLaneDemand(nodes, links, traceability, settings);
+            var expansionAttempts = expansion.Attempts;
+            if (expansion.Changed)
+            {
+                nodes = expansion.Nodes;
+                projects = PositionProjects(graph, settings, nodes);
+                positionedLinks = PositionLinks(graph, settings, nodes);
+                links = positionedLinks.Links;
+            }
+
             var repair = RouteRepairCoordinator.Repair(nodes, links, settings);
             links = repair.Links;
             corridors = repair.Corridors;
@@ -117,9 +128,68 @@ internal sealed class RenderLayout
             traceability = repair.PostRepairValidation;
 
             return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection,
-                traversals, traceability, corridors, lanes, repair.PreRepairValidation, repair.Attempts,
+                traversals, traceability, corridors, lanes, originalTraceability,
+                expansionAttempts.Concat(repair.Attempts).ToArray(),
                 repair.EstimatedWorkUsed, repair.WorkBudgetExhausted);
         }
+
+        internal static LayerExpansionResult ExpandLayersForLaneDemand(
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, LinkLayout> links,
+            TraceabilityValidationResult validation,
+            DiagramSettings settings)
+        {
+            var demandByDepth = new Dictionary<int, int>();
+            foreach (var finding in validation.Violations.Where(item =>
+                item.Code == TraceabilityViolationCode.SharedSegment ||
+                item.Code == TraceabilityViolationCode.ParallelSpacing))
+            {
+                if (!links.TryGetValue(finding.EdgeId, out var link) ||
+                    !nodes.TryGetValue(link.Link.SourceId, out var source) ||
+                    !nodes.TryGetValue(link.Link.TargetId, out var target))
+                {
+                    continue;
+                }
+
+                var depth = Math.Max(source.Depth, target.Depth);
+                var required = finding.Code == TraceabilityViolationCode.ParallelSpacing
+                    ? Math.Max(1, finding.Magnitude)
+                    : settings.Layout.ParallelLaneSpacing;
+                demandByDepth[depth] = Math.Min(
+                    settings.Layout.VerticalSpacing,
+                    demandByDepth.TryGetValue(depth, out var current) ? current + required : required);
+            }
+
+            if (demandByDepth.Count == 0)
+            {
+                return new LayerExpansionResult(
+                    nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                    Array.Empty<RouteRepairAttempt>(),
+                    false);
+            }
+
+            var expanded = nodes.ToDictionary(
+                item => item.Key,
+                item =>
+                {
+                    var delta = demandByDepth.Where(demand => item.Value.Depth >= demand.Key).Sum(demand => demand.Value);
+                    return item.Value with { Rect = item.Value.Rect with { Y = item.Value.Rect.Y + delta } };
+                },
+                StringComparer.Ordinal);
+            var attempts = demandByDepth.OrderBy(item => item.Key).Select(item => new RouteRepairAttempt(
+                $"layer-depth-{item.Key}",
+                "AdaptiveLayerSpacing",
+                true,
+                $"Expanded downstream layer geometry by {item.Value}px from observed lane demand.",
+                Array.Empty<ValidationPoint>(),
+                Array.Empty<ValidationPoint>())).ToArray();
+            return new LayerExpansionResult(expanded, attempts, true);
+        }
+
+        internal sealed record LayerExpansionResult(
+            Dictionary<string, NodeLayout> Nodes,
+            IReadOnlyList<RouteRepairAttempt> Attempts,
+            bool Changed);
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
         {

@@ -64,6 +64,33 @@ public sealed class RouteRepairCoordinatorTests
         Assert.Contains(result.PostRepairValidation.Violations, x => x.Code == TraceabilityViolationCode.NodeCollision);
     }
 
+    [Fact]
+    public void Adaptive_capacity_moves_only_affected_downstream_layers()
+    {
+        var nodes = new Dictionary<string, NodeLayout>
+        {
+            ["source"] = Node("source", new Rect(0, 0, 20, 20)) with { Depth = 0 },
+            ["target"] = Node("target", new Rect(0, 100, 20, 20)) with { Depth = 1 },
+            ["downstream"] = Node("downstream", new Rect(0, 200, 20, 20)) with { Depth = 2 }
+        };
+        var links = new Dictionary<string, LinkLayout>
+        {
+            ["edge"] = Link("edge", "source", "target", new Point(10, 20), new Point(10, 100))
+        };
+        var validation = new TraceabilityValidationResult(new[]
+        {
+            new TraceabilityViolation(TraceabilityViolationCode.ParallelSpacing, "edge", "other", 5, "spacing")
+        });
+
+        var result = RenderLayout.ExpandLayersForLaneDemand(nodes, links, validation, DiagramSettings.CreateDefault());
+
+        Assert.True(result.Changed);
+        Assert.Equal(0, result.Nodes["source"].Rect.Y);
+        Assert.Equal(105, result.Nodes["target"].Rect.Y);
+        Assert.Equal(205, result.Nodes["downstream"].Rect.Y);
+        Assert.Contains(result.Attempts, attempt => attempt.FindingCategory == "AdaptiveLayerSpacing");
+    }
+
     private static NodeLayout Node(string id, Rect rect) => new(
         new RenderNode(id, null, id, id, "Class", false, string.Empty, 0,
             Array.Empty<string>(), Array.Empty<TypeProperty>(), 0), rect, 0, false);
