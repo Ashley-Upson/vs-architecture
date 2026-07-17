@@ -9,6 +9,42 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DeterministicDrawioExporterTests
 {
     [Fact]
+    public void Render_emits_regional_optimisation_diagnostics_for_exposure_tree_edges()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ExposureTreeLayoutThreshold = 2;
+        var document = Render(new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project_api", "Api", new[]
+                {
+                    Node("type_controller", "project_api", "ApiController"),
+                    Node("type_service", "project_api", "Service"),
+                    Node("type_repository", "project_api", "Repository")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[]
+            {
+                new DependencyEdge("edge_controller_service", "type_controller", "type_service", "internal"),
+                new DependencyEdge("edge_service_repository", "type_service", "type_repository", "internal")
+            }),
+            settings);
+
+        var edges = document.Descendants("mxCell").Where(cell => (string?)cell.Attribute("edge") == "1").ToArray();
+
+        Assert.NotEmpty(edges);
+        Assert.All(edges, edge =>
+        {
+            Assert.Equal("regional", (string?)edge.Attribute("optimisationMode"));
+            Assert.NotNull(edge.Attribute("regionDecision"));
+            Assert.NotNull(edge.Attribute("regionFallbackReason"));
+            Assert.NotNull(edge.Attribute("pathInitialSignature"));
+            Assert.NotNull(edge.Attribute("pathFinalSignature"));
+        });
+    }
+
+    [Fact]
     public void Render_emits_global_path_selection_diagnostics_on_physical_segments()
     {
         var document = Render(new DiagramModel(

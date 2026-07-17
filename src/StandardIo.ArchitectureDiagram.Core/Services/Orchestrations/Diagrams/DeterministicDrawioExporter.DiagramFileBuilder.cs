@@ -108,9 +108,33 @@ internal sealed class DiagramFileBuilder
                 {
                     layout.PathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
                 }
+                if (layout.RegionalPathSelection is not null)
+                {
+                    layout.RegionalPathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
+                    if (layout.RegionalPathSelection.Initial.TryGetValue(segment.LogicalEdgeId, out var initialPathCandidate))
+                    {
+                        var regionalDecision = layout.RegionalPathSelection.Decisions.FirstOrDefault(decision =>
+                            decision.MutableEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
+                        pathDecision = new CorridorPathDecision(
+                            segment.LogicalEdgeId,
+                            initialPathCandidate.Signature.Value,
+                            pathCandidate?.Signature.Value ?? initialPathCandidate.Signature.Value,
+                            regionalDecision?.Reason ?? "No local traceability interaction was discovered.");
+                    }
+                }
                 var rejectedPathEvaluations = layout.PathSelection?.Evaluations.Where(evaluation =>
                     evaluation.EdgeId == segment.LogicalEdgeId && !evaluation.IsSelected).ToArray();
-                root.Add(Edge(segment, traversal, pathDecision, pathCandidate, rejectedPathEvaluations));
+                var regionDecision = layout.RegionalPathSelection?.Decisions.FirstOrDefault(decision =>
+                    decision.MutableEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal) ||
+                    decision.FixedContextEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
+                root.Add(Edge(
+                    segment,
+                    traversal,
+                    pathDecision,
+                    pathCandidate,
+                    rejectedPathEvaluations,
+                    layout.RegionalPathSelection is not null,
+                    regionDecision));
             }
 
             return root;
@@ -239,7 +263,9 @@ private XElement GraphModel(XElement root)
             EdgeTraversal? traversal,
             CorridorPathDecision? pathDecision,
             CorridorPathCandidate? pathCandidate,
-            IReadOnlyList<CorridorPathEvaluation>? rejectedPathEvaluations)
+            IReadOnlyList<CorridorPathEvaluation>? rejectedPathEvaluations,
+            bool usesRegionalOptimisation,
+            RegionOptimisationDecision? regionDecision)
         {
             // mxCell stores edge terminals in source/target, style as key=value pairs, and mxGeometry points as waypoints.
             // See https://jgraph.github.io/mxgraph/docs/js-api/files/model/mxCell-js.html and
@@ -260,6 +286,16 @@ private XElement GraphModel(XElement root)
                 rejectedPathEvaluations is null || rejectedPathEvaluations.Count == 0 ? null :
                     new XAttribute("pathRejectedAlternatives", string.Join(" | ", rejectedPathEvaluations.Select(evaluation =>
                         $"{evaluation.Signature}: {evaluation.Reason}"))),
+                usesRegionalOptimisation ? new XAttribute("optimisationMode", "regional") : null,
+                !usesRegionalOptimisation ? null : new XAttribute("optimisationRegionId", regionDecision?.RegionId ?? string.Empty),
+                !usesRegionalOptimisation ? null : new XAttribute("regionMutableEdgeCount", regionDecision?.MutableEdgeIds.Count ?? 0),
+                !usesRegionalOptimisation ? null : new XAttribute("regionContextEdgeCount", regionDecision?.FixedContextEdgeIds.Count ?? 0),
+                regionDecision is null ? null : new XAttribute("regionInitialScore", regionDecision.InitialScore),
+                regionDecision is null ? null : new XAttribute("regionFinalScore", regionDecision.FinalScore),
+                !usesRegionalOptimisation ? null : new XAttribute("regionDecision",
+                    regionDecision?.Reason ?? "No local traceability interaction was discovered."),
+                !usesRegionalOptimisation ? null : new XAttribute("regionFallbackReason",
+                    regionDecision?.FallbackReason.ToString() ?? RegionFallbackReason.NoTraceabilityIssue.ToString()),
                 traversal is null || traversal.Diagnostics.Count == 0
                     ? null
                     : new XAttribute("routingDiagnostics", string.Join(",", traversal.Diagnostics

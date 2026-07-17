@@ -35,6 +35,7 @@ internal static class RegionalCorridorPathOptimizer
             item => item.Key,
             item => item.Value.FirstOrDefault(candidate => candidate.IsAcceptedPath) ?? item.Value.First(),
             StringComparer.Ordinal);
+        var initialSelection = selected.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var initialScore = GlobalCorridorPathSelector.Score(selected, corridorCapacities, minimumSpacing);
         var interactions = DiscoverInteractions(selected, minimumSpacing);
         var regions = BuildRegions(interactions, retained, limits);
@@ -106,7 +107,7 @@ internal static class RegionalCorridorPathOptimizer
         }
 
         var finalScore = GlobalCorridorPathSelector.Score(selected, corridorCapacities, minimumSpacing);
-        return new RegionalPathSelectionResult(selected, interactions, regions, decisions, initialScore, finalScore);
+        return new RegionalPathSelectionResult(initialSelection, selected, interactions, regions, decisions, initialScore, finalScore);
     }
 
     internal static IReadOnlyList<RouteInteraction> DiscoverInteractions(

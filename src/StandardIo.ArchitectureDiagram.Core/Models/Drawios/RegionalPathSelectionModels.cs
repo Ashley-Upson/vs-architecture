@@ -56,6 +56,7 @@ internal sealed record RegionOptimisationDecision(
     string Reason);
 
 internal sealed record RegionalPathSelectionResult(
+    IReadOnlyDictionary<string, CorridorPathCandidate> Initial,
     IReadOnlyDictionary<string, CorridorPathCandidate> Selected,
     IReadOnlyList<RouteInteraction> Interactions,
     IReadOnlyList<RouteOptimisationRegion> Regions,
