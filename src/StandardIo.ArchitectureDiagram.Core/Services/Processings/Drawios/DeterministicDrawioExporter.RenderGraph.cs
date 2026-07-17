@@ -128,7 +128,11 @@ internal sealed class RenderGraph
                 .GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
-                    group => group.OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order).ThenBy(link => link.Order).ToArray(),
+                    group => group
+                        .OrderBy(link => graph.Nodes.Single(node => node.Id == link.TargetId).Order)
+                        .ThenBy(link => link.Order)
+                        .ThenBy(link => link.Id, StringComparer.Ordinal)
+                        .ToArray(),
                     StringComparer.Ordinal);
 
             foreach (var link in graph.Links)
@@ -142,12 +146,14 @@ internal sealed class RenderGraph
             var preferredRoots = graph.Nodes
                 .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && IsExposureNode(node))
                 .OrderBy(node => node.Order)
+                .ThenBy(node => node.Id, StringComparer.Ordinal)
                 .ToArray();
             var roots = preferredRoots.Length > 0
                 ? preferredRoots
                 : graph.Nodes
                     .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && incoming[node.Id] == 0)
                     .OrderBy(node => node.Order)
+                    .ThenBy(node => node.Id, StringComparer.Ordinal)
                     .ToArray();
 
             if (roots.Length == 0)

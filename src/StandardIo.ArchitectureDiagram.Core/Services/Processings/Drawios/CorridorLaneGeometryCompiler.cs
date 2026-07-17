@@ -19,7 +19,9 @@ internal static class CorridorLaneGeometryCompiler
                 StringComparer.Ordinal);
         var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
 
-        foreach (var link in links.Values.OrderBy(link => link.Link.Order))
+        foreach (var link in links.Values
+            .OrderBy(link => link.Link.Order)
+            .ThenBy(link => link.Link.Id, StringComparer.Ordinal))
         {
             var completePoints = new[] { link.SourcePoint }
                 .Concat(link.Points)

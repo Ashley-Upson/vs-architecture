@@ -16,6 +16,7 @@ internal static class CorridorObserver
         clearance = Math.Max(0, clearance);
         var observed = links.Values
             .OrderBy(link => link.Link.Order)
+            .ThenBy(link => link.Link.Id, StringComparer.Ordinal)
             .SelectMany(link => CompleteSegments(link)
                 .Select((segment, index) => Describe(link, segment, index, nodes, laneSpacing)))
             .Where(segment => segment is not null)

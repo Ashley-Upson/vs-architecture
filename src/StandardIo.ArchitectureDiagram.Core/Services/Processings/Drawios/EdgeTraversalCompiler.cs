@@ -61,7 +61,7 @@ internal static class EdgeTraversalCompiler
     public static IReadOnlyDictionary<string, LinkLayout> Apply(
         IReadOnlyDictionary<string, LinkLayout> links,
         EdgeTraversalCompilation compilation) =>
-        links.Values.OrderBy(link => link.Link.Order).ToDictionary(
+        links.Values.OrderBy(link => link.Link.Order).ThenBy(link => link.Link.Id, StringComparer.Ordinal).ToDictionary(
             link => link.Link.Id,
             link =>
             {

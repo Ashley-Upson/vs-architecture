@@ -59,7 +59,10 @@ internal static class TraceabilityValidator
         int requiredParallelSpacing)
     {
         var violations = new List<TraceabilityViolation>();
-        var orderedLinks = links.Values.OrderBy(link => link.Link.Order).ToArray();
+        var orderedLinks = links.Values
+            .OrderBy(link => link.Link.Order)
+            .ThenBy(link => link.Link.Id, StringComparer.Ordinal)
+            .ToArray();
 
         foreach (var link in orderedLinks)
         {
