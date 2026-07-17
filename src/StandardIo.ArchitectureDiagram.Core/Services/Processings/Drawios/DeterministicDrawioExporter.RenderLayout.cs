@@ -406,7 +406,9 @@ internal sealed class RenderLayout
             var cursorX = settings.Layout.ContainerPadding * 2;
             var treeGap = settings.Layout.NodeWidth + settings.Layout.StandaloneGroupSpacing;
             var exposureDepths = CalculateExposureTraversalDepths(graph, roots);
-            var depthGaps = CalculateExposureDepthGaps(graph, settings, exposureDepths);
+            var depthGaps = graph.Nodes.Count < settings.Layout.ExposureTreeLayoutThreshold
+                ? CalculateExposureDepthGaps(graph, settings, exposureDepths)
+                : new Dictionary<int, int>();
 
             foreach (var root in roots)
             {
@@ -561,17 +563,11 @@ internal sealed class RenderLayout
                     .Select(group => group.Count())
                     .DefaultIfEmpty(0)
                     .Max();
-                var traversingRouteCount = graph.Links.Count(link =>
-                    depths.TryGetValue(link.SourceId, out var sourceDepth) &&
-                    depths.TryGetValue(link.TargetId, out var targetDepth) &&
-                    Math.Min(sourceDepth, targetDepth) <= depth &&
-                    Math.Max(sourceDepth, targetDepth) > depth);
-                var laneCount = Math.Max(fanoutLaneCount, traversingRouteCount);
                 var terminalClearance = Math.Max(
                     settings.Layout.LinkPadding,
                     settings.Layout.ExposureTreeConnectorMinSegment);
                 var required = terminalClearance * 2 +
-                    Math.Max(0, laneCount - 1) * settings.Layout.ParallelLaneSpacing +
+                    Math.Max(0, fanoutLaneCount - 1) * settings.Layout.ParallelLaneSpacing +
                     settings.Layout.LinkPadding * 2;
                 gaps[depth] = Math.Max(
                     Math.Max(settings.Layout.ExposureTreeMinVerticalSpacing, settings.Layout.VerticalSpacing),
