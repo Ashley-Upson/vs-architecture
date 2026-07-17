@@ -182,6 +182,51 @@ public sealed class CoordinateOwnershipCompilerTests
         Assert.Equal(new Point(200, 50), anchor.RelativePoint);
     }
 
+    [Fact]
+    public void Compile_reconstructs_globally_selected_logical_geometry_exactly()
+    {
+        var selectedPoints = new[]
+        {
+            new Point(20, 50),
+            new Point(100, 50),
+            new Point(200, 50),
+            new Point(300, 50),
+            new Point(380, 50)
+        };
+        var candidates = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+        {
+            ["edge"] = new[]
+            {
+                new CorridorPathCandidate(
+                    "edge",
+                    new[] { "source", "root", "target" },
+                    new[] { "source-boundary", "target-boundary" },
+                    new CorridorPathSignature("source-root-target"),
+                    new CorridorPathLocalCost(360, 0, 0),
+                    selectedPoints,
+                    IsAcceptedPath: true)
+            }
+        };
+        var selection = GlobalCorridorPathSelector.Select(
+            candidates,
+            new Dictionary<string, int>(StringComparer.Ordinal),
+            10,
+            4);
+        var selected = selection.Selected["edge"].Points;
+        var context = Context(
+            new[]
+            {
+                Project("a", new Rect(0, 0, 100, 100)),
+                Project("b", new Rect(300, 0, 100, 100))
+            },
+            new[] { Node("source", "a"), Node("target", "b") },
+            Link("edge", "source", "target", selected[0], selected.Skip(1).Take(selected.Count - 2).ToArray(), selected[^1]));
+
+        var ownership = Compile(context);
+
+        Assert.Equal(Normalize(selected), Normalize(CoordinateOwnershipCompiler.ReconstructAbsolutePoints(ownership, "edge")));
+    }
+
     private static CoordinateOwnershipCompilation Compile(TestContext context) =>
         CoordinateOwnershipCompiler.Compile(
             context.Nodes,

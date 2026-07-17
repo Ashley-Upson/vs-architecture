@@ -179,6 +179,47 @@ public sealed class EdgeTraversalCompilerTests
     }
 
     [Fact]
+    public void Compile_preserves_selected_path_when_its_junction_topology_is_unsupported()
+    {
+        var accepted = TurnLink("edge", 0, 0);
+        var selectedPoints = CompletePoints(accepted);
+        var selection = GlobalCorridorPathSelector.Select(
+            new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+            {
+                ["edge"] = new[]
+                {
+                    new CorridorPathCandidate(
+                        "edge",
+                        new[] { "horizontal", "vertical" },
+                        new[] { "missing-junction" },
+                        new CorridorPathSignature("horizontal-vertical"),
+                        new CorridorPathLocalCost(200, 1, 0),
+                        selectedPoints,
+                        IsAcceptedPath: true)
+                }
+            },
+            new Dictionary<string, int>(StringComparer.Ordinal),
+            10,
+            4);
+        var selected = selection.Selected["edge"].Points;
+        var link = new LinkLayout(
+            accepted.Link,
+            selected[0],
+            selected[^1],
+            selected.Skip(1).Take(selected.Count - 2),
+            accepted.ExitX,
+            accepted.EntryX);
+        var context = CreateTurnContext(new[] { link }, includeJunction: false);
+
+        var result = EdgeTraversalCompiler.Compile(Links(link), context.Observation, context.Allocation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("UNSUPPORTED_JUNCTION_TOPOLOGY", diagnostic.Code);
+        Assert.True(result.Geometry["edge"].UsedFallback);
+        Assert.Equal(selected, result.Geometry["edge"].Points);
+    }
+
+    [Fact]
     public void Compile_is_deterministic_when_link_dictionary_order_is_reversed()
     {
         var links = new[] { TurnLink("a", 0, 0), TurnLink("b", 1, 10), TurnLink("c", 2, 20) };
