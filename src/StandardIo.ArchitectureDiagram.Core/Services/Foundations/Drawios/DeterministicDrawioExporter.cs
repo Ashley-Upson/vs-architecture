@@ -20,12 +20,15 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         var findings = prepared.Layout.Traceability.Violations
             .Select(violation => ToFinding(violation, prepared.IsEnforced(violation)))
             .ToArray();
+        var preRepairFindings = prepared.Layout.PreRepairTraceability.Violations
+            .Select(violation => ToFinding(violation, enforced: false))
+            .ToArray();
         var document = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
         return new DrawioGenerationResult(
             document,
+            preRepairFindings,
             findings,
-            findings,
-            Array.Empty<RouteRepairAttempt>(),
+            prepared.Layout.RepairAttempts,
             prepared.Layout.Links.Values
                 .OrderBy(link => link.Link.Id, StringComparer.Ordinal)
                 .Select(link => new GeneratedRoute(

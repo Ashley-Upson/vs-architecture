@@ -24,7 +24,11 @@ internal sealed class RenderLayout
             EdgeTraversalCompilation traversals,
             TraceabilityValidationResult traceability,
             CorridorObservation corridors,
-            CorridorLaneAllocation lanes)
+            CorridorLaneAllocation lanes,
+            TraceabilityValidationResult? preRepairTraceability = null,
+            IReadOnlyList<RouteRepairAttempt>? repairAttempts = null,
+            int repairWorkUsed = 0,
+            bool repairBudgetExhausted = false)
         {
             Graph = graph;
             Nodes = nodes;
@@ -36,6 +40,10 @@ internal sealed class RenderLayout
             Traceability = traceability;
             Corridors = corridors;
             Lanes = lanes;
+            PreRepairTraceability = preRepairTraceability ?? traceability;
+            RepairAttempts = repairAttempts ?? Array.Empty<RouteRepairAttempt>();
+            RepairWorkUsed = repairWorkUsed;
+            RepairBudgetExhausted = repairBudgetExhausted;
         }
 
         public RenderGraph Graph { get; }
@@ -58,8 +66,17 @@ internal sealed class RenderLayout
 
         public CorridorLaneAllocation Lanes { get; }
 
+        public TraceabilityValidationResult PreRepairTraceability { get; }
+
+        public IReadOnlyList<RouteRepairAttempt> RepairAttempts { get; }
+
+        public int RepairWorkUsed { get; }
+
+        public bool RepairBudgetExhausted { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
-            new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes);
+            new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
+                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -92,7 +109,16 @@ internal sealed class RenderLayout
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
-            return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection, traversals, traceability, corridors, lanes);
+            var repair = RouteRepairCoordinator.Repair(nodes, links, settings);
+            links = repair.Links;
+            corridors = repair.Corridors;
+            lanes = repair.Lanes;
+            traversals = repair.Traversals;
+            traceability = repair.PostRepairValidation;
+
+            return new RenderLayout(graph, nodes, projects, links, positionedLinks.Selection, positionedLinks.RegionalSelection,
+                traversals, traceability, corridors, lanes, repair.PreRepairValidation, repair.Attempts,
+                repair.EstimatedWorkUsed, repair.WorkBudgetExhausted);
         }
 
         private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
