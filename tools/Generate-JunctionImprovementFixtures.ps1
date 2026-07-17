@@ -61,6 +61,26 @@ function Points([string]$value, [int]$xOffset) {
 
 function Add-Route($root, $route, [string]$geometry, [int]$xOffset, [string]$colour, [int]$index) {
     $points = Points $geometry $xOffset
+    $sourceId = "route-$index-source"
+    $targetId = "route-$index-target"
+    foreach ($endpoint in @(
+        @{ Id = $sourceId; Point = $points[0] },
+        @{ Id = $targetId; Point = $points[-1] })) {
+        $vertex = Element "mxCell"
+        $vertex.SetAttributeValue("id", $endpoint.Id)
+        $vertex.SetAttributeValue("value", "")
+        $vertex.SetAttributeValue("style", "opacity=0;fillOpacity=0;strokeOpacity=0;movable=0;resizable=0;deletable=0;")
+        $vertex.SetAttributeValue("vertex", "1")
+        $vertex.SetAttributeValue("parent", "1")
+        $vertexGeometry = Element "mxGeometry"
+        $vertexGeometry.SetAttributeValue("x", $endpoint.Point.X)
+        $vertexGeometry.SetAttributeValue("y", $endpoint.Point.Y)
+        $vertexGeometry.SetAttributeValue("width", "0")
+        $vertexGeometry.SetAttributeValue("height", "0")
+        $vertexGeometry.SetAttributeValue("as", "geometry")
+        $vertex.Add($vertexGeometry)
+        $root.Add($vertex)
+    }
     $cell = Element "mxCell"
     $cell.SetAttributeValue("id", "route-$index")
     $cell.SetAttributeValue("value", $route.Id)
@@ -71,18 +91,17 @@ function Add-Route($root, $route, [string]$geometry, [int]$xOffset, [string]$col
     $cell.SetAttributeValue("style", "edgeStyle=none;orthogonalLoop=0;jettySize=auto;html=1;strokeWidth=2;strokeColor=$colour;endArrow=block;endFill=1;")
     $cell.SetAttributeValue("edge", "1")
     $cell.SetAttributeValue("parent", "1")
+    $cell.SetAttributeValue("source", $sourceId)
+    $cell.SetAttributeValue("target", $targetId)
     $geometryElement = Element "mxGeometry"
     $geometryElement.SetAttributeValue("relative", "1")
     $geometryElement.SetAttributeValue("as", "geometry")
-    $source = Element "mxPoint"
-    $source.SetAttributeValue("x", $points[0].X); $source.SetAttributeValue("y", $points[0].Y); $source.SetAttributeValue("as", "sourcePoint")
-    $target = Element "mxPoint"
-    $target.SetAttributeValue("x", $points[-1].X); $target.SetAttributeValue("y", $points[-1].Y); $target.SetAttributeValue("as", "targetPoint")
     $array = Element "Array"; $array.SetAttributeValue("as", "points")
-    foreach ($point in $points[1..($points.Count - 2)]) {
+    for ($pointIndex = 1; $pointIndex -lt $points.Count - 1; $pointIndex++) {
+        $point = $points[$pointIndex]
         $item = Element "mxPoint"; $item.SetAttributeValue("x", $point.X); $item.SetAttributeValue("y", $point.Y); $array.Add($item)
     }
-    $geometryElement.Add($source); $geometryElement.Add($target); $geometryElement.Add($array); $cell.Add($geometryElement); $root.Add($cell)
+    $geometryElement.Add($array); $cell.Add($geometryElement); $root.Add($cell)
 }
 
 $mxfile = Element "mxfile"
@@ -106,5 +125,20 @@ foreach ($case in $cases) {
 $document = [System.Xml.Linq.XDocument]::new($mxfile)
 $resolved = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputPath))
 [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($resolved)) | Out-Null
-$document.Save($resolved)
+$fixtureDirectory = Join-Path ([System.IO.Path]::GetDirectoryName($resolved)) "junction-fixtures"
+[System.IO.Directory]::CreateDirectory($fixtureDirectory) | Out-Null
+$diagrams = @($mxfile.Elements())
+for ($index = 0; $index -lt $diagrams.Count; $index++) {
+    $singleFile = Element "mxfile"
+    $singleFile.SetAttributeValue("host", "app.diagrams.net")
+    $singleFile.Add([System.Xml.Linq.XElement]::Parse($diagrams[$index].ToString()))
+    $singleDocument = [System.Xml.Linq.XDocument]::new($singleFile)
+    $casePath = Join-Path $fixtureDirectory ("{0:D2}-junction-fixture.drawio" -f ($index + 1))
+    $singleDocument.Save($casePath)
+    if ($index -eq 0) {
+        $singleDocument.Save($resolved)
+    }
+}
+$catalogPath = Join-Path ([System.IO.Path]::GetDirectoryName($resolved)) "junction-improvement-catalog.drawio"
+$document.Save($catalogPath)
 $resolved
