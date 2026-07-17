@@ -63,14 +63,14 @@ internal static class RouteRepairCoordinator
                 foreach (var candidate in Candidates(finding, beforeLink, nodes, settings)
                     .Take(budget.MaximumCandidatesPerFinding))
                 {
-                    candidateCount++;
-                    work++;
-                    if (work > budget.MaximumEstimatedWork)
+                    if (work >= budget.MaximumEstimatedWork)
                     {
                         exhausted = true;
                         break;
                     }
 
+                    candidateCount++;
+                    work++;
                     var trialLinks = current.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
                     trialLinks[finding.EdgeId] = candidate;
                     var trial = Compile(nodes, trialLinks, settings);
