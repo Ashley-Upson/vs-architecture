@@ -90,6 +90,7 @@ internal static class DrawioDiagnosticReportBuilder
                         id = item.Signature,
                         selected = item.IsSelected,
                         score = item.Score.ToString(),
+                        scoreComponents = Score(item.Score),
                         reason = item.Reason
                     }).ToArray(),
                     violations = group.Select((violation, index) => Finding(violation, index + 1, requiredSpacing)).ToArray()
@@ -117,6 +118,17 @@ internal static class DrawioDiagnosticReportBuilder
                     .Count()
             })
             .ToArray();
+        var routeGeometry = layout.Links.Values
+            .OrderBy(link => link.Link.Id, StringComparer.Ordinal)
+            .Select(link => new
+            {
+                logicalRouteId = link.Link.Id,
+                sourceId = link.Link.SourceId,
+                targetId = link.Link.TargetId,
+                selectedCandidateId = SelectedCandidate(layout, link.Link.Id)?.Signature.Value,
+                points = CompletePoints(link).Select(ToPoint).ToArray()
+            })
+            .ToArray();
 
         return JsonSerializer.Serialize(new
         {
@@ -130,7 +142,8 @@ internal static class DrawioDiagnosticReportBuilder
             },
             categories,
             findings,
-            routes
+            routes,
+            routeGeometry
         }, JsonOptions);
     }
 
@@ -296,6 +309,19 @@ internal static class DrawioDiagnosticReportBuilder
     private static object ToPoint(Point point) => new { point.X, point.Y };
 
     private static object ToSegment(Segment segment) => new { start = ToPoint(segment.Start), end = ToPoint(segment.End), segment.Length };
+
+    private static object Score(GlobalRouteScore score) => new
+    {
+        nodeCollisionOrInvalidGeometryCount = score.InvalidGeometry,
+        sharedSegmentLength = score.SharedSegmentLength,
+        spacingDeficit = score.SpacingDeficit,
+        terminalFanoutViolations = score.TerminalFanoutViolations,
+        ambiguousTransitions = score.AmbiguousTransitions,
+        capacityFailure = score.CapacityFailure,
+        perpendicularCrossingsAndCongestion = score.CrossingsAndCongestion,
+        routeEnvelopeExpansion = score.RouteEnvelopeExpansion,
+        pathEconomy = score.PathEconomy
+    };
 
     private static string SafeId(string value) =>
         new(value.Select(character => char.IsLetterOrDigit(character) ? character : '_').ToArray());
