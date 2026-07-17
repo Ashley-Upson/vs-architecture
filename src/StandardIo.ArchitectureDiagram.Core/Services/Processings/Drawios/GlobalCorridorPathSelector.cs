@@ -36,7 +36,10 @@ internal static class GlobalCorridorPathSelector
         {
             var changed = false;
             completedPasses++;
-            foreach (var edgeId in retained.Keys.OrderBy(id => id, StringComparer.Ordinal))
+            foreach (var edgeId in retained
+                .Where(item => item.Value.Count > 1)
+                .Select(item => item.Key)
+                .OrderBy(id => id, StringComparer.Ordinal))
             {
                 var current = selected[edgeId];
                 var currentScore = Score(selected, corridorCapacities, minimumSpacing);
@@ -96,6 +99,18 @@ internal static class GlobalCorridorPathSelector
         var evaluations = new List<CorridorPathEvaluation>();
         foreach (var edgeId in retained.Keys.OrderBy(id => id, StringComparer.Ordinal))
         {
+            if (retained[edgeId].Count == 1)
+            {
+                var candidate = retained[edgeId][0];
+                evaluations.Add(new CorridorPathEvaluation(
+                    edgeId,
+                    candidate.Signature.Value,
+                    true,
+                    finalScore,
+                    decisions[edgeId].Reason));
+                continue;
+            }
+
             foreach (var candidate in retained[edgeId].OrderBy(item => item.Signature.Value, StringComparer.Ordinal))
             {
                 var isSelected = candidate.Signature.Value == selected[edgeId].Signature.Value;
@@ -168,7 +183,7 @@ internal static class GlobalCorridorPathSelector
             routes.Sum(route => route.Value.AmbiguousTransitions) + reusedBends,
             capacityFailure,
             crossings,
-            routes.Sum(route => route.Value.LocalCost.CanvasEscape),
+            routes.Sum(route => route.Value.LocalCost.RouteEnvelopeExpansion),
             routes.Sum(route => route.Value.LocalCost.PathLength + route.Value.LocalCost.BendCount),
             fanoutViolations);
     }

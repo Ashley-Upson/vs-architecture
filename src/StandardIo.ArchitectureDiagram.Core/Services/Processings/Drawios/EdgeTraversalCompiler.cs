@@ -10,7 +10,8 @@ internal static class EdgeTraversalCompiler
         IReadOnlyDictionary<string, LinkLayout> links,
         CorridorObservation observation,
         CorridorLaneAllocation allocation,
-        IReadOnlyDictionary<string, NodeLayout>? nodes = null)
+        IReadOnlyDictionary<string, NodeLayout>? nodes = null,
+        IReadOnlyDictionary<string, LinkLayout>? logicalLinks = null)
     {
         var mappings = observation.SegmentMappings
             .GroupBy(mapping => mapping.EdgeId, StringComparer.Ordinal)
@@ -36,7 +37,23 @@ internal static class EdgeTraversalCompiler
             var traversal = junctionAllocation.Traversals[link.Link.Id];
             var compiled = Compile(traversal);
             var accepted = CompletePoints(link);
-            if (!Normalize(compiled.Points).SequenceEqual(Normalize(accepted)) &&
+            var logical = logicalLinks is not null && logicalLinks.TryGetValue(link.Link.Id, out var logicalLink)
+                ? CompletePoints(logicalLink)
+                : accepted;
+            if (!IsOrthogonal(compiled.Points) && IsOrthogonal(logical))
+            {
+                var diagnostic = new TraversalDiagnostic(
+                    link.Link.Id,
+                    "TRAVERSAL_NON_ORTHOGONAL",
+                    "Compiled traversal was not orthogonal; the selected logical route was retained.");
+                traversal = traversal with
+                {
+                    AcceptedFallbackPoints = logical,
+                    Diagnostics = traversal.Diagnostics.Concat(new[] { diagnostic }).ToArray()
+                };
+                compiled = new CompiledEdgeGeometry(link.Link.Id, logical, true);
+            }
+            else if (!Normalize(compiled.Points).SequenceEqual(Normalize(accepted)) &&
                 !junctionAllocation.AllocatedEdgeIds.Contains(link.Link.Id))
             {
                 var diagnostic = new TraversalDiagnostic(
@@ -87,6 +104,10 @@ internal static class EdgeTraversalCompiler
         return points.Zip(points.Skip(1), (start, end) => new Segment(start, end))
             .Any(segment => obstacles.Any(segment.Intersects));
     }
+
+    private static bool IsOrthogonal(IReadOnlyList<Point> points) =>
+        points.Zip(points.Skip(1), (start, end) => new Segment(start, end))
+            .All(segment => segment.IsHorizontal || segment.IsVertical);
 
     public static IReadOnlyDictionary<string, LinkLayout> Apply(
         IReadOnlyDictionary<string, LinkLayout> links,

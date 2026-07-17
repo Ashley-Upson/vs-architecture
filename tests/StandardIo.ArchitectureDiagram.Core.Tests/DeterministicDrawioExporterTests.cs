@@ -79,7 +79,7 @@ public sealed class DeterministicDrawioExporterTests
             var localCost = (string?)edge.Attribute("pathLocalCost");
             Assert.Contains("length=", localCost);
             Assert.Contains(";bends=", localCost);
-            Assert.Contains(";escape=", localCost);
+            Assert.Contains(";envelopeExpansion=", localCost);
             Assert.False(string.IsNullOrWhiteSpace((string?)edge.Attribute("pathRejectedAlternatives")));
         });
     }
@@ -1271,7 +1271,9 @@ public sealed class DeterministicDrawioExporterTests
         {
             Assert.True(side.Length >= 2);
             var sourcePorts = side.Select(route => route.Points[0].X).ToArray();
-            var laneCoordinates = side.Select(route => route.Points.First(point => point.Y != source.Y + source.Height).Y).ToArray();
+            var laneCoordinates = side.Select(route => TestSegments(route.Points)
+                .First(segment => segment.Start.Y == segment.End.Y && segment.Start.X != segment.End.X)
+                .Start.Y).ToArray();
             if (side[0].Target.X < source.X)
             {
                 Assert.Equal(sourcePorts.OrderByDescending(value => value), sourcePorts);

@@ -40,6 +40,13 @@ internal static class CorridorLaneGeometryCompiler
                     {
                         continue;
                     }
+                    if (mapping.SegmentIndex == 1 &&
+                            SameOrientation(segments[0], mapping.Segment) ||
+                        mapping.SegmentIndex == segments.Length - 2 &&
+                            SameOrientation(mapping.Segment, segments[segments.Length - 1]))
+                    {
+                        continue;
+                    }
 
                     var originalCoordinate = mapping.Segment.IsHorizontal
                         ? mapping.Segment.Start.Y
@@ -85,6 +92,9 @@ internal static class CorridorLaneGeometryCompiler
 
         return result;
     }
+
+    private static bool SameOrientation(Segment first, Segment second) =>
+        first.IsHorizontal && second.IsHorizontal || first.IsVertical && second.IsVertical;
 
     private static bool PreservesTerminalRegion(int original, int candidate, int firstTerminal, int secondTerminal)
     {

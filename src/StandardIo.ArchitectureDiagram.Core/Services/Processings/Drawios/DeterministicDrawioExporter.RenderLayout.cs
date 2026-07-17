@@ -12,7 +12,7 @@ internal sealed class RenderLayout
 {
     private const int TextWidth = 8;
     private const string ExposureTreeIdPrefix = "tree_";
-    private const int MaximumGlobalPathSelectionEdges = 64;
+    private const long MaximumGlobalPathSelectionEstimatedWork = 2_000_000;
 
         private RenderLayout(
             RenderGraph graph,
@@ -77,7 +77,18 @@ internal sealed class RenderLayout
                 settings.Layout.LinkPadding);
             var lanes = CorridorLaneAllocator.Allocate(corridors);
             var links = CorridorLaneGeometryCompiler.Compile(provisionalLinks, corridors, lanes);
-            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes);
+            IReadOnlyDictionary<string, LinkLayout> logicalFallback = provisionalLinks;
+            if (graph.PlacementParentByNode.Count == 0 &&
+                graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)))
+            {
+                links = OrderExposureFanoutLanes(
+                    links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                    graph,
+                    nodes,
+                    settings);
+                logicalFallback = links;
+            }
+            var traversals = EdgeTraversalCompiler.Compile(links, corridors, lanes, nodes, logicalFallback);
             links = EdgeTraversalCompiler.Apply(links, traversals);
             var traceability = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
 
@@ -365,6 +376,108 @@ internal sealed class RenderLayout
             }
 
             return result;
+        }
+
+        private static Dictionary<string, LinkLayout> OrderExposureFanoutLanes(
+            Dictionary<string, LinkLayout> layouts,
+            RenderGraph graph,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            DiagramSettings settings)
+        {
+            foreach (var sourceGroup in graph.Links
+                .GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                var sourceCenter = nodes[sourceGroup.Key].Rect.CenterX;
+                foreach (var side in sourceGroup
+                    .Where(link => nodes[link.TargetId].Rect.CenterX != sourceCenter)
+                    .GroupBy(link => nodes[link.TargetId].Rect.CenterX > sourceCenter))
+                {
+                    var ordered = side
+                        .OrderBy(link => Math.Abs(nodes[link.TargetId].Rect.CenterX - sourceCenter))
+                        .ThenBy(link => link.Id, StringComparer.Ordinal)
+                        .ToArray();
+                    var lanes = ordered
+                        .Select(link => FirstHorizontalLane(layouts[link.Id]))
+                        .ToArray();
+                    if (lanes.Any(lane => lane is null))
+                    {
+                        continue;
+                    }
+
+                    var anchor = lanes.Select(lane => lane!.Value)
+                        .Where(value => value > nodes[sourceGroup.Key].Rect.Bottom)
+                        .DefaultIfEmpty(nodes[sourceGroup.Key].Rect.Bottom + settings.Layout.LinkPadding)
+                        .Max();
+                    var desired = Enumerable.Range(0, ordered.Length)
+                        .Select(index => anchor - index * settings.Layout.ParallelLaneSpacing)
+                        .ToArray();
+                    if (desired[desired.Length - 1] <= nodes[sourceGroup.Key].Rect.Bottom)
+                    {
+                        continue;
+                    }
+                    var replacements = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
+                    for (var index = 0; index < ordered.Length; index++)
+                    {
+                        var link = ordered[index];
+                        var replacement = MoveFirstHorizontalLane(layouts[link.Id], desired[index]);
+                        var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
+                        if (CrossesNode(
+                            new[] { replacement.SourcePoint }.Concat(replacement.Points)
+                                .Concat(new[] { replacement.TargetPoint }).ToList(),
+                            obstacles))
+                        {
+                            replacements.Clear();
+                            break;
+                        }
+
+                        replacements[link.Id] = replacement;
+                    }
+
+                    foreach (var replacement in replacements)
+                    {
+                        layouts[replacement.Key] = replacement.Value;
+                    }
+                }
+            }
+
+            return layouts;
+        }
+
+        private static int? FirstHorizontalLane(LinkLayout link)
+        {
+            var complete = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+            return complete.Zip(complete.Skip(1), (start, end) => new Segment(start, end))
+                .Where(segment => segment.IsHorizontal && segment.Length > 0)
+                .Select(segment => (int?)segment.Start.Y)
+                .FirstOrDefault();
+        }
+
+        private static LinkLayout MoveFirstHorizontalLane(LinkLayout link, int laneY)
+        {
+            var complete = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+            for (var index = 0; index < complete.Length - 1; index++)
+            {
+                var segment = new Segment(complete[index], complete[index + 1]);
+                if (!segment.IsHorizontal || segment.Length == 0)
+                {
+                    continue;
+                }
+
+                complete[index] = new Point(complete[index].X, laneY);
+                complete[index + 1] = new Point(complete[index + 1].X, laneY);
+                break;
+            }
+
+            return new LinkLayout(
+                link.Link,
+                complete[0],
+                complete[complete.Length - 1],
+                complete.Skip(1).Take(complete.Length - 2),
+                link.ExitX,
+                link.EntryX,
+                link.ExitY,
+                link.EntryY);
         }
 
         private static Dictionary<string, NodeLayout> PositionExposureTrees(
@@ -1090,11 +1203,6 @@ internal sealed class RenderLayout
                     Ratio(targetPoint.X, target));
             }
 
-            if (result.Count > MaximumGlobalPathSelectionEdges)
-            {
-                return OptimiseRegionalLinks(graph, settings, nodes, result, false);
-            }
-
             var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
             foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
             {
@@ -1138,6 +1246,12 @@ internal sealed class RenderLayout
                     settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
             }
 
+            var estimatedWork = EstimateGlobalPathSelectionWork(candidatesByEdge, 4);
+            if (estimatedWork > MaximumGlobalPathSelectionEstimatedWork)
+            {
+                return OptimiseRegionalLinks(graph, settings, nodes, result, false);
+            }
+
             var selection = GlobalCorridorPathSelector.Select(
                 candidatesByEdge,
                 new Dictionary<string, int>(StringComparer.Ordinal),
@@ -1160,6 +1274,16 @@ internal sealed class RenderLayout
                 },
                 StringComparer.Ordinal);
             return new PositionedLinkLayouts(selectedLayouts, selection, null);
+        }
+
+        internal static long EstimateGlobalPathSelectionWork(
+            IReadOnlyDictionary<string, IReadOnlyList<CorridorPathCandidate>> candidates,
+            int maximumPasses)
+        {
+            var edgeCount = candidates.Count;
+            var routePairs = (long)edgeCount * Math.Max(0, edgeCount - 1) / 2;
+            var alternatives = candidates.Values.Sum(items => Math.Max(0, items.Count - 1));
+            return alternatives * Math.Max(1, routePairs) * Math.Max(1, maximumPasses);
         }
 
         private static PositionedLinkLayouts OptimiseRegionalLinks(

@@ -188,6 +188,28 @@ public sealed class GlobalCorridorPathSelectorTests
     }
 
     [Fact]
+    public void Work_estimate_depends_on_mutable_choices_not_an_edge_count_cliff()
+    {
+        var sparse = Enumerable.Range(0, 200).ToDictionary(
+            index => $"edge-{index}",
+            index => (IReadOnlyList<CorridorPathCandidate>)new[]
+            {
+                Candidate($"edge-{index}", "accepted", 100, "accepted", P(0, index * 20, 100, index * 20))
+            },
+            StringComparer.Ordinal);
+        var denseChoices = sparse.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var edgeId in denseChoices.Keys.Take(16).ToArray())
+        {
+            denseChoices[edgeId] = denseChoices[edgeId]
+                .Concat(new[] { Candidate(edgeId, "alternative", 120, "alternative", P(0, 0, 0, 10, 100, 10)) })
+                .ToArray();
+        }
+
+        Assert.Equal(0, RenderLayout.EstimateGlobalPathSelectionWork(sparse, 4));
+        Assert.True(RenderLayout.EstimateGlobalPathSelectionWork(denseChoices, 4) > 1_000_000);
+    }
+
+    [Fact]
     public void Score_is_lexicographic_and_does_not_blend_lower_tiers()
     {
         var higherTierFailure = new GlobalRouteScore(0, 1, 0, 0, 0, 0, 0, 0);

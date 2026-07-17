@@ -118,6 +118,54 @@ public sealed class CorridorLaneGeometryCompilerTests
         Assert.All(CompleteSegments(result), segment => Assert.True(segment.IsHorizontal || segment.IsVertical));
     }
 
+    [Fact]
+    public void Compile_does_not_shift_collinear_terminal_access_continuation()
+    {
+        var link = new LinkLayout(
+            new RenderLink("edge", "source", "target", "internal", 0),
+            new Point(20, 0),
+            new Point(100, 100),
+            new[] { new Point(20, 20), new Point(100, 20), new Point(100, 50) },
+            0.5,
+            0.5);
+        var corridor = new RoutingCorridor(
+            "V:60:120",
+            CorridorOrientation.Vertical,
+            new Rect(60, 20, 60, 30),
+            12,
+            3);
+        var observation = new CorridorObservation(
+            new Dictionary<string, RoutingCorridor> { [corridor.Id] = corridor },
+            new Dictionary<string, CorridorJunction>(),
+            new[]
+            {
+                new CorridorSegmentMapping(
+                    "edge",
+                    2,
+                    corridor.Id,
+                    new Segment(new Point(100, 20), new Point(100, 50)))
+            },
+            new Dictionary<string, CorridorUsage>());
+        var allocation = new CorridorLaneAllocation(
+            new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>
+            {
+                [corridor.Id] = new Dictionary<string, AllocatedCorridorLane>
+                {
+                    ["edge"] = new(corridor.Id, "edge", 0, 80)
+                }
+            },
+            Array.Empty<string>());
+
+        var result = CorridorLaneGeometryCompiler.Compile(
+            new Dictionary<string, LinkLayout> { ["edge"] = link },
+            observation,
+            allocation)["edge"];
+
+        Assert.DoesNotContain(new Point(80, 50), result.Points);
+        Assert.Contains(new Point(100, 50), result.Points);
+        Assert.All(CompleteSegments(result), segment => Assert.True(segment.IsHorizontal || segment.IsVertical));
+    }
+
     private static IEnumerable<Segment> CompleteSegments(LinkLayout link)
     {
         var points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();

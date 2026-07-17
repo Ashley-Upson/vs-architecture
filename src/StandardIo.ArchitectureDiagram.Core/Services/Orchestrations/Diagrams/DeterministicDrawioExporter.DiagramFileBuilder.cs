@@ -282,7 +282,7 @@ private XElement GraphModel(XElement root)
                 pathDecision is null ? null : new XAttribute("pathFinalSignature", pathDecision.FinalSignature),
                 pathDecision is null ? null : new XAttribute("pathDecision", pathDecision.Reason),
                 pathCandidate is null ? null : new XAttribute("pathLocalCost",
-                    $"length={pathCandidate.LocalCost.PathLength};bends={pathCandidate.LocalCost.BendCount};escape={pathCandidate.LocalCost.CanvasEscape}"),
+                    $"length={pathCandidate.LocalCost.PathLength};bends={pathCandidate.LocalCost.BendCount};envelopeExpansion={pathCandidate.LocalCost.RouteEnvelopeExpansion}"),
                 pathCandidate?.FanoutMemberships is null || pathCandidate.FanoutMemberships.Count == 0 ? null :
                     new XAttribute("fanoutGroups", string.Join(" | ", pathCandidate.FanoutMemberships.Select(fanout =>
                         $"{fanout.GroupId}:terminal={fanout.TerminalOrder},lane={fanout.LaneOrder},remote={fanout.RemoteNodeOrder},side={fanout.Side}"))),

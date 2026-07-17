@@ -5,7 +5,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal sealed record CorridorPathSignature(string Value);
 
-internal sealed record CorridorPathLocalCost(int PathLength, int BendCount, int CanvasEscape);
+internal sealed record CorridorPathLocalCost(int PathLength, int BendCount, int RouteEnvelopeExpansion);
 
 internal sealed record CorridorPathCandidate(
     string EdgeId,
@@ -28,7 +28,7 @@ internal sealed record GlobalRouteScore(
     int AmbiguousTransitions,
     int CapacityFailure,
     int CrossingsAndCongestion,
-    int CanvasEscape,
+    int RouteEnvelopeExpansion,
     int PathEconomy,
     int TerminalFanoutViolations = 0) : IComparable<GlobalRouteScore>
 {
@@ -40,12 +40,12 @@ internal sealed record GlobalRouteScore(
         }
 
         var left = new[] { InvalidGeometry, SharedSegmentLength, SpacingDeficit, TerminalFanoutViolations, AmbiguousTransitions,
-            CapacityFailure, VisualCost(CrossingsAndCongestion, CanvasEscape, PathEconomy),
-            CrossingsAndCongestion, CanvasEscape, PathEconomy };
+            CapacityFailure, VisualCost(CrossingsAndCongestion, RouteEnvelopeExpansion, PathEconomy),
+            CrossingsAndCongestion, RouteEnvelopeExpansion, PathEconomy };
         var right = new[] { other.InvalidGeometry, other.SharedSegmentLength, other.SpacingDeficit, other.TerminalFanoutViolations,
             other.AmbiguousTransitions, other.CapacityFailure,
-            VisualCost(other.CrossingsAndCongestion, other.CanvasEscape, other.PathEconomy),
-            other.CrossingsAndCongestion, other.CanvasEscape, other.PathEconomy };
+            VisualCost(other.CrossingsAndCongestion, other.RouteEnvelopeExpansion, other.PathEconomy),
+            other.CrossingsAndCongestion, other.RouteEnvelopeExpansion, other.PathEconomy };
         for (var index = 0; index < left.Length; index++)
         {
             var comparison = left[index].CompareTo(right[index]);

@@ -44,6 +44,24 @@ public sealed class EdgeTraversalCompilerTests
     {
         var links = new[] { AmbiguousTurnLink("a", 0, 0), AmbiguousTurnLink("b", 1, 10) };
         var context = CreateTurnContext(links, includeJunction: true);
+        var corridorAllocations = context.Allocation.Corridors.ToDictionary(
+            item => item.Key,
+            item => item.Value.ToDictionary(lane => lane.Key, lane => lane.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        var escapedEdge = links[0].Link.Id;
+        corridorAllocations["vertical"][escapedEdge] = corridorAllocations["vertical"][escapedEdge] with
+        {
+            Coordinate = 240
+        };
+        context = context with
+        {
+            Allocation = new CorridorLaneAllocation(
+                corridorAllocations.ToDictionary(
+                    item => item.Key,
+                    item => (IReadOnlyDictionary<string, AllocatedCorridorLane>)item.Value,
+                    StringComparer.Ordinal),
+                Array.Empty<string>())
+        };
         var withoutNodes = EdgeTraversalCompiler.Compile(Links(links), context.Observation, context.Allocation);
         var changed = links.First(link =>
             !withoutNodes.Geometry[link.Link.Id].Points.SequenceEqual(CompletePoints(link)));
