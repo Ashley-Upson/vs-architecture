@@ -12,7 +12,7 @@ internal static class CorridorPathCandidateReducer
         int maximumDetour)
     {
         var valid = candidates
-            .Where(candidate => !candidate.HasInvalidGeometry)
+            .Where(candidate => !candidate.HasInvalidGeometry || candidate.IsAcceptedPath)
             .GroupBy(candidate => candidate.Signature.Value, StringComparer.Ordinal)
             .Select(group => group
                 .OrderByDescending(candidate => candidate.IsAcceptedPath)

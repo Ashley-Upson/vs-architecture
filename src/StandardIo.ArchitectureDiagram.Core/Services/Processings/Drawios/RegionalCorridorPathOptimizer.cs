@@ -39,7 +39,27 @@ internal static class RegionalCorridorPathOptimizer
         var initialScore = GlobalCorridorPathSelector.Score(selected, corridorCapacities, minimumSpacing);
         var currentWholeScore = initialScore;
         var interactions = DiscoverInteractions(selected, minimumSpacing);
-        var regions = BuildRegions(interactions, retained, limits);
+        var interactionRegions = BuildRegions(interactions, retained, limits);
+        var representedEdges = new HashSet<string>(
+            interactionRegions.SelectMany(region => region.MutableEdgeIds.Concat(region.FixedContextEdgeIds)),
+            StringComparer.Ordinal);
+        var invalidGeometryRegions = selected.Values
+            .Where(candidate => candidate.HasInvalidGeometry && !representedEdges.Contains(candidate.EdgeId))
+            .OrderBy(candidate => candidate.EdgeId, StringComparer.Ordinal)
+            .Select(candidate =>
+            {
+                var bounds = Bounds(candidate.Points).Inflate(limits.InteractionMargin);
+                return new RouteOptimisationRegion(
+                    $"invalid_geometry_{candidate.EdgeId}",
+                    bounds,
+                    retained[candidate.EdgeId].Count > 1
+                        ? new[] { candidate.EdgeId }
+                        : Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<RouteInteraction>());
+            })
+            .ToArray();
+        var regions = invalidGeometryRegions.Concat(interactionRegions).ToArray();
         var decisions = new List<RegionOptimisationDecision>();
 
         foreach (var region in regions.Take(limits.MaximumRegions))

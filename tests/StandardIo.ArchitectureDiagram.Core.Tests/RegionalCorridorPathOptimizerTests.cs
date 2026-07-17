@@ -7,6 +7,29 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class RegionalCorridorPathOptimizerTests
 {
+    [Fact]
+    public void Isolated_invalid_baseline_receives_a_bounded_single_edge_region()
+    {
+        var invalid = Candidate("edge", "invalid", P(0, 0, 100, 0), accepted: true) with
+        {
+            HasInvalidGeometry = true
+        };
+        var safe = Candidate("edge", "safe", P(0, 0, 0, 20, 100, 20, 100, 0));
+        var candidates = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+        {
+            ["edge"] = new[] { invalid, safe }
+        };
+
+        var result = RegionalCorridorPathOptimizer.Optimise(
+            candidates,
+            new Dictionary<string, int>(StringComparer.Ordinal),
+            10,
+            new RegionalOptimisationLimits());
+
+        Assert.Equal("safe", result.Selected["edge"].Signature.Value);
+        Assert.Contains(result.Regions, region => region.Id == "invalid_geometry_edge");
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

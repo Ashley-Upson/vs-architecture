@@ -8,6 +8,22 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 public sealed class GlobalCorridorPathSelectorTests
 {
     [Fact]
+    public void Reducer_retains_invalid_accepted_baseline_for_safe_candidate_comparison()
+    {
+        var accepted = Candidate("edge", "accepted", 100, "accepted", P(0, 0, 100, 0)) with
+        {
+            HasInvalidGeometry = true,
+            IsAcceptedPath = true
+        };
+        var safe = Candidate("edge", "safe", 120, "safe", P(0, 0, 0, 20, 100, 20, 100, 0));
+
+        var retained = CorridorPathCandidateReducer.Retain(new[] { accepted, safe }, 8, 100);
+
+        Assert.Contains(accepted, retained);
+        Assert.Contains(safe, retained);
+    }
+
+    [Fact]
     public void Select_moves_locally_shortest_blocker_to_longer_clean_corridor()
     {
         var candidates = EarlyCommitCandidates();
