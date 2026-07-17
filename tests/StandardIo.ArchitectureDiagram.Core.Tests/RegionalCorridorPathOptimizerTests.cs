@@ -7,6 +7,48 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class RegionalCorridorPathOptimizerTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Score_accepts_three_route_monotonic_same_side_fanout(bool rightSide)
+    {
+        var side = rightSide ? FanoutSide.Right : FanoutSide.Left;
+        var selection = Enumerable.Range(0, 3).ToDictionary(
+            index => $"edge-{index}",
+            index => Candidate($"edge-{index}", "accepted", P(0, index * 10, 100, index * 10), accepted: true) with
+            {
+                FanoutMemberships = new[] { Membership("source:node", index, index, index, side) }
+            },
+            StringComparer.Ordinal);
+
+        var score = GlobalCorridorPathSelector.Score(selection, Capacities(), 10);
+
+        Assert.Equal(0, score.TerminalFanoutViolations);
+    }
+
+    [Fact]
+    public void Select_rejects_crossing_reduction_that_reverses_fanout_order()
+    {
+        var candidates = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal)
+        {
+            ["a"] = new[]
+            {
+                Candidate("a", "accepted", P(0, 0, 100, 0), accepted: true) with
+                { FanoutMemberships = new[] { Membership("source:node", 0, 0, 0, FanoutSide.Right) } },
+                Candidate("a", "reversed", P(0, 0, 0, 20, 100, 20)) with
+                { FanoutMemberships = new[] { Membership("source:node", 2, 2, 0, FanoutSide.Right) } }
+            },
+            ["b"] = new[] { Candidate("b", "fixed", P(0, 10, 100, 10), accepted: true) with
+                { FanoutMemberships = new[] { Membership("source:node", 1, 1, 1, FanoutSide.Right) } } },
+            ["c"] = new[] { Candidate("c", "fixed", P(0, 30, 100, 30), accepted: true) with
+                { FanoutMemberships = new[] { Membership("source:node", 2, 2, 2, FanoutSide.Right) } } }
+        };
+
+        var result = GlobalCorridorPathSelector.Select(candidates, Capacities(), 10, 4);
+
+        Assert.Equal("accepted", result.Selected["a"].Signature.Value);
+        Assert.Equal(0, result.FinalScore.TerminalFanoutViolations);
+    }
     [Fact]
     public void Optimise_changes_only_local_conflict_in_one_hundred_edge_diagram()
     {
@@ -215,6 +257,10 @@ public sealed class RegionalCorridorPathOptimizerTests
             ExposureBranchId: branch);
 
     private static IReadOnlyDictionary<string, int> Capacities() => new Dictionary<string, int>(StringComparer.Ordinal);
+
+    private static TerminalFanoutMembership Membership(
+        string groupId, int terminal, int lane, int remote, FanoutSide side) =>
+        new(groupId, FanoutDirection.Source, "node", terminal, lane, remote, side);
 
     private static IReadOnlyList<Point> P(params int[] coordinates) =>
         Enumerable.Range(0, coordinates.Length / 2)

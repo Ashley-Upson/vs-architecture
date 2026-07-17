@@ -18,7 +18,8 @@ internal sealed record CorridorPathCandidate(
     int AmbiguousTransitions = 0,
     bool IsAcceptedPath = false,
     string? ExposureRootId = null,
-    string? ExposureBranchId = null);
+    string? ExposureBranchId = null,
+    IReadOnlyList<TerminalFanoutMembership>? FanoutMemberships = null);
 
 internal sealed record GlobalRouteScore(
     int InvalidGeometry,
@@ -28,7 +29,8 @@ internal sealed record GlobalRouteScore(
     int CapacityFailure,
     int CrossingsAndCongestion,
     int CanvasEscape,
-    int PathEconomy) : IComparable<GlobalRouteScore>
+    int PathEconomy,
+    int TerminalFanoutViolations = 0) : IComparable<GlobalRouteScore>
 {
     public int CompareTo(GlobalRouteScore? other)
     {
@@ -37,9 +39,9 @@ internal sealed record GlobalRouteScore(
             return -1;
         }
 
-        var left = new[] { InvalidGeometry, SharedSegmentLength, SpacingDeficit, AmbiguousTransitions,
+        var left = new[] { InvalidGeometry, SharedSegmentLength, SpacingDeficit, TerminalFanoutViolations, AmbiguousTransitions,
             CapacityFailure, CrossingsAndCongestion, CanvasEscape, PathEconomy };
-        var right = new[] { other.InvalidGeometry, other.SharedSegmentLength, other.SpacingDeficit,
+        var right = new[] { other.InvalidGeometry, other.SharedSegmentLength, other.SpacingDeficit, other.TerminalFanoutViolations,
             other.AmbiguousTransitions, other.CapacityFailure, other.CrossingsAndCongestion,
             other.CanvasEscape, other.PathEconomy };
         for (var index = 0; index < left.Length; index++)

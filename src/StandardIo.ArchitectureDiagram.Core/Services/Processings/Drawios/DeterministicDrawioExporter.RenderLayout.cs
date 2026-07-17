@@ -989,6 +989,7 @@ internal sealed class RenderLayout
                 layout =>
                 {
                     var scope = ExposureScope(layout.Link.Id, exposureTree);
+                    var fanouts = FanoutMemberships(graph, nodes, acceptedLayouts, layout.Link);
                     return PathCandidate(
                         layout.Link.Id,
                         layout.SourcePoint,
@@ -996,7 +997,8 @@ internal sealed class RenderLayout
                         layout.Points.ToList(),
                         true,
                         scope.RootId,
-                        scope.BranchId);
+                        scope.BranchId,
+                        fanouts);
                 },
                 StringComparer.Ordinal);
             var interactions = RegionalCorridorPathOptimizer.DiscoverInteractions(
@@ -1006,17 +1008,12 @@ internal sealed class RenderLayout
                 interactions.SelectMany(interaction => new[] { interaction.FirstEdgeId, interaction.SecondEdgeId }),
                 StringComparer.Ordinal);
             var routeLaneIndexes = CalculateRouteLaneIndexes(graph, nodes);
-            var sourceDemand = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-            var targetDemand = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
             var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
             foreach (var link in graph.Links.OrderBy(item => item.Order).ThenBy(item => item.Id, StringComparer.Ordinal))
             {
                 var accepted = acceptedLayouts[link.Id];
                 var acceptedCandidate = acceptedCandidates[link.Id];
-                if (!relevantEdges.Contains(link.Id) || accepted.Points.Count == 0 ||
-                    sourceDemand[link.SourceId] > 1 || targetDemand[link.TargetId] > 1)
+                if (!relevantEdges.Contains(link.Id) || accepted.Points.Count == 0)
                 {
                     candidatesByEdge[link.Id] = new[] { acceptedCandidate };
                     continue;
@@ -1040,7 +1037,9 @@ internal sealed class RenderLayout
                         route,
                         false,
                         acceptedCandidate.ExposureRootId,
-                        acceptedCandidate.ExposureBranchId))
+                        acceptedCandidate.ExposureBranchId,
+                        acceptedCandidate.FanoutMemberships))
+                    .Where(candidate => PreservesTerminalFanoutGeometry(acceptedCandidate, candidate))
                     .Append(acceptedCandidate)
                     .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
                     .Select(group => group.First());
@@ -1081,7 +1080,8 @@ internal sealed class RenderLayout
             IReadOnlyList<Point> route,
             bool isAcceptedPath,
             string? exposureRootId = null,
-            string? exposureBranchId = null)
+            string? exposureBranchId = null,
+            IReadOnlyList<TerminalFanoutMembership>? fanoutMemberships = null)
         {
             var complete = new[] { source }.Concat(route).Concat(new[] { target }).ToArray();
             var length = Segments(complete).Sum(segment => segment.Length);
@@ -1103,7 +1103,61 @@ internal sealed class RenderLayout
                 complete,
                 IsAcceptedPath: isAcceptedPath,
                 ExposureRootId: exposureRootId,
-                ExposureBranchId: exposureBranchId);
+                ExposureBranchId: exposureBranchId,
+                FanoutMemberships: fanoutMemberships);
+        }
+
+        private static IReadOnlyList<TerminalFanoutMembership> FanoutMemberships(
+            RenderGraph graph,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, LinkLayout> layouts,
+            RenderLink link)
+        {
+            var memberships = new List<TerminalFanoutMembership>();
+            Add(graph.Links.Where(item => item.SourceId == link.SourceId).ToArray(), FanoutDirection.Source, link.SourceId, true);
+            Add(graph.Links.Where(item => item.TargetId == link.TargetId).ToArray(), FanoutDirection.Target, link.TargetId, false);
+            return memberships;
+
+            void Add(IReadOnlyList<RenderLink> group, FanoutDirection direction, string sharedNodeId, bool source)
+            {
+                if (group.Count < 2)
+                {
+                    return;
+                }
+
+                var orderedTerminals = group.OrderBy(item => source ? layouts[item.Id].SourcePoint.X : layouts[item.Id].TargetPoint.X)
+                    .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+                var orderedRemote = group.OrderBy(item => source ? nodes[item.TargetId].Rect.CenterX : nodes[item.SourceId].Rect.CenterX)
+                    .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+                var terminalOrder = Array.FindIndex(orderedTerminals, item => item.Id == link.Id);
+                var remoteOrder = Array.FindIndex(orderedRemote, item => item.Id == link.Id);
+                var sharedX = nodes[sharedNodeId].Rect.CenterX;
+                var remoteX = source ? nodes[link.TargetId].Rect.CenterX : nodes[link.SourceId].Rect.CenterX;
+                memberships.Add(new TerminalFanoutMembership(
+                    $"{direction.ToString().ToLowerInvariant()}:{sharedNodeId}",
+                    direction,
+                    sharedNodeId,
+                    terminalOrder,
+                    terminalOrder,
+                    remoteOrder,
+                    remoteX < sharedX ? FanoutSide.Left : FanoutSide.Right));
+            }
+        }
+
+        private static bool PreservesTerminalFanoutGeometry(
+            CorridorPathCandidate accepted,
+            CorridorPathCandidate candidate)
+        {
+            if (accepted.FanoutMemberships is null || accepted.FanoutMemberships.Count == 0)
+            {
+                return true;
+            }
+
+            var prefixLength = Math.Min(3, accepted.Points.Count);
+            var suffixLength = Math.Min(3, accepted.Points.Count);
+            return candidate.Points.Take(prefixLength).SequenceEqual(accepted.Points.Take(prefixLength)) &&
+                candidate.Points.Skip(candidate.Points.Count - suffixLength)
+                    .SequenceEqual(accepted.Points.Skip(accepted.Points.Count - suffixLength));
         }
 
         private static (string? RootId, string? BranchId) ExposureScope(string edgeId, bool exposureTree)

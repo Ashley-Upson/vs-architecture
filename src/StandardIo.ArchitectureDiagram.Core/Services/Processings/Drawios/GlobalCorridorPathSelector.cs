@@ -160,6 +160,7 @@ internal static class GlobalCorridorPathSelector
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         var capacityFailure = usage.Sum(item => Math.Max(0,
             item.Value - (corridorCapacities.TryGetValue(item.Key, out var capacity) ? capacity : int.MaxValue)));
+        var fanoutViolations = FanoutViolations(routes.Select(route => route.Value));
         return new GlobalRouteScore(
             invalid,
             shared,
@@ -168,8 +169,23 @@ internal static class GlobalCorridorPathSelector
             capacityFailure,
             crossings,
             routes.Sum(route => route.Value.LocalCost.CanvasEscape),
-            routes.Sum(route => route.Value.LocalCost.PathLength + route.Value.LocalCost.BendCount));
+            routes.Sum(route => route.Value.LocalCost.PathLength + route.Value.LocalCost.BendCount),
+            fanoutViolations);
     }
+
+    private static int FanoutViolations(IEnumerable<CorridorPathCandidate> candidates) =>
+        candidates.SelectMany(candidate => candidate.FanoutMemberships ?? Array.Empty<TerminalFanoutMembership>())
+            .GroupBy(item => item.GroupId, StringComparer.Ordinal)
+            .Sum(group =>
+            {
+                var ordered = group.OrderBy(item => item.Side).ThenBy(item => item.RemoteNodeOrder).ToArray();
+                var duplicatePorts = ordered.Length - ordered.Select(item => item.TerminalOrder).Distinct().Count();
+                var duplicateLanes = ordered.Length - ordered.Select(item => item.LaneOrder).Distinct().Count();
+                var inversions = ordered.SelectMany((left, index) => ordered.Skip(index + 1)
+                    .Where(right => left.Side == right.Side &&
+                        (left.TerminalOrder > right.TerminalOrder || left.LaneOrder > right.LaneOrder))).Count();
+                return duplicatePorts + duplicateLanes + inversions;
+            });
 
     private static IEnumerable<Segment> Segments(IReadOnlyList<Point> points) =>
         points.Zip(points.Skip(1), (start, end) => new Segment(start, end));
