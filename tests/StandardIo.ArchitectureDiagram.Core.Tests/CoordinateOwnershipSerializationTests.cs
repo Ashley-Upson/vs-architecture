@@ -64,7 +64,7 @@ public sealed class CoordinateOwnershipSerializationTests
     }
 
     [Fact]
-    public void Render_splits_project_to_external_dependency_and_preserves_semantic_target()
+    public void Render_owns_unique_external_dependency_with_its_source_project()
     {
         var document = Render(new DiagramModel(
             new[] { Project("project_a", Node("source", "project_a", "Source")) },
@@ -73,12 +73,49 @@ public sealed class CoordinateOwnershipSerializationTests
 
         var segments = LogicalSegments(document, "edge_external");
 
-        Assert.Equal(2, segments.Length);
-        Assert.Equal("project_a", (string?)segments[0].Attribute("parent"));
-        Assert.Equal("1", (string?)segments[1].Attribute("parent"));
+        var segment = Assert.Single(segments);
+        Assert.Equal("project_a", (string?)segment.Attribute("parent"));
+        Assert.Equal("project_a", (string?)segment.Attribute("ownerProjectId"));
         Assert.All(segments, segment => Assert.Equal("external", (string?)segment.Attribute("semanticTargetId")));
-        Assert.Contains("endArrow=none", Style(segments[0]));
-        Assert.Contains("endArrow=block", Style(segments[1]));
+        Assert.Contains("endArrow=block", Style(segment));
+
+        var external = document.Descendants("mxCell").Single(cell => (string?)cell.Attribute("id") == "external");
+        var project = document.Descendants("mxCell").Single(cell => (string?)cell.Attribute("id") == "project_a");
+        Assert.Equal("project_a", (string?)external.Attribute("parent"));
+        Assert.Equal(
+            Coordinate(project, "x") + Coordinate(external, "x"),
+            AbsoluteCoordinate(document, external, "x"));
+        Assert.Equal(
+            Coordinate(project, "y") + Coordinate(external, "y"),
+            AbsoluteCoordinate(document, external, "y"));
+        Assert.True(Coordinate(external, "x") >= DiagramSettings.CreateDefault().Layout.ContainerPadding);
+        Assert.True(Coordinate(external, "y") >= DiagramSettings.CreateDefault().Layout.ProjectHeaderHeight);
+        Assert.True(
+            Coordinate(project, "width") - Coordinate(external, "x") - Coordinate(external, "width") >=
+            DiagramSettings.CreateDefault().Layout.ContainerPadding);
+        Assert.True(
+            Coordinate(project, "height") - Coordinate(external, "y") - Coordinate(external, "height") >=
+            DiagramSettings.CreateDefault().Layout.ContainerPadding);
+
+        var source = document.Descendants("mxCell").Single(cell => (string?)cell.Attribute("id") == "source");
+        const int deltaX = 37;
+        const int deltaY = -19;
+        Assert.Equal(
+            AbsoluteCoordinate(document, source, "x") + deltaX,
+            Coordinate(project, "x") + deltaX + Coordinate(source, "x"));
+        Assert.Equal(
+            AbsoluteCoordinate(document, external, "y") + deltaY,
+            Coordinate(project, "y") + deltaY + Coordinate(external, "y"));
+        var firstWaypoint = segment.Element("mxGeometry")!.Element("Array")!.Elements("mxPoint").First();
+        Assert.Equal(
+            Coordinate(project, "x") + deltaX + int.Parse((string)firstWaypoint.Attribute("x")!),
+            Coordinate(project, "x") + int.Parse((string)firstWaypoint.Attribute("x")!) + deltaX);
+
+        var reopened = XDocument.Parse(document.ToString(SaveOptions.DisableFormatting));
+        var reopenedExternal = reopened.Descendants("mxCell").Single(cell => (string?)cell.Attribute("id") == "external");
+        Assert.Equal("project_a", (string?)reopenedExternal.Attribute("parent"));
+        Assert.Equal(Coordinate(external, "x"), Coordinate(reopenedExternal, "x"));
+        Assert.Equal(Coordinate(external, "y"), Coordinate(reopenedExternal, "y"));
     }
 
     [Fact]
@@ -101,6 +138,15 @@ public sealed class CoordinateOwnershipSerializationTests
             segment => Assert.Equal("external", (string?)segment.Attribute("semanticTargetId")));
         Assert.All(LogicalSegments(document, "edge_b"),
             segment => Assert.Equal("external", (string?)segment.Attribute("semanticTargetId")));
+        var edgeA = Assert.Single(LogicalSegments(document, "edge_a"));
+        var edgeB = Assert.Single(LogicalSegments(document, "edge_b"));
+        Assert.Equal("project_a", (string?)document.Descendants("mxCell")
+            .Single(cell => (string?)cell.Attribute("id") == (string?)edgeA.Attribute("target"))
+            .Attribute("parent"));
+        Assert.Equal("project_b", (string?)document.Descendants("mxCell")
+            .Single(cell => (string?)cell.Attribute("id") == (string?)edgeB.Attribute("target"))
+            .Attribute("parent"));
+        Assert.NotEqual((string?)edgeA.Attribute("target"), (string?)edgeB.Attribute("target"));
     }
 
     [Fact]
@@ -140,6 +186,25 @@ public sealed class CoordinateOwnershipSerializationTests
             Assert.Equal(0, Dimension(anchor, "width"));
             Assert.Equal(0, Dimension(anchor, "height"));
         });
+
+        var firstAnchor = reopenedAnchors[0];
+        var owner = reopened.Descendants("mxCell")
+            .Single(cell => (string?)cell.Attribute("id") == (string?)firstAnchor.Attribute("parent"));
+        const int movementDelta = 41;
+        Assert.Equal(
+            Coordinate(owner, "x") + Coordinate(firstAnchor, "x") + movementDelta,
+            Coordinate(owner, "x") + movementDelta + Coordinate(firstAnchor, "x"));
+    }
+
+    [Fact]
+    public void External_ownership_serialization_is_deterministic()
+    {
+        var model = new DiagramModel(
+            new[] { Project("project_a", Node("source", "project_a", "Source")) },
+            new[] { new ExternalDependencyNode("external", "External", "External", "external", "External", "[External]") },
+            new[] { new DependencyEdge("edge_external", "source", "external", "external") });
+
+        Assert.Equal(Render(model).ToString(SaveOptions.DisableFormatting), Render(model).ToString(SaveOptions.DisableFormatting));
     }
 
     private static XDocument Render(DiagramModel model) =>
@@ -163,4 +228,19 @@ public sealed class CoordinateOwnershipSerializationTests
 
     private static int Dimension(XElement cell, string name) =>
         int.TryParse((string?)cell.Element("mxGeometry")!.Attribute(name), out var value) ? value : 0;
+
+    private static int Coordinate(XElement cell, string name) =>
+        int.Parse((string)cell.Element("mxGeometry")!.Attribute(name)!);
+
+    private static int AbsoluteCoordinate(XDocument document, XElement cell, string name)
+    {
+        var value = Coordinate(cell, name);
+        var parentId = (string?)cell.Attribute("parent");
+        if (parentId is not null && parentId != "1")
+        {
+            value += Coordinate(document.Descendants("mxCell").Single(item => (string?)item.Attribute("id") == parentId), name);
+        }
+
+        return value;
+    }
 }
