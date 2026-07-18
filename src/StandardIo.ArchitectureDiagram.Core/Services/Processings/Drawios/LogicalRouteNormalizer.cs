@@ -36,6 +36,8 @@ internal static class LogicalRouteNormalizer
             .Select(item => item.Value.Rect.Inflate(Math.Max(0, obstaclePadding)))
             .ToArray();
 
+        CollapseSafeDirectRoute(points, obstacles);
+
         var changed = true;
         while (changed)
         {
@@ -47,6 +49,27 @@ internal static class LogicalRouteNormalizer
             points,
             LogicalRouteStage.Normalized,
             nameof(LogicalRouteNormalizer));
+    }
+
+    private static void CollapseSafeDirectRoute(IList<Point> points, IReadOnlyList<Rect> obstacles)
+    {
+        if (points.Count <= 2)
+        {
+            return;
+        }
+
+        var direct = new Segment(points[0], points[points.Count - 1]);
+        var oneAxis = points.All(point => point.X == points[0].X) ||
+            points.All(point => point.Y == points[0].Y);
+        if (!oneAxis || obstacles.Any(direct.Intersects))
+        {
+            return;
+        }
+
+        while (points.Count > 2)
+        {
+            points.RemoveAt(1);
+        }
     }
 
     private static void RemoveConsecutiveDuplicates(IList<Point> points)

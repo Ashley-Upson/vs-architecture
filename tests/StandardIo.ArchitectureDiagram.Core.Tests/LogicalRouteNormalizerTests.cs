@@ -6,6 +6,26 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class LogicalRouteNormalizerTests
 {
     [Fact]
+    public void Normalize_makes_safe_single_axis_route_authoritative_before_serialization()
+    {
+        var link = Link(new[]
+        {
+            new Point(50, 20),
+            new Point(50, 120),
+            new Point(50, 40),
+            new Point(50, 180)
+        });
+
+        var result = LogicalRouteNormalizer.Normalize(
+            new Dictionary<string, NodeLayout>(),
+            new Dictionary<string, LinkLayout> { [link.Link.Id] = link },
+            obstaclePadding: 0)[link.Link.Id];
+
+        Assert.Empty(result.Points);
+        Assert.Equal(LogicalRouteStage.Normalized, result.RouteState.Stage);
+    }
+
+    [Fact]
     public void Normalize_removes_safe_same_axis_reversal_before_validation()
     {
         var link = Link(new[]
