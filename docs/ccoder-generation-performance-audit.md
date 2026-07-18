@@ -222,8 +222,43 @@ No selector, repair, validation, corridor, traversal, route, or candidate family
 
 ## 14. Implemented removals
 
-None at this audit commit. Cleanup begins only after this document is committed.
+Cleanup was implemented only after the audit commit:
 
-## 15. Remaining Stage B boundary
+| Commit | Correction | Proof | Production change |
+| --- | --- | --- | ---: |
+| `c30160b` | deterministic corridor-pair-to-junction index | preserves the former lowest-junction-ID result; cCoder output hashes and finding counts are exact | 37 added, 12 removed |
+| `3dffc9f` | one Roslyn compilation acquisition per project, shared by the type, registration and dependency passes | focused counter test reports one request per project; both cCoder output hashes are exact | 8 added, 24 removed |
 
-Stage B remains paused. The achievable legacy target from current evidence is a substantial deduplicated improvement by removing the 49.3-million-check junction scan, plus a smaller analysis saving. Duplicated mode is dominated by selection and validation that demonstrably affect geometry, so an under-15-second duplicated target still belongs to the later layer-band replacement rather than this low-risk legacy cleanup.
+The junction correction removes the measured 49,347,824 deduplicated linear candidate checks. The replacement performs 8,990 dictionary lookups against an index built once per traversal compilation. The three semantically distinct Roslyn passes remain; only their repeated acquisition was removed. In total, 36 production lines were removed or replaced. No production type, selector, validation, repair stage, route family or diagnostic was deleted because none was proven dead.
+
+## 15. After timings and parity
+
+The after benchmark repeats the original Release methodology: one excluded warm-up, five measured new processes, unchanged source and settings, local NTFS outputs, and no shared Roslyn workspace.
+
+| Graph/settings | Mode | Before min / median / max | After min / median / max | Median change |
+| --- | --- | ---: | ---: | ---: |
+| StandardIo duplicated | normal | 3.081 / 3.087 / 3.160 s | 3.302 / 3.314 / 3.378 s | +0.227 s |
+| StandardIo deduplicated | normal | 3.182 / 3.210 / 3.225 s | 3.224 / 3.244 / 3.460 s | +0.034 s |
+| cCoder duplicated | normal | 31.905 / 32.464 / 32.635 s | 31.793 / 31.920 / 32.755 s | -0.544 s (-1.7%) |
+| cCoder deduplicated | normal | 51.488 / 52.355 / 54.448 s | 13.730 / 13.959 / 14.324 s | **-38.396 s (-73.3%)** |
+| StandardIo duplicated | diagnostic bundle | 3.109 / 3.125 / 3.171 s | 3.284 / 3.369 / 3.550 s | +0.244 s |
+| StandardIo deduplicated | diagnostic bundle | 3.282 / 3.322 / 3.378 s | 3.444 / 3.525 / 3.644 s | +0.203 s |
+| cCoder duplicated | diagnostic bundle | 33.108 / 33.397 / 35.065 s | 32.000 / 32.410 / 33.893 s | -0.987 s (-3.0%) |
+| cCoder deduplicated | diagnostic bundle | 54.748 / 54.802 / 56.741 s | 16.424 / 16.662 / 17.682 s | **-38.140 s (-69.6%)** |
+| StandardIo duplicated | strict | 3.121 / 3.259 / 3.279 s | 3.333 / 3.381 / 3.494 s | +0.122 s |
+| StandardIo deduplicated | strict | 3.231 / 3.320 / 3.446 s | 3.464 / 3.508 / 3.657 s | +0.188 s |
+| cCoder duplicated | strict | 32.699 / 33.374 / 33.422 s | 33.917 / 34.397 / 35.527 s | +1.023 s |
+| cCoder deduplicated | strict | 53.739 / 54.402 / 55.163 s | 17.843 / 18.043 / 18.094 s | **-36.359 s (-66.8%)** |
+
+Every after group produced one output hash and one byte size across all five measured runs. The final cCoder normal outputs are also byte-identical to the pre-cleanup baseline files:
+
+- duplicated: `8DD08EDC862B610081ED9D270A8F40DDFF34C46D0513C2C4DE73D03BABE3373C`;
+- deduplicated: `8A7C26A1FE8B4A7460996FDBA643DBDFDC603F80CCE215A34715988E0E72D1DE`.
+
+The advisory sets are unchanged: duplicated has 2 shared-segment and 10 spacing findings; deduplicated has 10 node-intersection, 3 reused-bend, 45 shared-segment and 20 spacing findings. Thus route points, finding locations, ownership segmentation and serialized XML remain exact. XML parseability and route presence continue to be covered by the full test suite.
+
+The small StandardIo movements are process-startup/noise scale rather than evidence of a graph-size-dependent regression. The duplicated strict increase is isolated to the optional diagnostic/enforcement path; normal duplicated generation improved slightly. The CLI still cannot isolate JSON-only from all focused outputs, so both before and after rows honestly describe the coupled bundle.
+
+## 16. Remaining Stage B boundary
+
+Stage B remains paused. The evidence-backed cleanup achieved the expected substantial deduplicated improvement without changing geometry. Deduplicated normal generation is now below 15 seconds; duplicated mode remains near 32 seconds because selection, validation and repair work demonstrably affect final geometry. Removing or bypassing those stages is not justified by this audit. Their broad pairwise work remains the dominant legacy cost expected to disappear with layer-band routing rather than through further speculative legacy changes.
