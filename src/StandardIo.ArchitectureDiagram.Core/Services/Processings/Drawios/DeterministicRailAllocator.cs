@@ -22,6 +22,8 @@ internal static class DeterministicRailAllocator
         if (demands.Any(item => item.Orientation != region.Orientation ||
             item.AllowedAxisRange != region.AllowedAxisRange || item.PlacementRevision != region.PlacementRevision))
             throw new ArgumentException("Every demand must belong to the supplied allocation region.", nameof(source));
+        if (demands.Length > 0 && demands.All(item => item.OccupiedInterval == demands[0].OccupiedInterval))
+            return AssignCompleteOverlap(region, demands, options);
 
         var comparisons = 0L;
         var conflictTimer = Stopwatch.StartNew();
@@ -105,6 +107,26 @@ internal static class DeterministicRailAllocator
             item.Demand.RouteRevision)).ToArray();
         var identity = string.Join("+", demands.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
         return ($"rail-component:{region.EnvelopeIdentity}:{identity}", demands, rails, required);
+    }
+
+    private static DeterministicRailAssignment AssignCompleteOverlap(
+        RailAllocationRegionIdentity region,
+        IReadOnlyList<RailDemand> demands,
+        RailAssignmentOptions options)
+    {
+        var assignmentTimer = Stopwatch.StartNew();
+        var assigned = AssignComponent(region, demands, options);
+        assignmentTimer.Stop();
+        var extentTimer = Stopwatch.StartNew();
+        var currentExtent = Math.Max(0, region.AllowedAxisRange.Length);
+        var component = new RailAssignmentComponent(
+            assigned.Id, region, assigned.Demands, assigned.Rails, assigned.RequiredExtent,
+            Math.Max(0, assigned.RequiredExtent - currentExtent));
+        var byDemand = assigned.Rails.ToDictionary(item => item.DemandId, StringComparer.Ordinal);
+        extentTimer.Stop();
+        return new DeterministicRailAssignment(
+            new[] { component }, byDemand, assigned.RequiredExtent, Math.Max(0, demands.Count - 1),
+            0, 0, Microseconds(assignmentTimer), Microseconds(extentTimer));
     }
 
     private static bool Conflicts(AxisInterval left, AxisInterval right, RailAssignmentOptions options)
