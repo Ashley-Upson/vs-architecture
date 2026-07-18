@@ -12,6 +12,31 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DeterministicDrawioExporterTests
 {
     [Fact]
+    public void Normal_renderer_does_not_materialize_development_diagnostics()
+    {
+        var result = new DrawioGenerationResult(
+            "<mxfile />",
+            Array.Empty<ValidationFinding>(),
+            Array.Empty<ValidationFinding>(),
+            Array.Empty<RouteRepairAttempt>(),
+            Array.Empty<GeneratedRoute>(),
+            serializationSucceeded: true,
+            strictValidationPassed: true,
+            () => new DrawioDiagnosticExportResult("", "{}", new Dictionary<string, string>(), 0, 0));
+        var exporter = new StubDeterministicExporter(result);
+
+        var document = new DrawioDiagramRenderer(exporter).Render(
+            new DiagramModel(Array.Empty<ProjectContainer>(), Array.Empty<ExternalDependencyNode>(), Array.Empty<DependencyEdge>()),
+            DiagramSettings.CreateDefault());
+
+        Assert.Equal("<mxfile />", document);
+        Assert.Equal(1, result.PreparationCount);
+        Assert.Equal(0, result.DiagnosticMaterializationCount);
+        exporter.ExportDiagnostic(result);
+        Assert.Equal(1, result.DiagnosticMaterializationCount);
+    }
+
+    [Fact]
     public void GenerateResult_emits_parseable_escaped_xml_with_configured_styles()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -1486,5 +1511,23 @@ public sealed class DeterministicDrawioExporterTests
             .Split(';')
             .Single(part => part.StartsWith(prefix, StringComparison.Ordinal))
             .Substring(prefix.Length);
+    }
+
+    private sealed class StubDeterministicExporter : IDeterministicDrawioExporter
+    {
+        private readonly DrawioGenerationResult result;
+
+        public StubDeterministicExporter(DrawioGenerationResult result) => this.result = result;
+
+        public DrawioGenerationResult GenerateResult(
+            DiagramModel diagram,
+            DiagramSettings settings,
+            IReadOnlyList<PipelineStageMetric>? upstreamTimings = null) => result;
+
+        public DrawioDiagnosticExportResult ExportDiagnostic(DrawioGenerationResult generationResult) =>
+            generationResult.Diagnostics;
+
+        public void ValidateStrict(DrawioGenerationResult generationResult)
+        { }
     }
 }
