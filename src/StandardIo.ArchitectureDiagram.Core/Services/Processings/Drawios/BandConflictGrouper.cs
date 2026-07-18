@@ -12,51 +12,34 @@ internal static class BandConflictGrouper
         int padding,
         out long comparisons)
     {
-        comparisons = 0;
-        var demands = band.Demands.OrderBy(item => item.XStart).ThenBy(item => item.XEnd)
-            .ThenBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal).ThenBy(item => item.SegmentIndex).ToArray();
-        var neighbours = demands.ToDictionary(item => item.Id, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
-        for (var leftIndex = 0; leftIndex < demands.Length; leftIndex++)
-        {
-            for (var rightIndex = leftIndex + 1; rightIndex < demands.Length; rightIndex++)
-            {
-                comparisons++;
-                var left = demands[leftIndex];
-                var right = demands[rightIndex];
-                if (right.XStart > left.XEnd + clearance) break;
-                if (Contact(left.XStart, left.XEnd, right.XStart, right.XEnd, clearance) == IntervalContactKind.Disjoint) continue;
-                neighbours[left.Id].Add(right.Id);
-                neighbours[right.Id].Add(left.Id);
-            }
-        }
-
-        var byId = demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
-        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var commonDemands = band.Demands.Select(item => new RailDemand(
+            item.Id, item.LogicalEdgeIdentity, RailOrientation.Horizontal,
+            new AxisInterval(item.XStart, item.XEnd), new AxisInterval(band.UpperBoundary, band.LowerBoundary),
+            null, item.Role == BandMembershipRole.Return ? RailSemanticRole.Return : RailSemanticRole.Through,
+            item.TerminalOrder, item.SegmentIndex,
+            new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
+            band.Id.LayoutRevision, item.RouteRevision)).ToArray();
+        var region = new RailAllocationRegionIdentity(
+            RailOrientation.Horizontal, new AxisInterval(band.UpperBoundary, band.LowerBoundary),
+            band.Id.ToString(), new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
+            band.Id.LayoutRevision);
+        var common = DeterministicRailAllocator.Assign(region, commonDemands,
+            new RailAssignmentOptions(clearance, padding, EndpointContactCreatesComponent: true));
+        comparisons = common.ConflictComparisons;
+        var byId = band.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var groups = new List<BandConflictGroup>();
-        foreach (var seed in demands.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal))
+        foreach (var commonComponent in common.Components)
         {
-            if (!visited.Add(seed)) continue;
-            var pending = new SortedSet<string>(StringComparer.Ordinal) { seed };
-            var component = new List<BandRouteDemand>();
-            while (pending.Count > 0)
-            {
-                var id = pending.Min!;
-                pending.Remove(id);
-                component.Add(byId[id]);
-                foreach (var neighbour in neighbours[id].OrderBy(item => item, StringComparer.Ordinal))
-                    if (visited.Add(neighbour)) pending.Add(neighbour);
-            }
-
-            var assigned = AssignLanes(component, clearance);
-            var laneCount = assigned.Values.DefaultIfEmpty(-1).Max() + 1;
-            var required = component.Count == 0 ? band.CurrentExtent : padding * 2 + Math.Max(1, laneCount) * clearance;
+            var component = commonComponent.Demands.Select(item => byId[item.Id]).ToArray();
+            var assigned = commonComponent.Rails.ToDictionary(item => item.DemandId, item => item.LaneIndex, StringComparer.Ordinal);
+            var laneCount = commonComponent.Rails.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1;
             var identity = string.Join("+", component.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
             groups.Add(new BandConflictGroup(
                 $"group:{band.Id}:{identity}", band.Id,
                 component.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 assigned,
                 component.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1,
-                laneCount, band.CurrentExtent, required, Math.Max(0, required - band.CurrentExtent),
+                laneCount, band.CurrentExtent, commonComponent.RequiredExtent, commonComponent.MissingExtent,
                 SpacingConstraintScope.LayerBoundary));
         }
         return groups.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
@@ -95,19 +78,4 @@ internal static class BandConflictGrouper
         };
     }
 
-    private static IReadOnlyDictionary<string, int> AssignLanes(IReadOnlyList<BandRouteDemand> demands, int clearance)
-    {
-        var result = new Dictionary<string, int>(StringComparer.Ordinal);
-        var laneEnds = new List<int>();
-        foreach (var demand in demands.OrderBy(item => item.XStart).ThenBy(item => item.XEnd)
-                     .ThenBy(item => item.TerminalOrder).ThenBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-                     .ThenBy(item => item.SegmentIndex))
-        {
-            var lane = laneEnds.FindIndex(end => end + clearance <= demand.XStart);
-            if (lane < 0) { lane = laneEnds.Count; laneEnds.Add(demand.XEnd); }
-            else laneEnds[lane] = demand.XEnd;
-            result[demand.Id] = lane;
-        }
-        return result;
-    }
 }
