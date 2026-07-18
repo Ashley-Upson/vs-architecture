@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" compressed="false">
+  <diagram id="common-rail-real-component" name="Page-1">
+    <mxGraphModel grid="1" gridSize="10" page="0" background="#101010">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Before: existing shared rail" style="text;html=1;align=left;fontSize=18;fontStyle=1;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="40" y="10" width="600" height="30" as="geometry" /></mxCell>
+        <mxCell id="app-manager" value="AppManager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d8f22;strokeColor=#61bd4f;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="1351" y="50" width="200" height="80" as="geometry" /></mxCell>
+        <mxCell id="app-orchestration" value="AppOrchestrationService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d8f22;strokeColor=#61bd4f;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="1297" y="270" width="308" height="80" as="geometry" /></mxCell>
+        <mxCell id="metadata-cache" value="MetadataCache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d8f22;strokeColor=#61bd4f;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="4274" y="50" width="244" height="80" as="geometry" /></mxCell>
+        <mxCell id="metadata-type-cache" value="IMetadataTypeCache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d8f22;strokeColor=#61bd4f;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="4296" y="270" width="200" height="80" as="geometry" /></mxCell>
+        <mxCell id="app-controller" value="AppController" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d8f22;strokeColor=#61bd4f;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="12302" y="50" width="260" height="80" as="geometry" /></mxCell>
+        <mxCell id="route-app-controller" value="AppController -&gt; AppOrchestrationService" edge="1" parent="1" source="app-controller" target="app-orchestration" style="edgeStyle=none;orthogonalLoop=0;html=1;rounded=0;strokeColor=#d0d0d0;endArrow=block;endFill=1;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="12432" y="200" /><mxPoint x="1451" y="200" /></Array></mxGeometry></mxCell>
+        <mxCell id="route-app-manager" value="AppManager -&gt; AppOrchestrationService" edge="1" parent="1" source="app-manager" target="app-orchestration" style="edgeStyle=none;orthogonalLoop=0;html=1;rounded=0;strokeColor=#d0d0d0;endArrow=block;endFill=1;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1451" y="200" /><mxPoint x="1427" y="200" /></Array></mxGeometry></mxCell>
+        <mxCell id="route-metadata-cache" value="MetadataCache -&gt; IMetadataTypeCache" edge="1" parent="1" source="metadata-cache" target="metadata-type-cache" style="edgeStyle=none;orthogonalLoop=0;html=1;rounded=0;strokeColor=#d0d0d0;endArrow=block;endFill=1;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="4384" y="200" /><mxPoint x="4396" y="200" /></Array></mxGeometry></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
