@@ -165,6 +165,50 @@ public sealed class AdjacentDownwardRailDemandObserverTests
         Assert.Empty(reconstructed);
     }
 
+    [Fact]
+    public void Common_allocator_reconstructs_without_reusing_existing_through_rail()
+    {
+        var observed = AdjacentDownwardRailDemandObserver.Observe(new[] { Context("route", lane: 3) });
+
+        var common = AdjacentDownwardCommonRailObserver.Observe(observed, 12, 4);
+
+        var route = Assert.Single(common.Routes);
+        Assert.NotNull(route.CommonThroughRail);
+        Assert.Equal(0, route.CommonThroughRail!.LaneIndex);
+        Assert.Equal(CommonRouteReconstructionParity.ValidDifferentGeometry, route.ReconstructionParity);
+        Assert.Equal(84, route.ReconstructedPoints[1].Y);
+    }
+
+    [Fact]
+    public void Common_allocator_assigns_complete_interacting_route_group_deterministically()
+    {
+        var contexts = new[] { Context("b", lane: 1), Context("a", lane: 0) };
+        var forward = AdjacentDownwardCommonRailObserver.Observe(
+            AdjacentDownwardRailDemandObserver.Observe(contexts), 12, 4);
+        var reverse = AdjacentDownwardCommonRailObserver.Observe(
+            AdjacentDownwardRailDemandObserver.Observe(contexts.AsEnumerable().Reverse()), 12, 4);
+
+        Assert.Single(forward.Regions);
+        Assert.Equal(2, forward.Regions[0].Assignment.RailsByDemandId.Count);
+        Assert.Equal(forward.Routes.Select(item => (item.LogicalRouteId, item.CommonThroughRail!.LaneIndex)),
+            reverse.Routes.Select(item => (item.LogicalRouteId, item.CommonThroughRail!.LaneIndex)));
+    }
+
+    [Fact]
+    public void Common_required_extent_projects_a_persistent_constraint_without_moving_live_layout()
+    {
+        var contexts = Enumerable.Range(0, 12).Select(index => Context($"route-{index:D2}", lane: index)).ToArray();
+        var observed = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var before = observed.Routes.Select(item => item.CanonicalAuthoritativePoints.ToArray()).ToArray();
+
+        var common = AdjacentDownwardCommonRailObserver.Observe(observed, 12, 4);
+
+        var region = Assert.Single(common.Regions);
+        Assert.NotNull(region.ConstraintProposal);
+        Assert.Equal(152, region.Assignment.RequiredExtent);
+        Assert.Equal(before, observed.Routes.Select(item => item.CanonicalAuthoritativePoints.ToArray()).ToArray());
+    }
+
     private static AdjacentDownwardRouteContext Context(
         string id,
         int lane = 0,
