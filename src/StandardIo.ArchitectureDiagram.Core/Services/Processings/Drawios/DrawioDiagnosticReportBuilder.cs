@@ -157,6 +157,7 @@ internal static class DrawioDiagnosticReportBuilder
         var contactObservation = ObserveCanonicalContacts(layout, requiredSpacing);
         contactTimer.Stop();
         var foundationCosts = ObserveFoundationCosts(layout, layoutSettings);
+        var adjacentDownward = ObserveAdjacentDownward(layout, bandReport, requiredSpacing);
 
         return JsonSerializer.Serialize(new
         {
@@ -196,6 +197,7 @@ internal static class DrawioDiagnosticReportBuilder
                 directInvalidationCount = foundationCosts.InvalidationCount,
                 terminalUnresolvedComponents = foundationCosts.UnresolvedTerminalComponents,
                 terminalResolvedComponents = foundationCosts.ResolvedTerminalComponents,
+                adjacentDownward,
                 timings = new
                 {
                     nodeAndTerminalDemandMicroseconds = ToMicroseconds(nodeTimer),
@@ -331,6 +333,125 @@ internal static class DrawioDiagnosticReportBuilder
             invalidations.Length,
             unresolved.Count,
             resolved.Count);
+    }
+
+    private static object? ObserveAdjacentDownward(
+        RenderLayout layout,
+        InterLayerBandReport? bandReport,
+        int requiredSpacing)
+    {
+        if (bandReport is null) return null;
+        var memberships = bandReport.Bands.SelectMany(item => item.Memberships)
+            .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<BandRouteMembership>)group.ToArray(), StringComparer.Ordinal);
+        var demands = bandReport.Bands.SelectMany(item => item.Demands)
+            .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<BandRouteDemand>)group.ToArray(), StringComparer.Ordinal);
+        var ranges = bandReport.Bands.ToDictionary(
+            item => item.Id, item => new AxisInterval(item.UpperBoundary, item.LowerBoundary));
+        var routeRevision = bandReport.Telemetry.RouteRevision;
+        var duplicatedExposureTree = layout.Graph.PlacementParentByNode.Count == 0 &&
+            layout.Graph.Nodes.Any(item => item.Id.StartsWith("tree_", StringComparison.Ordinal));
+        var contexts = layout.Links.Values.OrderBy(item => item.Link.Id, StringComparer.Ordinal).Select(route =>
+            new AdjacentDownwardRouteContext(
+                route,
+                layout.Nodes[route.Link.SourceId],
+                layout.Nodes[route.Link.TargetId],
+                layout.LayoutRevision,
+                routeRevision,
+                memberships.TryGetValue(route.Link.Id, out var routeMemberships)
+                    ? routeMemberships : Array.Empty<BandRouteMembership>(),
+                demands.TryGetValue(route.Link.Id, out var routeDemands)
+                    ? routeDemands : Array.Empty<BandRouteDemand>(),
+                ranges,
+                layout.Corridors,
+                layout.Lanes,
+                layout.GroupedSpacingPlan,
+                duplicatedExposureTree)).ToArray();
+        var observation = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var projection = AdjacentDownwardComponentProjector.Project(observation, requiredSpacing);
+        var eligible = observation.Routes.Where(item => item.Eligible).ToArray();
+        var assignedPairs = new HashSet<string>(projection.AssignedEdges.Select(EdgePair), StringComparer.Ordinal);
+        var removedEdges = projection.UnassignedEdges
+            .Where(item => !assignedPairs.Contains(EdgePair(item)))
+            .ToArray();
+        var routesInRemovedEdges = removedEdges.SelectMany(item => new[] { item.FirstId, item.SecondId })
+            .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
+        var assignedSources = eligible.SelectMany(item => item.ExistingLaneMappings).GroupBy(item => item.Source)
+            .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count());
+        return new
+        {
+            eligibleRoutes = eligible.Length,
+            rejectedRoutes = observation.Routes.Count - eligible.Length,
+            rejections = observation.Routes.Where(item => !item.Eligible).GroupBy(item => item.RejectionReason)
+                .OrderBy(item => item.Key).ToDictionary(item => item.Key?.ToString() ?? "Unknown", item => item.Count()),
+            demandsByRole = eligible.SelectMany(item => item.Demands).GroupBy(item => item.Role)
+                .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count()),
+            transitions = eligible.Sum(item => item.Transitions.Count),
+            assignedSources,
+            parity = eligible.GroupBy(item => item.Parity).OrderBy(item => item.Key)
+                .ToDictionary(item => item.Key.ToString(), item => item.Count()),
+            unassignedComponents = projection.UnassignedComponents.Count,
+            assignedComponents = projection.AssignedComponents.Count,
+            largestAssignedComponent = projection.AssignedComponents.Select(item => item.Members.Count).DefaultIfEmpty(0).Max(),
+            edgesRemovedAfterAssignment = removedEdges.Length,
+            routesInRemovedEdges,
+            unassignedEdges = projection.UnassignedEdges.GroupBy(item => item.Cause).OrderBy(item => item.Key)
+                .ToDictionary(item => item.Key, item => item.Count()),
+            assignedEdges = projection.AssignedEdges.GroupBy(item => item.Cause).OrderBy(item => item.Key)
+                .ToDictionary(item => item.Key, item => item.Count()),
+            timings = new
+            {
+                observation.DemandProductionMicroseconds,
+                observation.ExistingLaneAdaptationMicroseconds,
+                observation.ReconstructionMicroseconds,
+                observation.ParityComparisonMicroseconds,
+                componentProjectionMicroseconds = projection.ElapsedMicroseconds
+            },
+            routes = observation.Routes.Select(item => new
+            {
+                item.LogicalRouteId,
+                item.Eligible,
+                rejectionReason = item.RejectionReason?.ToString(),
+                demands = item.Demands.Select(demand => new
+                {
+                    demand.Id,
+                    role = demand.Role.ToString(),
+                    orientation = demand.Orientation.ToString(),
+                    occupiedMinimum = demand.OccupiedInterval.Minimum,
+                    occupiedMaximum = demand.OccupiedInterval.Maximum,
+                    allowedAxisMinimum = demand.AllowedAxisRange.Minimum,
+                    allowedAxisMaximum = demand.AllowedAxisRange.Maximum,
+                    demand.PreferredAxis,
+                    demand.TerminalOrder,
+                    demand.TurnOrder,
+                    movementScope = demand.MovementScope?.ToString(),
+                    placementRevision = demand.PlacementRevision.Value,
+                    routeRevision = demand.RouteRevision.Value
+                }),
+                laneMappings = item.ExistingLaneMappings.Select(mapping => new
+                {
+                    source = mapping.Source.ToString(),
+                    mapping.Rail.LaneIndex,
+                    mapping.Rail.AxisCoordinate,
+                    mapping.SpecializedMetadata
+                }),
+                transitions = item.Transitions.Select(transition => new
+                {
+                    transition.Id,
+                    transition.Order,
+                    transition.Turn
+                }),
+                parity = item.Parity.ToString(),
+                item.CanonicalAuthoritativePoints,
+                item.ReconstructedPoints,
+                item.Diagnostics
+            })
+        };
+
+        string EdgePair(ConflictEdge edge) => string.CompareOrdinal(edge.FirstId, edge.SecondId) <= 0
+            ? $"{edge.FirstId}\u001f{edge.SecondId}"
+            : $"{edge.SecondId}\u001f{edge.FirstId}";
     }
 
     private static long ToMicroseconds(Stopwatch timer) =>
