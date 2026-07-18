@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -21,6 +22,8 @@ internal static class SimpleJunctionAllocator
         foreach (var group in turns)
         {
             var items = group.OrderBy(item => item.EdgeId, StringComparer.Ordinal).ToArray();
+            PerformanceAudit.Increment("junction groups checked");
+            PerformanceAudit.Increment("junction pair checks", (long)items.Length * Math.Max(0, items.Length - 1) / 2);
             var topology = items
                 .Select(item => $"{item.Junction.IncomingCorridorId}->{item.Junction.OutgoingCorridorId}")
                 .Distinct(StringComparer.Ordinal)

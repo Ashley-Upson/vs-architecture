@@ -37,7 +37,12 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
 
         foreach (var project in projects)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            Compilation? compilation;
+            using (PerformanceAudit.Measure("Roslyn compilation acquisition"))
+            {
+                PerformanceAudit.Increment("Roslyn compilation requests");
+                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            }
             if (compilation is null)
             {
                 continue;
@@ -48,6 +53,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 .OrderBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), System.StringComparer.Ordinal))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                PerformanceAudit.Increment("symbols inspected");
 
                 if (type.TypeKind is not TypeKind.Class and not TypeKind.Interface)
                 {
@@ -87,7 +93,12 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
 
         foreach (var project in projects)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            Compilation? compilation;
+            using (PerformanceAudit.Measure("Roslyn compilation acquisition"))
+            {
+                PerformanceAudit.Increment("Roslyn compilation requests");
+                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            }
             if (compilation is null)
             {
                 continue;
@@ -118,7 +129,12 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
 
         foreach (var project in projects)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            Compilation? compilation;
+            using (PerformanceAudit.Measure("Roslyn compilation acquisition"))
+            {
+                PerformanceAudit.Increment("Roslyn compilation requests");
+                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            }
             if (compilation is null)
             {
                 continue;
@@ -128,12 +144,14 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
                 .ThenBy(document => document.Name, System.StringComparer.Ordinal))
             {
+                PerformanceAudit.Increment("syntax trees visited");
                 var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
                 if (root is null)
                 {
                     continue;
                 }
 
+                PerformanceAudit.Increment("semantic models requested");
                 var model = compilation.GetSemanticModel(root.SyntaxTree);
                 var usingNamespaces = root.DescendantNodes()
                     .OfType<UsingDirectiveSyntax>()
@@ -145,6 +163,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    PerformanceAudit.Increment("symbols inspected");
 
                     if (model.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol sourceSymbol)
                     {
@@ -180,11 +199,18 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             }
         }
 
-        return new DiagramModel(
-            projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
-            orderedExternalDependencies.ToImmutableArray(),
-            edges.ToImmutableArray(),
-            new DiagramMetadata());
+        using (PerformanceAudit.Measure(
+            "DiagramModel construction",
+            inputNodes: projectContainers.Sum(project => project.Types.Count),
+            inputRoutes: edges.Count,
+            outputObjects: 1))
+        {
+            return new DiagramModel(
+                projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
+                orderedExternalDependencies.ToImmutableArray(),
+                edges.ToImmutableArray(),
+                new DiagramMetadata());
+        }
     }
 
     private static string StableProjectKey(Project project) =>
@@ -219,12 +245,14 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
             .ThenBy(document => document.Name, System.StringComparer.Ordinal))
         {
+            PerformanceAudit.Increment("syntax trees visited");
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
             if (root is null)
             {
                 continue;
             }
 
+            PerformanceAudit.Increment("semantic models requested");
             var model = compilation.GetSemanticModel(root.SyntaxTree);
             foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {

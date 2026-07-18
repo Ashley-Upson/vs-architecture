@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -140,6 +141,7 @@ internal static class GlobalCorridorPathSelector
         IReadOnlyDictionary<string, int> corridorCapacities,
         int minimumSpacing)
     {
+        PerformanceAudit.Increment("global score evaluations");
         var routes = selection.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray();
         var invalid = routes.Count(route => route.Value.HasInvalidGeometry);
         var shared = 0;
@@ -152,6 +154,7 @@ internal static class GlobalCorridorPathSelector
             var leftBends = routes[leftIndex].Value.Points.Skip(1).Take(Math.Max(0, routes[leftIndex].Value.Points.Count - 2));
             for (var rightIndex = leftIndex + 1; rightIndex < routes.Length; rightIndex++)
             {
+                PerformanceAudit.Increment("global score route-pair evaluations");
                 var right = Segments(routes[rightIndex].Value.Points).ToArray();
                 var rightBends = routes[rightIndex].Value.Points.Skip(1).Take(Math.Max(0, routes[rightIndex].Value.Points.Count - 2));
                 reusedBends += leftBends.Intersect(rightBends).Count();
@@ -159,6 +162,7 @@ internal static class GlobalCorridorPathSelector
                 {
                     foreach (var rightSegment in right)
                     {
+                        PerformanceAudit.Increment("global score segment-pair evaluations");
                         shared += leftSegment.OverlapLength(rightSegment);
                         spacing += SpacingDeficit(leftSegment, rightSegment, minimumSpacing);
                         if (CrossesInside(leftSegment, rightSegment))

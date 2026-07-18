@@ -34,7 +34,11 @@ internal static class RouteRepairCoordinator
         DiagramSettings settings,
         string reason)
     {
-        var compiled = Compile(nodes, selectedLinks, settings);
+        Pipeline compiled;
+        using (PerformanceAudit.Measure("repair preparation", inputRoutes: selectedLinks.Count))
+        {
+            compiled = Compile(nodes, selectedLinks, settings);
+        }
         return new RouteRepairResult(
             compiled.Links,
             compiled.Corridors,
@@ -58,7 +62,11 @@ internal static class RouteRepairCoordinator
         RouteRepairBudget? budget = null)
     {
         budget ??= new RouteRepairBudget();
-        var initial = Compile(nodes, selectedLinks, settings);
+        Pipeline initial;
+        using (PerformanceAudit.Measure("repair preparation", inputRoutes: selectedLinks.Count))
+        {
+            initial = Compile(nodes, selectedLinks, settings);
+        }
         var current = initial;
         var attempts = new List<RouteRepairAttempt>();
         var affected = new HashSet<string>(StringComparer.Ordinal);
@@ -90,8 +98,16 @@ internal static class RouteRepairCoordinator
                 var best = current;
                 var bestScore = Score(current.Validation);
                 var candidateCount = 0;
-                foreach (var candidate in Candidates(finding, beforeLink, nodes, settings)
-                    .Take(budget.MaximumCandidatesPerFinding))
+                LinkLayout[] repairCandidates;
+                using (PerformanceAudit.Measure("repair candidate generation", inputRoutes: 1))
+                {
+                    repairCandidates = Candidates(finding, beforeLink, nodes, settings)
+                        .Take(budget.MaximumCandidatesPerFinding)
+                        .ToArray();
+                    PerformanceAudit.Increment("repair candidates generated", repairCandidates.Length);
+                }
+
+                foreach (var candidate in repairCandidates)
                 {
                     if (work >= budget.MaximumEstimatedWork)
                     {
@@ -100,11 +116,16 @@ internal static class RouteRepairCoordinator
                     }
 
                     candidateCount++;
+                    PerformanceAudit.Increment("repair candidates attempted");
                     work++;
                     var closure = InteractionClosure(current, candidate, finding.EdgeId, settings.Layout.ParallelLaneSpacing);
                     invalidatedRoutes += closure.Count;
                     revalidatedPairs += (long)closure.Count * Math.Max(0, closure.Count - 1) / 2;
-                    var trial = CompileRegional(nodes, current, candidate, closure, settings);
+                    Pipeline trial;
+                    using (PerformanceAudit.Measure("repair trial compilation", inputRoutes: closure.Count))
+                    {
+                        trial = CompileRegional(nodes, current, candidate, closure, settings);
+                    }
                     corridorRebuilds++;
                     var score = Score(trial.Validation);
                     if (score.CompareTo(bestScore) < 0)
@@ -117,10 +138,15 @@ internal static class RouteRepairCoordinator
                 var applied = !ReferenceEquals(best, current);
                 if (applied)
                 {
-                    var globallyCompiled = Compile(nodes, best.Links, settings);
+                    Pipeline globallyCompiled;
+                    using (PerformanceAudit.Measure("repair accepted-candidate confirmation", inputRoutes: best.Links.Count))
+                    {
+                        globallyCompiled = Compile(nodes, best.Links, settings);
+                    }
                     corridorRebuilds++;
                     if (Score(globallyCompiled.Validation).CompareTo(Score(current.Validation)) < 0)
                     {
+                        PerformanceAudit.Increment("repair candidates accepted");
                         current = globallyCompiled;
                         affected.Add(finding.EdgeId);
                         improved = true;
@@ -282,15 +308,41 @@ internal static class RouteRepairCoordinator
         IReadOnlyDictionary<string, LinkLayout> logicalLinks,
         DiagramSettings settings)
     {
-        var corridors = CorridorObserver.Observe(nodes, logicalLinks, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
-        var lanes = CorridorLaneAllocator.Allocate(corridors);
-        var laneGeometry = CorridorLaneGeometryCompiler.Compile(logicalLinks, corridors, lanes);
-        var traversals = EdgeTraversalCompiler.Compile(laneGeometry, corridors, lanes, nodes, logicalLinks);
-        var links = LogicalRouteNormalizer.Normalize(
-            nodes,
-            EdgeTraversalCompiler.Apply(laneGeometry, traversals),
-            settings.Layout.LinkPadding);
-        var validation = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
+        PerformanceAudit.Increment("repair trial compilations");
+        CorridorObservation corridors;
+        using (PerformanceAudit.Measure("corridor observation", inputRoutes: logicalLinks.Count))
+        {
+            corridors = CorridorObserver.Observe(nodes, logicalLinks, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        }
+        CorridorLaneAllocation lanes;
+        using (PerformanceAudit.Measure("lane allocation", inputRoutes: logicalLinks.Count))
+        {
+            lanes = CorridorLaneAllocator.Allocate(corridors);
+        }
+        IReadOnlyDictionary<string, LinkLayout> laneGeometry;
+        using (PerformanceAudit.Measure("lane geometry compilation", inputRoutes: logicalLinks.Count))
+        {
+            laneGeometry = CorridorLaneGeometryCompiler.Compile(logicalLinks, corridors, lanes);
+        }
+        EdgeTraversalCompilation traversals;
+        using (PerformanceAudit.Measure("traversal/junction compilation", inputRoutes: logicalLinks.Count))
+        {
+            traversals = EdgeTraversalCompiler.Compile(laneGeometry, corridors, lanes, nodes, logicalLinks);
+        }
+        IReadOnlyDictionary<string, LinkLayout> links;
+        using (PerformanceAudit.Measure("final normalization", inputRoutes: logicalLinks.Count))
+        {
+            links = LogicalRouteNormalizer.Normalize(
+                nodes,
+                EdgeTraversalCompiler.Apply(laneGeometry, traversals),
+                settings.Layout.LinkPadding);
+        }
+        TraceabilityValidationResult validation;
+        using (PerformanceAudit.Measure("final validation", inputRoutes: logicalLinks.Count))
+        {
+            validation = TraceabilityValidator.Validate(nodes, links, settings.Layout.ParallelLaneSpacing);
+        }
+        PerformanceAudit.Increment("repair trial validations");
         return new Pipeline(links, corridors, lanes, traversals, validation);
     }
 
@@ -307,6 +359,8 @@ internal static class RouteRepairCoordinator
         regionalInput[candidate.Link.Id] = candidate;
         var regional = Compile(nodes, regionalInput, settings);
         var mergedLinks = current.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        PerformanceAudit.Increment("complete route-set copies");
+        PerformanceAudit.Increment("complete dictionary copies");
         foreach (var item in regional.Links)
         {
             mergedLinks[item.Key] = item.Value;

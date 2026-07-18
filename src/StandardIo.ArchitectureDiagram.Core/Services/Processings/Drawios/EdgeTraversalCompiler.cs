@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -13,6 +14,7 @@ internal static class EdgeTraversalCompiler
         IReadOnlyDictionary<string, NodeLayout>? nodes = null,
         IReadOnlyDictionary<string, LinkLayout>? logicalLinks = null)
     {
+        PerformanceAudit.Increment("traversals compiled", links.Count);
         var mappings = observation.SegmentMappings
             .GroupBy(mapping => mapping.EdgeId, StringComparer.Ordinal)
             .ToDictionary(

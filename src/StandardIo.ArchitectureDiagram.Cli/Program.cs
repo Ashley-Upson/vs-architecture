@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using StandardIo.ArchitectureDiagram.Core;
@@ -17,6 +18,7 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        GenerationPerformanceSession? performance = null;
         try
         {
             var options = CliOptions.Parse(args);
@@ -24,6 +26,11 @@ public static class Program
             {
                 WriteUsage();
                 return 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.PerformanceOutputPath))
+            {
+                performance = GenerationPerformanceSession.Start(options.SerializationRepeatCount);
             }
 
             var settings = string.IsNullOrWhiteSpace(options.SettingsPath)
@@ -40,7 +47,13 @@ public static class Program
                 .BuildServiceProvider();
             if (string.Equals(settings.OutputRenderer, "drawio", StringComparison.OrdinalIgnoreCase))
             {
-                return await GenerateDrawioAsync(provider, options, settings).ConfigureAwait(false);
+                var exitCode = await GenerateDrawioAsync(provider, options, settings).ConfigureAwait(false);
+                if (performance is not null)
+                {
+                    await WritePerformanceReportAsync(performance, options.PerformanceOutputPath!).ConfigureAwait(false);
+                }
+
+                return exitCode;
             }
 
             var result = await provider
@@ -59,11 +72,15 @@ public static class Program
             Console.Error.WriteLine(ex.Message);
             return 1;
         }
+        finally
+        {
+            performance?.Dispose();
+        }
     }
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>]");
     }
 
     private static async Task<int> GenerateDrawioAsync(
@@ -72,16 +89,24 @@ public static class Program
         DiagramSettings settings)
     {
         var workspaceTimer = Stopwatch.StartNew();
-        var target = await provider.GetRequiredService<IWorkspacePathBroker>()
-            .LoadAsync(
-                options.InputPath!,
-                new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
-            .ConfigureAwait(false);
+        WorkspacePathLoadResult target;
+        using (GenerationPerformanceSession.Current?.Measure("project/workspace acquisition"))
+        {
+            target = await provider.GetRequiredService<IWorkspacePathBroker>()
+                .LoadAsync(
+                    options.InputPath!,
+                    new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
+                .ConfigureAwait(false);
+        }
         workspaceTimer.Stop();
         var analysisTimer = Stopwatch.StartNew();
-        var diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
-            .AnalyzeAsync(target.Projects, settings)
-            .ConfigureAwait(false);
+        DiagramModel diagram;
+        using (GenerationPerformanceSession.Current?.Measure("semantic analysis", outputObjects: target.Projects.Count))
+        {
+            diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
+                .AnalyzeAsync(target.Projects, settings)
+                .ConfigureAwait(false);
+        }
         analysisTimer.Stop();
         var exporter = provider.GetRequiredService<IDeterministicDrawioExporter>();
         var generation = exporter.GenerateResult(diagram, settings, new[]
@@ -93,23 +118,36 @@ public static class Program
             ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
             : Path.GetFullPath(options.OutputPath);
         var broker = provider.GetRequiredService<IDiagramFileBroker>();
-        await broker.WriteTextAsync(outputPath, generation.Document).ConfigureAwait(false);
+        using (GenerationPerformanceSession.Current?.Measure("file write", outputObjects: generation.Document.Length))
+        {
+            await broker.WriteTextAsync(outputPath, generation.Document).ConfigureAwait(false);
+        }
 
         string? reportPath = null;
         if (options.StrictValidation || !string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath))
         {
-            var diagnostic = exporter.ExportDiagnostic(generation);
+            DrawioDiagnosticExportResult diagnostic;
+            using (GenerationPerformanceSession.Current?.Measure("optional diagnostic materialization"))
+            {
+                diagnostic = exporter.ExportDiagnostic(generation);
+            }
             reportPath = string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath)
                 ? Path.ChangeExtension(outputPath, ".validation.json")
                 : Path.GetFullPath(options.DiagnosticsOutputPath);
-            await broker.WriteTextAsync(reportPath, diagnostic.ReportJson).ConfigureAwait(false);
+            using (GenerationPerformanceSession.Current?.Measure("diagnostic JSON file write", outputObjects: diagnostic.ReportJson.Length))
+            {
+                await broker.WriteTextAsync(reportPath, diagnostic.ReportJson).ConfigureAwait(false);
+            }
             var focusedDirectory = Path.Combine(
                 Path.GetDirectoryName(outputPath) ?? Directory.GetCurrentDirectory(),
                 $"{Path.GetFileNameWithoutExtension(outputPath)}-focused");
             foreach (var focused in diagnostic.FocusedOutputs.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
                 var focusedPath = Path.Combine(focusedDirectory, $"{focused.Key}.drawio");
-                await broker.WriteTextAsync(focusedPath, focused.Value).ConfigureAwait(false);
+                using (GenerationPerformanceSession.Current?.Measure("focused diagnostic file write", outputObjects: focused.Value.Length))
+                {
+                    await broker.WriteTextAsync(focusedPath, focused.Value).ConfigureAwait(false);
+                }
             }
         }
 
@@ -134,6 +172,22 @@ public static class Program
         return 0;
     }
 
+    private static async Task WritePerformanceReportAsync(
+        GenerationPerformanceSession performance,
+        string outputPath)
+    {
+        var fullPath = Path.GetFullPath(outputPath);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var json = JsonSerializer.Serialize(performance.Snapshot(), new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(fullPath, json).ConfigureAwait(false);
+        Console.WriteLine($"Performance: {fullPath}");
+    }
+
     private sealed class CliOptions
     {
         public string? InputPath { get; private set; }
@@ -147,6 +201,10 @@ public static class Program
         public string? ProjectFilter { get; private set; }
 
         public string? DiagnosticsOutputPath { get; private set; }
+
+        public string? PerformanceOutputPath { get; private set; }
+
+        public int SerializationRepeatCount { get; private set; }
 
         public bool StrictValidation { get; private set; }
 
@@ -185,6 +243,17 @@ public static class Program
                         break;
                     case "--diagnostics-output":
                         options.DiagnosticsOutputPath = ReadValue(args, ref index, arg);
+                        break;
+                    case "--performance-output":
+                        options.PerformanceOutputPath = ReadValue(args, ref index, arg);
+                        break;
+                    case "--serialization-repeat":
+                        if (!int.TryParse(ReadValue(args, ref index, arg), out var repeatCount) || repeatCount < 0)
+                        {
+                            throw new ArgumentException("--serialization-repeat requires a non-negative integer.");
+                        }
+
+                        options.SerializationRepeatCount = repeatCount;
                         break;
                     default:
                         if (arg.StartsWith("-", StringComparison.Ordinal))

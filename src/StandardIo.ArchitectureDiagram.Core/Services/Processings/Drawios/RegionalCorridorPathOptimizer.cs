@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -139,6 +140,7 @@ internal static class RegionalCorridorPathOptimizer
         {
             for (var rightIndex = leftIndex + 1; rightIndex < ordered.Length; rightIndex++)
             {
+                PerformanceAudit.Increment("regional interaction checks");
                 var left = ordered[leftIndex];
                 var right = ordered[rightIndex];
                 if (!Intersects(Bounds(left.Value.Points).Inflate(minimumSpacing), Bounds(right.Value.Points).Inflate(minimumSpacing)))

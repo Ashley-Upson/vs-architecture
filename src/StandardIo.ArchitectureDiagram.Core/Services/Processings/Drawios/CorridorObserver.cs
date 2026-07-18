@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -12,6 +13,7 @@ internal static class CorridorObserver
         int laneSpacing,
         int clearance)
     {
+        PerformanceAudit.Increment("corridor observations built");
         laneSpacing = Math.Max(1, laneSpacing);
         clearance = Math.Max(0, clearance);
         var sourceCounts = links.Values.GroupBy(link => link.Link.SourceId, StringComparer.Ordinal)
@@ -37,6 +39,7 @@ internal static class CorridorObserver
             .Where(segment => segment is not null)
             .Select(segment => segment!)
             .ToArray();
+        PerformanceAudit.Increment("corridor segment observations", observed.Length);
         var spatialGroups = observed
             .GroupBy(segment => segment.CorridorKey, StringComparer.Ordinal)
             .SelectMany(group => SplitSpatially(group.Key, group))

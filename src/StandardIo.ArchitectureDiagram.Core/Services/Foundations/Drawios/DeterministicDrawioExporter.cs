@@ -26,6 +26,23 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             .ToArray();
         var document = Measure(prepared.StageTimings, "serialization", () =>
             new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
+        var repeatCount = GenerationPerformanceSession.Current?.SerializationRepeatCount ?? 0;
+        for (var repeat = 0; repeat < repeatCount; repeat++)
+        {
+            using (PerformanceAudit.Measure(
+                "serialization-only repeat",
+                prepared.Layout.Nodes.Count,
+                prepared.Layout.Links.Count,
+                prepared.Ownership.Segments.Count,
+                layoutRevision: prepared.Layout.LayoutRevision.Value))
+            {
+                var repeated = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+                if (!string.Equals(document, repeated, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Serialization-only repeat produced different XML.");
+                }
+            }
+        }
         return new DrawioGenerationResult(
             document,
             preRepairFindings,
@@ -69,7 +86,9 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 
     private static DrawioDiagnosticExportResult BuildDiagnostic(PreparedExport prepared, string content)
     {
+        PerformanceAudit.Increment("diagnostic materializations");
         var enforced = prepared.Layout.Traceability.Violations.Where(prepared.IsEnforced).ToArray();
+        PerformanceAudit.Increment("diagnostic projections", prepared.Layout.Traceability.Violations.Count);
         var reportJson = DrawioDiagnosticReportBuilder.BuildJson(
             prepared.Layout,
             prepared.Ownership,
@@ -79,6 +98,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             diagnosticReuse: true);
         var annotated = DrawioDiagnosticReportBuilder.Annotate(content, enforced, "All enforced findings", prepared.Layout);
         var focused = DrawioDiagnosticReportBuilder.FocusedOutputs(content, enforced, prepared.Layout);
+        PerformanceAudit.Increment("focused diagnostic outputs", focused.Count);
         return new DrawioDiagnosticExportResult(
             annotated,
             reportJson,
@@ -135,14 +155,33 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             settings.ShowProjectContainers));
         if (settings.ShowProjectContainers)
         {
-            var projects = ProjectOwnershipBoundsCompiler.Compile(
-                layout.Projects,
-                layout.Nodes,
-                ownership,
-                settings.Layout.ContainerPadding,
-                settings.Layout.ProjectHeaderHeight);
+            IReadOnlyDictionary<string, ProjectLayout> projects;
+            using (PerformanceAudit.Measure(
+                "project-bound calculation",
+                layout.Nodes.Count,
+                layout.Links.Count,
+                ownership.Segments.Count,
+                layout.Graph.Projects.Count,
+                layout.LayoutRevision.Value))
+            {
+                projects = ProjectOwnershipBoundsCompiler.Compile(
+                    layout.Projects,
+                    layout.Nodes,
+                    ownership,
+                    settings.Layout.ContainerPadding,
+                    settings.Layout.ProjectHeaderHeight);
+            }
             layout = layout.WithProjects(projects);
-            ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
+            using (PerformanceAudit.Measure(
+                "ownership rebase",
+                layout.Nodes.Count,
+                layout.Links.Count,
+                ownership.Segments.Count,
+                ownership.Segments.Count,
+                layout.LayoutRevision.Value))
+            {
+                ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
+            }
         }
 
         return new PreparedExport(settings, layout, ownership, IsEnforced, timings);
@@ -151,7 +190,16 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
     private static T Measure<T>(ICollection<PipelineStageMetric> timings, string stage, Func<T> action)
     {
         var timer = Stopwatch.StartNew();
-        var result = action();
+        T result;
+        var performanceStage = stage == "render graph construction"
+            ? "RenderGraph construction"
+            : stage == "ownership"
+                ? "ownership compilation"
+                : stage;
+        using (PerformanceAudit.Measure(performanceStage))
+        {
+            result = action();
+        }
         timer.Stop();
         timings.Add(new PipelineStageMetric(stage, timer.ElapsedMilliseconds,
             timings.Count(item => item.Stage == stage) + 1));

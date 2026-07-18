@@ -117,7 +117,15 @@ internal sealed partial class RenderLayout
             var timings = new List<PipelineStageMetric>();
             var placed = MeasureStage(timings, "node placement", () =>
                 PlacementPipeline.Place(graph, settings, new LayoutRevision(0)));
-            var routed = LegacyRoutingPipeline.Run(placed, settings, timings);
+            LegacyRoutingResult routed;
+            using (PerformanceAudit.Measure(
+                "legacy route generation",
+                graph.Nodes.Count,
+                graph.Links.Count,
+                layoutRevision: placed.Revision.Value))
+            {
+                routed = LegacyRoutingPipeline.Run(placed, settings, timings);
+            }
 
             return new RenderLayout(graph, routed.Placement.Nodes, routed.Placement.Projects, routed.Links,
                 routed.PositionedLinks.Selection, routed.PositionedLinks.RegionalSelection,
@@ -133,7 +141,18 @@ internal sealed partial class RenderLayout
             Func<T> action)
         {
             var timer = Stopwatch.StartNew();
-            var result = action();
+            T result;
+            var performanceStage = stage == "traversal compilation"
+                ? "traversal/junction compilation"
+                : stage == "normalization"
+                    ? "final normalization"
+                    : stage == "validation"
+                        ? "final validation"
+                        : stage;
+            using (PerformanceAudit.Measure(performanceStage))
+            {
+                result = action();
+            }
             timer.Stop();
             timings.Add(new PipelineStageMetric(stage, timer.ElapsedMilliseconds,
                 timings.Count(item => item.Stage == stage) + 1));
@@ -313,68 +332,86 @@ internal sealed partial class RenderLayout
                 settings.Layout.EdgePortSpacing,
                 settings.Layout.ParallelLaneSpacing * 2);
 
-            foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
+            using (PerformanceAudit.Measure(
+                "terminal allocation",
+                graph.Nodes.Count,
+                graph.Links.Count))
             {
-                var source = nodes[link.SourceId].Rect;
-                var target = nodes[link.TargetId].Rect;
-                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
-                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
-                var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
-                var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
-                var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
-                var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
-                var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners);
+                foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
+                {
+                    var source = nodes[link.SourceId].Rect;
+                    var target = nodes[link.TargetId].Rect;
+                    var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
+                    var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
+                    var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
+                    var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
+                    var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
+                    var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
+                    var route = BuildRoute(sourcePoint, targetPoint, obstacles, settings, routeLaneIndex, usedCorners);
 
-                result[link.Id] = new LinkLayout(
-                    link,
-                    sourcePoint,
-                    targetPoint,
-                    route,
-                    Ratio(sourcePoint.X, source),
-                    Ratio(targetPoint.X, target));
+                    result[link.Id] = new LinkLayout(
+                        link,
+                        sourcePoint,
+                        targetPoint,
+                        route,
+                        Ratio(sourcePoint.X, source),
+                        Ratio(targetPoint.X, target));
+                }
             }
 
             var candidatesByEdge = new Dictionary<string, IReadOnlyList<CorridorPathCandidate>>(StringComparer.Ordinal);
-            foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
+            using (PerformanceAudit.Measure(
+                "candidate construction and reduction",
+                graph.Nodes.Count,
+                graph.Links.Count))
             {
-                var accepted = result[link.Id];
-                var source = nodes[link.SourceId].Rect;
-                var target = nodes[link.TargetId].Rect;
-                var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
-                var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
-                var laneOffset = routeLaneIndex * settings.Layout.ParallelLaneSpacing;
-                var sourceExit = accepted.Points.Count > 0
-                    ? accepted.Points[0]
-                    : new Point(accepted.SourcePoint.X, accepted.SourcePoint.Y + settings.Layout.LinkPadding);
-                var targetEntry = accepted.Points.Count > 0
-                    ? accepted.Points[accepted.Points.Count - 1]
-                    : new Point(accepted.TargetPoint.X, accepted.TargetPoint.Y - settings.Layout.LinkPadding);
-                var alternatives = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
-                    .Concat(BuildRouteCandidates(
-                        sourceExit,
-                        targetEntry,
-                        obstacles,
-                        settings,
-                        laneOffset + settings.Layout.ParallelLaneSpacing))
-                    .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
-                    .Concat(graph.PlacementParentByNode.Count > 0
-                        ? CanonicalSharedNodeRouteCandidateBuilder.BuildExteriorRoutes(
+                foreach (var link in graph.Links.OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal))
+                {
+                    var accepted = result[link.Id];
+                    var source = nodes[link.SourceId].Rect;
+                    var target = nodes[link.TargetId].Rect;
+                    var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
+                    var routeLaneIndex = routeLaneIndexes.TryGetValue(link.Id, out var index) ? index : 0;
+                    var laneOffset = routeLaneIndex * settings.Layout.ParallelLaneSpacing;
+                    var sourceExit = accepted.Points.Count > 0
+                        ? accepted.Points[0]
+                        : new Point(accepted.SourcePoint.X, accepted.SourcePoint.Y + settings.Layout.LinkPadding);
+                    var targetEntry = accepted.Points.Count > 0
+                        ? accepted.Points[accepted.Points.Count - 1]
+                        : new Point(accepted.TargetPoint.X, accepted.TargetPoint.Y - settings.Layout.LinkPadding);
+                    var alternatives = BuildRouteCandidates(sourceExit, targetEntry, obstacles, settings, laneOffset)
+                        .Concat(BuildRouteCandidates(
                             sourceExit,
                             targetEntry,
                             obstacles,
                             settings,
-                            laneOffset).Select(route => route.ToList())
-                        : Enumerable.Empty<List<Point>>())
-                    .Select(Simplify)
-                    .Where(route => !CrossesNode(route, obstacles))
-                    .Select(route => PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, route, false))
-                    .Append(PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, accepted.Points.ToList(), true))
-                    .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
-                    .Select(group => group.First());
-                candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
-                    alternatives,
-                    8,
-                    settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+                            laneOffset + settings.Layout.ParallelLaneSpacing))
+                        .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
+                        .Concat(graph.PlacementParentByNode.Count > 0
+                            ? CanonicalSharedNodeRouteCandidateBuilder.BuildExteriorRoutes(
+                                sourceExit,
+                                targetEntry,
+                                obstacles,
+                                settings,
+                                laneOffset).Select(route => route.ToList())
+                            : Enumerable.Empty<List<Point>>())
+                        .Select(Simplify)
+                        .Where(route => !CrossesNode(route, obstacles))
+                        .Select(route => PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, route, false))
+                        .Append(PathCandidate(link.Id, accepted.SourcePoint, accepted.TargetPoint, accepted.Points.ToList(), true))
+                        .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
+                        .Select(group => group.First())
+                        .ToArray();
+                    PerformanceAudit.Increment("candidate routes created", alternatives.Length);
+                    using (PerformanceAudit.Measure("candidate reduction", inputRoutes: alternatives.Length))
+                    {
+                        candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
+                            alternatives,
+                            8,
+                            settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+                    }
+                    PerformanceAudit.Increment("candidate routes retained", candidatesByEdge[link.Id].Count);
+                }
             }
 
             var estimatedWork = EstimateGlobalPathSelectionWork(candidatesByEdge, 4);
@@ -383,11 +420,15 @@ internal sealed partial class RenderLayout
                 return OptimiseRegionalLinks(graph, settings, nodes, result, false);
             }
 
-            var selection = GlobalCorridorPathSelector.Select(
-                candidatesByEdge,
-                new Dictionary<string, int>(StringComparer.Ordinal),
-                settings.Layout.ParallelLaneSpacing,
-                4);
+            CorridorPathSelectionResult selection;
+            using (PerformanceAudit.Measure("global selection", inputRoutes: candidatesByEdge.Count))
+            {
+                selection = GlobalCorridorPathSelector.Select(
+                    candidatesByEdge,
+                    new Dictionary<string, int>(StringComparer.Ordinal),
+                    settings.Layout.ParallelLaneSpacing,
+                    4);
+            }
             var selectedLayouts = result.Values.ToDictionary(
                 layout => layout.Link.Id,
                 layout =>
@@ -448,9 +489,14 @@ internal sealed partial class RenderLayout
                     };
                 },
                 StringComparer.Ordinal);
-            var interactions = RegionalCorridorPathOptimizer.DiscoverInteractions(
-                acceptedCandidates,
-                settings.Layout.ParallelLaneSpacing);
+            IReadOnlyList<RouteInteraction> interactions;
+            using (PerformanceAudit.Measure("regional interaction discovery", inputRoutes: acceptedCandidates.Count))
+            {
+                interactions = RegionalCorridorPathOptimizer.DiscoverInteractions(
+                    acceptedCandidates,
+                    settings.Layout.ParallelLaneSpacing);
+                PerformanceAudit.Increment("interaction pairs discovered", interactions.Count);
+            }
             var relevantEdges = new HashSet<string>(
                 interactions.SelectMany(interaction => new[] { interaction.FirstEdgeId, interaction.SecondEdgeId }),
                 StringComparer.Ordinal);
@@ -480,6 +526,7 @@ internal sealed partial class RenderLayout
                     .Append(BuildOutsideRoute(sourceExit, targetEntry, obstacles, settings, laneOffset))
                     .Select(Simplify)
                     .ToArray();
+                PerformanceAudit.Increment("candidate routes created", localCandidates.Length);
                 var nodeSafeLocalCandidates = localCandidates
                     .Where(route => !CrossesNode(route, obstacles))
                     .Select(route => PathCandidate(
@@ -503,17 +550,25 @@ internal sealed partial class RenderLayout
                     .Append(acceptedCandidate)
                     .GroupBy(candidate => string.Join(";", candidate.Points.Select(point => $"{point.X},{point.Y}")), StringComparer.Ordinal)
                     .Select(group => group.First());
-                candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
-                    alternatives,
-                    8,
-                    settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+                using (PerformanceAudit.Measure("candidate reduction"))
+                {
+                    candidatesByEdge[link.Id] = CorridorPathCandidateReducer.Retain(
+                        alternatives,
+                        8,
+                        settings.Layout.HorizontalSpacing * 2 + settings.Layout.VerticalSpacing * 2);
+                }
+                PerformanceAudit.Increment("candidate routes retained", candidatesByEdge[link.Id].Count);
             }
 
-            var regional = RegionalCorridorPathOptimizer.Optimise(
-                candidatesByEdge,
-                new Dictionary<string, int>(StringComparer.Ordinal),
-                settings.Layout.ParallelLaneSpacing,
-                new RegionalOptimisationLimits());
+            RegionalPathSelectionResult regional;
+            using (PerformanceAudit.Measure("regional optimisation", inputRoutes: candidatesByEdge.Count))
+            {
+                regional = RegionalCorridorPathOptimizer.Optimise(
+                    candidatesByEdge,
+                    new Dictionary<string, int>(StringComparer.Ordinal),
+                    settings.Layout.ParallelLaneSpacing,
+                    new RegionalOptimisationLimits());
+            }
             var selectedLayouts = acceptedLayouts.Values.ToDictionary(
                 layout => layout.Link.Id,
                 layout =>
@@ -612,6 +667,7 @@ internal sealed partial class RenderLayout
             IReadOnlyDictionary<string, LinkLayout> layouts,
             RenderLink link)
         {
+            using var timing = PerformanceAudit.Measure("fan-out processing");
             var memberships = new List<TerminalFanoutMembership>();
             Add(graph.Links.Where(item => item.SourceId == link.SourceId).ToArray(), FanoutDirection.Source, link.SourceId, true);
             Add(graph.Links.Where(item => item.TargetId == link.TargetId).ToArray(), FanoutDirection.Target, link.TargetId, false);
@@ -684,6 +740,10 @@ internal sealed partial class RenderLayout
             DiagramSettings settings,
             IReadOnlyDictionary<string, NodeLayout> nodes)
         {
+            using var timing = PerformanceAudit.Measure(
+                "terminal allocation and fan-out processing",
+                graph.Nodes.Count,
+                graph.Links.Count);
             var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
             var sourceGroups = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
@@ -1131,7 +1191,22 @@ internal sealed partial class RenderLayout
 
         private static bool CrossesNode(IReadOnlyList<Point> points, IReadOnlyList<Rect> obstacles)
         {
-            return Segments(points).Any(segment => obstacles.Any(obstacle => segment.Intersects(obstacle)));
+            using var timing = PerformanceAudit.Measure("candidate obstacle checking", inputSegments: Math.Max(0, points.Count - 1));
+            PerformanceAudit.Increment("candidate routes obstacle-checked");
+            foreach (var segment in Segments(points))
+            {
+                foreach (var obstacle in obstacles)
+                {
+                    PerformanceAudit.Increment("candidate node-segment obstacle checks");
+                    if (segment.Intersects(obstacle))
+                    {
+                        PerformanceAudit.Increment("candidate routes rejected");
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static IEnumerable<Segment> Segments(IReadOnlyList<Point> points)

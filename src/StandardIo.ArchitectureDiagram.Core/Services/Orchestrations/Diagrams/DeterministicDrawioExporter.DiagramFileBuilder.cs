@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Text;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 
@@ -21,15 +22,37 @@ internal sealed class DiagramFileBuilder
 
         public string Build(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
-            var architectureRoot = new ArchitectureGenerator(this).Generate(layout, ownership);
-            var dataModelRoot = new DataModelGenerator(this).Generate(layout.Graph.DataModels);
+            XDocument document;
+            using (PerformanceAudit.Measure(
+                "DiagramFileBuilder XML construction",
+                layout.Nodes.Count,
+                layout.Links.Count,
+                ownership.Segments.Count,
+                layout.Nodes.Count + ownership.Anchors.Count + ownership.Segments.Count,
+                layout.LayoutRevision.Value))
+            {
+                var architectureRoot = new ArchitectureGenerator(this).Generate(layout, ownership);
+                var dataModelRoot = new DataModelGenerator(this).Generate(layout.Graph.DataModels);
 
-            var file = new XElement("mxfile",
-                new XAttribute("host", "StandardIo.ArchitectureDiagram"),
-                new XElement("diagram", new XAttribute("name", "Architecture"), GraphModel(architectureRoot)),
-                new XElement("diagram", new XAttribute("name", "Data Model"), GraphModel(dataModelRoot)));
+                var file = new XElement("mxfile",
+                    new XAttribute("host", "StandardIo.ArchitectureDiagram"),
+                    new XElement("diagram", new XAttribute("name", "Architecture"), GraphModel(architectureRoot)),
+                    new XElement("diagram", new XAttribute("name", "Data Model"), GraphModel(dataModelRoot)));
+                document = new XDocument(file);
+                PerformanceAudit.Increment("final nodes", layout.Nodes.Count);
+                PerformanceAudit.Increment("logical routes", layout.Links.Count);
+                PerformanceAudit.Increment("physical edge segments", ownership.Segments.Count);
+                PerformanceAudit.Increment("XML cells", document.Descendants("mxCell").Count());
+                PerformanceAudit.Increment("waypoints", document.Descendants("mxPoint").Count());
+            }
 
-            return new XDocument(file).ToString(SaveOptions.DisableFormatting);
+            using (PerformanceAudit.Measure("XML ToString/materialization"))
+            {
+                var content = document.ToString(SaveOptions.DisableFormatting);
+                PerformanceAudit.Increment("document characters", content.Length);
+                PerformanceAudit.Increment("document bytes", Encoding.UTF8.GetByteCount(content));
+                return content;
+            }
         }
 
         private XElement ArchitectureRoot(RenderLayout layout, CoordinateOwnershipCompilation ownership)
@@ -100,6 +123,8 @@ internal sealed class DiagramFileBuilder
                 .OrderBy(segment => segment.LogicalLink.Link.Order)
                 .ThenBy(segment => segment.SegmentIndex))
             {
+                PerformanceAudit.Increment("XML edge metadata lookups");
+                PerformanceAudit.Increment("metadata projections");
                 layout.Traversals.Traversals.TryGetValue(segment.LogicalEdgeId, out var traversal);
                 var pathDecision = layout.PathSelection?.Decisions.FirstOrDefault(decision =>
                     string.Equals(decision.EdgeId, segment.LogicalEdgeId, StringComparison.Ordinal));

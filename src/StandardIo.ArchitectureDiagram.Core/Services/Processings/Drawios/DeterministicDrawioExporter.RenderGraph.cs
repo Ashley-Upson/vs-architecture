@@ -157,12 +157,29 @@ internal sealed class RenderGraph
         public static RenderGraph From(DiagramModel diagram, DiagramSettings settings)
         {
             var duplicationPolicy = NodeDuplicationPolicy.From(settings.NodeDuplication);
-            var graph = FromBaseDiagram(diagram, duplicationPolicy);
-            return graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold
-                ? settings.NodeDuplication.AllowDuplicateNodes
+            RenderGraph graph;
+            using (PerformanceAudit.Measure("base RenderGraph construction"))
+            {
+                graph = FromBaseDiagram(diagram, duplicationPolicy);
+            }
+
+            if (graph.Nodes.Count < settings.Layout.ExposureTreeLayoutThreshold)
+            {
+                return graph;
+            }
+
+            using (PerformanceAudit.Measure(
+                "exposure/canonical graph construction",
+                graph.Nodes.Count,
+                graph.Links.Count))
+            {
+                var result = settings.NodeDuplication.AllowDuplicateNodes
                     ? BuildExposureTreeGraph(graph)
-                    : BuildCanonicalExposureGraph(graph, duplicationPolicy)
-                : graph;
+                    : BuildCanonicalExposureGraph(graph, duplicationPolicy);
+                PerformanceAudit.Increment("render paths/clones created", result.Nodes.Count);
+                PerformanceAudit.Increment("render links created", result.Links.Count);
+                return result;
+            }
         }
 
         private static RenderGraph BuildCanonicalExposureGraph(
@@ -215,6 +232,7 @@ internal sealed class RenderGraph
 
             foreach (var root in roots)
             {
+                PerformanceAudit.Increment("exposure roots visited");
                 Visit(root.Id, root.Id, SafeId(root.Id), null, new HashSet<string>(StringComparer.Ordinal));
             }
 
@@ -241,6 +259,7 @@ internal sealed class RenderGraph
                 }
 
                 clonedNodes.Add(original with { Id = cloneId, Order = clonedNodes.Count });
+                PerformanceAudit.Increment("render clone instances created");
                 if (placementParentId is not null)
                 {
                     placementParentByNode[cloneId] = placementParentId;
@@ -325,6 +344,7 @@ internal sealed class RenderGraph
 
             foreach (var root in roots)
             {
+                PerformanceAudit.Increment("exposure roots visited");
                 Visit(root.Id, root.Id, SafeId(root.Id), new HashSet<string>(StringComparer.Ordinal));
 
                 string Visit(string originalNodeId, string rootId, string path, HashSet<string> ancestors)
@@ -338,6 +358,7 @@ internal sealed class RenderGraph
                     originalNodesInTrees.Add(originalNodeId);
                     var original = nodeById[originalNodeId];
                     clonedNodes.Add(original with { Id = cloneId, Order = clonedNodes.Count });
+                    PerformanceAudit.Increment("render clone instances created");
 
                     if (!outgoing.TryGetValue(originalNodeId, out var childLinks))
                     {

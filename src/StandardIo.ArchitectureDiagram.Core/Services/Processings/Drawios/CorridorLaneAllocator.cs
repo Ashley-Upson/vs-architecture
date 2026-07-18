@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -8,6 +9,7 @@ internal static class CorridorLaneAllocator
 {
     public static CorridorLaneAllocation Allocate(CorridorObservation observation)
     {
+        PerformanceAudit.Increment("lane allocations built");
         var allocations = new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>(StringComparer.Ordinal);
         var failures = new List<string>();
         var requests = new List<CapacityRequest>();
@@ -43,6 +45,7 @@ internal static class CorridorLaneAllocator
             }
 
             var edgeIds = usage.EdgeIds.ToArray();
+            PerformanceAudit.Increment("corridor lanes allocated", edgeIds.Length);
             var lanes = new Dictionary<string, AllocatedCorridorLane>(StringComparer.Ordinal);
             for (var index = 0; index < edgeIds.Length; index++)
             {

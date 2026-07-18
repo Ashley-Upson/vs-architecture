@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -66,6 +67,7 @@ internal static class TraceabilityValidator
         IReadOnlyDictionary<string, LinkLayout> links,
         int requiredParallelSpacing)
     {
+        PerformanceAudit.Increment("full validations");
         var violations = new List<TraceabilityViolation>();
         var orderedLinks = links.Values
             .OrderBy(link => link.Link.Order)
@@ -98,6 +100,8 @@ internal static class TraceabilityValidator
                 !string.Equals(node.Node.Id, link.Link.SourceId, StringComparison.Ordinal) &&
                 !string.Equals(node.Node.Id, link.Link.TargetId, StringComparison.Ordinal)))
             {
+                PerformanceAudit.Increment("node-route intersection checks");
+                PerformanceAudit.Increment("node-segment intersection checks", route.Length);
                 var collidingSegments = route.Where(segment => segment.Intersects(node.Rect)).ToArray();
                 if (collidingSegments.Length > 0)
                 {
@@ -121,9 +125,11 @@ internal static class TraceabilityValidator
             var leftBends = InteriorPoints(left);
             for (var rightIndex = leftIndex + 1; rightIndex < orderedLinks.Length; rightIndex++)
             {
+                PerformanceAudit.Increment("route-route pair checks");
                 var right = orderedLinks[rightIndex];
                 var rightSegments = CompleteSegments(right);
                 var rightBends = InteriorPoints(right);
+                PerformanceAudit.Increment("segment-segment pair checks", (long)leftSegments.Length * rightSegments.Length);
                 var sharedSegments = leftSegments.SelectMany(leftSegment =>
                     rightSegments.Select(rightSegment => SharedSegment(leftSegment, rightSegment)))
                     .Where(segment => segment is not null)

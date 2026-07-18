@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -11,6 +12,8 @@ internal static class LogicalRouteNormalizer
         IReadOnlyDictionary<string, LinkLayout> links,
         int obstaclePadding)
     {
+        PerformanceAudit.Increment("normalizations performed");
+        PerformanceAudit.Increment("routes normalized", links.Count);
         return links.Values
             .OrderBy(link => link.Link.Order)
             .ThenBy(link => link.Link.Id, StringComparer.Ordinal)
