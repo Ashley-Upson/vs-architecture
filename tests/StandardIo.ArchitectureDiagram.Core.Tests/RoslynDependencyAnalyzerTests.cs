@@ -10,6 +10,31 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class RoslynDependencyAnalyzerTests
 {
     [Fact]
+    public async Task Analyze_requests_one_compilation_per_project()
+    {
+        using var workspace = new AdhocWorkspace();
+        var solution = workspace.CurrentSolution;
+        var firstId = ProjectId.CreateNewId();
+        var secondId = ProjectId.CreateNewId();
+        solution = solution
+            .AddProject(firstId, "First", "First", LanguageNames.CSharp)
+            .AddMetadataReference(firstId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
+            .AddDocument(DocumentId.CreateNewId(firstId), "First.cs", "public class First { }")
+            .AddProject(secondId, "Second", "Second", LanguageNames.CSharp)
+            .AddMetadataReference(secondId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
+            .AddDocument(DocumentId.CreateNewId(secondId), "Second.cs", "public class Second { }");
+        using var session = GenerationPerformanceSession.Start();
+
+        await new RoslynDependencyAnalyzer().AnalyzeAsync(
+            new[] { solution.GetProject(secondId)!, solution.GetProject(firstId)! },
+            DiagramSettings.CreateDefault());
+        var report = session.Snapshot();
+
+        Assert.Equal(2, report.Counters.Single(item => item.Name == "Roslyn compilation requests").Value);
+        Assert.Equal(2, report.Phases.Single(item => item.Phase == "Roslyn compilation acquisition").InvocationCount);
+    }
+
+    [Fact]
     public async Task Analyze_emits_external_boundary_node_for_unselected_project_reference()
     {
         using var workspace = new AdhocWorkspace();

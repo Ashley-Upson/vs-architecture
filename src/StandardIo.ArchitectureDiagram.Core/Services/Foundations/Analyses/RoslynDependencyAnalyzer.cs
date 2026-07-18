@@ -34,6 +34,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         var typeByFullName = new Dictionary<string, TypeNode>();
         var registeredImplementationByService = new Dictionary<ISymbol, INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var projectTypes = new List<(Project Project, string ProjectId, List<TypeNode> Types)>();
+        var projectCompilations = new List<(Project Project, Compilation Compilation)>();
 
         foreach (var project in projects)
         {
@@ -48,6 +49,11 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 continue;
             }
 
+            projectCompilations.Add((project, compilation));
+        }
+
+        foreach (var (project, compilation) in projectCompilations)
+        {
             var types = new List<TypeNode>();
             foreach (var type in GetNamedTypes(compilation.Assembly.GlobalNamespace)
                 .OrderBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), System.StringComparer.Ordinal))
@@ -91,19 +97,8 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             projectTypes.Add((project, StableId.From("project", StableProjectKey(project)), types));
         }
 
-        foreach (var project in projects)
+        foreach (var (project, compilation) in projectCompilations)
         {
-            Compilation? compilation;
-            using (PerformanceAudit.Measure("Roslyn compilation acquisition"))
-            {
-                PerformanceAudit.Increment("Roslyn compilation requests");
-                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            }
-            if (compilation is null)
-            {
-                continue;
-            }
-
             foreach (var registration in await CollectServiceRegistrationsAsync(project, compilation, cancellationToken).ConfigureAwait(false))
             {
                 if (!SymbolEqualityComparer.Default.Equals(registration.Service.OriginalDefinition, registration.Implementation.OriginalDefinition) &&
@@ -127,19 +122,8 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         var edgeIds = new HashSet<string>();
         var edges = new List<DependencyEdge>();
 
-        foreach (var project in projects)
+        foreach (var (project, compilation) in projectCompilations)
         {
-            Compilation? compilation;
-            using (PerformanceAudit.Measure("Roslyn compilation acquisition"))
-            {
-                PerformanceAudit.Increment("Roslyn compilation requests");
-                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            }
-            if (compilation is null)
-            {
-                continue;
-            }
-
             foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree)
                 .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
                 .ThenBy(document => document.Name, System.StringComparer.Ordinal))
