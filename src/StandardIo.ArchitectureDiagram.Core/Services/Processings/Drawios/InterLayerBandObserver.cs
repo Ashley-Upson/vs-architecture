@@ -180,27 +180,29 @@ internal static class InterLayerBandObserver
                 var ordered = roleGroup.OrderBy(item => item.XStart).ThenBy(item => item.XEnd)
                     .ThenBy(item => item.TerminalOrder).ThenBy(item => item.EdgeId, StringComparer.Ordinal)
                     .ThenBy(item => item.SegmentIndex).ToArray();
-                var laneEnds = new List<int>();
-                var activeEnds = new List<int>();
+                var active = new SortedSet<ActiveLane>(ActiveLaneComparer.Instance);
+                var freeLanes = new SortedSet<int>();
+                var createdLanes = 0;
                 foreach (var demand in ordered)
                 {
-                    var lane = -1;
-                    for (var index = 0; index < laneEnds.Count; index++)
+                    while (active.Count > 0)
                     {
                         comparisons++;
-                        if (laneEnds[index] + clearance <= demand.XStart) { lane = index; break; }
+                        var earliest = active.Min!;
+                        if (earliest.End + clearance > demand.XStart) break;
+                        active.Remove(earliest);
+                        freeLanes.Add(earliest.Lane);
                     }
-                    if (lane < 0) { lane = laneEnds.Count; laneEnds.Add(demand.XEnd); }
-                    else laneEnds[lane] = demand.XEnd;
-                    activeEnds.RemoveAll(end => end + clearance <= demand.XStart);
-                    if (activeEnds.Count == 0) overlapGroups++;
-                    activeEnds.Add(demand.XEnd);
-                    maximumOverlap = Math.Max(maximumOverlap, activeEnds.Count);
+                    if (active.Count == 0) overlapGroups++;
+                    var lane = freeLanes.Count == 0 ? createdLanes++ : freeLanes.Min;
+                    if (freeLanes.Count > 0) freeLanes.Remove(lane);
+                    active.Add(new ActiveLane(demand.XEnd, lane));
+                    maximumOverlap = Math.Max(maximumOverlap, active.Count);
                     demands.Add(demand.ToDemand(lane));
                 }
-                laneCount = Math.Max(laneCount, laneEnds.Count);
-                if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = laneEnds.Count;
-                else ordinaryLaneCount = Math.Max(ordinaryLaneCount, laneEnds.Count);
+                laneCount = Math.Max(laneCount, createdLanes);
+                if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = createdLanes;
+                else ordinaryLaneCount = Math.Max(ordinaryLaneCount, createdLanes);
             }
             var current = Math.Max(0, LowerBoundary - UpperBoundary);
             var ordinary = demands.Where(item => item.Role != BandMembershipRole.Return).ToArray();
@@ -226,5 +228,20 @@ internal static class InterLayerBandObserver
     {
         public BandRouteDemand ToDemand(int lane) => new(Id, EdgeId, Revision, BandId, SegmentIndex, Role,
             XStart, XEnd, TerminalOrder, Direction, lane);
+    }
+
+    private sealed record ActiveLane(int End, int Lane);
+
+    private sealed class ActiveLaneComparer : IComparer<ActiveLane>
+    {
+        public static ActiveLaneComparer Instance { get; } = new();
+        public int Compare(ActiveLane? left, ActiveLane? right)
+        {
+            if (ReferenceEquals(left, right)) return 0;
+            if (left is null) return -1;
+            if (right is null) return 1;
+            var end = left.End.CompareTo(right.End);
+            return end != 0 ? end : left.Lane.CompareTo(right.Lane);
+        }
     }
 }
