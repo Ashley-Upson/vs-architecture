@@ -149,6 +149,8 @@ internal static class DrawioDiagnosticReportBuilder
                 repairWorkUsed = layout.RepairWorkUsed,
                 repairBudgetExhausted = layout.RepairBudgetExhausted,
                 repairRunReason = layout.RepairRunReason,
+                layoutRevision = layout.LayoutRevision.Value,
+                layoutRevisionsCreated = layout.LayoutRevision.Value + 1,
                 routeRevisionsCreated = layout.Links.Values.Sum(link => link.RouteState.Revision),
                 staleStateRejections = layout.Links.Values.Sum(link =>
                     link.RouteState.History.Count(snapshot => snapshot.CompilationStatus == LogicalRouteCompilationStatus.Rejected)),

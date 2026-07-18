@@ -35,7 +35,8 @@ internal sealed partial class RenderLayout
             long routePairsRevalidated = 0,
             int corridorRebuildCount = 0,
             int capacityFailureCount = 0,
-            int capacityExpansionCount = 0)
+            int capacityExpansionCount = 0,
+            LayoutRevision layoutRevision = default)
         {
             Graph = graph;
             Nodes = nodes;
@@ -58,6 +59,7 @@ internal sealed partial class RenderLayout
             CorridorRebuildCount = corridorRebuildCount;
             CapacityFailureCount = capacityFailureCount;
             CapacityExpansionCount = capacityExpansionCount;
+            LayoutRevision = layoutRevision;
         }
 
         public RenderGraph Graph { get; }
@@ -102,10 +104,13 @@ internal sealed partial class RenderLayout
 
         public int CapacityExpansionCount { get; }
 
+        public LayoutRevision LayoutRevision { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
             new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
                 PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason, StageTimings,
-                RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount);
+                RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount,
+                LayoutRevision);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -119,7 +124,7 @@ internal sealed partial class RenderLayout
                 routed.Traversals, routed.Traceability, routed.Corridors, routed.Lanes, routed.PreRepairTraceability,
                 routed.RepairAttempts, routed.RepairWorkUsed, routed.RepairBudgetExhausted, routed.RepairRunReason,
                 timings, routed.RoutesInvalidated, routed.RoutePairsRevalidated, routed.CorridorRebuildCount,
-                routed.CapacityFailureCount, routed.CapacityExpansionCount);
+                routed.CapacityFailureCount, routed.CapacityExpansionCount, routed.Placement.Revision);
         }
 
         private static T MeasureStage<T>(

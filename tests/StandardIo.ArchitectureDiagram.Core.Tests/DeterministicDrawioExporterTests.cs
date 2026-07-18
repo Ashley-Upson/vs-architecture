@@ -162,6 +162,8 @@ public sealed class DeterministicDrawioExporterTests
         using var report = JsonDocument.Parse(result.Diagnostics.ReportJson);
         var summary = report.RootElement.GetProperty("summary");
         Assert.True(summary.GetProperty("diagnosticReuse").GetBoolean());
+        Assert.True(summary.TryGetProperty("layoutRevision", out _));
+        Assert.True(summary.GetProperty("layoutRevisionsCreated").GetInt32() >= 1);
         Assert.True(summary.TryGetProperty("routeRevisionsCreated", out _));
         Assert.True(summary.TryGetProperty("routePairsRevalidated", out _));
         Assert.True(report.RootElement.GetProperty("stageTimings").GetArrayLength() > 0);
