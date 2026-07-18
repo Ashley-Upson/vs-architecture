@@ -339,12 +339,57 @@ Repeated O(E²) validation should be replaced in stages with band-local interval
 
 ## 12. Migration stages and rollback points
 
+### Grouped constraint-sweep replacement for Stage C
+
+Stage C no longer means vertical expansion followed by the complete legacy corridor and route-by-route repair stack. Its authority is a monotonic constraint sweep over stable identities and immutable placement/route snapshots:
+
+```text
+stable base placement
+-> node-spacing constraints
+-> provisional supported routes
+-> grouped route-spacing analysis
+-> merge minimum X/Y/width constraints with max()
+-> materialize one revised placement
+-> invalidate the affected route closure
+-> regenerate each affected group atomically
+-> repeat until no minimum increases and no route remains invalidated
+-> normalize and validate
+```
+
+The constraint store contains stable IDs rather than mutable geometry references. Its minimum types are layer-boundary Y, sibling/subtree-boundary X, and project/root-group width. A materialized coordinate is the stable base position plus cumulative layer, subtree and project offsets. Stored minimums never decrease within a generation.
+
+Spacing work is flattened and ordered by Y, X, scope type, then stable band/subtree/project identity. Movement remains hierarchical: a layer boundary moves every lower layer; an adjacent sibling constraint moves the coherent sibling subtree or ordered sibling suffix; project enlargement moves later complete project groups while preserving their stable order. A conflict in one project cannot directly rearrange individual nodes inside another project. Canonical nodes retain first-placement relationships.
+
+Before provisional routing, a node-spacing sweep produces hierarchy-owned constraints for node overlap, sibling clearance, layer clearance, project containment and external dependency clearance. Route demand may add further constraints and cause another materialization pass.
+
+Within each band, horizontal intervals form an inclusive conflict graph. Disjoint intervals do not conflict; endpoint contact and positive-length overlap are classified separately. Connected components are atomic spacing groups, so transitive A-B-C conflicts receive one lane assignment, one extent calculation and one constraint proposal. Vertical segments use the equivalent grouped Y-interval analysis for X-local constraints.
+
+A shared endpoint is classified using both routes' incoming/outgoing directions, terminal roles and supported-junction identity. Distinct bends, ambiguous merges/departures and indistinguishable continuations require separate turns or lanes. A perpendicular intersection is a clean crossover only when it lies strictly inside one horizontal and one vertical straight segment, neither route bends or terminates there, no merge/junction semantics apply, and no collinear overlap exists. Clean crossovers are accepted without expansion and may carry only a low-priority route cost. An accepted crossover is never a bend.
+
+Each spacing group reports its stable group ID, orientation, routes, segments, current/required lanes and extent, movement scope, moved nodes and invalidated routes. Group lane assignments and regenerated routes are committed together or not at all. Predictable group findings do not enter the legacy route-by-route repair coordinator.
+
+The invalidation closure contains routes incident to moved endpoints, crossing an expanded band, participating in or sharing lanes with the group, newly intersecting moved obstacle envelopes, and upward routes crossing an altered boundary. Invalidated dependencies retain semantic identity but discard their current point sequence. They are regenerated against the new placement revision; old waypoints are never translated wholesale. Unrelated routes retain their authoritative revisions and geometry.
+
+Vertical required extent includes upper-node clearance, source stub and transition, the complete horizontal lane stack, target transition and stub, lower-node clearance, return-route space where it conflicts, padding and configured spacing. The full missing delta is merged once and moves only the lower layer and layers beneath it. There is no maximum band height, lane count, canvas extent or graph-size refusal.
+
+Horizontal constraints prefer the adjacent sibling subtree, ordered sibling suffix, containing project root, then neighbouring complete project groups. Internal project expansion recomputes project bounds; later projects move only enough to restore configured clearance. Cross-project routes affected by container movement are regenerated.
+
+Convergence occurs when no X, Y or width minimum increases and no affected route requires regeneration. Iteration guards diagnose non-convergence rather than accepting overlap. Diagnostics list changing groups, revisions, previous/new extents, affected routes and movement scopes.
+
+Pure proposal analysis may run in parallel over immutable independent bands/projects. Workers return constraints, lane assignments, candidates and observations. Mutation and acceptance remain sequential. Proposals merge deterministically by stable group ID and minimums merge with `max()`. Any shared route, obstacle or movement scope joins the proposals into one dependency group. Sequential and parallel proposal analysis must produce byte-identical output.
+
+`SeparateOverlappingCorners` is not an owning production transformation. Supported route generation assigns distinct lane and turn coordinates. An overlapping generated corner is an invariant failure that regenerates the complete group. The preserved experimental branch remains research for unsupported residual shapes; production may retain only an assertion after supported migration.
+
+The first supported slice is deliberately narrow: ordinary downward routes contained in one adjacent-layer band, with bottom-source/top-target terminals and orthogonal transitions. All routes in an interacting group must share one authority. If any group member is unsupported, the complete generation uses the legacy pipeline. Later slices add skipped layers, return routes, canonical cross-branch groups, X-local vertical spacing and cross-project groups.
+
+Stage C telemetry records groups observed, pairwise findings collapsed, proposals, increased constraints, moved scopes/nodes/layers, invalidated and regenerated routes, parallel groups, merged dependency groups, convergence iterations, comparisons, and elapsed observation/merge/materialization/regeneration/validation time.
+
 | Stage | Change | Acceptance fixtures | Rollback point |
 | --- | --- | --- | --- |
 | A | **Complete:** `HierarchyAnalyzer`, `LayoutHierarchy`, stable base placements, composed translations, typed project placement, and immutable `PlacedGraph`; legacy routing remains authoritative. | Single chain, two siblings, canonical multi-parent, duplicated exposure path, SCC/cycle, reversed enumeration, ownership, revision and cancellation. | Revert the Stage A extraction commits and restore placement inside `RenderLayout`. |
 | B | Add observational `InterLayerRoutingBand` telemetry without changing geometry. | Adjacent, skipped-layer, upward, fan-out, non-overlapping interval reuse, crossing. | Stop emitting band telemetry; no output change. |
-| C | Calculate exact band extent and layer offsets while retaining existing downstream routing. | 148/76/72 exact expansion, multiple bands, combined deltas, convergence, deterministic repeat. | Feature switch returns existing capacity expansion. |
-| D | Compile band lanes for simple downward forest routes. | Direct vertical, two/three fan-out, interval reuse, configured spacing, bottom/top terminals. | Route unsupported graph through existing corridor pipeline. |
+| C | Group ordinary adjacent-layer downward routes, merge monotonic node/band constraints, apply exact vertical extent, allocate live lanes and regenerate affected groups atomically to convergence. | Inclusive endpoint classification, transitive groups, exact expansion, lower-only movement, invalidation closure, atomic commit, determinism. | Select the complete legacy pipeline at generation entry for any unsupported interacting group. |
+| D | Extend grouped authority to skipped-layer and canonical cross-branch routes. | Long canonical incoming route, first-placement preservation, multi-band membership and exterior alternatives. | Select the old pipeline for the complete generation; never mix authority inside a group. |
 | E | Add skipped-layer, canonical cross-branch and upward/return routes. | Long incoming canonical route, first-placement preservation, multi-band participation, exterior obstacle detour. | If the graph contains an unsupported route shape, select the old pipeline for the complete generation; never mix route authorities. |
 | F | Add demonstrated X-local vertical-lane separation and subtree offsets. | Two overlapping vertical highways, unaffected sibling, minimal-width movement, canonical node fixed. | Disable X expansion while retaining vertical bands. |
 | G | Make band pipeline default for explicitly supported graphs; compare typed geometry/diagnostics. | Full compact catalogue plus StandardIo and cCoder four modes. | One generation-level switch selects old pipeline. |
@@ -368,6 +413,20 @@ Required compact fixtures:
 10. Regex duplication exception.
 11. Exact band expansion delta and one-iteration stabilization.
 12. Multiple band deltas composed without coordinate drift.
+13. Endpoint contact between two straight continuations.
+14. Endpoint contact where one route bends.
+15. Two routes sharing one bend.
+16. Clean perpendicular crossover strictly inside both straight segments.
+17. Perpendicular intersection where one route bends and is not a crossover.
+18. Transitive overlap group A-B-C.
+19. Existing minimum constraint never reduced.
+20. Sibling subtree/right suffix movement preserving earlier siblings.
+21. Project enlargement moving a later complete project.
+22. Moved endpoint and unmoved band-crossing route invalidation.
+23. Atomic group route commit.
+24. Deterministic merge of conflicting proposals.
+25. Sequential/parallel proposal parity.
+26. Supported generation requiring no corner post-processing.
 13. X-local vertical-lane conflict shifting only the chosen sibling subtree.
 14. Obstacle detour requesting extent rather than crossing a node.
 15. Ownership reconstruction and project-container movement unchanged.
