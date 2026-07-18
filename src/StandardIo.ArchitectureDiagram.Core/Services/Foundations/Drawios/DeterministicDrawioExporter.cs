@@ -8,14 +8,6 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
-    public string Export(DiagramModel diagram, DiagramSettings settings)
-    {
-        var prepared = Prepare(diagram, settings);
-        TraceabilityValidator.ThrowIfInvalid(prepared.Layout.Traceability, prepared.IsEnforced);
-        return Measure(prepared.StageTimings, "serialization", () =>
-            new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
-    }
-
     public DrawioGenerationResult GenerateResult(
         DiagramModel diagram,
         DiagramSettings settings,
@@ -34,7 +26,6 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             .ToArray();
         var document = Measure(prepared.StageTimings, "serialization", () =>
             new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
-        var diagnostics = BuildDiagnostic(prepared, document);
         return new DrawioGenerationResult(
             document,
             preRepairFindings,
@@ -50,22 +41,30 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 .ToArray(),
             serializationSucceeded: true,
             strictValidationPassed: findings.All(finding => !finding.IsStrictlyEnforced),
-            diagnostics,
+            () => BuildDiagnostic(prepared, document),
             stageTimings: AllTimings(prepared));
-    }
-
-    public DrawioDiagnosticExportResult ExportDiagnostic(DiagramModel diagram, DiagramSettings settings)
-    {
-        var prepared = Prepare(diagram, settings);
-        var content = Measure(prepared.StageTimings, "serialization", () =>
-            new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
-        return BuildDiagnostic(prepared, content);
     }
 
     public DrawioDiagnosticExportResult ExportDiagnostic(DrawioGenerationResult generationResult)
     {
         if (generationResult is null) throw new ArgumentNullException(nameof(generationResult));
         return generationResult.Diagnostics;
+    }
+
+    public void ValidateStrict(DrawioGenerationResult generationResult)
+    {
+        if (generationResult is null) throw new ArgumentNullException(nameof(generationResult));
+        var enforced = generationResult.ValidationFindings
+            .Where(finding => finding.IsStrictlyEnforced)
+            .ToArray();
+        if (enforced.Length == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Strict geometry verification failed with {enforced.Length} finding(s)." + Environment.NewLine +
+            string.Join(Environment.NewLine, enforced.Take(10).Select(finding => finding.Description)));
     }
 
     private static DrawioDiagnosticExportResult BuildDiagnostic(PreparedExport prepared, string content)

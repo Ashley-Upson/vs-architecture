@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -10,6 +11,36 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
 public sealed class DeterministicDrawioExporterTests
 {
+    [Fact]
+    public void ValidateStrict_is_explicit_and_rejects_enforced_findings()
+    {
+        var finding = new ValidationFinding(
+            "NodeCollision",
+            "edge",
+            null,
+            "node",
+            1,
+            "edge crosses node",
+            Array.Empty<ValidationPoint>(),
+            Array.Empty<ValidationSegment>(),
+            null,
+            null,
+            null,
+            IsStrictlyEnforced: true);
+        var result = new DrawioGenerationResult(
+            "<mxfile />",
+            Array.Empty<ValidationFinding>(),
+            new[] { finding },
+            Array.Empty<RouteRepairAttempt>(),
+            Array.Empty<GeneratedRoute>(),
+            serializationSucceeded: true,
+            strictValidationPassed: false,
+            new DrawioDiagnosticExportResult("", "{}", new Dictionary<string, string>(), 1, 1));
+
+        Assert.Throws<InvalidOperationException>(() => new DeterministicDrawioExporter().ValidateStrict(result));
+        Assert.Equal(0, result.DiagnosticMaterializationCount);
+    }
+
     [Fact]
     public void GenerateResult_exposes_document_routes_and_validation_without_console_parsing()
     {
@@ -36,7 +67,11 @@ public sealed class DeterministicDrawioExporterTests
         Assert.True(route.Points.Count >= 2);
         Assert.Equal("mxfile", XDocument.Parse(result.Document).Root!.Name.LocalName);
         Assert.Equal(1, result.PreparationCount);
-        Assert.Same(result.Diagnostics, exporter.ExportDiagnostic(result));
+        Assert.Equal(0, result.DiagnosticMaterializationCount);
+        var diagnostics = exporter.ExportDiagnostic(result);
+        Assert.Equal(1, result.DiagnosticMaterializationCount);
+        Assert.Same(diagnostics, exporter.ExportDiagnostic(result));
+        Assert.Equal(1, result.DiagnosticMaterializationCount);
         Assert.False(string.IsNullOrWhiteSpace(result.Diagnostics.ReportJson));
         Assert.Contains(result.StageTimings, timing => timing.Stage == "render graph construction");
         Assert.Contains(result.StageTimings, timing => timing.Stage == "normalization");

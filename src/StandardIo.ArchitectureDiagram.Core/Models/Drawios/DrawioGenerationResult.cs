@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models;
 
@@ -32,6 +34,9 @@ public sealed record RouteRepairAttempt(
 
 public sealed class DrawioGenerationResult
 {
+    private readonly Lazy<DrawioDiagnosticExportResult> diagnostics;
+    private int diagnosticMaterializationCount;
+
     public DrawioGenerationResult(
         string document,
         IReadOnlyList<ValidationFinding> preRepairFindings,
@@ -51,7 +56,39 @@ public sealed class DrawioGenerationResult
         Routes = routes;
         SerializationSucceeded = serializationSucceeded;
         StrictValidationPassed = strictValidationPassed;
-        Diagnostics = diagnostics;
+        this.diagnostics = new Lazy<DrawioDiagnosticExportResult>(() =>
+        {
+            Interlocked.Increment(ref diagnosticMaterializationCount);
+            return diagnostics;
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
+        PreparationCount = preparationCount;
+        StageTimings = stageTimings ?? new PipelineStageMetric[0];
+    }
+
+    internal DrawioGenerationResult(
+        string document,
+        IReadOnlyList<ValidationFinding> preRepairFindings,
+        IReadOnlyList<ValidationFinding> validationFindings,
+        IReadOnlyList<RouteRepairAttempt> repairAttempts,
+        IReadOnlyList<GeneratedRoute> routes,
+        bool serializationSucceeded,
+        bool strictValidationPassed,
+        Func<DrawioDiagnosticExportResult> diagnosticFactory,
+        int preparationCount = 1,
+        IReadOnlyList<PipelineStageMetric>? stageTimings = null)
+    {
+        Document = document;
+        PreRepairFindings = preRepairFindings;
+        ValidationFindings = validationFindings;
+        RepairAttempts = repairAttempts;
+        Routes = routes;
+        SerializationSucceeded = serializationSucceeded;
+        StrictValidationPassed = strictValidationPassed;
+        diagnostics = new Lazy<DrawioDiagnosticExportResult>(() =>
+        {
+            Interlocked.Increment(ref diagnosticMaterializationCount);
+            return diagnosticFactory();
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
         PreparationCount = preparationCount;
         StageTimings = stageTimings ?? new PipelineStageMetric[0];
     }
@@ -63,7 +100,10 @@ public sealed class DrawioGenerationResult
     public IReadOnlyList<GeneratedRoute> Routes { get; }
     public bool SerializationSucceeded { get; }
     public bool StrictValidationPassed { get; }
-    public DrawioDiagnosticExportResult Diagnostics { get; }
+    public IReadOnlyList<GeneratedRoute> FinalLogicalRoutes => Routes;
+    public IReadOnlyList<PipelineStageMetric> GenerationTelemetry => StageTimings;
+    public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
+    public int DiagnosticMaterializationCount => diagnosticMaterializationCount;
     public int PreparationCount { get; }
     public IReadOnlyList<PipelineStageMetric> StageTimings { get; }
 }
