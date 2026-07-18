@@ -24,10 +24,11 @@ internal static class EdgeTraversalCompiler
         var mapped = new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal);
         var geometry = new Dictionary<string, CompiledEdgeGeometry>(StringComparer.Ordinal);
         var diagnostics = new List<TraversalDiagnostic>();
+        var junctionsByCorridorPair = IndexJunctions(observation.Junctions.Values);
 
         foreach (var link in links.Values.OrderBy(item => item.Link.Order).ThenBy(item => item.Link.Id, StringComparer.Ordinal))
         {
-            mapped[link.Link.Id] = Map(link, observation, allocation, mappings.TryGetValue(link.Link.Id, out var edgeMappings)
+            mapped[link.Link.Id] = Map(link, observation, allocation, junctionsByCorridorPair, mappings.TryGetValue(link.Link.Id, out var edgeMappings)
                 ? edgeMappings
                 : new Dictionary<int, CorridorSegmentMapping>());
         }
@@ -138,6 +139,7 @@ internal static class EdgeTraversalCompiler
         LinkLayout link,
         CorridorObservation observation,
         CorridorLaneAllocation allocation,
+        IReadOnlyDictionary<(string First, string Second), CorridorJunction> junctionsByCorridorPair,
         IReadOnlyDictionary<int, CorridorSegmentMapping> mappings)
     {
         var points = CompletePoints(link);
@@ -173,18 +175,10 @@ internal static class EdgeTraversalCompiler
                 continue;
             }
 
-            CorridorJunction? junction = null;
             PerformanceAudit.Increment("junction transition lookups");
-            foreach (var candidate in observation.Junctions.Values.OrderBy(item => item.Id, StringComparer.Ordinal))
-            {
-                PerformanceAudit.Increment("junction lookup candidate checks");
-                if (candidate.CorridorIds.Contains(pair.incoming.CorridorId) &&
-                    candidate.CorridorIds.Contains(pair.outgoing.CorridorId))
-                {
-                    junction = candidate;
-                    break;
-                }
-            }
+            junctionsByCorridorPair.TryGetValue(
+                CorridorPair(pair.incoming.CorridorId, pair.outgoing.CorridorId),
+                out var junction);
             var straight = string.Equals(pair.incoming.CorridorId, pair.outgoing.CorridorId, StringComparison.Ordinal) ||
                 DirectionOrientation(pair.incoming.Direction) == DirectionOrientation(pair.outgoing.Direction);
             if (!straight && junction is null)
@@ -215,6 +209,37 @@ internal static class EdgeTraversalCompiler
             points,
             diagnostics);
     }
+
+    private static IReadOnlyDictionary<(string First, string Second), CorridorJunction> IndexJunctions(
+        IEnumerable<CorridorJunction> junctions)
+    {
+        PerformanceAudit.Increment("junction transition indexes built");
+        var result = new Dictionary<(string First, string Second), CorridorJunction>();
+        foreach (var junction in junctions.OrderBy(item => item.Id, StringComparer.Ordinal))
+        {
+            var corridorIds = junction.CorridorIds
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            for (var first = 0; first < corridorIds.Length; first++)
+            {
+                for (var second = first; second < corridorIds.Length; second++)
+                {
+                    var key = CorridorPair(corridorIds[first], corridorIds[second]);
+                    if (!result.ContainsKey(key))
+                    {
+                        result.Add(key, junction);
+                    }
+                }
+            }
+        }
+
+        PerformanceAudit.Increment("junction transition index entries", result.Count);
+        return result;
+    }
+
+    private static (string First, string Second) CorridorPair(string first, string second) =>
+        string.CompareOrdinal(first, second) <= 0 ? (first, second) : (second, first);
 
     private static CompiledEdgeGeometry Compile(EdgeTraversal traversal)
     {

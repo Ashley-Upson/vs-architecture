@@ -300,6 +300,29 @@ public sealed class EdgeTraversalCompilerTests
         });
     }
 
+    [Fact]
+    public void Compile_indexes_junction_pairs_and_preserves_lowest_id_selection()
+    {
+        var link = TurnLink("edge", 0, 0);
+        var context = CreateTurnContext(new[] { link }, includeJunction: true);
+        var junctions = new Dictionary<string, CorridorJunction>(StringComparer.Ordinal)
+        {
+            ["z-matching"] = new("z-matching", new Rect(80, 40, 60, 60), new[] { "vertical", "horizontal" }),
+            ["unrelated"] = new("unrelated", new Rect(0, 0, 10, 10), new[] { "other-a", "other-b" }),
+            ["a-matching"] = new("a-matching", new Rect(80, 40, 60, 60), new[] { "horizontal", "vertical" })
+        };
+        var observation = context.Observation with { Junctions = junctions };
+        using var session = GenerationPerformanceSession.Start();
+
+        var result = EdgeTraversalCompiler.Compile(Links(link), observation, context.Allocation);
+        var report = session.Snapshot();
+
+        Assert.Equal("a-matching", Assert.Single(result.Traversals["edge"].Junctions).JunctionId);
+        Assert.Equal(1, report.Counters.Single(item => item.Name == "junction transition lookups").Value);
+        Assert.Equal(1, report.Counters.Single(item => item.Name == "junction transition indexes built").Value);
+        Assert.DoesNotContain(report.Counters, item => item.Name == "junction lookup candidate checks");
+    }
+
     private static TurnContext CreateTurnContext(IReadOnlyList<LinkLayout> links, bool includeJunction)
     {
         const string horizontal = "horizontal";
