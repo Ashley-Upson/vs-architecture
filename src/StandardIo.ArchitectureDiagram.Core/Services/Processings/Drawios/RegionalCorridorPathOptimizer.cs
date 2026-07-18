@@ -127,6 +127,12 @@ internal static class RegionalCorridorPathOptimizer
         }
 
         var finalScore = currentWholeScore;
+        PerformanceAudit.Increment("regional regions considered", regions.Take(limits.MaximumRegions).Count());
+        PerformanceAudit.Increment("regional selected routes changed", selected.Count(item =>
+            !string.Equals(item.Value.Signature.Value, initialSelection[item.Key].Signature.Value, StringComparison.Ordinal)));
+        PerformanceAudit.Increment("regional decisions applied", decisions.Count(decision => decision.Changed));
+        PerformanceAudit.Increment("regional no-alternative decisions", decisions.Count(decision =>
+            decision.FallbackReason == RegionFallbackReason.NoAlternativeCandidate));
         return new RegionalPathSelectionResult(initialSelection, selected, interactions, regions, decisions, initialScore, finalScore);
     }
 

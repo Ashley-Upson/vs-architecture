@@ -87,6 +87,9 @@ internal static class EdgeTraversalCompiler
             diagnostics.AddRange(traversal.Diagnostics);
         }
 
+        PerformanceAudit.Increment("traversal fallbacks", geometry.Values.Count(item => item.UsedFallback));
+        PerformanceAudit.Increment("junction-allocated traversals", junctionAllocation.AllocatedEdgeIds.Count);
+
         return new EdgeTraversalCompilation(traversals, geometry, diagnostics);
     }
 
@@ -170,10 +173,18 @@ internal static class EdgeTraversalCompiler
                 continue;
             }
 
-            var junction = observation.Junctions.Values
-                .OrderBy(item => item.Id, StringComparer.Ordinal)
-                .FirstOrDefault(item => item.CorridorIds.Contains(pair.incoming.CorridorId) &&
-                    item.CorridorIds.Contains(pair.outgoing.CorridorId));
+            CorridorJunction? junction = null;
+            PerformanceAudit.Increment("junction transition lookups");
+            foreach (var candidate in observation.Junctions.Values.OrderBy(item => item.Id, StringComparer.Ordinal))
+            {
+                PerformanceAudit.Increment("junction lookup candidate checks");
+                if (candidate.CorridorIds.Contains(pair.incoming.CorridorId) &&
+                    candidate.CorridorIds.Contains(pair.outgoing.CorridorId))
+                {
+                    junction = candidate;
+                    break;
+                }
+            }
             var straight = string.Equals(pair.incoming.CorridorId, pair.outgoing.CorridorId, StringComparison.Ordinal) ||
                 DirectionOrientation(pair.incoming.Direction) == DirectionOrientation(pair.outgoing.Direction);
             if (!straight && junction is null)

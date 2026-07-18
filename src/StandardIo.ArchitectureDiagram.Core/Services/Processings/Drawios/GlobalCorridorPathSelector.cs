@@ -78,6 +78,8 @@ internal static class GlobalCorridorPathSelector
         }
 
         var final = Score(selected, corridorCapacities, minimumSpacing);
+        PerformanceAudit.Increment("global selected routes changed", decisions.Values.Count(decision =>
+            !string.Equals(decision.InitialSignature, decision.FinalSignature, StringComparison.Ordinal)));
         var evaluations = EvaluateCandidates(retained, selected, decisions, final, corridorCapacities, minimumSpacing);
         return new CorridorPathSelectionResult(
             selected,
