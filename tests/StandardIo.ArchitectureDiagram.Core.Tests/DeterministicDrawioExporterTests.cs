@@ -12,6 +12,37 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DeterministicDrawioExporterTests
 {
     [Fact]
+    public void Development_common_authority_trial_is_explicit_deterministic_and_leaves_normal_output_unchanged()
+    {
+        var diagram = new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project", "Project", new[]
+                {
+                    new TypeNode("source", "project", "Source", "Project.Source", "Class"),
+                    new TypeNode("target", "project", "Target", "Project.Target", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("edge", "source", "target", "Dependency") });
+        var settings = DiagramSettings.CreateDefault();
+        var exporter = new DeterministicDrawioExporter();
+
+        var normalBefore = exporter.GenerateResult(diagram, settings).Document;
+        var first = exporter.GenerateDevelopmentCommonAuthorityTrial(diagram, settings);
+        var second = exporter.GenerateDevelopmentCommonAuthorityTrial(diagram, settings);
+        var normalAfter = exporter.GenerateResult(diagram, settings).Document;
+
+        Assert.Equal(normalBefore, normalAfter);
+        Assert.Equal(first.BeforeDocument, second.BeforeDocument);
+        Assert.Equal(first.AfterDocument, second.AfterDocument);
+        Assert.Equal("DevelopmentOnlyCommonAuthorityTrial",
+            JsonDocument.Parse(first.ReportJson).RootElement.GetProperty("mode").GetString());
+        XDocument.Parse(first.BeforeDocument);
+        XDocument.Parse(first.AfterDocument);
+    }
+
+    [Fact]
     public void Normal_renderer_does_not_materialize_development_diagnostics()
     {
         var result = new DrawioGenerationResult(

@@ -80,7 +80,7 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-common-authority-trial <directory>]");
     }
 
     private static async Task<int> GenerateDrawioAsync(
@@ -109,6 +109,24 @@ public static class Program
         }
         analysisTimer.Stop();
         var exporter = provider.GetRequiredService<IDeterministicDrawioExporter>();
+        if (!string.IsNullOrWhiteSpace(options.CommonAuthorityTrialDirectory))
+        {
+            var trial = ((DeterministicDrawioExporter)exporter)
+                .GenerateDevelopmentCommonAuthorityTrial(diagram, settings);
+            var trialDirectory = Path.GetFullPath(options.CommonAuthorityTrialDirectory);
+            Directory.CreateDirectory(trialDirectory);
+            var beforePath = Path.Combine(trialDirectory, "before.drawio");
+            var afterPath = Path.Combine(trialDirectory, "after.drawio");
+            var trialReportPath = Path.Combine(trialDirectory, "trial-report.json");
+            var trialBroker = provider.GetRequiredService<IDiagramFileBroker>();
+            await trialBroker.WriteTextAsync(beforePath, trial.BeforeDocument).ConfigureAwait(false);
+            await trialBroker.WriteTextAsync(afterPath, trial.AfterDocument).ConfigureAwait(false);
+            await trialBroker.WriteTextAsync(trialReportPath, trial.ReportJson).ConfigureAwait(false);
+            Console.WriteLine($"Development common-authority before: {beforePath}");
+            Console.WriteLine($"Development common-authority after: {afterPath}");
+            Console.WriteLine($"Development common-authority report: {trialReportPath}");
+            return 0;
+        }
         var generation = exporter.GenerateResult(diagram, settings, new[]
         {
             new PipelineStageMetric("workspace acquisition", workspaceTimer.ElapsedMilliseconds),
@@ -204,6 +222,8 @@ public static class Program
 
         public string? PerformanceOutputPath { get; private set; }
 
+        public string? CommonAuthorityTrialDirectory { get; private set; }
+
         public int SerializationRepeatCount { get; private set; }
 
         public bool StrictValidation { get; private set; }
@@ -254,6 +274,9 @@ public static class Program
                         }
 
                         options.SerializationRepeatCount = repeatCount;
+                        break;
+                    case "--development-common-authority-trial":
+                        options.CommonAuthorityTrialDirectory = ReadValue(args, ref index, arg);
                         break;
                     default:
                         if (arg.StartsWith("-", StringComparison.Ordinal))

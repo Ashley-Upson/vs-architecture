@@ -8,6 +8,20 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
+    public DevelopmentCommonAuthorityTrialResult GenerateDevelopmentCommonAuthorityTrial(
+        DiagramModel diagram,
+        DiagramSettings settings)
+    {
+        var prepared = Prepare(diagram, settings);
+        var before = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
+        var trial = DevelopmentCommonAuthorityTrial.Apply(prepared.Layout, prepared.Settings);
+        var ownership = CoordinateOwnershipCompiler.Compile(
+            trial.Layout.Nodes, trial.Layout.Projects, trial.Layout.Links, prepared.Settings.ShowProjectContainers);
+        var after = new DiagramFileBuilder(prepared.Settings).Build(trial.Layout, ownership);
+        return new DevelopmentCommonAuthorityTrialResult(
+            before, after, trial.ReportJson, Routes(prepared.Layout), Routes(trial.Layout));
+    }
+
     public DrawioGenerationResult GenerateResult(
         DiagramModel diagram,
         DiagramSettings settings,
@@ -231,6 +245,13 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 
     private static PipelineStageMetric[] AllTimings(PreparedExport prepared) =>
         prepared.StageTimings.Concat(prepared.Layout.StageTimings).ToArray();
+
+    private static IReadOnlyList<GeneratedRoute> Routes(RenderLayout layout) =>
+        layout.Links.Values.OrderBy(item => item.Link.Id, StringComparer.Ordinal)
+            .Select(item => new GeneratedRoute(item.Link.Id,
+                new[] { item.SourcePoint }.Concat(item.Points).Concat(new[] { item.TargetPoint })
+                    .Select(point => new ValidationPoint(point.X, point.Y)).ToArray()))
+            .ToArray();
 
     private sealed record PreparedExport(
         DiagramSettings Settings,
