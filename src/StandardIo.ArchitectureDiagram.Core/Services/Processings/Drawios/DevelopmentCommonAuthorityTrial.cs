@@ -11,6 +11,13 @@ internal sealed record DevelopmentCommonAuthorityApplication(
     RenderLayout Layout,
     string ReportJson);
 
+internal sealed record DevelopmentTrialComponentAttempt(
+    string ComponentId,
+    string Status,
+    string Reason,
+    IReadOnlyList<string> RouteIds,
+    IReadOnlyList<string> Details);
+
 internal static class DevelopmentCommonAuthorityTrial
 {
     public static DevelopmentCommonAuthorityApplication Apply(RenderLayout production, DiagramSettings settings)
@@ -38,7 +45,7 @@ internal static class DevelopmentCommonAuthorityTrial
         timer.Restart();
         var comparisonByRoute = common.Routes.ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
         var current = production.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        var attempts = new List<object>();
+        var attempts = new List<DevelopmentTrialComponentAttempt>();
         var acceptedRouteIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var component in closure.Components.OrderBy(item => item.Id, StringComparer.Ordinal))
         {
@@ -104,25 +111,62 @@ internal static class DevelopmentCommonAuthorityTrial
         var finalValidation = TraceabilityValidator.Validate(production.Nodes, current, settings.Layout.ParallelLaneSpacing);
         var layout = production.WithTrialLinks(current, finalValidation);
         phase["combined validation"] = Elapsed(timer);
-        var beforeQuality = Quality(production.Links.Values);
-        var afterQuality = Quality(current.Values.Where(item => acceptedRouteIds.Contains(item.Link.Id)));
+        var acceptedBefore = production.Links.Values.Where(item => acceptedRouteIds.Contains(item.Link.Id)).ToArray();
+        var acceptedAfter = current.Values.Where(item => acceptedRouteIds.Contains(item.Link.Id)).ToArray();
+        var beforeQuality = Quality(acceptedBefore);
+        var afterQuality = Quality(acceptedAfter);
+        var routeChanges = acceptedRouteIds.OrderBy(item => item, StringComparer.Ordinal).Select(routeId =>
+        {
+            var beforeRoute = RouteQuality(production.Links[routeId]);
+            var afterRoute = RouteQuality(current[routeId]);
+            return new
+            {
+                routeId,
+                beforeLength = beforeRoute.Length,
+                afterLength = afterRoute.Length,
+                lengthIncrease = afterRoute.Length - beforeRoute.Length,
+                beforeBends = beforeRoute.Bends,
+                afterBends = afterRoute.Bends,
+                envelopeExpansion = afterRoute.Envelope - beforeRoute.Envelope
+            };
+        }).OrderByDescending(item => item.lengthIncrease).ThenBy(item => item.routeId, StringComparer.Ordinal).Take(10).ToArray();
+        var boundaryInteractions = interactions.Where(item =>
+            acceptedRouteIds.Contains(item.FirstRouteId) != acceptedRouteIds.Contains(item.SecondRouteId)).ToArray();
         var report = new
         {
             mode = "DevelopmentOnlyCommonAuthorityTrial",
             normalProductionExposure = false,
             eligibleRoutes = observation.Routes.Count(item => item.Eligible),
             eligibleClosedComponents = closure.Components.Count(item => item.Disposition == CommonAuthorityComponentDisposition.Eligible),
-            rejectedPreExecutionComponents = attempts.Count(item => ReadStatus(item) == "rejected before execution"),
-            acceptedComponents = attempts.Count(item => ReadStatus(item) == "accepted"),
-            rejectedPostValidationComponents = attempts.Count(item => ReadStatus(item) == "rejected after validation"),
+            rejectedPreExecutionComponents = attempts.Count(item => item.Status == "rejected before execution"),
+            acceptedComponents = attempts.Count(item => item.Status == "accepted"),
+            rejectedPostValidationComponents = attempts.Count(item => item.Status == "rejected after validation"),
             routesRegenerated = acceptedRouteIds.Count,
             legacyRoutesRetained = current.Count - acceptedRouteIds.Count,
             componentAttempts = attempts,
+            commonRegions = common.Regions.Select(item => new
+            {
+                item.Region.EnvelopeIdentity,
+                allowedMinimum = item.Region.AllowedAxisRange.Minimum,
+                allowedMaximum = item.Region.AllowedAxisRange.Maximum,
+                availableExtent = item.Region.AllowedAxisRange.Length,
+                item.Assignment.RequiredExtent,
+                missingExtent = Math.Max(0, item.Assignment.RequiredExtent - item.Region.AllowedAxisRange.Length),
+                demandCount = item.Assignment.RailsByDemandId.Count,
+                movementScope = item.Region.MovementScope?.ToString()
+            }).ToArray(),
             advisoryCleanCrossovers = closure.AdvisoryCrossovers.Count,
-            beforeFindings = Counts(production.Traceability.Violations),
-            afterFindings = Counts(finalValidation.Violations),
+            beforeFindings = FullCounts(production.Nodes, production.Links, production.Traceability, settings.Layout.ParallelLaneSpacing),
+            afterFindings = FullCounts(production.Nodes, current, finalValidation, settings.Layout.ParallelLaneSpacing),
             commonRouteQualityBefore = beforeQuality,
             commonRouteQualityAfter = afterQuality,
+            largestRouteLengthIncreases = routeChanges,
+            routesFlaggedUnreasonable = routeChanges.Where(item =>
+                item.afterLength > Math.Max(item.beforeLength * 2, item.beforeLength + settings.Layout.NodeWidth * 4) ||
+                item.afterBends > item.beforeBends + 4).Select(item => item.routeId).ToArray(),
+            commonLegacyBoundaryInteractions = boundaryInteractions.GroupBy(item => item.Kind)
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .ToDictionary(item => item.Key, item => item.Count(), StringComparer.Ordinal),
             phaseMicroseconds = phase,
             repairOwnership = new
             {
@@ -182,27 +226,68 @@ internal static class DevelopmentCommonAuthorityTrial
         return result;
     }
 
-    private static object Attempt(CommonAuthorityComponent component, string status, string reason, IReadOnlyList<string> details) =>
-        new { componentId = component.Id, status, reason, routeIds = component.Routes.Select(item => item.LogicalRouteId).ToArray(), details };
-
-    private static string ReadStatus(object attempt) =>
-        (string)(attempt.GetType().GetProperty("status")?.GetValue(attempt) ?? string.Empty);
+    private static DevelopmentTrialComponentAttempt Attempt(
+        CommonAuthorityComponent component,
+        string status,
+        string reason,
+        IReadOnlyList<string> details) =>
+        new(component.Id, status, reason,
+            component.Routes.Select(item => item.LogicalRouteId).ToArray(), details);
 
     private static object Quality(IEnumerable<LinkLayout> routes)
     {
-        var values = routes.Select(route => new[] { route.SourcePoint }.Concat(route.Points).Concat(new[] { route.TargetPoint }).ToArray()).ToArray();
+        var values = routes.Select(RouteQuality).ToArray();
         return new
         {
             routeCount = values.Length,
-            totalLength = values.Sum(points => points.Zip(points.Skip(1), Distance).Sum()),
-            bendCount = values.Sum(points => Math.Max(0, points.Length - 2))
+            totalLength = values.Sum(item => item.Length),
+            bendCount = values.Sum(item => item.Bends),
+            maximumEnvelope = values.Select(item => item.Envelope).DefaultIfEmpty(0).Max()
         };
+    }
+
+    private static (int Length, int Bends, int Envelope) RouteQuality(LinkLayout route)
+    {
+        var points = new[] { route.SourcePoint }.Concat(route.Points).Concat(new[] { route.TargetPoint }).ToArray();
+        return (points.Zip(points.Skip(1), Distance).Sum(), Math.Max(0, points.Length - 2),
+            points.Length == 0 ? 0 : points.Max(item => item.X) - points.Min(item => item.X) +
+                points.Max(item => item.Y) - points.Min(item => item.Y));
     }
 
     private static int Distance(Point first, Point second) => Math.Abs(first.X - second.X) + Math.Abs(first.Y - second.Y);
     private static IReadOnlyDictionary<string, int> Counts(IEnumerable<TraceabilityViolation> findings) =>
         findings.GroupBy(item => item.Code).OrderBy(item => item.Key)
             .ToDictionary(item => item.Key.ToString(), item => item.Count(), StringComparer.Ordinal);
+    private static IReadOnlyDictionary<string, int> FullCounts(
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> links,
+        TraceabilityValidationResult validation,
+        int spacing)
+    {
+        var counts = Counts(validation.Violations).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var bendContact = 0;
+        var endpointInterior = 0;
+        var clean = 0;
+        var ordered = links.Values.OrderBy(item => item.Link.Id, StringComparer.Ordinal).ToArray();
+        for (var left = 0; left < ordered.Length; left++)
+        for (var right = left + 1; right < ordered.Length; right++)
+        foreach (var contact in CanonicalRouteContactDiscovery.Discover(ordered[left], ordered[right], spacing))
+        {
+            if (contact.Contact.Kind == CanonicalContactKind.BendInvolvedPerpendicularContact) bendContact++;
+            if (contact.Contact.Kind == CanonicalContactKind.EndpointToInterior) endpointInterior++;
+            if (contact.Contact.Kind == CanonicalContactKind.CleanPerpendicularCrossover) clean++;
+        }
+        counts["BendInvolvedPerpendicularContact"] = bendContact;
+        counts["EndpointToInterior"] = endpointInterior;
+        counts["NonOrthogonalSegment"] = links.Values.Sum(link =>
+        {
+            var points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+            return points.Zip(points.Skip(1), (a, b) => new Segment(a, b)).Count(item => !item.IsOrthogonal);
+        });
+        counts["CleanPerpendicularCrossover"] = clean;
+        counts["TraceabilityViolation"] = validation.Violations.Count(item => item.Code != TraceabilityViolationCode.PerpendicularCrossing);
+        return counts;
+    }
     private static long Elapsed(Stopwatch timer)
     {
         timer.Stop();
