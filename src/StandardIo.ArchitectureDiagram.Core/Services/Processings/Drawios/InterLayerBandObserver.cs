@@ -177,29 +177,19 @@ internal static class InterLayerBandObserver
             var returnLaneCount = 0;
             foreach (var roleGroup in PendingDemands.GroupBy(item => item.Role).OrderBy(group => group.Key))
             {
-                var ordered = roleGroup.OrderBy(item => item.XStart).ThenBy(item => item.XEnd)
-                    .ThenBy(item => item.TerminalOrder).ThenBy(item => item.EdgeId, StringComparer.Ordinal)
-                    .ThenBy(item => item.SegmentIndex).ToArray();
-                var active = new SortedSet<ActiveLane>(ActiveLaneComparer.Instance);
-                var freeLanes = new SortedSet<int>();
-                var createdLanes = 0;
-                foreach (var demand in ordered)
-                {
-                    while (active.Count > 0)
-                    {
-                        comparisons++;
-                        var earliest = active.Min!;
-                        if (earliest.End + clearance > demand.XStart) break;
-                        active.Remove(earliest);
-                        freeLanes.Add(earliest.Lane);
-                    }
-                    if (active.Count == 0) overlapGroups++;
-                    var lane = freeLanes.Count == 0 ? createdLanes++ : freeLanes.Min;
-                    if (freeLanes.Count > 0) freeLanes.Remove(lane);
-                    active.Add(new ActiveLane(demand.XEnd, lane));
-                    maximumOverlap = Math.Max(maximumOverlap, active.Count);
-                    demands.Add(demand.ToDemand(lane));
-                }
+                var pending = roleGroup.ToArray();
+                var commonDemands = pending.Select(item => item.ToRailDemand(UpperBoundary, LowerBoundary)).ToArray();
+                var movement = new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{Id.LowerLayer}");
+                var common = DeterministicRailAllocator.Assign(
+                    new RailAllocationRegionIdentity(RailOrientation.Horizontal,
+                        new AxisInterval(UpperBoundary, LowerBoundary), $"{Id}:{roleGroup.Key}", movement, Id.LayoutRevision),
+                    commonDemands, new RailAssignmentOptions(clearance, padding));
+                comparisons += common.ConflictComparisons;
+                overlapGroups += common.Components.Count;
+                var createdLanes = common.RailsByDemandId.Values.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1;
+                maximumOverlap = Math.Max(maximumOverlap, createdLanes);
+                foreach (var demand in pending)
+                    demands.Add(demand.ToDemand(common.RailsByDemandId[demand.Id].LaneIndex));
                 laneCount = Math.Max(laneCount, createdLanes);
                 if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = createdLanes;
                 else ordinaryLaneCount = Math.Max(ordinaryLaneCount, createdLanes);
@@ -228,20 +218,13 @@ internal static class InterLayerBandObserver
     {
         public BandRouteDemand ToDemand(int lane) => new(Id, EdgeId, Revision, BandId, SegmentIndex, Role,
             XStart, XEnd, TerminalOrder, Direction, lane);
-    }
 
-    private sealed record ActiveLane(int End, int Lane);
-
-    private sealed class ActiveLaneComparer : IComparer<ActiveLane>
-    {
-        public static ActiveLaneComparer Instance { get; } = new();
-        public int Compare(ActiveLane? left, ActiveLane? right)
-        {
-            if (ReferenceEquals(left, right)) return 0;
-            if (left is null) return -1;
-            if (right is null) return 1;
-            var end = left.End.CompareTo(right.End);
-            return end != 0 ? end : left.Lane.CompareTo(right.Lane);
-        }
+        public RailDemand ToRailDemand(int upperBoundary, int lowerBoundary) => new(
+            Id, EdgeId, RailOrientation.Horizontal, new AxisInterval(XStart, XEnd),
+            new AxisInterval(upperBoundary, lowerBoundary), null,
+            Role == BandMembershipRole.Return ? RailSemanticRole.Return : RailSemanticRole.Through,
+            TerminalOrder, SegmentIndex,
+            new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{BandId.LowerLayer}"),
+            BandId.LayoutRevision, Revision);
     }
 }

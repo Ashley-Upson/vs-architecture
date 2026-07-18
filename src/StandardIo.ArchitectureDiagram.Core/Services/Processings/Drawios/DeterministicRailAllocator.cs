@@ -16,6 +16,8 @@ internal static class DeterministicRailAllocator
         var demands = source.OrderBy(item => item.OccupiedInterval.Minimum)
             .ThenBy(item => item.OccupiedInterval.Maximum)
             .ThenBy(item => item.TerminalOrder)
+            .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
+            .ThenBy(item => item.TurnOrder)
             .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
         if (demands.Any(item => item.Orientation != region.Orientation ||
             item.AllowedAxisRange != region.AllowedAxisRange || item.PlacementRevision != region.PlacementRevision))
@@ -86,6 +88,7 @@ internal static class DeterministicRailAllocator
         var assigned = new List<(RailDemand Demand, int Lane)>();
         foreach (var demand in demands.OrderBy(item => item.OccupiedInterval.Minimum)
                      .ThenBy(item => item.OccupiedInterval.Maximum).ThenBy(item => item.TerminalOrder)
+                     .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal).ThenBy(item => item.TurnOrder)
                      .ThenBy(item => item.Id, StringComparer.Ordinal))
         {
             var lane = laneEnds.FindIndex(end => CanReuse(end, demand.OccupiedInterval.Minimum, options));
@@ -108,7 +111,7 @@ internal static class DeterministicRailAllocator
     {
         var overlap = Math.Min(left.Maximum, right.Maximum) - Math.Max(left.Minimum, right.Minimum);
         if (overlap > 0) return true;
-        if (overlap == 0) return options.EndpointContactCreatesComponent;
+        if (overlap == 0) return options.Separation > 0 || options.EndpointContactCreatesComponent;
         return -overlap < options.Separation;
     }
 
