@@ -142,6 +142,63 @@ public sealed class InterLayerBandObserverTests
             fixture.Placement, fixture.Routes, DiagramSettings.CreateDefault(), cancellationToken: cancellation.Token));
     }
 
+    [Fact]
+    public void Finding_correlation_reports_under_sized_associated_band()
+    {
+        var fixture = Fixture(new[] { Node("source", 0), Node("target", 1) },
+            Link("edge", "source", "target", 0, (10, 20), (10, 50), (80, 50), (80, 100)));
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ParallelLaneSpacing = 100;
+        var findings = new TraceabilityValidationResult(new[]
+        {
+            new TraceabilityViolation(TraceabilityViolationCode.SharedSegment, "edge", null, 20, "fixture")
+        });
+
+        var report = InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, settings, findings);
+
+        Assert.True(Assert.Single(report.FindingCorrelations).PlausiblyBandResolvable);
+        Assert.True(Assert.Single(report.Bands).MissingExtent > 0);
+    }
+
+    [Fact]
+    public void Diagnostic_observation_is_lazy_and_leaves_xml_byte_identical()
+    {
+        var diagram = new DiagramModel(Array.Empty<ProjectContainer>(), Array.Empty<ExternalDependencyNode>(), Array.Empty<DependencyEdge>());
+        using var session = GenerationPerformanceSession.Start();
+        var disabled = new DeterministicDrawioExporter().GenerateResult(diagram, DiagramSettings.CreateDefault());
+        var before = session.Snapshot();
+
+        var diagnostic = disabled.Diagnostics;
+        var after = session.Snapshot();
+        var enabled = new DeterministicDrawioExporter().GenerateResult(diagram, DiagramSettings.CreateDefault());
+        var documentBeforeDiagnostic = enabled.Document;
+        var enabledDiagnostics = enabled.Diagnostics;
+
+        Assert.Equal(0, before.Counters.Where(item => item.Name == "inter-layer bands observed").Sum(item => item.Value));
+        Assert.Contains(after.Phases, phase => phase.Phase == "Stage B observation");
+        Assert.Contains("\"interLayerBands\"", diagnostic.ReportJson);
+        Assert.NotNull(enabledDiagnostics);
+        Assert.Equal(disabled.Document, documentBeforeDiagnostic);
+        Assert.Equal(documentBeforeDiagnostic, enabled.Document);
+    }
+
+    [Fact]
+    public void Observer_contract_has_no_legacy_routing_model_dependencies()
+    {
+        var dependencyNames = typeof(InterLayerBandObserver).GetMethods(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType)
+                .Append(method.ReturnType))
+            .Select(type => type.FullName ?? type.Name)
+            .ToArray();
+
+        Assert.DoesNotContain(dependencyNames, name =>
+            name.Contains("Corridor", StringComparison.Ordinal) ||
+            name.Contains("Selector", StringComparison.Ordinal) ||
+            name.Contains("Repair", StringComparison.Ordinal) ||
+            name.Contains("Junction", StringComparison.Ordinal));
+    }
+
     private static InterLayerBandReport Observe(FixtureData fixture) =>
         InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, DiagramSettings.CreateDefault());
 

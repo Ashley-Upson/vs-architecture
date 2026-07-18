@@ -21,7 +21,8 @@ internal static class DrawioDiagnosticReportBuilder
         IReadOnlyList<TraceabilityViolation> enforced,
         int requiredSpacing,
         IReadOnlyList<PipelineStageMetric> stageTimings,
-        bool diagnosticReuse)
+        bool diagnosticReuse,
+        InterLayerBandReport? bandReport = null)
     {
         var projectNames = layout.Graph.Projects.ToDictionary(project => project.Id, project => project.Name, StringComparer.Ordinal);
         var routes = enforced
@@ -166,6 +167,28 @@ internal static class DrawioDiagnosticReportBuilder
             routes,
             routeGeometry,
             stageTimings,
+            interLayerBands = bandReport is null ? null : new
+            {
+                telemetry = bandReport.Telemetry,
+                bands = bandReport.Bands.Select(band => new
+                {
+                    id = band.Id.ToString(),
+                    band.Id.UpperLayer,
+                    band.Id.LowerLayer,
+                    layoutRevision = band.Id.LayoutRevision.Value,
+                    band.CurrentExtent,
+                    band.RequiredExtent,
+                    band.MissingExtent,
+                    band.OverlapGroupCount,
+                    band.MaximumSimultaneousOverlap,
+                    band.HypotheticalLaneCount,
+                    band.ReturnLaneCount,
+                    band.Memberships,
+                    band.Demands,
+                    band.UnsupportedShapes
+                }).ToArray(),
+                findingCorrelations = bandReport.FindingCorrelations
+            },
             repair = new
             {
                 preRepairFindings = layout.PreRepairTraceability.Violations.Select((finding, index) =>

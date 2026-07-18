@@ -89,13 +89,36 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         PerformanceAudit.Increment("diagnostic materializations");
         var enforced = prepared.Layout.Traceability.Violations.Where(prepared.IsEnforced).ToArray();
         PerformanceAudit.Increment("diagnostic projections", prepared.Layout.Traceability.Violations.Count);
+        var placement = new PlacedGraph(
+            prepared.Layout.Graph,
+            prepared.Layout.Nodes,
+            prepared.Layout.Projects,
+            prepared.Layout.LayoutRevision);
+        var routeRevision = new RouteRevision(prepared.Layout.Links.Values
+            .Select(link => link.RouteState.Revision)
+            .DefaultIfEmpty(0)
+            .Max());
+        var generated = new GeneratedLogicalRoutes(placement, prepared.Layout.Links, routeRevision);
+        InterLayerBandReport bands;
+        using (PerformanceAudit.Measure(
+            "Stage B observation",
+            placement.Nodes.Count,
+            generated.Links.Count,
+            generated.Links.Values.Sum(link => link.Points.Count + 1),
+            layoutRevision: placement.Revision.Value,
+            routeRevision: routeRevision.Value))
+        {
+            bands = InterLayerBandObserver.Observe(
+                placement, generated, prepared.Settings, prepared.Layout.Traceability);
+        }
         var reportJson = DrawioDiagnosticReportBuilder.BuildJson(
             prepared.Layout,
             prepared.Ownership,
             enforced,
             prepared.Settings.Layout.ParallelLaneSpacing,
             AllTimings(prepared),
-            diagnosticReuse: true);
+            diagnosticReuse: true,
+            bands);
         var annotated = DrawioDiagnosticReportBuilder.Annotate(content, enforced, "All enforced findings", prepared.Layout);
         var focused = DrawioDiagnosticReportBuilder.FocusedOutputs(content, enforced, prepared.Layout);
         PerformanceAudit.Increment("focused diagnostic outputs", focused.Count);
