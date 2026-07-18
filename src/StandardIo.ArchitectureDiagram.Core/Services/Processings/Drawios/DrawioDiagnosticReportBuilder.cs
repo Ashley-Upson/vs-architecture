@@ -157,7 +157,7 @@ internal static class DrawioDiagnosticReportBuilder
         var contactObservation = ObserveCanonicalContacts(layout, requiredSpacing);
         contactTimer.Stop();
         var foundationCosts = ObserveFoundationCosts(layout, layoutSettings);
-        var adjacentDownward = ObserveAdjacentDownward(layout, bandReport, requiredSpacing);
+        var adjacentDownward = ObserveAdjacentDownward(layout, bandReport, requiredSpacing, layoutSettings.LinkPadding);
 
         return JsonSerializer.Serialize(new
         {
@@ -338,7 +338,8 @@ internal static class DrawioDiagnosticReportBuilder
     private static object? ObserveAdjacentDownward(
         RenderLayout layout,
         InterLayerBandReport? bandReport,
-        int requiredSpacing)
+        int requiredSpacing,
+        int padding)
     {
         if (bandReport is null) return null;
         var memberships = bandReport.Bands.SelectMany(item => item.Memberships)
@@ -370,6 +371,7 @@ internal static class DrawioDiagnosticReportBuilder
                 duplicatedExposureTree)).ToArray();
         var observation = AdjacentDownwardRailDemandObserver.Observe(contexts);
         var projection = AdjacentDownwardComponentProjector.Project(observation, requiredSpacing);
+        var common = AdjacentDownwardCommonRailObserver.Observe(observation, requiredSpacing, padding);
         var eligible = observation.Routes.Where(item => item.Eligible).ToArray();
         var assignedPairs = new HashSet<string>(projection.AssignedEdges.Select(EdgePair), StringComparer.Ordinal);
         var removedEdges = projection.UnassignedEdges
@@ -400,6 +402,14 @@ internal static class DrawioDiagnosticReportBuilder
                 .ToDictionary(item => item.Key, item => item.Count()),
             assignedEdges = projection.AssignedEdges.GroupBy(item => item.Cause).OrderBy(item => item.Key)
                 .ToDictionary(item => item.Key, item => item.Count()),
+            retainedAssignedConflictDetails = projection.AssignedEdges.Select(edge => new
+            {
+                edge.FirstId,
+                edge.SecondId,
+                edge.Cause,
+                first = RetainedRouteEvidence(edge.FirstId),
+                second = RetainedRouteEvidence(edge.SecondId)
+            }),
             timings = new
             {
                 observation.DemandProductionMicroseconds,
@@ -407,6 +417,41 @@ internal static class DrawioDiagnosticReportBuilder
                 observation.ReconstructionMicroseconds,
                 observation.ParityComparisonMicroseconds,
                 componentProjectionMicroseconds = projection.ElapsedMicroseconds
+            },
+            commonAssignment = new
+            {
+                regions = common.Regions.Count,
+                components = common.Regions.Sum(item => item.Assignment.Components.Count),
+                demandsAssigned = common.Regions.Sum(item => item.Assignment.RailsByDemandId.Count),
+                largestComponent = common.Regions.SelectMany(item => item.Assignment.Components)
+                    .Select(item => item.Demands.Count).DefaultIfEmpty(0).Max(),
+                existingParity = common.Routes.SelectMany(item => item.ExistingParity)
+                    .GroupBy(item => $"{item.Key}:{item.Value}").OrderBy(item => item.Key)
+                    .ToDictionary(item => item.Key, item => item.Count()),
+                reconstructionParity = common.Routes.GroupBy(item => item.ReconstructionParity)
+                    .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count()),
+                constraintProposals = common.Regions.Count(item => item.ConstraintProposal is not null),
+                requiredExtents = common.Regions.Select(item => new
+                {
+                    item.Region.EnvelopeIdentity,
+                    currentExtent = item.Region.AllowedAxisRange.Length,
+                    item.Assignment.RequiredExtent,
+                    missingExtent = Math.Max(0, item.Assignment.RequiredExtent - item.Region.AllowedAxisRange.Length),
+                    movementScope = item.Region.MovementScope?.ToString(),
+                    proposal = item.ConstraintProposal
+                }),
+                timings = new
+                {
+                    common.AssignmentMicroseconds,
+                    conflictDiscoveryMicroseconds = common.Regions.Sum(item => item.Assignment.ConflictDiscoveryMicroseconds),
+                    componentConstructionMicroseconds = common.Regions.Sum(item => item.Assignment.ComponentConstructionMicroseconds),
+                    laneAssignmentMicroseconds = common.Regions.Sum(item => item.Assignment.LaneAssignmentMicroseconds),
+                    extentCalculationMicroseconds = common.Regions.Sum(item => item.Assignment.ExtentCalculationMicroseconds),
+                    common.ConstraintProjectionMicroseconds,
+                    common.ReconstructionMicroseconds,
+                    common.ParityComparisonMicroseconds
+                },
+                routes = common.Routes
             },
             routes = observation.Routes.Select(item => new
             {
@@ -448,6 +493,30 @@ internal static class DrawioDiagnosticReportBuilder
                 item.Diagnostics
             })
         };
+
+        object? RetainedRouteEvidence(string routeId)
+        {
+            var route = observation.Routes.FirstOrDefault(item => item.LogicalRouteId == routeId);
+            if (route is null) return null;
+            var logical = layout.Links[routeId];
+            var sourceNode = layout.Nodes[logical.Link.SourceId];
+            var targetNode = layout.Nodes[logical.Link.TargetId];
+            return new
+            {
+                route.LogicalRouteId,
+                source = new { sourceNode.Node.Id, sourceNode.Node.Name, sourceNode.Node.FullName, sourceNode.Rect },
+                target = new { targetNode.Node.Id, targetNode.Node.Name, targetNode.Node.FullName, targetNode.Rect },
+                assignedRails = route.SelectedAssignedRails.Select(item => new
+                {
+                    role = item.Role.ToString(),
+                    item.AxisCoordinate,
+                    item.LaneIndex,
+                    item.OccupiedInterval
+                }),
+                turns = route.Transitions.Select(item => item.Turn),
+                route.CanonicalAuthoritativePoints
+            };
+        }
 
         string EdgePair(ConflictEdge edge) => string.CompareOrdinal(edge.FirstId, edge.SecondId) <= 0
             ? $"{edge.FirstId}\u001f{edge.SecondId}"
