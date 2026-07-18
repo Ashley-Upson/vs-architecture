@@ -360,6 +360,55 @@ There is no single policy-valid chain joining all 294 routes after filtering, so
 
 Global/regional scoring and junction metrics are not migrated in this tranche because their route representations omit terminal/bend context required for exact canonical parity. Their strict-interior crossing calculation already represents the permitted advisory clean-crossover cost, but their duplicated factual helpers remain a future consolidation target.
 
+## Observational adjacent-downward common demand integration
+
+`AdjacentDownwardRailDemandObserver` is the first route-local common-demand producer. It has diagnostic and test consumers only; no production route, selector, lane, placement, repair, fallback or XML consumer reads its result. For an ordinary orthogonal route from depth `d` to `d + 1`, using bottom source and top target terminals and exactly one distinct inter-layer band, it emits:
+
+```text
+assigned source terminal
+-> TerminalDeparture vertical demand
+-> departure-to-through transition
+-> Through horizontal demand in the crossed band
+-> through-to-arrival transition
+-> TerminalArrival vertical demand
+-> assigned target terminal
+```
+
+The observer preserves existing terminal coordinates and the authoritative through coordinate. Each demand carries deterministic route/demand identity, orientation, occupied and allowed intervals, preferred axis, semantic role, terminal/lane order, placement and route revisions, and movement scope. Reconstruction receives only terminals, selected `AssignedRail` records and ordered `RailTransition` records. It has no original-point fallback.
+
+Eligibility is route-local. A rejected route does not suppress an independent eligible route. Explicit reasons are same layer, skipped layer, upward/return, cross-project, duplicated exposure-tree-specific, non-orthogonal, multiple distinct bands, unsupported terminal topology and revision mismatch. Multiple membership records for the same band remain eligible; observation revision is the band-generation revision and is independent of a logical route state's local history counter.
+
+### Existing assignment adapters
+
+The common `AssignedRail` fields are rail ID, logical route/demand IDs, orientation, actual axis, lane index, occupied interval, role, placement revision and route revision.
+
+| Existing source | Specialised metadata |
+|---|---|
+| legacy corridor lane | `corridorId`, `role`, `regionKey`, `obstacleBoundaryKey` |
+| Stage B hypothetical lane | `bandId`, `direction`, `membershipRole` |
+| Stage C grouped lane | `groupId`, `movementScope`, `currentExtent`, `requiredExtent` |
+
+Adapter priority is deterministic: legacy corridor, then Stage B, then Stage C. This observes an existing result rather than inventing another allocator. Focused tests prove all three adapters map to the same common fields. Current real graphs exercise legacy and Stage B mappings; no eligible real route carried an active Stage C grouped assignment in this run.
+
+### Four-graph parity and component evidence
+
+| Graph | Eligible / rejected | Rejection summary | Demands D/T/A | Exact / topology-only / unable | Unassigned / assigned components | Largest assigned | Removed edges / involved routes |
+|---|---:|---|---:|---:|---:|---:|---:|
+| StandardIo duplicated | 0 / 21 | exposure tree 21 | 0/0/0 | 0/0/0 | 0/0 | 0 | 0/0 |
+| StandardIo deduplicated | 7 / 5 | skipped 4; multiple band 1 | 7/7/7 | 7/0/0 | 7/7 | 1 | 0/0 |
+| cCoder duplicated | 0 / 1,072 | exposure tree 1,072 | 0/0/0 | 0/0/0 | 0/0 | 0 | 0/0 |
+| cCoder deduplicated | 45 / 249 | same 20; skipped 25; upward 40; non-orthogonal 27; multiple band 112; terminal topology 25 | 45/45/45 | 45/0/0 | 29/42 | 3 | 27/21 |
+
+In the deduplicated cCoder adjacent-downward family, representing the existing distinct lanes removes 27 provisional competition edges involving 21 routes. This identifies the lane-assignment-attributable portion inside the previously reported 270-route resolved-policy region: 21 routes (7.8% of 270) participate in those disappearing relations. It does not claim that removing those edges alone dissolves the 270-route transitive component. Two assigned-rail conflicts and one shared-turn transition conflict remain in this family, and the larger component also contains bend, spacing, overlap, obstacle and movement-scope relations.
+
+Detailed evidence is in `docs/evidence/adjacent-downward-rail-observation.csv`; route-level demands, assignments, transitions, authoritative points and reconstructed points are retained in `artifacts/adjacent-downward-observation/*.json`. Diagnostic and normal cCoder deduplicated Draw.io output have identical SHA-256 `08D70BBA59130F8D56EC4F411D3A5BB360B6FB1BBA800D5C43FE1A6386DAB7F6`.
+
+Observed diagnostic costs for deduplicated cCoder were 5.839 ms demand production, 6.258 ms existing-lane adaptation, 2.215 ms reconstruction, 0.267 ms parity comparison and 10.659 ms component projection. The controlled normal benchmark used one excluded warm-up and five fresh Release processes: minimum 14,692 ms, median 14,911 ms, maximum 15,005 ms, with one repeated output hash. This sits alongside the 14.30-second foundation and 14.18-second earlier baselines; the observer is not invoked in normal generation.
+
+### Gates before common rail authority
+
+Common rail assignment remains observational until skipped-layer, same-layer, return, cross-project, exposure-tree and other rejected topologies have explicit producers; specialised metadata has a branch-neutral owner or deliberate extension boundary; common assignment reproduces current spacing and deterministic geometry; revisioned constraint/invalidation cycles converge; component-local mixed support is validated; and full traceability, byte parity and performance gates pass under production use. No graph-wide `Supports` gate is introduced by this tranche.
+
 ### Corrected node-width diagnostics and performance
 
 Diagnostics now report every winning requirement (`Current`, `Text`, `Incoming`, `Outgoing`), whether the node actually changed from the preceding production formula, and a single or multiple resize cause. Current inputs still resize only `ICoreContextFactory`, `AuthorizationBroker`, `ICoreAuthInfo` and `IEventHub`, all in deduplicated cCoder and all because incoming demand wins. Counts remain: StandardIo duplicated 22 text; StandardIo deduplicated 11 text; cCoder duplicated 427 current and 667 text; cCoder deduplicated 21 current, 155 text and four incoming. No ties occur.
