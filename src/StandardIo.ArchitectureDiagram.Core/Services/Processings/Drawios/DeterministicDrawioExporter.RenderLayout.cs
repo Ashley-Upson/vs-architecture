@@ -350,8 +350,10 @@ internal sealed partial class RenderLayout
                 {
                     var source = nodes[link.SourceId].Rect;
                     var target = nodes[link.TargetId].Rect;
-                    var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
-                    var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
+                    var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing,
+                        settings.Layout.LinkNodeWidthPadding, nodes, true);
+                    var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing,
+                        settings.Layout.LinkNodeWidthPadding, nodes, false);
                     var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                     var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                     var obstacles = RoutingObstacles(nodes, link, settings.Layout.LinkPadding);
@@ -772,8 +774,10 @@ internal sealed partial class RenderLayout
                 var terminalLaneSpacing = Math.Max(
                     settings.Layout.EdgePortSpacing,
                     settings.Layout.ParallelLaneSpacing * 2);
-                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing, nodes, true);
-                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing, nodes, false);
+                var sourceOffset = PortOffset(sourceGroups[link.SourceId], link, terminalLaneSpacing,
+                    settings.Layout.LinkNodeWidthPadding, nodes, true);
+                var targetOffset = PortOffset(targetGroups[link.TargetId], link, terminalLaneSpacing,
+                    settings.Layout.LinkNodeWidthPadding, nodes, false);
                 var sourcePoint = new Point(source.CenterX + sourceOffset, source.Bottom);
                 var targetPoint = new Point(target.CenterX + targetOffset, target.Y);
                 var points = BuildExposureTreeRoute(
@@ -1258,18 +1262,19 @@ internal sealed partial class RenderLayout
             IReadOnlyList<RenderLink> group,
             RenderLink link,
             int spacing,
+            int totalHorizontalPadding,
             IReadOnlyDictionary<string, NodeLayout> nodes,
             bool sourcePort)
         {
-            var ordered = group
-                .OrderBy(item => sourcePort
-                    ? nodes[item.TargetId].Rect.CenterX
-                    : nodes[item.SourceId].Rect.CenterX)
-                .ThenBy(item => item.Id, StringComparer.Ordinal)
-                .ToArray();
-            var index = Array.FindIndex(ordered, item => item.Id == link.Id);
-            var center = (ordered.Length - 1) / 2.0;
-            return (int)Math.Round((index - center) * spacing);
+            var side = sourcePort ? TerminalAttachmentSide.OutgoingBottom : TerminalAttachmentSide.IncomingTop;
+            var node = nodes[sourcePort ? link.SourceId : link.TargetId].Rect;
+            var requests = group.Select(item => new TerminalAttachmentRequest(
+                item.Id,
+                sourcePort ? nodes[item.TargetId].Rect.CenterX : nodes[item.SourceId].Rect.CenterX,
+                side));
+            var attachments = TerminalDemandCalculator.Allocate(
+                node, requests, totalHorizontalPadding, spacing);
+            return attachments.Single(item => item.RouteId == link.Id).AxisCoordinate - node.CenterX;
         }
 
         private static double Ratio(int x, Rect rect)

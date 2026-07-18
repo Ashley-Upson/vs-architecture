@@ -9,7 +9,6 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class PlacementPipeline
 {
-    private const int TextWidth = 8;
     private const string ExposureTreeIdPrefix = "tree_";
 
     public static PlacedGraph Place(
@@ -40,19 +39,23 @@ internal static class PlacementPipeline
 
         private static Dictionary<string, int> CalculateWidths(RenderGraph graph, DiagramSettings settings)
         {
-            var linkCounts = graph.Nodes.ToDictionary(
-                node => node.Id,
-                node => graph.Links.Count(link => link.SourceId == node.Id || link.TargetId == node.Id),
-                StringComparer.Ordinal);
+            var incoming = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            var outgoing = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            var separation = TerminalDemandCalculator.AttachmentSeparation(
+                settings.Layout.EdgePortSpacing, settings.Layout.ParallelLaneSpacing);
 
             return graph.Nodes.ToDictionary(
                 node => node.Id,
-                node =>
-                {
-                    var labelWidth = Math.Max(node.Name.Length, node.FullName.Length / 2) * TextWidth + settings.Layout.LinkNodeWidthPadding;
-                    var portWidth = Math.Max(0, linkCounts[node.Id] - 1) * settings.Layout.EdgePortSpacing + settings.Layout.LinkNodeWidthPadding;
-                    return Math.Max(settings.Layout.NodeWidth, Math.Max(labelWidth, portWidth));
-                },
+                node => TerminalDemandCalculator.Measure(
+                    node.Id,
+                    settings.Layout.NodeWidth,
+                    TerminalDemandCalculator.EstimatedTextWidth(node.Name, node.FullName),
+                    incoming.TryGetValue(node.Id, out var incomingCount) ? incomingCount : 0,
+                    outgoing.TryGetValue(node.Id, out var outgoingCount) ? outgoingCount : 0,
+                    separation,
+                    settings.Layout.LinkNodeWidthPadding).RequiredWidth,
                 StringComparer.Ordinal);
         }
 
