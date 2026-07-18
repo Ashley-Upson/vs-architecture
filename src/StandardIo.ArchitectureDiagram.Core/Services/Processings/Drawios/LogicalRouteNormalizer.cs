@@ -61,7 +61,10 @@ internal static class LogicalRouteNormalizer
         var direct = new Segment(points[0], points[points.Count - 1]);
         var oneAxis = points.All(point => point.X == points[0].X) ||
             points.All(point => point.Y == points[0].Y);
-        if (!oneAxis || obstacles.Any(direct.Intersects))
+        var containsReversal = Enumerable.Range(0, points.Count - 2)
+            .Any(index => TraceabilityValidator.IsImmediateReversal(
+                points[index], points[index + 1], points[index + 2]));
+        if (!oneAxis || !containsReversal || obstacles.Any(direct.Intersects))
         {
             return;
         }
