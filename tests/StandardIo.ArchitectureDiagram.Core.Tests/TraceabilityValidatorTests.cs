@@ -155,11 +155,25 @@ public sealed class TraceabilityValidatorTests
     }
 
     [Fact]
-    public void Validate_reports_clean_perpendicular_crossing_with_exact_coordinate()
+    public void Validate_accepts_clean_perpendicular_crossing()
     {
         var links = new Dictionary<string, LinkLayout>
         {
             ["horizontal"] = Link("horizontal", 0, new Point(0, 50), new Point(100, 50), Array.Empty<Point>()),
+            ["vertical"] = Link("vertical", 1, new Point(40, 0), new Point(40, 100), Array.Empty<Point>())
+        };
+
+        var result = TraceabilityValidator.Validate(new Dictionary<string, NodeLayout>(), links, 12);
+
+        Assert.DoesNotContain(result.Violations, item => item.Code == TraceabilityViolationCode.PerpendicularCrossing);
+    }
+
+    [Fact]
+    public void Validate_reports_bend_involved_perpendicular_contact_with_exact_coordinate()
+    {
+        var links = new Dictionary<string, LinkLayout>
+        {
+            ["bending"] = Link("bending", 0, new Point(0, 50), new Point(40, 80), new[] { new Point(40, 50) }),
             ["vertical"] = Link("vertical", 1, new Point(40, 0), new Point(40, 100), Array.Empty<Point>())
         };
 
