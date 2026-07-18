@@ -409,6 +409,83 @@ Observed diagnostic costs for deduplicated cCoder were 5.839 ms demand productio
 
 Common rail assignment remains observational until skipped-layer, same-layer, return, cross-project, exposure-tree and other rejected topologies have explicit producers; specialised metadata has a branch-neutral owner or deliberate extension boundary; common assignment reproduces current spacing and deterministic geometry; revisioned constraint/invalidation cycles converge; component-local mixed support is validated; and full traceability, byte parity and performance gates pass under production use. No graph-wide `Supports` gate is introduced by this tranche.
 
+## Shared deterministic rail assignment consolidation
+
+`DeterministicRailAllocator` is now the shared interval-assignment algorithm for Stage B inter-layer bands and Stage C grouped bands. It was extracted from Stage C's `BandConflictGrouper`, which already supplied deterministic interval ordering, transitive component construction, unbounded greedy interval colouring and required-extent calculation. Stage B's embedded active/free-lane sweep was removed. A legacy-corridor wrapper was trialled and proved XML-equivalent, but it imposed a repeatable normal-generation cost because repair repeatedly represents each corridor as a complete full-envelope conflict graph. That production redirection was removed to preserve the explicit observational-authority boundary.
+
+The shared flow is:
+
+```text
+stable RailDemand records
+-> ordered interval sweep
+-> complete transitive components
+-> deterministic lowest-available lane
+-> AssignedRail records
+-> component and region required extent
+-> optional persistent constraint proposal
+```
+
+Positive overlap conflicts. A gap smaller than configured separation conflicts. Endpoint-only contact is independent when separation is zero unless a wrapper explicitly selects the historical Stage C endpoint-component policy; positive configured separation separates it. Perpendicular contacts do not enter same-orientation colouring. Stable interval start/end, terminal order, logical route ID, turn order and demand ID determine ordering. There is no lane, component or graph-size limit.
+
+### Allocation-region identity and wrappers
+
+The branch-neutral identity consists of orientation, permitted axis range, geometric envelope identity, movement-scope owner and placement revision. It deliberately contains no route-family label.
+
+| Wrapper | Region mapping | Remaining specialised responsibility |
+|---|---|---|
+| legacy corridor | observational adjacent routes map corridor orientation, cross-axis bounds, corridor ID and current placement | production `CorridorLaneAllocator` remains the one duplicate allocator: its capacity-first, all-routes-distinct, centred-coordinate contract is not yet a lossless interval-demand wrapper at acceptable repair-loop cost |
+| adjacent inter-layer band / Stage B | horizontal orientation, band bounds/ID, `LayerAndLowerSuffix`, band layout revision | return/downward role separation and return-region extent composition |
+| Stage C grouped band | same band geometry and movement scope | grouped constraint metadata and historical endpoint-component grouping |
+| terminal side | not activated | terminal ordering/width allocation remains separate |
+| return region | only Stage B's existing proven role wrapper | exterior-side topology remains specialised |
+| obstacle bypass | not activated | no common region mapping has fixture evidence yet |
+
+No normal route consumes a newly calculated common coordinate. Existing Stage B, Stage C and legacy callers use the extracted algorithm under parity-preserving wrappers. The adjacent dual run remains diagnostic and reconstructs from the common allocator's own through rail plus terminal coordinates and new transitions.
+
+### Four-graph assignment parity
+
+| Graph | Regions | Components | Demands | Largest | Existing parity | Reconstruction | Failures / hard regressions |
+|---|---:|---:|---:|---:|---|---|---:|
+| StandardIo duplicated | 0 | 0 | 0 | 0 | n/a | n/a | 0/0 |
+| StandardIo deduplicated | 5 | 7 | 7 | 1 | 7 legacy and 7 Stage B equivalent/different coordinate | 7 valid/different | 0/0 |
+| cCoder duplicated | 0 | 0 | 0 | 0 | n/a | n/a | 0/0 |
+| cCoder deduplicated | 7 | 39 | 45 | 4 | 45 legacy and 39 Stage B equivalent/different coordinate | 45 valid/different | 0/0 |
+
+No real eligible route required extra extent, so no live or observational constraint was needed for these graphs. The common formula is `2 * padding + laneCount * separation`; missing extent is `max(0, required - available)`. When positive, adjacent vertical expansion proposes `MinimumHeight` for the `LayerAndLowerSuffix` owner. `GenerationConstraintStore` retains the maximum by key, rejects later reductions and materialises from immutable base placement; existing foundation tests protect those iteration semantics. Stage C's wrapper has exact lane/extent parity in focused fixtures. Legacy and Stage B real-route coordinate differences arise because the observational common region uses a band-origin coordinate, while production wrappers retain corridor-centred or authoritative existing coordinates.
+
+Detailed evidence is `docs/evidence/common-rail-assignment-evidence.csv`. All four production Draw.io hashes match the preceding accepted tranche. Deduplicated cCoder remains `08D70BBA59130F8D56EC4F411D3A5BB360B6FB1BBA800D5C43FE1A6386DAB7F6`.
+
+The final authority-safe normal benchmark used one excluded warm-up and five fresh Release processes: minimum 14,619 ms, median 14,723 ms and maximum 14,863 ms, with one repeated output hash. The attempted legacy production wrapper measured 16,387 ms median before lookup correction and 15,663 ms after a complete-overlap optimization, so it was removed. The final 14,723 ms result returns to the preceding 14.63-14.78 second verification range and improves on the immediately preceding 14,911 ms observational-tranche sample. One instrumented phase sample measured 590 ms workspace acquisition, 1,756 ms semantic analysis, 17,527 ms layout/routing including 4,503 ms repair, 13 ms ownership compilation, 257 ms XML serialization and 322 ms file writing; telemetry itself raises that run to 20.58 seconds and is not a normal benchmark.
+
+### Three retained existing-assignment conflicts
+
+1. `AppController -> AppOrchestrationService` and `AppManager -> AppOrchestrationService` reuse `(1451,200)`. This is a transition-allocation gap: separate existing corridor results place both through rails at Y=200 and transition ownership is outside those local solvers.
+2. `AppController -> AppOrchestrationService` spans X=1451..12432 at Y=200 and contains `MetadataCache -> IMetadataTypeCache` X=4384..4396 at Y=200. Their legacy lane indices differ but independent corridor identities project them to the same axis. This is an adapter/allocation-region deficiency, not insufficient band extent.
+3. `PageRenderCoordinationService -> PageInfoOrchestrationService` spans X=19857..20540 at Y=200 while `PageController -> ILogger` spans X=19352..19923 at Y=206. Six pixels violates the configured 12-pixel separation. This is another independently allocated corridor-region deficiency.
+
+The common band region places interacting intervals together, so these are not intrinsic semantic junctions or malformed routes.
+
+### Real-component visual proof
+
+The deterministic development fixture uses the first two retained relations as one real three-route component. It preserves the real node dimensions, X/Y placement, terminal coordinates, route spans and 12-pixel spacing. The before file is `docs/evidence/common-rail-real-component/before.drawio`; the after file is `docs/evidence/common-rail-real-component/after.drawio`.
+
+| Metric | Before | After |
+|---|---:|---:|
+| shared segment | 1 | 0 |
+| parallel-spacing defect | 1 | 0 |
+| reused bend | 1 | 0 |
+| node collision | 0 | 0 |
+| immediate reversal | 0 | 0 |
+| non-orthogonal segment | 0 | 0 |
+| bend-involved perpendicular contact | 0 | 0 |
+| endpoint-to-interior contact | 0 | 0 |
+
+The fixture assigns three rails, creates six turns, regenerates three routes and records three `AssignedRailChanged` invalidations. It moves zero nodes and zero layers and adds zero extent because the existing 140-pixel band already contains the required two lanes. `RouteRepairCoordinator`, `SeparateOverlappingCorners` and traversal fallback are all explicitly absent. Initial semantics retain all three dependencies; the after topology is fully orthogonal and deterministic.
+
+### Remaining authority gates
+
+Normal common-coordinate authority still requires production mappings for terminal, return and obstacle-bypass regions; shared transition/junction allocation; exact or explicitly accepted coordinate migration; persistent-constraint convergence on real positive-missing-extent components; mixed supported/unsupported component handling; and full hard-validity, visual and performance acceptance. The development fixture does not grant normal production authority.
+
 ### Corrected node-width diagnostics and performance
 
 Diagnostics now report every winning requirement (`Current`, `Text`, `Incoming`, `Outgoing`), whether the node actually changed from the preceding production formula, and a single or multiple resize cause. Current inputs still resize only `ICoreContextFactory`, `AuthorizationBroker`, `ICoreAuthInfo` and `IEventHub`, all in deduplicated cCoder and all because incoming demand wins. Counts remain: StandardIo duplicated 22 text; StandardIo deduplicated 11 text; cCoder duplicated 427 current and 667 text; cCoder deduplicated 21 current, 155 text and four incoming. No ties occur.
