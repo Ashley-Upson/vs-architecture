@@ -4,7 +4,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Models;
 
 public sealed class DiagramSettings
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = SettingsSchemaVersion.Current;
     public CanvasSettings Canvas { get; set; } = new();
     public LayoutSettings Layout { get; set; } = new();
     public List<string> ExcludedNamespaces { get; set; } = new();
@@ -23,4 +23,10 @@ public sealed class DiagramSettings
     {
         return DiagramSettingsFactory.CreateDefault();
     }
+}
+
+public static class SettingsSchemaVersion
+{
+    public const int LegacyUnversioned = 1;
+    public const int Current = 2;
 }

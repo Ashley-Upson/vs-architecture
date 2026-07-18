@@ -6,6 +6,62 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class SettingsTests
 {
     [Fact]
+    public void Import_migrates_unversioned_settings_without_changing_existing_choices()
+    {
+        var settings = SettingsSerializer.Import("""
+            {
+              "showProjectContainers": false,
+              "outputRenderer": "json",
+              "layout": { "parallelLaneSpacing": 23 },
+              "unknownLegacyField": "retained-by-source-but-ignored-by-current-policy"
+            }
+            """);
+
+        Assert.Equal(SettingsSchemaVersion.Current, settings.Version);
+        Assert.False(settings.ShowProjectContainers);
+        Assert.Equal("json", settings.OutputRenderer);
+        Assert.Equal(23, settings.Layout.ParallelLaneSpacing);
+    }
+
+    [Fact]
+    public void Import_migrates_version_one_and_export_writes_current_schema_version()
+    {
+        var settings = SettingsSerializer.Import("""
+            {
+              "version": 1,
+              "externalDependencyTag": "[Outside]",
+              "nodeDuplication": { "allowDuplicateNodes": false }
+            }
+            """);
+
+        var exported = SettingsSerializer.Export(settings);
+        var reloaded = SettingsSerializer.Import(exported);
+
+        Assert.Contains($"\"version\": {SettingsSchemaVersion.Current}", exported);
+        Assert.Equal("[Outside]", reloaded.ExternalDependencyTag);
+        Assert.False(reloaded.NodeDuplication.AllowDuplicateNodes);
+    }
+
+    [Fact]
+    public void Import_applies_defaults_for_fields_missing_from_legacy_settings()
+    {
+        var settings = SettingsSerializer.Import("{ \"version\": 1 }");
+
+        Assert.NotNull(settings.Canvas);
+        Assert.NotNull(settings.Layout);
+        Assert.NotNull(settings.Connector);
+        Assert.NotNull(settings.NodeDuplication);
+        Assert.Equal("drawio", settings.OutputRenderer);
+    }
+
+    [Fact]
+    public void Import_rejects_unknown_future_schema_version()
+    {
+        Assert.Throws<NotSupportedException>(() =>
+            SettingsSerializer.Import($"{{ \"version\": {SettingsSchemaVersion.Current + 1} }}"));
+    }
+
+    [Fact]
     public void Default_settings_export_and_import_without_data_loss()
     {
         var settings = DiagramSettings.CreateDefault();

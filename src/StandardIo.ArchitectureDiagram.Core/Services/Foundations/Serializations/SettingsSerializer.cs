@@ -21,6 +21,7 @@ public static class SettingsSerializer
             throw new ArgumentNullException(nameof(settings));
         }
 
+        settings.Version = SettingsSchemaVersion.Current;
         return JsonSerializer.Serialize(settings, Options);
     }
 
@@ -31,13 +32,16 @@ public static class SettingsSerializer
             throw new InvalidDataException("Settings JSON is empty.");
         }
 
+        var sourceVersion = ReadSourceVersion(json);
+        if (sourceVersion < SettingsSchemaVersion.LegacyUnversioned ||
+            sourceVersion > SettingsSchemaVersion.Current)
+        {
+            throw new NotSupportedException($"Settings version {sourceVersion} is not supported.");
+        }
+
         var settings = JsonSerializer.Deserialize<DiagramSettings>(json, Options)
             ?? throw new InvalidDataException("Settings JSON did not contain a settings object.");
-
-        if (settings.Version != 1)
-        {
-            throw new NotSupportedException($"Settings version {settings.Version} is not supported.");
-        }
+        settings.Version = SettingsSchemaVersion.Current;
 
         settings.Canvas ??= new CanvasSettings();
         settings.Layout ??= new LayoutSettings();
@@ -84,5 +88,38 @@ public static class SettingsSerializer
         settings.Layout.DuplicateHighNoiseNodePatterns ??= new();
 
         return settings;
+    }
+
+    private static int ReadSourceVersion(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidDataException("Settings JSON did not contain a settings object.");
+            }
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "version", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt32(out var version))
+                {
+                    throw new InvalidDataException("Settings version must be an integer.");
+                }
+
+                return version;
+            }
+
+            return SettingsSchemaVersion.LegacyUnversioned;
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("Settings JSON is invalid.", exception);
+        }
     }
 }
