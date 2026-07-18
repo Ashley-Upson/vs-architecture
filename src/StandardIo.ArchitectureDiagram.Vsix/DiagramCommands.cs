@@ -54,13 +54,15 @@ internal sealed class DiagramCommands
         _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            using var threadTelemetry = GenerationThreadTelemetrySession.Start(() => ThreadHelper.CheckAccess());
-            threadTelemetry.Mark("command entry");
+            using var threadTelemetry = IsThreadTelemetryEnabled()
+                ? GenerationThreadTelemetrySession.Start(() => ThreadHelper.CheckAccess())
+                : null;
+            threadTelemetry?.Mark("command entry");
 
             try
             {
                 DiagramTarget? target;
-                using (threadTelemetry.Measure("selection operation"))
+                using (threadTelemetry?.Measure("selection operation"))
                 {
                     target = await GetSelectedDiagramTargetAsync();
                 }
@@ -72,7 +74,7 @@ internal sealed class DiagramCommands
 
                 DiagramSettings settings;
                 string? outputPath;
-                using (threadTelemetry.Measure("settings and save-dialog operations"))
+                using (threadTelemetry?.Measure("settings and save-dialog operations"))
                 {
                     settings = SettingsStore.Load();
                 }
@@ -82,7 +84,7 @@ internal sealed class DiagramCommands
                 var renderer = provider
                     .GetRequiredService<IDiagramRendererRegistry>()
                     .Resolve(settings.OutputRenderer);
-                using (threadTelemetry.Measure("settings and save-dialog operations"))
+                using (threadTelemetry?.Measure("settings and save-dialog operations"))
                 {
                     outputPath = PromptForSavePath(target.Name, renderer);
                 }
@@ -98,7 +100,7 @@ internal sealed class DiagramCommands
 
                 var analysis = provider.GetRequiredService<IDiagramAnalysisProcessingService>();
                 DiagramModel diagram;
-                using (threadTelemetry.Measure("semantic analysis"))
+                using (threadTelemetry?.Measure("semantic analysis"))
                 {
                     diagram = await Task.Run(
                         () => analysis.AnalyzeAsync(target.Projects, settings, cancellation.Token),
@@ -108,7 +110,7 @@ internal sealed class DiagramCommands
                 cancellation.Token.ThrowIfCancellationRequested();
                 progress.SetStage("Constructing layout and routing geometry...");
                 string output;
-                using (threadTelemetry.Measure("renderer background execution"))
+                using (threadTelemetry?.Measure("renderer background execution"))
                 {
                     output = await Task.Run(
                         () => renderer.Render(diagram, settings),
@@ -117,13 +119,13 @@ internal sealed class DiagramCommands
 
                 cancellation.Token.ThrowIfCancellationRequested();
                 progress.SetStage("Writing the generated diagram...");
-                using (threadTelemetry.Measure("file writing"))
+                using (threadTelemetry?.Measure("file writing"))
                 {
                     await provider.GetRequiredService<IDiagramFileBroker>()
                         .WriteTextAsync(outputPath!, output, cancellation.Token);
                 }
                 progress.Complete();
-                using (threadTelemetry.Measure("completion notification"))
+                using (threadTelemetry?.Measure("completion notification"))
                 {
                     ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
                 }
@@ -138,7 +140,7 @@ internal sealed class DiagramCommands
             }
             finally
             {
-                foreach (var metric in threadTelemetry.Snapshot())
+                foreach (var metric in threadTelemetry?.Snapshot() ?? Array.Empty<GenerationThreadMetric>())
                 {
                     DiagnosticLog.Write(
                         $"Generation thread telemetry: stage={metric.Stage}; startThread={metric.StartManagedThreadId}; " +
@@ -148,6 +150,12 @@ internal sealed class DiagramCommands
             }
         });
     }
+
+    private static bool IsThreadTelemetryEnabled() =>
+        string.Equals(
+            Environment.GetEnvironmentVariable("STANDARDIO_THREAD_TELEMETRY"),
+            "1",
+            StringComparison.Ordinal);
 
     private void OpenSettings(object sender, EventArgs e)
     {
