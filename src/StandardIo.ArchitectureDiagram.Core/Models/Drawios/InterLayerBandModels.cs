@@ -87,3 +87,45 @@ internal sealed record InterLayerBandReport(
     IReadOnlyList<InterLayerBandObservation> Bands,
     IReadOnlyList<BandFindingCorrelation> FindingCorrelations,
     InterLayerBandTelemetry Telemetry);
+
+internal sealed record PhysicalSegmentDiagnostic(
+    string Id,
+    int SegmentIndex,
+    PhysicalEdgeSegmentRole Role,
+    string? OwnerProjectId,
+    IReadOnlyList<Point> AbsolutePoints);
+
+internal sealed record LogicalRouteHistoryDiagnostic(
+    int Revision,
+    LogicalRouteStage Stage,
+    string Producer,
+    LogicalRouteCompilationStatus CompilationStatus,
+    IReadOnlyList<Point> Points,
+    bool ContainsNonOrthogonalSegment);
+
+internal sealed record NonOrthogonalSegmentDiagnostic(
+    string LogicalEdgeId,
+    string SourceId,
+    string SourceName,
+    string TargetId,
+    string TargetName,
+    int RouteRevision,
+    int SegmentIndex,
+    Point Start,
+    Point End,
+    int DeltaX,
+    int DeltaY,
+    IReadOnlyList<string> BandMemberships,
+    string RouteProducer,
+    LogicalRouteStage RouteStage,
+    bool TraversalFallback,
+    IReadOnlyList<string> TraversalDiagnostics,
+    bool TerminalRegion,
+    bool OwnershipBoundary,
+    string Classification,
+    IReadOnlyList<TraceabilityViolationCode> AssociatedFindings,
+    IReadOnlyList<LogicalRouteHistoryDiagnostic> RouteHistory,
+    IReadOnlyList<Point> CompleteLogicalPoints,
+    IReadOnlyList<PhysicalSegmentDiagnostic> PhysicalSegments,
+    IReadOnlyList<Point> ReconstructedAbsoluteXmlPoints,
+    bool XmlContainsDiagonal);

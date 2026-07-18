@@ -134,6 +134,7 @@ internal static class DrawioDiagnosticReportBuilder
                 points = CompletePoints(link).Select(ToPoint).ToArray()
             })
             .ToArray();
+        var nonOrthogonalSegments = NonOrthogonalSegments(layout, ownership, bandReport);
 
         return JsonSerializer.Serialize(new
         {
@@ -190,6 +191,7 @@ internal static class DrawioDiagnosticReportBuilder
                 }).ToArray(),
                 findingCorrelations = bandReport.FindingCorrelations
             },
+            nonOrthogonalSegments,
             repair = new
             {
                 preRepairFindings = layout.PreRepairTraceability.Violations.Select((finding, index) =>
@@ -202,6 +204,70 @@ internal static class DrawioDiagnosticReportBuilder
                 layout.RepairRunReason
             }
         }, JsonOptions);
+    }
+
+    private static IReadOnlyList<NonOrthogonalSegmentDiagnostic> NonOrthogonalSegments(
+        RenderLayout layout,
+        CoordinateOwnershipCompilation ownership,
+        InterLayerBandReport? bandReport)
+    {
+        var anchors = new HashSet<Point>(ownership.Anchors.Select(anchor => anchor.AbsolutePoint));
+        return layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal).SelectMany(link =>
+        {
+            var points = CompletePoints(link).ToArray();
+            var physical = ownership.Segments.Where(segment => segment.LogicalEdgeId == link.Link.Id)
+                .OrderBy(segment => segment.SegmentIndex).ToArray();
+            var physicalDiagnostics = physical.Select(segment => new PhysicalSegmentDiagnostic(
+                segment.Id, segment.SegmentIndex, segment.Role, segment.OwnerProjectId,
+                new[] { segment.AbsoluteStart }.Concat(segment.AbsoluteWaypoints).Concat(new[] { segment.AbsoluteEnd }).ToArray()))
+                .ToArray();
+            var reconstructed = new List<Point>();
+            foreach (var segment in physicalDiagnostics)
+            {
+                foreach (var point in segment.AbsolutePoints)
+                {
+                    if (reconstructed.Count == 0 || reconstructed[reconstructed.Count - 1] != point) reconstructed.Add(point);
+                }
+            }
+            var fallback = layout.Traversals.Geometry.TryGetValue(link.Link.Id, out var geometry) && geometry.UsedFallback;
+            return Enumerable.Range(0, points.Length - 1).Where(index =>
+                    points[index].X != points[index + 1].X && points[index].Y != points[index + 1].Y)
+                .Select(index =>
+                {
+                    var start = points[index];
+                    var end = points[index + 1];
+                    var terminal = index == 0 || index == points.Length - 2;
+                    var boundary = anchors.Contains(start) || anchors.Contains(end);
+                    var classification = terminal ? "terminal attachment artefact" :
+                        boundary ? "ownership-anchor artefact" :
+                        fallback ? "fallback geometry" : "actual final diagonal route";
+                    var memberships = bandReport?.Bands.SelectMany(band => band.Memberships)
+                        .Where(membership => membership.LogicalEdgeIdentity == link.Link.Id &&
+                            index >= membership.FirstSegmentIndex && index <= membership.LastSegmentIndex)
+                        .Select(membership => membership.BandId.ToString()).Distinct(StringComparer.Ordinal)
+                        .OrderBy(id => id, StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
+                    var findings = layout.Traceability.Violations.Where(finding =>
+                            finding.EdgeId == link.Link.Id || finding.OtherEdgeId == link.Link.Id)
+                        .Select(finding => finding.Code).Distinct().OrderBy(code => code).ToArray();
+                    var history = link.RouteState.History.Select(snapshot => new LogicalRouteHistoryDiagnostic(
+                        snapshot.Revision, snapshot.Stage, snapshot.Producer, snapshot.CompilationStatus,
+                        snapshot.Points,
+                        snapshot.Points.Zip(snapshot.Points.Skip(1), (left, right) => (left, right))
+                            .Any(pair => pair.left.X != pair.right.X && pair.left.Y != pair.right.Y))).ToArray();
+                    var xmlContains = reconstructed.Zip(reconstructed.Skip(1), (left, right) => (left, right))
+                        .Any(pair => pair.left == start && pair.right == end || pair.left == end && pair.right == start);
+                    return new NonOrthogonalSegmentDiagnostic(
+                        link.Link.Id, link.Link.SourceId, layout.Nodes[link.Link.SourceId].Node.Name,
+                        link.Link.TargetId, layout.Nodes[link.Link.TargetId].Node.Name,
+                        link.RouteState.Revision, index, start, end, end.X - start.X, end.Y - start.Y,
+                        memberships, link.RouteState.Producer, link.RouteState.Stage, fallback,
+                        layout.Traversals.Traversals.TryGetValue(link.Link.Id, out var traversal)
+                            ? traversal.Diagnostics.Select(item => item.Code).ToArray()
+                            : Array.Empty<string>(),
+                        terminal, boundary,
+                        classification, findings, history, points, physicalDiagnostics, reconstructed, xmlContains);
+                });
+        }).ToArray();
     }
 
     public static IReadOnlyDictionary<string, string> FocusedOutputs(
