@@ -81,15 +81,6 @@ internal static class CoordinateOwnershipCompiler
         bool projectContainersEnabled)
     {
         var completePoints = CompletePoints(link);
-        var normalizedPoints = NormalizePolyline(completePoints);
-        var logicalPoints = completePoints.Length >= 4 && normalizedPoints.Count == 2 &&
-            Enumerable.Range(0, completePoints.Length - 2).Any(index =>
-                TraceabilityValidator.IsImmediateReversal(
-                    completePoints[index],
-                    completePoints[index + 1],
-                    completePoints[index + 2]))
-                ? normalizedPoints
-                : completePoints;
         var sourceProjectId = OwnedProjectId(nodes, projects, link.Link.SourceId, projectContainersEnabled);
         var targetProjectId = OwnedProjectId(nodes, projects, link.Link.TargetId, projectContainersEnabled);
         var relevantProjects = new[] { sourceProjectId, targetProjectId }
@@ -97,7 +88,7 @@ internal static class CoordinateOwnershipCompiler
             .Distinct(StringComparer.Ordinal)
             .Select(id => projects[id!])
             .ToArray();
-        var expanded = InsertBoundaryIntersections(logicalPoints, relevantProjects);
+        var expanded = InsertBoundaryIntersections(completePoints, relevantProjects);
         var runs = OwnershipRuns(expanded, sourceProjectId, targetProjectId, projects);
         if (runs.Count == 0)
         {
@@ -184,7 +175,7 @@ internal static class CoordinateOwnershipCompiler
 
         var result = new CoordinateOwnershipCompilation(anchors, physicalSegments);
         var reconstructed = ReconstructAbsolutePoints(result, link.Link.Id);
-        if (!NormalizePolyline(logicalPoints).SequenceEqual(NormalizePolyline(reconstructed)))
+        if (!EquivalentPolyline(completePoints, reconstructed))
         {
             throw new InvalidOperationException(
                 $"Coordinate ownership compilation changed logical edge {link.Link.Id} geometry.");
@@ -332,7 +323,12 @@ internal static class CoordinateOwnershipCompiler
     private static int Distance(Point left, Point right) =>
         Math.Abs(left.X - right.X) + Math.Abs(left.Y - right.Y);
 
-    private static IReadOnlyList<Point> NormalizePolyline(IReadOnlyList<Point> points)
+    private static bool EquivalentPolyline(
+        IReadOnlyList<Point> expected,
+        IReadOnlyList<Point> actual) =>
+        RemoveRedundantSubdivisions(expected).SequenceEqual(RemoveRedundantSubdivisions(actual));
+
+    private static IReadOnlyList<Point> RemoveRedundantSubdivisions(IReadOnlyList<Point> points)
     {
         var result = new List<Point>();
         foreach (var point in points)
@@ -343,8 +339,11 @@ internal static class CoordinateOwnershipCompiler
                 var first = result[result.Count - 3];
                 var middle = result[result.Count - 2];
                 var last = result[result.Count - 1];
-                if (!((first.X == middle.X && middle.X == last.X) ||
-                    (first.Y == middle.Y && middle.Y == last.Y)))
+                var verticalSubdivision = first.X == middle.X && middle.X == last.X &&
+                    BetweenInclusive(middle.Y, first.Y, last.Y);
+                var horizontalSubdivision = first.Y == middle.Y && middle.Y == last.Y &&
+                    BetweenInclusive(middle.X, first.X, last.X);
+                if (!verticalSubdivision && !horizontalSubdivision)
                 {
                     break;
                 }

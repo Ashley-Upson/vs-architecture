@@ -36,7 +36,7 @@ public sealed class CoordinateOwnershipCompilerTests
         Assert.Equal(new[] { "edge__segment__000", "edge__segment__001", "edge__segment__002" }, result.Segments.Select(segment => segment.Id));
         Assert.Equal(2, result.Anchors.Count);
         Assert.Equal(new[] { new Point(100, 50), new Point(300, 50) }, result.Anchors.Select(anchor => anchor.AbsolutePoint));
-        Assert.Equal(CompletePoints(context.Link), Normalize(CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge")));
+        AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class CoordinateOwnershipCompilerTests
 
         Assert.Equal(new[] { "a", "1", "a" }, result.Segments.Select(segment => segment.ParentId));
         Assert.Equal(2, result.Anchors.Count);
-        Assert.Equal(CompletePoints(context.Link), Normalize(CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge")));
+        AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class CoordinateOwnershipCompilerTests
         var result = Compile(context);
 
         Assert.Equal(new Point(100, 50), Assert.Single(result.Anchors).AbsolutePoint);
-        Assert.Equal(CompletePoints(context.Link), Normalize(CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge")));
+        AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
     [Fact]
@@ -224,7 +224,44 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var ownership = Compile(context);
 
-        Assert.Equal(Normalize(selected), Normalize(CoordinateOwnershipCompiler.ReconstructAbsolutePoints(ownership, "edge")));
+        AssertEquivalentPolyline(selected, CoordinateOwnershipCompiler.ReconstructAbsolutePoints(ownership, "edge"));
+    }
+
+    [Fact]
+    public void Compile_preserves_authoritative_reversal_that_old_ownership_normalization_removed()
+    {
+        var context = Context(
+            Array.Empty<ProjectLayout>(),
+            new[] { Node("source", null), Node("target", null) },
+            Link("edge", "source", "target", new Point(0, 0), new[]
+            {
+                new Point(100, 0),
+                new Point(40, 0)
+            }, new Point(180, 0)));
+
+        var result = Compile(context);
+
+        Assert.Equal(
+            new[] { new Point(0, 0), new Point(100, 0), new Point(40, 0), new Point(180, 0) },
+            CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
+    }
+
+    [Fact]
+    public void Compile_preserves_terminal_transition_and_ordinary_bends()
+    {
+        var context = Context(
+            Array.Empty<ProjectLayout>(),
+            new[] { Node("source", null), Node("target", null) },
+            Link("edge", "source", "target", new Point(20, 20), new[]
+            {
+                new Point(20, 40),
+                new Point(120, 40),
+                new Point(120, 180)
+            }, new Point(120, 200)));
+
+        var result = Compile(context);
+
+        Assert.Equal(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
     private static CoordinateOwnershipCompilation Compile(TestContext context) =>
@@ -279,22 +316,35 @@ public sealed class CoordinateOwnershipCompilerTests
         new(new RenderLink(id, sourceId, targetId, "internal", order), source, target, waypoints, 0.5, 0.5);
 
     private static IReadOnlyList<Point> CompletePoints(LinkLayout link) =>
-        Normalize(new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray());
+        new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
 
-    private static IReadOnlyList<Point> Normalize(IReadOnlyList<Point> points)
+    private static void AssertEquivalentPolyline(IReadOnlyList<Point> expected, IReadOnlyList<Point> actual) =>
+        Assert.Equal(RemoveRedundantSubdivisions(expected), RemoveRedundantSubdivisions(actual));
+
+    private static IReadOnlyList<Point> RemoveRedundantSubdivisions(IReadOnlyList<Point> points)
     {
         var result = new List<Point>();
         foreach (var point in points)
         {
-            if (result.Count == 0 || result[result.Count - 1] != point)
+            if (result.Count == 0 || result[^1] != point)
             {
                 result.Add(point);
             }
 
-            while (result.Count >= 3 &&
-                (result[^3].X == result[^2].X && result[^2].X == result[^1].X ||
-                 result[^3].Y == result[^2].Y && result[^2].Y == result[^1].Y))
+            while (result.Count >= 3)
             {
+                var first = result[^3];
+                var middle = result[^2];
+                var last = result[^1];
+                var verticalSubdivision = first.X == middle.X && middle.X == last.X &&
+                    middle.Y >= Math.Min(first.Y, last.Y) && middle.Y <= Math.Max(first.Y, last.Y);
+                var horizontalSubdivision = first.Y == middle.Y && middle.Y == last.Y &&
+                    middle.X >= Math.Min(first.X, last.X) && middle.X <= Math.Max(first.X, last.X);
+                if (!verticalSubdivision && !horizontalSubdivision)
+                {
+                    break;
+                }
+
                 result.RemoveAt(result.Count - 2);
             }
         }
