@@ -39,7 +39,7 @@ internal sealed partial class RenderLayout
 
                 placement = placement.Revise(
                     capacityExpansion.Nodes,
-                    PositionProjects(placement.Graph, settings, capacityExpansion.Nodes));
+                    PlacementPipeline.PositionProjects(placement.Graph, settings, capacityExpansion.Nodes));
                 positionedLinks = MeasureStage(timings, "candidate construction and selection", () =>
                     PositionLinks(placement.Graph, settings, placement.Nodes));
                 provisionalLinks = positionedLinks.Links;
@@ -67,7 +67,7 @@ internal sealed partial class RenderLayout
             {
                 placement = placement.Revise(
                     expansion.Nodes,
-                    PositionProjects(placement.Graph, settings, expansion.Nodes));
+                    PlacementPipeline.PositionProjects(placement.Graph, settings, expansion.Nodes));
                 positionedLinks = MeasureStage(timings, "candidate construction and selection", () =>
                     PositionLinks(placement.Graph, settings, placement.Nodes));
                 provisionalLinks = positionedLinks.Links;
