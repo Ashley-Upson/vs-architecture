@@ -12,7 +12,7 @@ internal static class PlacementPipeline
     private const int TextWidth = 8;
     private const string ExposureTreeIdPrefix = "tree_";
 
-    public static PlacementResult Place(
+    public static PlacedGraph Place(
         RenderGraph graph,
         DiagramSettings settings,
         LayoutRevision revision,
@@ -22,11 +22,20 @@ internal static class PlacementPipeline
         var hierarchy = HierarchyAnalyzer.Analyze(graph, revision, cancellationToken);
         var depthOffsets = CalculateDepthOffsets(graph, settings, hierarchy.VisualLayerByNode);
         var widths = CalculateWidths(graph, settings);
-        var nodes = PositionNodes(graph, settings, hierarchy.VisualLayerByNode, depthOffsets, widths, cancellationToken);
+        var basePlacements = new Dictionary<string, NodeBasePlacement>(StringComparer.Ordinal);
+        var nodes = PositionNodes(
+            graph, settings, hierarchy.VisualLayerByNode, depthOffsets, widths, basePlacements, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var projects = PositionProjects(graph, settings, nodes);
         cancellationToken.ThrowIfCancellationRequested();
-        return new PlacementResult(hierarchy, nodes, projects);
+        return new PlacedGraph(
+            graph,
+            hierarchy,
+            basePlacements,
+            LayoutTranslations.Between(basePlacements, nodes),
+            nodes,
+            ProjectPlacementResult.Create(graph, projects),
+            revision);
     }
 
         private static Dictionary<string, int> CalculateWidths(RenderGraph graph, DiagramSettings settings)
@@ -96,12 +105,13 @@ internal static class PlacementPipeline
             IReadOnlyDictionary<string, int> depths,
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths,
+            Dictionary<string, NodeBasePlacement> basePlacements,
             CancellationToken cancellationToken)
         {
             if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)) &&
                 (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold || IsRootedExposureForest(graph)))
             {
-                return PositionExposureTrees(graph, settings, depths, widths, cancellationToken);
+                return PositionExposureTrees(graph, settings, depths, widths, basePlacements, cancellationToken);
             }
 
             var incidentIds = new HashSet<string>(
@@ -124,6 +134,7 @@ internal static class PlacementPipeline
                         new Rect(x, NodeY(layer.Key, settings, depthOffsets), widths[node.Id], settings.Layout.NodeHeight),
                         layer.Key,
                         false);
+                    RecordBasePlacement(basePlacements, result[node.Id]);
                     x += widths[node.Id] + settings.Layout.HorizontalSpacing;
                 }
             }
@@ -172,6 +183,7 @@ internal static class PlacementPipeline
                         settings.Layout.NodeHeight),
                     depths[node.Id],
                     true);
+                RecordBasePlacement(basePlacements, result[node.Id]);
             }
 
             return result;
@@ -182,6 +194,7 @@ internal static class PlacementPipeline
             DiagramSettings settings,
             IReadOnlyDictionary<string, int> depths,
             IReadOnlyDictionary<string, int> widths,
+            Dictionary<string, NodeBasePlacement> basePlacements,
             CancellationToken cancellationToken)
         {
             var result = new Dictionary<string, NodeLayout>(StringComparer.Ordinal);
@@ -240,6 +253,7 @@ internal static class PlacementPipeline
                     outgoing,
                     nodeById,
                     result,
+                    basePlacements,
                     placed,
                     new HashSet<string>(StringComparer.Ordinal),
                     depthGaps,
@@ -280,6 +294,7 @@ internal static class PlacementPipeline
                         settings.Layout.NodeHeight),
                     depths.TryGetValue(node.Id, out var depth) ? depth : 0,
                     true);
+                RecordBasePlacement(basePlacements, result[node.Id]);
             }
 
             return result;
@@ -488,6 +503,7 @@ internal static class PlacementPipeline
             IReadOnlyDictionary<string, RenderLink[]> outgoing,
             IReadOnlyDictionary<string, RenderNode> nodeById,
             Dictionary<string, NodeLayout> result,
+            Dictionary<string, NodeBasePlacement> basePlacements,
             HashSet<string> placed,
             HashSet<string> ancestors,
             IReadOnlyDictionary<int, int> depthGaps,
@@ -511,6 +527,7 @@ internal static class PlacementPipeline
                 new Rect(x, top, width, settings.Layout.NodeHeight),
                 depth,
                 false);
+            RecordBasePlacement(basePlacements, result[nodeId]);
             placed.Add(nodeId);
 
             if (!outgoing.TryGetValue(nodeId, out var childLinks) || childLinks.Length == 0)
@@ -548,6 +565,7 @@ internal static class PlacementPipeline
                     outgoing,
                     nodeById,
                     result,
+                    basePlacements,
                     placed,
                     new HashSet<string>(ancestors, StringComparer.Ordinal),
                     depthGaps,
@@ -555,6 +573,13 @@ internal static class PlacementPipeline
                 childLeft += child.Measure.Width + gap;
             }
         }
+
+        private static void RecordBasePlacement(
+            IDictionary<string, NodeBasePlacement> basePlacements,
+            NodeLayout layout) =>
+            basePlacements.Add(
+                layout.Node.Id,
+                new NodeBasePlacement(layout.Node.Id, layout.Rect, layout.Depth, layout.IsStandalone));
 
         private static int ExposureTreeHorizontalGap(DiagramSettings settings, int depth)
         {
@@ -867,8 +892,3 @@ internal static class PlacementPipeline
             settings.Layout.ContainerPadding * 2 + depth * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing) +
             (depthOffsets.TryGetValue(depth, out var offset) ? offset : 0);
 }
-
-internal sealed record PlacementResult(
-    LayoutHierarchy Hierarchy,
-    IReadOnlyDictionary<string, NodeLayout> Nodes,
-    IReadOnlyDictionary<string, ProjectLayout> Projects);

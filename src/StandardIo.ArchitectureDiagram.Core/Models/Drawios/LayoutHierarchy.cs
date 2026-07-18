@@ -60,4 +60,8 @@ internal sealed class LayoutHierarchy
     public IReadOnlyDictionary<string, HierarchyEdgeDirection> EdgeDirectionByLink { get; }
     public IReadOnlyDictionary<string, LayoutNodeProvenance> ProvenanceByNode { get; }
     public LayoutRevision Revision { get; }
+
+    public LayoutHierarchy WithRevision(LayoutRevision revision) =>
+        new(ParentByNode, ChildrenByNode, RootNodeIds, ComponentByNode, Components, StableNodeOrder,
+            VisualLayerByNode, EdgeDirectionByLink, ProvenanceByNode, revision);
 }

@@ -110,9 +110,8 @@ internal sealed partial class RenderLayout
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var timings = new List<PipelineStageMetric>();
-            var placement = MeasureStage(timings, "node placement", () =>
+            var placed = MeasureStage(timings, "node placement", () =>
                 PlacementPipeline.Place(graph, settings, new LayoutRevision(0)));
-            var placed = new PlacedGraph(graph, placement.Nodes, placement.Projects, new LayoutRevision(0));
             var routed = LegacyRoutingPipeline.Run(placed, settings, timings);
 
             return new RenderLayout(graph, routed.Placement.Nodes, routed.Placement.Projects, routed.Links,

@@ -22,22 +22,66 @@ internal sealed class PlacedGraph
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, ProjectLayout> projects,
         LayoutRevision revision)
+        : this(
+            graph,
+            HierarchyAnalyzer.Analyze(graph, revision),
+            nodes.ToDictionary(
+                item => item.Key,
+                item => new NodeBasePlacement(
+                    item.Key, item.Value.Rect, item.Value.Depth, item.Value.IsStandalone),
+                StringComparer.Ordinal),
+            new LayoutTranslations(nodes.ToDictionary(
+                item => item.Key,
+                _ => NodeTranslation.None,
+                StringComparer.Ordinal)),
+            nodes,
+            ProjectPlacementResult.Create(graph, projects),
+            revision)
+    {
+    }
+
+    public PlacedGraph(
+        RenderGraph graph,
+        LayoutHierarchy hierarchy,
+        IReadOnlyDictionary<string, NodeBasePlacement> nodeBasePlacements,
+        LayoutTranslations translations,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        ProjectPlacementResult projectPlacement,
+        LayoutRevision revision)
     {
         Graph = graph ?? throw new ArgumentNullException(nameof(graph));
+        Hierarchy = hierarchy ?? throw new ArgumentNullException(nameof(hierarchy));
+        NodeBasePlacements = Snapshot(nodeBasePlacements);
+        Translations = translations ?? throw new ArgumentNullException(nameof(translations));
         Nodes = Snapshot(nodes);
-        Projects = Snapshot(projects);
+        ProjectPlacement = projectPlacement ?? throw new ArgumentNullException(nameof(projectPlacement));
         Revision = revision;
     }
 
     public RenderGraph Graph { get; }
+    public LayoutHierarchy Hierarchy { get; }
+    public IReadOnlyDictionary<string, NodeBasePlacement> NodeBasePlacements { get; }
+    public LayoutTranslations Translations { get; }
     public IReadOnlyDictionary<string, NodeLayout> Nodes { get; }
-    public IReadOnlyDictionary<string, ProjectLayout> Projects { get; }
+    public ProjectPlacementResult ProjectPlacement { get; }
+    public IReadOnlyDictionary<string, ProjectLayout> Projects => ProjectPlacement.Layouts;
+    public NodeOwnership NodeOwnership => ProjectPlacement.NodeOwnership;
     public LayoutRevision Revision { get; }
 
     public PlacedGraph Revise(
         IReadOnlyDictionary<string, NodeLayout> nodes,
-        IReadOnlyDictionary<string, ProjectLayout> projects) =>
-        new(Graph, nodes, projects, Revision.Next());
+        IReadOnlyDictionary<string, ProjectLayout> projects)
+    {
+        var nextRevision = Revision.Next();
+        return new PlacedGraph(
+            Graph,
+            Hierarchy.WithRevision(nextRevision),
+            NodeBasePlacements,
+            LayoutTranslations.Between(NodeBasePlacements, nodes),
+            nodes,
+            ProjectPlacement.WithLayouts(projects),
+            nextRevision);
+    }
 
     private static IReadOnlyDictionary<string, TValue> Snapshot<TValue>(
         IReadOnlyDictionary<string, TValue> source) =>
