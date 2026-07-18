@@ -71,6 +71,10 @@ internal static class InterLayerBandObserver
                 {
                     var start = points[segmentIndex];
                     var end = points[segmentIndex + 1];
+                    if (start.X != end.X && start.Y != end.Y)
+                    {
+                        item.Band.UnsupportedShapes.Add($"{link.Link.Id}:segment-{segmentIndex}:non-orthogonal");
+                    }
                     if (start.Y != end.Y || start.Y < item.Band.UpperBoundary || start.Y > item.Band.LowerBoundary) continue;
                     item.Band.PendingDemands.Add(new PendingDemand(
                         $"{membershipId}:segment-{segmentIndex}", link.Link.Id, routes.Revision, item.Band.Id,
@@ -161,6 +165,7 @@ internal static class InterLayerBandObserver
         public int LowerBoundary { get; }
         public List<BandRouteMembership> Memberships { get; } = new();
         public List<PendingDemand> PendingDemands { get; } = new();
+        public List<string> UnsupportedShapes { get; } = new();
 
         public InterLayerBandObservation Build(int clearance, int padding, ref long comparisons)
         {
@@ -168,6 +173,8 @@ internal static class InterLayerBandObserver
             var maximumOverlap = 0;
             var overlapGroups = 0;
             var laneCount = 0;
+            var ordinaryLaneCount = 0;
+            var returnLaneCount = 0;
             foreach (var roleGroup in PendingDemands.GroupBy(item => item.Role).OrderBy(group => group.Key))
             {
                 var ordered = roleGroup.OrderBy(item => item.XStart).ThenBy(item => item.XEnd)
@@ -192,15 +199,25 @@ internal static class InterLayerBandObserver
                     demands.Add(demand.ToDemand(lane));
                 }
                 laneCount = Math.Max(laneCount, laneEnds.Count);
+                if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = laneEnds.Count;
+                else ordinaryLaneCount = Math.Max(ordinaryLaneCount, laneEnds.Count);
             }
             var current = Math.Max(0, LowerBoundary - UpperBoundary);
-            var required = PendingDemands.Count == 0 ? current : padding * 2 + Math.Max(1, laneCount) * clearance;
-            var returnLanes = demands.Where(item => item.Role == BandMembershipRole.Return)
-                .Select(item => item.LaneIndex).Distinct().Count();
+            var ordinary = demands.Where(item => item.Role != BandMembershipRole.Return).ToArray();
+            var returns = demands.Where(item => item.Role == BandMembershipRole.Return).ToArray();
+            var returnRegions = returns.Select(item => new BandReturnRegionObservation(
+                item.Id, item.LogicalEdgeIdentity, item.Direction == BandRouteDirection.Left ? "left" : "right",
+                item.XStart, item.XEnd, ordinary.Any(other =>
+                    item.XStart < other.XEnd + clearance && other.XStart < item.XEnd + clearance))).ToArray();
+            var effectiveLanes = returnRegions.Any(item => item.ConflictsWithDownwardTraffic)
+                ? ordinaryLaneCount + returnLaneCount
+                : Math.Max(ordinaryLaneCount, returnLaneCount);
+            var required = PendingDemands.Count == 0 ? current : padding * 2 + Math.Max(1, effectiveLanes) * clearance;
             return new InterLayerBandObservation(Id, UpperBoundary, LowerBoundary, current, required,
                 Math.Max(0, required - current), Memberships.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 demands.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(), overlapGroups,
-                maximumOverlap, laneCount, returnLanes, Array.Empty<string>());
+                maximumOverlap, Math.Max(laneCount, effectiveLanes), returnLaneCount, returnRegions,
+                UnsupportedShapes.OrderBy(item => item, StringComparer.Ordinal).ToArray());
         }
     }
 

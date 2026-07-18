@@ -46,7 +46,16 @@ internal sealed record InterLayerBandObservation(
     int MaximumSimultaneousOverlap,
     int HypotheticalLaneCount,
     int ReturnLaneCount,
+    IReadOnlyList<BandReturnRegionObservation> ReturnRegions,
     IReadOnlyList<string> UnsupportedShapes);
+
+internal sealed record BandReturnRegionObservation(
+    string DemandId,
+    string LogicalEdgeIdentity,
+    string SideChoice,
+    int XStart,
+    int XEnd,
+    bool ConflictsWithDownwardTraffic);
 
 internal sealed record BandFindingCorrelation(
     TraceabilityViolationCode Code,

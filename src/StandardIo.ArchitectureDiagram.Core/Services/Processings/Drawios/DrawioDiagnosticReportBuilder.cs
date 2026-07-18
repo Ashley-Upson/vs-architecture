@@ -183,6 +183,7 @@ internal static class DrawioDiagnosticReportBuilder
                     band.MaximumSimultaneousOverlap,
                     band.HypotheticalLaneCount,
                     band.ReturnLaneCount,
+                    band.ReturnRegions,
                     band.Memberships,
                     band.Demands,
                     band.UnsupportedShapes
