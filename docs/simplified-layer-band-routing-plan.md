@@ -170,6 +170,12 @@ This is preferable to repeatedly rewriting rectangles because it avoids numeric 
 | Stable bases plus layer/subtree offsets | Deterministic, auditable, cheap vertical shifts | Needs one materialization step | Recommended. |
 | Internal parent-relative coordinates | Natural subtree motion | Complex canonical/cycle transforms and obstacle queries | Not recommended. |
 
+### Stage A implementation boundary
+
+Stage A resolves this design as `HierarchyAnalyzer -> LayoutHierarchy -> PlacementPipeline -> PlacedGraph`. `LayoutHierarchy` carries SCC membership, acyclic parent/child relationships, stable ordering, visual layers, edge direction, provenance, and the layout revision. `PlacementPipeline` contains coherent ordinary and exposure placement sections and returns stable base rectangles plus composed translations. `ProjectPlacementResult` separately records initial project rectangles and visual ownership.
+
+The initial placed graph is revision 0. Legacy capacity expansion creates a revised immutable placement and recomputes translations from the same bases. `LegacyRoutingPipeline` consumes this typed boundary and remains the sole routing authority through Stage A. The detailed contract is documented in [layout-placement-architecture.md](layout-placement-architecture.md).
+
 ## 5. Draw.io ownership decision
 
 Physical Draw.io parentage does not follow the layout-parent tree.
@@ -335,7 +341,7 @@ Repeated O(E²) validation should be replaced in stages with band-local interval
 
 | Stage | Change | Acceptance fixtures | Rollback point |
 | --- | --- | --- | --- |
-| A | Add `LayoutHierarchy`, stable base placements and composed offsets; materialized rectangles must be identical. | Single chain, two siblings, canonical multi-parent, duplicated exposure path, SCC/cycle, reversed enumeration. | Disable hierarchy materialization and use existing `PositionNodes`. |
+| A | **Complete:** `HierarchyAnalyzer`, `LayoutHierarchy`, stable base placements, composed translations, typed project placement, and immutable `PlacedGraph`; legacy routing remains authoritative. | Single chain, two siblings, canonical multi-parent, duplicated exposure path, SCC/cycle, reversed enumeration, ownership, revision and cancellation. | Revert the Stage A extraction commits and restore placement inside `RenderLayout`. |
 | B | Add observational `InterLayerRoutingBand` telemetry without changing geometry. | Adjacent, skipped-layer, upward, fan-out, non-overlapping interval reuse, crossing. | Stop emitting band telemetry; no output change. |
 | C | Calculate exact band extent and layer offsets while retaining existing downstream routing. | 148/76/72 exact expansion, multiple bands, combined deltas, convergence, deterministic repeat. | Feature switch returns existing capacity expansion. |
 | D | Compile band lanes for simple downward forest routes. | Direct vertical, two/three fan-out, interval reuse, configured spacing, bottom/top terminals. | Route unsupported graph through existing corridor pipeline. |
