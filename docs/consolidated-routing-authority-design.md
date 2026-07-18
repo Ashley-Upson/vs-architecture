@@ -306,3 +306,62 @@ No listed subsystem is deleted in this tranche.
 Active production changes in this tranche are limited to node/terminal measurement and allocation, plus the parity adapter from Stage C contact policy to canonical contact facts. The whole-graph support gate, legacy/grouped authority selection, candidate construction, lanes, capacity, repair, fallback and final route selection are unchanged.
 
 `RailDemand`, `AssignedRail`, `RailTransition`, persistent constraints, invalidation and defect contracts are currently exercised by focused tests and optional diagnostics only. They do not assign live rails or move production nodes. Canonical all-route contact classification is optional diagnostic work only. No VSIX is packaged.
+
+## Canonical facts and consumer policy integration
+
+Canonical geometry and consumer policy are separate authorities. `CanonicalRouteContactDiscovery` supplies route-pair facts using `CanonicalContactClassifier`; `TraceabilityValidator`, component evidence and advisory scoring decide independently what each fact means.
+
+| Canonical fact | Final hard validation/component policy |
+|---|---|
+| `Disjoint` | no edge |
+| `CleanPerpendicularCrossover` | permitted; advisory scoring input only; no component edge |
+| `BendInvolvedPerpendicularContact` | hard ambiguous contact and component edge |
+| `EndpointToInterior` | hard ambiguous contact and component edge unless a future explicit terminal/junction owner permits it |
+| `NearParallelSpacingConflict` | edge where the routes compete in the same final allocation region |
+| `PositiveCollinearOverlap` | hard shared geometry and component edge |
+| `SharedBend` | hard shared turn and component edge |
+| `StraightContinuation` | no edge without genuine shared traceability ownership |
+| `EndpointToEndpoint` | no generic edge; requires terminal/junction classification first |
+| `TerminalContact` | unresolved terminal competition or identical assigned coordinate only |
+| `IntentionalSemanticJunction` | explicit junction ownership; never inferred as an ordinary conflict |
+
+The legacy validator's `PerpendicularCrossing` predicate used strict-interior crossing and therefore reported clean crossovers. It now preserves that public code only for bend-involved or endpoint-to-interior ambiguity. Clean crossovers remain counted by candidate/junction advisory scoring and are not hard findings.
+
+### Rail-conflict distinction
+
+Overlapping occupied intervals of unassigned demands whose allowed axis ranges overlap compete for lane assignment and create an allocation edge. Assigned rails do not conflict merely because their projected occupied intervals overlap: their actual axes must coincide or violate configured separation, or they must share an explicit transition/movement consequence. Current Stage B evidence consists of unassigned band demands, so all observed interval edges remain legitimate provisional allocation edges; no current closure edge was an assigned-rail projection edge, and the measured assigned-rail removal count is zero.
+
+### Revised four-graph closure
+
+Each entry is `component count / largest routes / median routes / singleton routes`. “Legacy broad” reconstructs the old broad semantics by including clean crossovers. “Canonical factual” includes every observed non-disjoint fact. “Policy” applies the table above with unresolved terminal allocation. “Resolved” retains only identical assigned terminal coordinates.
+
+| Graph | Legacy broad | Canonical factual | Policy | Resolved policy |
+|---|---|---|---|---|
+| StandardIo duplicated | 16/3/1/12 | 16/3/1/12 | 16/3/1/12 | 20/2/1/19 |
+| StandardIo deduplicated | 5/8/1/4 | 5/8/1/4 | 5/8/1/4 | 7/6/1/6 |
+| cCoder duplicated | 630/42/1/423 | 628/42/1/421 | 641/32/1/425 | 976/20/1/950 |
+| cCoder deduplicated | 1/294/294/0 | 1/294/294/0 | 23/271/1/21 | 25/270/1/24 |
+
+Deduplicated cCoder therefore no longer forms one policy-valid component. Its largest resolved component has 270 routes. Leading retained edges are 1,569 bend-involved contacts, 1,232 unassigned rail-demand conflicts, 895 spacing conflicts, 815 positive overlaps, 193 endpoint-to-interior contacts, 20 shared bends and nine obstacle-bypass relations. Two explicit deficient-band movement scopes connect 145 and 81 routes respectively. The broad one-component result depended on 3,400 clean crossovers. The compact reason/route map is `docs/evidence/ccoder-deduplicated-contact-component-map.csv`; full closure evidence is `docs/evidence/canonical-contact-policy-evidence.csv`.
+
+There is no single policy-valid chain joining all 294 routes after filtering, so no all-graph minimal cut exists. Within the 270-route largest component, the leading transitive backbone is bend-involved contact → unassigned band demand → spacing/positive overlap, reinforced by the two deficient-band movement scopes. Those movement-scope hyperedges are the smallest authority-level cuts joining their respective lower-layer regions; route-by-route cuts would misrepresent their coherent movement ownership.
+
+### Consumer inventory after integration
+
+| Consumer | Current factual geometry status | Policy status |
+|---|---|---|
+| `TraceabilityValidator` | canonical route-contact discovery directly | explicit hard-finding projection; clean crossings permitted |
+| diagnostic closure | canonical diagnostic facts directly | explicit unresolved/resolved component projection |
+| `BandConflictGrouper` | canonical classifier through parity adapter | Stage C compatibility policy retained |
+| global selector/candidate scoring | duplicates overlap, spacing and strict-interior crossing calculations | advisory lexicographic scoring remains consumer-specific |
+| regional interaction discovery | consumes global score summaries | interaction-reason policy remains regional |
+| junction metrics | duplicates overlap, spacing and strict-interior crossing calculations | metrics/advisory policy remains specialised |
+| obstacle/crossing helpers | rectangle/route predicates, not general route-contact classification | obstacle rejection remains specialised |
+
+Global/regional scoring and junction metrics are not migrated in this tranche because their route representations omit terminal/bend context required for exact canonical parity. Their strict-interior crossing calculation already represents the permitted advisory clean-crossover cost, but their duplicated factual helpers remain a future consolidation target.
+
+### Corrected node-width diagnostics and performance
+
+Diagnostics now report every winning requirement (`Current`, `Text`, `Incoming`, `Outgoing`), whether the node actually changed from the preceding production formula, and a single or multiple resize cause. Current inputs still resize only `ICoreContextFactory`, `AuthorizationBroker`, `ICoreAuthInfo` and `IEventHub`, all in deduplicated cCoder and all because incoming demand wins. Counts remain: StandardIo duplicated 22 text; StandardIo deduplicated 11 text; cCoder duplicated 427 current and 667 text; cCoder deduplicated 21 current, 155 text and four incoming. No ties occur.
+
+The indexed diagnostic contact sweep takes 9.8–33.9 ms across the four graphs; policy projection takes 0.1–1.2 ms. The four-graph PowerShell evidence projection takes approximately 9.2 seconds. Across every validation and repair trial in one instrumented cCoder deduplicated generation, validator contact discovery plus finding projection consumed 3.04 seconds. Normal cCoder deduplicated generation retained the accepted output hash; the first five-run median was 14,629 ms and a subsequent three-run verification median was 14,775 ms versus the 14,297 ms foundation median. Validator timing uses one enclosing timer per validation only when a performance session is requested, so normal generation does not pay per-pair stopwatch overhead.
