@@ -34,3 +34,11 @@ internal sealed record CommonAuthorityClosure(
 internal sealed record SharedTurnAllocation(
     IReadOnlyDictionary<string, IReadOnlyList<RailTransition>> TransitionsByRouteId,
     IReadOnlyList<string> RejectedRouteIds);
+
+internal sealed record LayerSuffixConstraintIteration(
+    PlacedGraph Placement,
+    IReadOnlyList<int> LayersMoved,
+    IReadOnlyList<string> NodesMoved,
+    IReadOnlyList<string> InvalidatedRouteIds,
+    int MaximumDelta,
+    bool Changed);
