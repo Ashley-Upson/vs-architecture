@@ -130,7 +130,14 @@ internal static class TraceabilityValidator
                 var leftBends = InteriorPoints(left);
                 var rightBends = InteriorPoints(right);
                 PerformanceAudit.Increment("segment-segment pair checks", (long)leftSegments.Length * rightSegments.Length);
-                var contacts = CanonicalRouteContactDiscovery.Discover(left, right, requiredParallelSpacing);
+                IReadOnlyList<RouteContactFact> contacts;
+                using (PerformanceAudit.Measure(
+                    "canonical route contact discovery",
+                    inputRoutes: 2,
+                    inputSegments: leftSegments.Length + rightSegments.Length))
+                {
+                    contacts = CanonicalRouteContactDiscovery.Discover(left, right, requiredParallelSpacing);
+                }
                 var sharedSegments = contacts
                     .Where(item => item.Contact.Kind == CanonicalContactKind.PositiveCollinearOverlap)
                     .Select(item => SharedSegment(item.FirstSegment, item.SecondSegment))

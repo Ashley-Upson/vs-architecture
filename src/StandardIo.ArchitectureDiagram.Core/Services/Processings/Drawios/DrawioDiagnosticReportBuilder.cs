@@ -10,6 +10,11 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class DrawioDiagnosticReportBuilder
 {
+    private sealed record DiagnosticContactFact(
+        string FirstRouteId,
+        string SecondRouteId,
+        CanonicalContact Contact);
+
     private sealed record FoundationCostObservation(
         long ConstraintMergeAndMaterializationMicroseconds,
         long InvalidationMicroseconds,
@@ -351,6 +356,14 @@ internal static class DrawioDiagnosticReportBuilder
                 measuredText + settings.LinkNodeWidthPadding,
                 Math.Max(0, incomingCount + outgoingCount - 1) * settings.EdgePortSpacing +
                 settings.LinkNodeWidthPadding));
+            var winningRequirements = new[]
+            {
+                new { Name = "Current", Value = settings.NodeWidth },
+                new { Name = "Text", Value = demand.TextSpaceRequirement },
+                new { Name = "Incoming", Value = demand.IncomingAttachmentSpaceRequirement },
+                new { Name = "Outgoing", Value = demand.OutgoingAttachmentSpaceRequirement }
+            }.Where(item => item.Value == demand.RequiredWidth).Select(item => item.Name).ToArray();
+            var actuallyResized = legacyWidth != demand.RequiredWidth;
             return new
             {
                 nodeId = node.Id,
@@ -364,7 +377,10 @@ internal static class DrawioDiagnosticReportBuilder
                 demand.OutgoingAttachmentSpaceRequirement,
                 incomingCount,
                 outgoingCount,
-                changedFromPreviousFormula = legacyWidth != demand.RequiredWidth,
+                winningRequirements,
+                actualResize = actuallyResized,
+                resizeCause = !actuallyResized ? "None" : string.Join("+", winningRequirements.Where(item => item != "Current")),
+                changedFromPreviousFormula = actuallyResized,
                 expandedFromConfiguredWidth = demand.RequiredWidth > settings.NodeWidth,
                 reason = demand.RequiredWidth == settings.NodeWidth ? "CurrentWidth" :
                     demand.RequiredWidth == demand.TextSpaceRequirement ? "Text" :
@@ -394,26 +410,55 @@ internal static class DrawioDiagnosticReportBuilder
     private static object ObserveCanonicalContacts(RenderLayout layout, int requiredSpacing)
     {
         var segments = layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal)
-            .SelectMany(link => ContactSegments(link).Select(segment => new { link.Link.Id, Segment = segment }))
+            .SelectMany(link => ContactSegments(link).Select(segment => new
+            {
+                link.Link.Id,
+                Segment = segment,
+                MinimumX = Math.Min(segment.Segment.Start.X, segment.Segment.End.X),
+                MaximumX = Math.Max(segment.Segment.Start.X, segment.Segment.End.X)
+            }))
+            .OrderBy(item => item.MinimumX).ThenBy(item => item.MaximumX).ThenBy(item => item.Id, StringComparer.Ordinal)
             .ToArray();
         var counts = Enum.GetValues(typeof(CanonicalContactKind)).Cast<CanonicalContactKind>()
             .ToDictionary(kind => kind, _ => 0);
+        var facts = new List<DiagnosticContactFact>();
         long comparisons = 0;
         for (var left = 0; left < segments.Length; left++)
         {
             for (var right = left + 1; right < segments.Length; right++)
             {
+                if (segments[right].MinimumX > segments[left].MaximumX + requiredSpacing) break;
                 if (string.Equals(segments[left].Id, segments[right].Id, StringComparison.Ordinal)) continue;
                 comparisons++;
                 var contact = CanonicalContactClassifier.Classify(
                     segments[left].Segment, segments[right].Segment, requiredSpacing);
                 counts[contact.Kind]++;
+                if (contact.Kind == CanonicalContactKind.Disjoint) continue;
+                var firstId = string.CompareOrdinal(segments[left].Id, segments[right].Id) <= 0
+                    ? segments[left].Id : segments[right].Id;
+                var secondId = string.CompareOrdinal(segments[left].Id, segments[right].Id) <= 0
+                    ? segments[right].Id : segments[left].Id;
+                facts.Add(new DiagnosticContactFact(firstId, secondId, contact));
             }
         }
+        var policyTimer = Stopwatch.StartNew();
+        var projectedFacts = facts.Select(fact => new
+        {
+            fact.FirstRouteId,
+            fact.SecondRouteId,
+            kind = fact.Contact.Kind.ToString(),
+            fact.Contact.Point,
+            fact.Contact.PositiveOverlap,
+            fact.Contact.Separation,
+            createsFinalGeometryEdge = ContactInteractionPolicy.CreatesFinalGeometryEdge(fact.Contact.Kind)
+        }).ToArray();
+        policyTimer.Stop();
         return new
         {
             comparisons,
-            counts = counts.OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Value)
+            counts = counts.OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Value),
+            policyProjectionMicroseconds = ToMicroseconds(policyTimer),
+            facts = projectedFacts
         };
     }
 
