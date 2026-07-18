@@ -78,21 +78,21 @@ internal static class BandConflictGrouper
         Segment second,
         Segment? secondContinuation)
     {
-        if (first.IsHorizontal != second.IsHorizontal && first.IsOrthogonal && second.IsOrthogonal)
-        {
-            var horizontal = first.IsHorizontal ? first : second;
-            var vertical = first.IsVertical ? first : second;
-            var point = new Point(vertical.Start.X, horizontal.Start.Y);
-            var strict = point.X > Math.Min(horizontal.Start.X, horizontal.End.X) &&
-                point.X < Math.Max(horizontal.Start.X, horizontal.End.X) &&
-                point.Y > Math.Min(vertical.Start.Y, vertical.End.Y) &&
-                point.Y < Math.Max(vertical.Start.Y, vertical.End.Y);
-            if (strict && firstContinuation is null && secondContinuation is null)
-                return RoutePointContactKind.CleanCrossover;
-        }
+        // Preserve the existing Stage C policy: any caller-supplied continuation makes
+        // the contact ambiguous. The canonical classifier provides the geometry fact;
+        // this adapter retains the current consumer policy and therefore route parity.
         if (firstContinuation is not null || secondContinuation is not null)
             return RoutePointContactKind.AmbiguousBend;
-        return RoutePointContactKind.StraightContinuation;
+        var contact = CanonicalContactClassifier.Classify(
+            new ContactSegment(first, Next: firstContinuation),
+            new ContactSegment(second, Next: secondContinuation));
+        return contact.Kind switch
+        {
+            CanonicalContactKind.CleanPerpendicularCrossover => RoutePointContactKind.CleanCrossover,
+            CanonicalContactKind.SharedBend or
+            CanonicalContactKind.BendInvolvedPerpendicularContact => RoutePointContactKind.AmbiguousBend,
+            _ => RoutePointContactKind.StraightContinuation
+        };
     }
 
     private static IReadOnlyDictionary<string, int> AssignLanes(IReadOnlyList<BandRouteDemand> demands, int clearance)
