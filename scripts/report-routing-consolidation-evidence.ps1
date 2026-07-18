@@ -79,14 +79,17 @@ $rows = foreach ($diagnosticPath in $DiagnosticPaths) {
             TargetId = $geometry.targetId
             SourceProjectId = if ($focused) { $focused.sourceNode.projectId } else { $null }
             TargetProjectId = if ($focused) { $focused.targetNode.projectId } else { $null }
+            SourceAxis = if (@($geometry.points).Count) { [int]$geometry.points[0].x } else { 0 }
+            TargetAxis = if (@($geometry.points).Count) { [int]$geometry.points[-1].x } else { 0 }
         }
     }
     $routeIds = @($routes | ForEach-Object LogicalRouteId | Sort-Object -Unique)
     $routeById = @{}; foreach ($route in $routes) { $routeById[$route.LogicalRouteId] = $route }
-    $direct = New-DisjointSet $routeIds
+    $base = New-DisjointSet $routeIds
+    $mergeCauses = @{}
     $bandByRoute = @{}; foreach ($id in $routeIds) { $bandByRoute[$id] = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal) }
 
-    # Semantic terminal sharing is a direct interaction relation.
+    # Semantic endpoint identity is an index, not an interaction edge.
     $terminalGroups = @{}
     foreach ($route in $routes) {
         foreach ($terminal in @($route.SourceId, $route.TargetId)) {
@@ -94,15 +97,18 @@ $rows = foreach ($diagnosticPath in $DiagnosticPaths) {
             $terminalGroups[$terminal].Add($route.LogicalRouteId)
         }
     }
-    foreach ($group in $terminalGroups.Values) {
-        for ($index = 1; $index -lt $group.Count; $index++) { Join-Items $direct $group[0] $group[$index] }
-    }
-
     $findings = @($report.repair.postRepairFindings)
     foreach ($finding in $findings) {
-        if ($finding.otherRouteId) { Join-Items $direct $finding.logicalRouteId $finding.otherRouteId }
+        if ($finding.otherRouteId) {
+            Join-Items $base $finding.logicalRouteId $finding.otherRouteId
+            $cause = "Contact:$($finding.validatorCode)"
+            $mergeCauses[$cause] = 1 + [int]($mergeCauses[$cause])
+        }
         if ($finding.otherNodeId -and $terminalGroups.ContainsKey($finding.otherNodeId)) {
-            foreach ($incident in $terminalGroups[$finding.otherNodeId]) { Join-Items $direct $finding.logicalRouteId $incident }
+            foreach ($incident in $terminalGroups[$finding.otherNodeId]) {
+                Join-Items $base $finding.logicalRouteId $incident
+                $mergeCauses['ObstacleBypass'] = 1 + [int]($mergeCauses['ObstacleBypass'])
+            }
         }
     }
 
@@ -121,13 +127,40 @@ $rows = foreach ($diagnosticPath in $DiagnosticPaths) {
                 if ([double]$right.xStart -gt [double]$left.xEnd) { break }
                 $intervalComparisons++
                 if ([double]$right.xEnd -ge [double]$left.xStart) {
-                    Join-Items $direct $left.logicalEdgeIdentity $right.logicalEdgeIdentity
+                    Join-Items $base $left.logicalEdgeIdentity $right.logicalEdgeIdentity
+                    $mergeCauses['RailIntervalConflict'] = 1 + [int]($mergeCauses['RailIntervalConflict'])
                 }
             }
         }
     }
 
-    $movement = Copy-DisjointSet $direct
+    $unresolved = Copy-DisjointSet $base
+    $resolvedTerminals = Copy-DisjointSet $base
+    $unresolvedTerminalEdges = 0
+    foreach ($group in @($routes | ForEach-Object {
+        [pscustomobject]@{ Key = "$($_.SourceId):OutgoingBottom:bottom"; Route = $_.LogicalRouteId }
+        [pscustomobject]@{ Key = "$($_.TargetId):IncomingTop:top"; Route = $_.LogicalRouteId }
+    } | Group-Object Key)) {
+        $members = @($group.Group.Route | Sort-Object -Unique)
+        for ($index = 1; $index -lt $members.Count; $index++) {
+            Join-Items $unresolved $members[0] $members[$index]
+            $unresolvedTerminalEdges++
+        }
+    }
+    $resolvedTerminalEdges = 0
+    foreach ($group in @($routes | ForEach-Object {
+        [pscustomobject]@{ Key = "$($_.SourceId):OutgoingBottom:bottom:$($_.SourceAxis)"; Route = $_.LogicalRouteId }
+        [pscustomobject]@{ Key = "$($_.TargetId):IncomingTop:top:$($_.TargetAxis)"; Route = $_.LogicalRouteId }
+    } | Group-Object Key)) {
+        $members = @($group.Group.Route | Sort-Object -Unique)
+        for ($index = 1; $index -lt $members.Count; $index++) {
+            Join-Items $resolvedTerminals $members[0] $members[$index]
+            $resolvedTerminalEdges++
+        }
+    }
+
+    $unresolvedMovement = Copy-DisjointSet $unresolved
+    $movement = Copy-DisjointSet $resolvedTerminals
     # A deficient band moves its lower layer and all deeper nodes. Close over every route
     # incident to that movement scope and every route already interacting with the band.
     foreach ($band in @($report.interLayerBands.bands | Where-Object { $_.missingExtent -gt 0 })) {
@@ -140,10 +173,14 @@ $rows = foreach ($diagnosticPath in $DiagnosticPaths) {
             $touchesMovedLayer = @($bandByRoute[$route.LogicalRouteId] | Where-Object { $affectedBands -contains $_ }).Count -gt 0
             if ($inBand -or $touchesMovedLayer) { $affected.Add($route.LogicalRouteId) }
         }
-        for ($index = 1; $index -lt $affected.Count; $index++) { Join-Items $movement $affected[0] $affected[$index] }
+        for ($index = 1; $index -lt $affected.Count; $index++) {
+            Join-Items $unresolvedMovement $affected[0] $affected[$index]
+            Join-Items $movement $affected[0] $affected[$index]
+        }
     }
 
-    $directComponents = @(Get-Components $direct $routeById $bandByRoute)
+    $unresolvedComponents = @(Get-Components $unresolvedMovement $routeById $bandByRoute)
+    $resolvedComponents = @(Get-Components $movement $routeById $bandByRoute)
     $movementComponents = @(Get-Components $movement $routeById $bandByRoute)
     $telemetry = $report.interLayerBands.telemetry
     $drawioPath = [IO.Path]::ChangeExtension($resolved, '.drawio')
@@ -174,8 +211,18 @@ $rows = foreach ($diagnosticPath in $DiagnosticPaths) {
         Projects = $projects.Count
         LegacyInteractionRegions = 'not exposed'
         GroupedConflictGroups = (@($report.interLayerBands.bands | Measure-Object overlapGroupCount -Sum).Sum)
-        DirectComponents = $directComponents.Count
-        DirectLargestRoutes = if ($directComponents.Count) { $directComponents[0].Routes } else { 0 }
+        TerminalUnresolvedComponents = $unresolvedComponents.Count
+        TerminalUnresolvedLargestRoutes = if ($unresolvedComponents.Count) { $unresolvedComponents[0].Routes } else { 0 }
+        TerminalUnresolvedMedianRoutes = if ($unresolvedComponents.Count) {
+            $sizes = @($unresolvedComponents.Routes | Sort-Object); $sizes[[int][Math]::Floor(($sizes.Count - 1) / 2)]
+        } else { 0 }
+        TerminalUnresolvedSingletons = @($unresolvedComponents | Where-Object Routes -eq 1).Count
+        TerminalResolvedComponents = $resolvedComponents.Count
+        TerminalResolvedLargestRoutes = if ($resolvedComponents.Count) { $resolvedComponents[0].Routes } else { 0 }
+        TerminalResolvedMedianRoutes = if ($resolvedComponents.Count) {
+            $sizes = @($resolvedComponents.Routes | Sort-Object); $sizes[[int][Math]::Floor(($sizes.Count - 1) / 2)]
+        } else { 0 }
+        TerminalResolvedSingletons = @($resolvedComponents | Where-Object Routes -eq 1).Count
         MovementClosedComponents = $movementComponents.Count
         LargestRoutes = if ($movementComponents.Count) { $movementComponents[0].Routes } else { 0 }
         LargestNodes = if ($movementComponents.Count) { $movementComponents[0].Nodes } else { 0 }
@@ -189,6 +236,21 @@ $rows = foreach ($diagnosticPath in $DiagnosticPaths) {
         UnsupportedShapes = [int]$telemetry.unsupportedShapeCount
         IntervalComparisons = $intervalComparisons
         CandidateParallelRegions = $movementComponents.Count
+        UnresolvedTerminalCompetitionEdges = $unresolvedTerminalEdges
+        ResolvedTerminalContactEdges = $resolvedTerminalEdges
+        TopMergeCauses = (@($mergeCauses.GetEnumerator() | Sort-Object -Property `
+            @{ Expression = 'Value'; Descending = $true }, @{ Expression = 'Name'; Ascending = $true } |
+            Select-Object -First 5 | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ';')
+        CanonicalCleanCrossovers = [int]$report.consolidatedFoundation.contacts.counts.CleanPerpendicularCrossover
+        CanonicalBendInvolvedContacts = [int]$report.consolidatedFoundation.contacts.counts.BendInvolvedPerpendicularContact
+        NodeTerminalDemandMicroseconds = [long]$report.consolidatedFoundation.timings.nodeAndTerminalDemandMicroseconds
+        CanonicalContactMicroseconds = [long]$report.consolidatedFoundation.timings.canonicalContactClassificationMicroseconds
+        ConstraintMaterializationMicroseconds = [long]$report.consolidatedFoundation.timings.constraintMergeAndMaterializationMicroseconds
+        InvalidationMicroseconds = [long]$report.consolidatedFoundation.timings.invalidationMicroseconds
+        TerminalComponentMicroseconds = [long]$report.consolidatedFoundation.timings.terminalComponentConstructionMicroseconds
+        NodesChangedFromPreviousFormula = [int]$report.consolidatedFoundation.nodeWidths.changedFromPreviousFormula
+        MaximumNodeWidthChange = [int]$report.consolidatedFoundation.nodeWidths.maximumAbsoluteChangeFromPreviousFormula
+        ObservedIncidentInvalidations = [int]$report.consolidatedFoundation.nodeWidths.observationalIncidentRouteInvalidations
     }
 }
 

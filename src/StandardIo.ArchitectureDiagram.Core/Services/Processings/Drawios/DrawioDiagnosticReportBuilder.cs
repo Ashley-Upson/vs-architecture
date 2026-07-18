@@ -10,6 +10,14 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class DrawioDiagnosticReportBuilder
 {
+    private sealed record FoundationCostObservation(
+        long ConstraintMergeAndMaterializationMicroseconds,
+        long InvalidationMicroseconds,
+        long TerminalComponentConstructionMicroseconds,
+        int InvalidationCount,
+        int UnresolvedTerminalComponents,
+        int ResolvedTerminalComponents);
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -137,10 +145,13 @@ internal static class DrawioDiagnosticReportBuilder
             })
             .ToArray();
         var nonOrthogonalSegments = NonOrthogonalSegments(layout, ownership, bandReport);
-        var foundationTimer = Stopwatch.StartNew();
+        var nodeTimer = Stopwatch.StartNew();
         var nodeWidthObservation = ObserveNodeWidths(layout, layoutSettings);
+        nodeTimer.Stop();
+        var contactTimer = Stopwatch.StartNew();
         var contactObservation = ObserveCanonicalContacts(layout, requiredSpacing);
-        foundationTimer.Stop();
+        contactTimer.Stop();
+        var foundationCosts = ObserveFoundationCosts(layout, layoutSettings);
 
         return JsonSerializer.Serialize(new
         {
@@ -177,7 +188,17 @@ internal static class DrawioDiagnosticReportBuilder
             {
                 nodeWidths = nodeWidthObservation,
                 contacts = contactObservation,
-                observationMicroseconds = foundationTimer.ElapsedTicks * 1000000 / Stopwatch.Frequency
+                directInvalidationCount = foundationCosts.InvalidationCount,
+                terminalUnresolvedComponents = foundationCosts.UnresolvedTerminalComponents,
+                terminalResolvedComponents = foundationCosts.ResolvedTerminalComponents,
+                timings = new
+                {
+                    nodeAndTerminalDemandMicroseconds = ToMicroseconds(nodeTimer),
+                    canonicalContactClassificationMicroseconds = ToMicroseconds(contactTimer),
+                    foundationCosts.ConstraintMergeAndMaterializationMicroseconds,
+                    foundationCosts.InvalidationMicroseconds,
+                    foundationCosts.TerminalComponentConstructionMicroseconds
+                }
             },
             stageTimings,
             interLayerBands = bandReport is null ? null : new
@@ -240,6 +261,76 @@ internal static class DrawioDiagnosticReportBuilder
         }, JsonOptions);
     }
 
+    private static FoundationCostObservation ObserveFoundationCosts(RenderLayout layout, LayoutSettings settings)
+    {
+        var incoming = layout.Graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var outgoing = layout.Graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var separation = TerminalDemandCalculator.AttachmentSeparation(
+            settings.EdgePortSpacing, settings.ParallelLaneSpacing);
+        var changedNodeIds = new HashSet<string>(StringComparer.Ordinal);
+        var constraintTimer = Stopwatch.StartNew();
+        var constraints = new GenerationConstraintStore();
+        var basis = new Dictionary<MovementScopeIdentity, Rect>();
+        foreach (var node in layout.Graph.Nodes.OrderBy(node => node.Id, StringComparer.Ordinal))
+        {
+            var incomingCount = incoming.TryGetValue(node.Id, out var inc) ? inc : 0;
+            var outgoingCount = outgoing.TryGetValue(node.Id, out var outgoingValue) ? outgoingValue : 0;
+            var textWidth = TerminalDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
+            var demand = TerminalDemandCalculator.Measure(
+                node.Id, settings.NodeWidth, textWidth, incomingCount, outgoingCount,
+                separation, settings.LinkNodeWidthPadding);
+            var legacyWidth = Math.Max(settings.NodeWidth, Math.Max(
+                textWidth + settings.LinkNodeWidthPadding,
+                Math.Max(0, incomingCount + outgoingCount - 1) * settings.EdgePortSpacing +
+                settings.LinkNodeWidthPadding));
+            if (legacyWidth != demand.RequiredWidth) changedNodeIds.Add(node.Id);
+            var scope = new MovementScopeIdentity(MovementScopeKind.Node, node.Id);
+            basis[scope] = layout.Nodes[node.Id].Rect with { Width = settings.NodeWidth };
+            constraints.Merge(new GenerationConstraint(
+                new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumWidth),
+                demand.RequiredWidth,
+                "terminal demand"));
+        }
+        _ = constraints.Materialize(basis);
+        constraintTimer.Stop();
+
+        var invalidationTimer = Stopwatch.StartNew();
+        var routeReferences = layout.Links.Values.Select(link => new SemanticRouteReference(
+            link.Link.Id, link.Link.SourceId, link.Link.TargetId, new RouteRevision(link.RouteState.Revision)));
+        var invalidations = changedNodeIds.Count == 0
+            ? Array.Empty<RouteInvalidation>()
+            : RouteInvalidationCalculator.ForChangedNodes(
+                routeReferences, changedNodeIds, RouteInvalidationCause.EndpointResized,
+                layout.LayoutRevision, layout.LayoutRevision.Next()).ToArray();
+        invalidationTimer.Stop();
+
+        var componentTimer = Stopwatch.StartNew();
+        var claims = layout.Links.Values.SelectMany(link => new[]
+        {
+            new TerminalAttachmentClaim(link.Link.Id, link.Link.SourceId,
+                TerminalAttachmentSide.OutgoingBottom, "bottom", link.SourcePoint.X),
+            new TerminalAttachmentClaim(link.Link.Id, link.Link.TargetId,
+                TerminalAttachmentSide.IncomingTop, "top", link.TargetPoint.X)
+        }).ToArray();
+        var ids = layout.Links.Keys.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var unresolved = ConflictComponentBuilder.Build(ids, id => id, TerminalInteractionEdges.BeforeAllocation(claims));
+        var resolved = ConflictComponentBuilder.Build(ids, id => id, TerminalInteractionEdges.AfterAllocation(claims));
+        componentTimer.Stop();
+
+        return new FoundationCostObservation(
+            ToMicroseconds(constraintTimer),
+            ToMicroseconds(invalidationTimer),
+            ToMicroseconds(componentTimer),
+            invalidations.Length,
+            unresolved.Count,
+            resolved.Count);
+    }
+
+    private static long ToMicroseconds(Stopwatch timer) =>
+        timer.ElapsedTicks * 1000000 / Stopwatch.Frequency;
+
     private static object ObserveNodeWidths(RenderLayout layout, LayoutSettings settings)
     {
         var separation = TerminalDemandCalculator.AttachmentSeparation(
@@ -263,6 +354,8 @@ internal static class DrawioDiagnosticReportBuilder
             return new
             {
                 nodeId = node.Id,
+                node.Name,
+                node.FullName,
                 previousWidth = legacyWidth,
                 requiredWidth = demand.RequiredWidth,
                 actualWidth = layout.Nodes[node.Id].Rect.Width,
