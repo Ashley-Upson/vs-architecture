@@ -192,6 +192,28 @@ internal static class DrawioDiagnosticReportBuilder
                 findingCorrelations = bandReport.FindingCorrelations
             },
             nonOrthogonalSegments,
+            groupedSpacing = layout.GroupedSpacingPlan is null ? null : new
+            {
+                supportedSubset = "adjacent-layer-downward",
+                convergenceIterations = layout.GroupedSpacingIterations,
+                telemetry = layout.GroupedSpacingPlan.Telemetry,
+                constraints = layout.GroupedSpacingPlan.Constraints,
+                invalidatedRoutes = layout.GroupedSpacingPlan.InvalidatedRoutes,
+                groups = layout.GroupedSpacingPlan.Groups.Select(group => new
+                {
+                    group.Id,
+                    orientation = "horizontal-band",
+                    routes = group.Demands.Select(item => item.LogicalEdgeIdentity)
+                        .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray(),
+                    segments = group.Demands.Select(item => item.Id).ToArray(),
+                    group.CurrentLaneCount,
+                    group.RequiredLaneCount,
+                    group.CurrentExtent,
+                    group.RequiredExtent,
+                    group.MissingExtent,
+                    group.MovementScope
+                }).ToArray()
+            },
             repair = new
             {
                 preRepairFindings = layout.PreRepairTraceability.Violations.Select((finding, index) =>

@@ -36,7 +36,9 @@ internal sealed partial class RenderLayout
             int corridorRebuildCount = 0,
             int capacityFailureCount = 0,
             int capacityExpansionCount = 0,
-            LayoutRevision layoutRevision = default)
+            LayoutRevision layoutRevision = default,
+            GroupedVerticalBandPlan? groupedSpacingPlan = null,
+            int groupedSpacingIterations = 0)
         {
             Graph = graph;
             Nodes = nodes;
@@ -60,6 +62,8 @@ internal sealed partial class RenderLayout
             CapacityFailureCount = capacityFailureCount;
             CapacityExpansionCount = capacityExpansionCount;
             LayoutRevision = layoutRevision;
+            GroupedSpacingPlan = groupedSpacingPlan;
+            GroupedSpacingIterations = groupedSpacingIterations;
         }
 
         public RenderGraph Graph { get; }
@@ -106,11 +110,15 @@ internal sealed partial class RenderLayout
 
         public LayoutRevision LayoutRevision { get; }
 
+        public GroupedVerticalBandPlan? GroupedSpacingPlan { get; }
+
+        public int GroupedSpacingIterations { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
             new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
                 PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason, StageTimings,
                 RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount,
-                LayoutRevision);
+                LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -132,7 +140,8 @@ internal sealed partial class RenderLayout
                 routed.Traversals, routed.Traceability, routed.Corridors, routed.Lanes, routed.PreRepairTraceability,
                 routed.RepairAttempts, routed.RepairWorkUsed, routed.RepairBudgetExhausted, routed.RepairRunReason,
                 timings, routed.RoutesInvalidated, routed.RoutePairsRevalidated, routed.CorridorRebuildCount,
-                routed.CapacityFailureCount, routed.CapacityExpansionCount, routed.Placement.Revision);
+                routed.CapacityFailureCount, routed.CapacityExpansionCount, routed.Placement.Revision,
+                routed.GroupedSpacingPlan, routed.GroupedSpacingIterations);
         }
 
         private static T MeasureStage<T>(

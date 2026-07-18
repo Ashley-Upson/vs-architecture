@@ -21,6 +21,7 @@ internal sealed record BandConflictGroup(
     string Id,
     InterLayerBandId BandId,
     IReadOnlyList<BandRouteDemand> Demands,
+    IReadOnlyDictionary<string, int> AssignedLanes,
     int CurrentLaneCount,
     int RequiredLaneCount,
     int CurrentExtent,

@@ -18,6 +18,14 @@ internal sealed partial class RenderLayout
             var positionedLinks = MeasureStage(timings, "candidate construction and selection", () =>
                 PositionLinks(placement.Graph, settings, placement.Nodes));
             var provisionalLinks = positionedLinks.Links;
+            var initialGenerated = new GeneratedLogicalRoutes(
+                placement, provisionalLinks, new RouteRevision(0));
+            var initialBands = InterLayerBandObserver.Observe(placement, initialGenerated, settings);
+            if (GroupedVerticalBandPlanner.Supports(placement, initialGenerated, initialBands))
+            {
+                return RunGroupedVerticalBands(
+                    placement, initialGenerated, initialBands, settings, timings);
+            }
             var corridors = Observe(placement, provisionalLinks, settings, timings);
             var lanes = MeasureStage(timings, "lane allocation", () => CorridorLaneAllocator.Allocate(corridors));
             var capacityFailureCount = lanes.CapacityRequests?.Count ?? 0;
@@ -122,6 +130,58 @@ internal sealed partial class RenderLayout
                 capacityAttempts.Count(attempt => attempt.Applied));
         }
 
+        private static LegacyRoutingResult RunGroupedVerticalBands(
+            PlacedGraph placement,
+            GeneratedLogicalRoutes routes,
+            InterLayerBandReport bands,
+            DiagramSettings settings,
+            ICollection<PipelineStageMetric> timings)
+        {
+            GroupedVerticalBandResult? grouped = null;
+            var iterations = 0;
+            while (bands.Bands.Any(band => band.MissingExtent > 0))
+            {
+                if (iterations++ >= 16)
+                    throw new InvalidOperationException("Grouped vertical-band constraints did not converge after 16 iterations.");
+                grouped = MeasureStage(timings, "grouped band materialization and regeneration", () =>
+                    GroupedVerticalBandPlanner.Apply(placement, routes, bands, settings));
+                placement = grouped.Placement;
+                routes = grouped.Routes;
+                bands = InterLayerBandObserver.Observe(placement, routes, settings);
+            }
+
+            if (grouped is null)
+            {
+                grouped = new GroupedVerticalBandResult(
+                    placement, routes,
+                    GroupedVerticalBandPlanner.Plan(placement, routes, bands, settings), 0);
+            }
+            var normalizedLinks = MeasureStage(timings, "normalization", () =>
+                LogicalRouteNormalizer.Normalize(placement.Nodes, routes.Links, settings.Layout.LinkPadding));
+            var validation = MeasureStage(timings, "validation", () =>
+                TraceabilityValidator.Validate(placement.Nodes, normalizedLinks, settings.Layout.ParallelLaneSpacing));
+            var emptyCorridors = new CorridorObservation(
+                new Dictionary<string, RoutingCorridor>(StringComparer.Ordinal),
+                new Dictionary<string, CorridorJunction>(StringComparer.Ordinal),
+                Array.Empty<CorridorSegmentMapping>(),
+                new Dictionary<string, CorridorUsage>(StringComparer.Ordinal));
+            var emptyLanes = new CorridorLaneAllocation(
+                new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>(StringComparer.Ordinal),
+                Array.Empty<string>());
+            var geometry = normalizedLinks.ToDictionary(item => item.Key, item => new CompiledEdgeGeometry(
+                item.Key,
+                new[] { item.Value.SourcePoint }.Concat(item.Value.Points).Concat(new[] { item.Value.TargetPoint }).ToArray(),
+                false), StringComparer.Ordinal);
+            var traversals = new EdgeTraversalCompilation(
+                new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal), geometry, Array.Empty<TraversalDiagnostic>());
+            return new LegacyRoutingResult(
+                placement, normalizedLinks,
+                new PositionedLinkLayouts(normalizedLinks, null, null),
+                emptyCorridors, emptyLanes, traversals, validation, validation,
+                Array.Empty<RouteRepairAttempt>(), 0, false, "GroupedVerticalBandConverged",
+                normalizedLinks.Count, 0, 0, 0, 0, grouped.Plan, iterations);
+        }
+
         internal static bool RequiresDuplicateRepair(
             PlacedGraph placement,
             ValidatedLogicalRoutes routes,
@@ -195,5 +255,7 @@ internal sealed partial class RenderLayout
         long RoutePairsRevalidated,
         int CorridorRebuildCount,
         int CapacityFailureCount,
-        int CapacityExpansionCount);
+        int CapacityExpansionCount,
+        GroupedVerticalBandPlan? GroupedSpacingPlan = null,
+        int GroupedSpacingIterations = 0);
 }

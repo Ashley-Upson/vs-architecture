@@ -54,6 +54,7 @@ internal static class BandConflictGrouper
             groups.Add(new BandConflictGroup(
                 $"group:{band.Id}:{identity}", band.Id,
                 component.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+                assigned,
                 component.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1,
                 laneCount, band.CurrentExtent, required, Math.Max(0, required - band.CurrentExtent),
                 SpacingConstraintScope.LayerBoundary));
