@@ -12,6 +12,63 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DeterministicDrawioExporterTests
 {
     [Fact]
+    public void GenerateResult_emits_parseable_escaped_xml_with_configured_styles()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Overrides.Add(new StyleOverride
+        {
+            FullName = "App.Event&Hub<Primary>",
+            Style = new NodeStyle
+            {
+                Shape = "rhombus",
+                FillColor = "#f36c21",
+                StrokeColor = "#a43b08",
+                FontColor = "#111111"
+            }
+        });
+        var diagram = new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project", "App & Tools", new[]
+                {
+                    new TypeNode("event", "project", "Event&Hub<Primary>", "App.Event&Hub<Primary>", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>());
+
+        var document = XDocument.Parse(new DeterministicDrawioExporter().GenerateResult(diagram, settings).Document);
+        var cell = document.Descendants("mxCell").Single(item => (string?)item.Attribute("id") == "event");
+
+        Assert.Equal("Event&Hub<Primary>", (string?)cell.Attribute("value"));
+        Assert.Contains("shape=rhombus", (string?)cell.Attribute("style"));
+        Assert.Contains("fillColor=#f36c21", (string?)cell.Attribute("style"));
+    }
+
+    [Fact]
+    public void GenerateResult_can_omit_project_containers_without_orphaning_nodes()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.ShowProjectContainers = false;
+        var diagram = new DiagramModel(
+            new[]
+            {
+                new ProjectContainer("project", "App", new[]
+                {
+                    new TypeNode("node", "project", "Node", "App.Node", "Class")
+                })
+            },
+            Array.Empty<ExternalDependencyNode>(),
+            Array.Empty<DependencyEdge>());
+
+        var document = XDocument.Parse(new DeterministicDrawioExporter().GenerateResult(diagram, settings).Document);
+
+        Assert.DoesNotContain(document.Descendants("mxCell"), item => (string?)item.Attribute("id") == "project");
+        Assert.Equal("1", (string?)document.Descendants("mxCell")
+            .Single(item => (string?)item.Attribute("id") == "node").Attribute("parent"));
+    }
+
+    [Fact]
     public void ValidateStrict_is_explicit_and_rejects_enforced_findings()
     {
         var finding = new ValidationFinding(
