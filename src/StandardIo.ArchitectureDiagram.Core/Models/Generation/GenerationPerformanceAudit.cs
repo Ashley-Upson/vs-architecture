@@ -240,9 +240,10 @@ internal static class PerformanceAudit
         int outputObjects = 0,
         int? layoutRevision = null,
         int? routeRevision = null) =>
-        GenerationPerformanceSession.Current?.Measure(
-            phase, inputNodes, inputRoutes, inputSegments, outputObjects, layoutRevision, routeRevision)
-        ?? EmptyScope.Instance;
+        new CombinedScope(
+            GenerationPerformanceSession.Current?.Measure(
+                phase, inputNodes, inputRoutes, inputSegments, outputObjects, layoutRevision, routeRevision),
+            GenerationThreadTelemetrySession.Current?.Measure(phase));
 
     public static void Increment(string name, long amount = 1) =>
         GenerationPerformanceSession.Current?.Increment(name, amount);
@@ -251,5 +252,21 @@ internal static class PerformanceAudit
     {
         public static EmptyScope Instance { get; } = new();
         public void Dispose() { }
+    }
+
+    private sealed class CombinedScope : IDisposable
+    {
+        private readonly IDisposable performance;
+        private readonly IDisposable thread;
+        public CombinedScope(IDisposable? performance, IDisposable? thread)
+        {
+            this.performance = performance ?? EmptyScope.Instance;
+            this.thread = thread ?? EmptyScope.Instance;
+        }
+        public void Dispose()
+        {
+            thread.Dispose();
+            performance.Dispose();
+        }
     }
 }

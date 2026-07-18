@@ -54,24 +54,38 @@ internal sealed class DiagramCommands
         _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            using var threadTelemetry = GenerationThreadTelemetrySession.Start(() => ThreadHelper.CheckAccess());
+            threadTelemetry.Mark("command entry");
 
             try
             {
-                var target = await GetSelectedDiagramTargetAsync();
+                DiagramTarget? target;
+                using (threadTelemetry.Measure("selection operation"))
+                {
+                    target = await GetSelectedDiagramTargetAsync();
+                }
                 if (target is null)
                 {
                     ShowMessage("Select a C# project or solution node before generating a diagram.", OLEMSGICON.OLEMSGICON_WARNING);
                     return;
                 }
 
-                var settings = SettingsStore.Load();
+                DiagramSettings settings;
+                string? outputPath;
+                using (threadTelemetry.Measure("settings and save-dialog operations"))
+                {
+                    settings = SettingsStore.Load();
+                }
                 using var provider = new ServiceCollection()
                     .AddArchitectureDiagram()
                     .BuildServiceProvider();
                 var renderer = provider
                     .GetRequiredService<IDiagramRendererRegistry>()
                     .Resolve(settings.OutputRenderer);
-                var outputPath = PromptForSavePath(target.Name, renderer);
+                using (threadTelemetry.Measure("settings and save-dialog operations"))
+                {
+                    outputPath = PromptForSavePath(target.Name, renderer);
+                }
                 if (string.IsNullOrWhiteSpace(outputPath))
                 {
                     return;
@@ -83,22 +97,36 @@ internal sealed class DiagramCommands
                 progress.SetStage("Analyzing the selected project graph...");
 
                 var analysis = provider.GetRequiredService<IDiagramAnalysisProcessingService>();
-                var diagram = await Task.Run(
-                    () => analysis.AnalyzeAsync(target.Projects, settings, cancellation.Token),
-                    cancellation.Token);
+                DiagramModel diagram;
+                using (threadTelemetry.Measure("semantic analysis"))
+                {
+                    diagram = await Task.Run(
+                        () => analysis.AnalyzeAsync(target.Projects, settings, cancellation.Token),
+                        cancellation.Token);
+                }
 
                 cancellation.Token.ThrowIfCancellationRequested();
                 progress.SetStage("Constructing layout and routing geometry...");
-                var output = await Task.Run(
-                    () => renderer.Render(diagram, settings),
-                    cancellation.Token);
+                string output;
+                using (threadTelemetry.Measure("renderer background execution"))
+                {
+                    output = await Task.Run(
+                        () => renderer.Render(diagram, settings),
+                        cancellation.Token);
+                }
 
                 cancellation.Token.ThrowIfCancellationRequested();
                 progress.SetStage("Writing the generated diagram...");
-                await provider.GetRequiredService<IDiagramFileBroker>()
-                    .WriteTextAsync(outputPath!, output, cancellation.Token);
+                using (threadTelemetry.Measure("file writing"))
+                {
+                    await provider.GetRequiredService<IDiagramFileBroker>()
+                        .WriteTextAsync(outputPath!, output, cancellation.Token);
+                }
                 progress.Complete();
-                ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
+                using (threadTelemetry.Measure("completion notification"))
+                {
+                    ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -107,6 +135,16 @@ internal sealed class DiagramCommands
             catch (Exception ex)
             {
                 ShowMessage(ex.Message, OLEMSGICON.OLEMSGICON_CRITICAL);
+            }
+            finally
+            {
+                foreach (var metric in threadTelemetry.Snapshot())
+                {
+                    DiagnosticLog.Write(
+                        $"Generation thread telemetry: stage={metric.Stage}; startThread={metric.StartManagedThreadId}; " +
+                        $"endThread={metric.EndManagedThreadId}; startMain={metric.StartIsMainThread}; " +
+                        $"endMain={metric.EndIsMainThread}; start={metric.StartedAt:O}; end={metric.EndedAt:O}");
+                }
             }
         });
     }
