@@ -43,6 +43,19 @@ public sealed class GenerationPhaseResultTests
         Assert.Throws<InvalidOperationException>(() => validated.EnsureCompatible(newer));
     }
 
+    [Fact]
+    public void Repair_decision_rejects_validation_from_a_previous_layout_revision()
+    {
+        var first = Placement(new Dictionary<string, NodeLayout>(), new LayoutRevision(0));
+        var moved = first.Revise(new Dictionary<string, NodeLayout>(), new Dictionary<string, ProjectLayout>());
+        var generated = new GeneratedLogicalRoutes(first, new Dictionary<string, LinkLayout>(), new RouteRevision(0));
+        var normalized = new NormalizedLogicalRoutes(generated, generated.Links, generated.Revision.Next());
+        var stale = new ValidatedLogicalRoutes(normalized, new TraceabilityValidationResult(Array.Empty<TraceabilityViolation>()));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            RenderLayout.LegacyRoutingPipeline.RequiresDuplicateRepair(moved, stale, DiagramSettings.CreateDefault()));
+    }
+
     private static PlacedGraph Placement(
         IReadOnlyDictionary<string, NodeLayout> nodes,
         LayoutRevision revision) =>

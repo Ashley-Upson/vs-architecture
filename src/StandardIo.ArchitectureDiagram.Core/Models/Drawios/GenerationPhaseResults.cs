@@ -132,4 +132,6 @@ internal sealed class ValidatedLogicalRoutes
                 $"{normalized.LayoutRevision.Value}/{normalized.Revision.Value}.");
         }
     }
+
+    public void ValidatedCompatibilityCheck() => EnsureCompatible(Normalized);
 }
