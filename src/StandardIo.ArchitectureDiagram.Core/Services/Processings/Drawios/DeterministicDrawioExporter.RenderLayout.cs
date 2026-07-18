@@ -113,7 +113,8 @@ internal sealed partial class RenderLayout
             var timings = new List<PipelineStageMetric>();
             var placement = MeasureStage(timings, "node placement", () =>
             {
-                var depths = CalculateDepths(graph);
+                var hierarchy = HierarchyAnalyzer.Analyze(graph, new LayoutRevision(0));
+                var depths = hierarchy.VisualLayerByNode;
                 var depthOffsets = CalculateDepthOffsets(graph, settings, depths);
                 var widths = CalculateWidths(graph, settings);
                 var positionedNodes = PositionNodes(graph, settings, depths, depthOffsets, widths);
@@ -289,144 +290,6 @@ internal sealed partial class RenderLayout
                 Array.Empty<ValidationPoint>(),
                 Array.Empty<ValidationPoint>())).ToArray();
             return new LayerExpansionResult(expanded, attempts, true);
-        }
-
-        private static Dictionary<string, int> CalculateDepths(RenderGraph graph)
-        {
-            var components = StrongComponents(graph);
-            var componentByNode = components
-                .SelectMany((component, index) => component.Select(nodeId => new { nodeId, index }))
-                .ToDictionary(item => item.nodeId, item => item.index, StringComparer.Ordinal);
-            var outgoing = components
-                .Select(_ => new HashSet<int>())
-                .ToArray();
-            var incoming = components
-                .Select(_ => 0)
-                .ToArray();
-
-            foreach (var link in graph.Links)
-            {
-                var source = componentByNode[link.SourceId];
-                var target = componentByNode[link.TargetId];
-                if (source == target || !outgoing[source].Add(target))
-                {
-                    continue;
-                }
-
-                incoming[target]++;
-            }
-
-            var incomingForTopologicalSort = incoming.ToArray();
-            var queue = new Queue<int>(incoming
-                .Select((count, index) => new { count, index })
-                .Where(item => item.count == 0)
-                .Select(item => item.index));
-            var topologicalOrder = new List<int>();
-
-            while (queue.Count > 0)
-            {
-                var component = queue.Dequeue();
-                topologicalOrder.Add(component);
-                foreach (var target in outgoing[component])
-                {
-                    incomingForTopologicalSort[target]--;
-                    if (incomingForTopologicalSort[target] == 0)
-                    {
-                        queue.Enqueue(target);
-                    }
-                }
-            }
-
-            var distanceToExitByComponent = components
-                .Select((_, index) => new { index, distance = 0 })
-                .ToDictionary(item => item.index, item => item.distance);
-
-            foreach (var component in topologicalOrder.AsEnumerable().Reverse())
-            {
-                if (outgoing[component].Count == 0)
-                {
-                    continue;
-                }
-
-                distanceToExitByComponent[component] = outgoing[component]
-                    .Select(target => distanceToExitByComponent[target] + 1)
-                    .Max();
-            }
-
-            var maxDistanceToExit = distanceToExitByComponent.Values.DefaultIfEmpty(0).Max();
-            var depthByComponent = distanceToExitByComponent.ToDictionary(
-                item => item.Key,
-                item => maxDistanceToExit - item.Value);
-
-            return graph.Nodes.ToDictionary(
-                node => node.Id,
-                node => depthByComponent[componentByNode[node.Id]],
-                StringComparer.Ordinal);
-        }
-
-        private static IReadOnlyList<IReadOnlyList<string>> StrongComponents(RenderGraph graph)
-        {
-            var outgoing = graph.Nodes.ToDictionary(
-                node => node.Id,
-                node => graph.Links.Where(link => link.SourceId == node.Id).Select(link => link.TargetId).ToArray(),
-                StringComparer.Ordinal);
-            var index = 0;
-            var stack = new Stack<string>();
-            var onStack = new HashSet<string>(StringComparer.Ordinal);
-            var indices = new Dictionary<string, int>(StringComparer.Ordinal);
-            var lowLinks = new Dictionary<string, int>(StringComparer.Ordinal);
-            var components = new List<IReadOnlyList<string>>();
-
-            foreach (var node in graph.Nodes)
-            {
-                if (!indices.ContainsKey(node.Id))
-                {
-                    Visit(node.Id);
-                }
-            }
-
-            return components;
-
-            void Visit(string nodeId)
-            {
-                indices[nodeId] = index;
-                lowLinks[nodeId] = index;
-                index++;
-                stack.Push(nodeId);
-                onStack.Add(nodeId);
-
-                foreach (var targetId in outgoing[nodeId])
-                {
-                    if (!indices.ContainsKey(targetId))
-                    {
-                        Visit(targetId);
-                        lowLinks[nodeId] = Math.Min(lowLinks[nodeId], lowLinks[targetId]);
-                    }
-                    else if (onStack.Contains(targetId))
-                    {
-                        lowLinks[nodeId] = Math.Min(lowLinks[nodeId], indices[targetId]);
-                    }
-                }
-
-                if (lowLinks[nodeId] != indices[nodeId])
-                {
-                    return;
-                }
-
-                var component = new List<string>();
-                string current;
-                do
-                {
-                    current = stack.Pop();
-                    onStack.Remove(current);
-                    component.Add(current);
-                }
-                while (!string.Equals(current, nodeId, StringComparison.Ordinal));
-
-                component.Sort((left, right) =>
-                    graph.Nodes.Single(node => node.Id == left).Order.CompareTo(graph.Nodes.Single(node => node.Id == right).Order));
-                components.Add(component);
-            }
         }
 
         private static Dictionary<string, int> CalculateWidths(RenderGraph graph, DiagramSettings settings)
