@@ -115,7 +115,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             prepared.Layout,
             prepared.Ownership,
             enforced,
-            prepared.Settings.Layout.ParallelLaneSpacing,
+            prepared.Settings.Layout,
             AllTimings(prepared),
             diagnosticReuse: true,
             bands);

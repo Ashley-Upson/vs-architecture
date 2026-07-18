@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -19,11 +20,12 @@ internal static class DrawioDiagnosticReportBuilder
         RenderLayout layout,
         CoordinateOwnershipCompilation ownership,
         IReadOnlyList<TraceabilityViolation> enforced,
-        int requiredSpacing,
+        LayoutSettings layoutSettings,
         IReadOnlyList<PipelineStageMetric> stageTimings,
         bool diagnosticReuse,
         InterLayerBandReport? bandReport = null)
     {
+        var requiredSpacing = layoutSettings.ParallelLaneSpacing;
         var projectNames = layout.Graph.Projects.ToDictionary(project => project.Id, project => project.Name, StringComparer.Ordinal);
         var routes = enforced
             .GroupBy(violation => violation.EdgeId, StringComparer.Ordinal)
@@ -135,6 +137,10 @@ internal static class DrawioDiagnosticReportBuilder
             })
             .ToArray();
         var nonOrthogonalSegments = NonOrthogonalSegments(layout, ownership, bandReport);
+        var foundationTimer = Stopwatch.StartNew();
+        var nodeWidthObservation = ObserveNodeWidths(layout, layoutSettings);
+        var contactObservation = ObserveCanonicalContacts(layout, requiredSpacing);
+        foundationTimer.Stop();
 
         return JsonSerializer.Serialize(new
         {
@@ -167,6 +173,12 @@ internal static class DrawioDiagnosticReportBuilder
             findings,
             routes,
             routeGeometry,
+            consolidatedFoundation = new
+            {
+                nodeWidths = nodeWidthObservation,
+                contacts = contactObservation,
+                observationMicroseconds = foundationTimer.ElapsedTicks * 1000000 / Stopwatch.Frequency
+            },
             stageTimings,
             interLayerBands = bandReport is null ? null : new
             {
@@ -226,6 +238,102 @@ internal static class DrawioDiagnosticReportBuilder
                 layout.RepairRunReason
             }
         }, JsonOptions);
+    }
+
+    private static object ObserveNodeWidths(RenderLayout layout, LayoutSettings settings)
+    {
+        var separation = TerminalDemandCalculator.AttachmentSeparation(
+            settings.EdgePortSpacing, settings.ParallelLaneSpacing);
+        var incoming = layout.Graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var outgoing = layout.Graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var nodes = layout.Graph.Nodes.OrderBy(node => node.Id, StringComparer.Ordinal).Select(node =>
+        {
+            var incomingCount = incoming.TryGetValue(node.Id, out var inc) ? inc : 0;
+            var outgoingCount = outgoing.TryGetValue(node.Id, out var outgoingValue) ? outgoingValue : 0;
+            var measuredText = TerminalDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
+            var demand = TerminalDemandCalculator.Measure(
+                node.Id, settings.NodeWidth, measuredText, incomingCount, outgoingCount,
+                separation, settings.LinkNodeWidthPadding);
+            var legacyWidth = Math.Max(settings.NodeWidth, Math.Max(
+                measuredText + settings.LinkNodeWidthPadding,
+                Math.Max(0, incomingCount + outgoingCount - 1) * settings.EdgePortSpacing +
+                settings.LinkNodeWidthPadding));
+            return new
+            {
+                nodeId = node.Id,
+                previousWidth = legacyWidth,
+                requiredWidth = demand.RequiredWidth,
+                actualWidth = layout.Nodes[node.Id].Rect.Width,
+                demand.TextSpaceRequirement,
+                demand.IncomingAttachmentSpaceRequirement,
+                demand.OutgoingAttachmentSpaceRequirement,
+                incomingCount,
+                outgoingCount,
+                changedFromPreviousFormula = legacyWidth != demand.RequiredWidth,
+                expandedFromConfiguredWidth = demand.RequiredWidth > settings.NodeWidth,
+                reason = demand.RequiredWidth == settings.NodeWidth ? "CurrentWidth" :
+                    demand.RequiredWidth == demand.TextSpaceRequirement ? "Text" :
+                    demand.IncomingAttachmentSpaceRequirement >= demand.OutgoingAttachmentSpaceRequirement
+                        ? "IncomingAttachments" : "OutgoingAttachments"
+            };
+        }).ToArray();
+        var resizedIds = new HashSet<string>(nodes.Where(node => node.changedFromPreviousFormula)
+            .Select(node => node.nodeId), StringComparer.Ordinal);
+        return new
+        {
+            configuredWidth = settings.NodeWidth,
+            totalHorizontalPadding = settings.LinkNodeWidthPadding,
+            attachmentSeparation = separation,
+            alreadySufficient = nodes.Count(node => !node.expandedFromConfiguredWidth),
+            expandedByText = nodes.Count(node => node.expandedFromConfiguredWidth && node.reason == "Text"),
+            expandedByIncomingAttachments = nodes.Count(node => node.expandedFromConfiguredWidth && node.reason == "IncomingAttachments"),
+            expandedByOutgoingAttachments = nodes.Count(node => node.expandedFromConfiguredWidth && node.reason == "OutgoingAttachments"),
+            changedFromPreviousFormula = resizedIds.Count,
+            maximumAbsoluteChangeFromPreviousFormula = nodes.Select(node => Math.Abs(node.requiredWidth - node.previousWidth)).DefaultIfEmpty(0).Max(),
+            observationalIncidentRouteInvalidations = layout.Graph.Links.Count(link =>
+                resizedIds.Contains(link.SourceId) || resizedIds.Contains(link.TargetId)),
+            nodes
+        };
+    }
+
+    private static object ObserveCanonicalContacts(RenderLayout layout, int requiredSpacing)
+    {
+        var segments = layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal)
+            .SelectMany(link => ContactSegments(link).Select(segment => new { link.Link.Id, Segment = segment }))
+            .ToArray();
+        var counts = Enum.GetValues(typeof(CanonicalContactKind)).Cast<CanonicalContactKind>()
+            .ToDictionary(kind => kind, _ => 0);
+        long comparisons = 0;
+        for (var left = 0; left < segments.Length; left++)
+        {
+            for (var right = left + 1; right < segments.Length; right++)
+            {
+                if (string.Equals(segments[left].Id, segments[right].Id, StringComparison.Ordinal)) continue;
+                comparisons++;
+                var contact = CanonicalContactClassifier.Classify(
+                    segments[left].Segment, segments[right].Segment, requiredSpacing);
+                counts[contact.Kind]++;
+            }
+        }
+        return new
+        {
+            comparisons,
+            counts = counts.OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Value)
+        };
+    }
+
+    private static IReadOnlyList<ContactSegment> ContactSegments(LinkLayout link)
+    {
+        var points = CompletePoints(link).ToArray();
+        var segments = points.Zip(points.Skip(1), (start, end) => new Segment(start, end)).ToArray();
+        return segments.Select((segment, index) => new ContactSegment(
+            segment,
+            index > 0 ? segments[index - 1] : (Segment?)null,
+            index + 1 < segments.Length ? segments[index + 1] : (Segment?)null,
+            StartIsTerminal: index == 0,
+            EndIsTerminal: index == segments.Length - 1)).ToArray();
     }
 
     private static IReadOnlyList<NonOrthogonalSegmentDiagnostic> NonOrthogonalSegments(
