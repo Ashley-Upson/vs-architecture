@@ -125,6 +125,38 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     }
 
     [Fact]
+    public void Observation_revision_is_independent_of_logical_route_history_revision()
+    {
+        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[]
+        {
+            Context("route", observationRevision: 2)
+        }).Routes);
+
+        Assert.True(result.Eligible);
+        Assert.All(result.Demands, item => Assert.Equal(2, item.RouteRevision.Value));
+    }
+
+    [Fact]
+    public void Multiple_memberships_in_one_band_remain_one_band_eligible()
+    {
+        var context = Context("route");
+        var second = context.BandMemberships[0] with
+        {
+            Id = "route:band:second",
+            FirstSegmentIndex = 1,
+            LastSegmentIndex = 2
+        };
+
+        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[]
+        {
+            context with { BandMemberships = context.BandMemberships.Concat(new[] { second }).ToArray() }
+        }).Routes);
+
+        Assert.True(result.Eligible);
+        Assert.Equal(ObservationalRouteParity.ExactPointParity, result.Parity);
+    }
+
+    [Fact]
     public void Reconstruction_never_uses_original_points_as_fallback()
     {
         var reconstructed = AdjacentDownwardRailDemandObserver.Reconstruct(
@@ -137,10 +169,11 @@ public sealed class AdjacentDownwardRailDemandObserverTests
         string id,
         int lane = 0,
         int targetDepth = 1,
-        bool includeAllLaneSources = false)
+        bool includeAllLaneSources = false,
+        int observationRevision = 0)
     {
         var layoutRevision = new LayoutRevision(1);
-        var routeRevision = new RouteRevision(0);
+        var routeRevision = new RouteRevision(observationRevision);
         var bandId = new InterLayerBandId(0, 1, layoutRevision);
         var source = Node($"{id}-source", new Rect(0, 0, 100, 80), 0);
         var target = Node($"{id}-target", new Rect(40, 200, 100, 80), targetDepth);

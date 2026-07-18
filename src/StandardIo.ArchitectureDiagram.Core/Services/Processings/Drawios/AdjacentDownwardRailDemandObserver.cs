@@ -25,7 +25,11 @@ internal static class AdjacentDownwardRailDemandObserver
                 continue;
             }
 
-            var bandMembership = context.BandMemberships.Single();
+            var bandMembership = context.BandMemberships
+                .OrderBy(item => item.FirstSegmentIndex)
+                .ThenBy(item => item.LastSegmentIndex)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .First();
             var throughSegment = authoritative[1] == authoritative[2]
                 ? new Segment(authoritative[1], authoritative[1])
                 : new Segment(authoritative[1], authoritative[2]);
@@ -73,8 +77,7 @@ internal static class AdjacentDownwardRailDemandObserver
     {
         canonical = Normalize(CompletePoints(context.Route));
         if (context.ExposureTreeSpecific) return AdjacentDownwardRejectionReason.ExposureTreeSpecific;
-        if (context.Route.RouteState.Revision != context.RouteRevision.Value ||
-            context.BandMemberships.Any(item => item.RouteRevision != context.RouteRevision ||
+        if (context.BandMemberships.Any(item => item.RouteRevision != context.RouteRevision ||
                 item.BandId.LayoutRevision != context.LayoutRevision) ||
             context.BandDemands.Any(item => item.RouteRevision != context.RouteRevision ||
                 item.BandId.LayoutRevision != context.LayoutRevision))
