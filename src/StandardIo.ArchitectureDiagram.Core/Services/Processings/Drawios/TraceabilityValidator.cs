@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 
@@ -69,6 +70,7 @@ internal static class TraceabilityValidator
     {
         PerformanceAudit.Increment("full validations");
         var violations = new List<TraceabilityViolation>();
+        var measureContactDiscovery = GenerationPerformanceSession.Current is not null;
         var orderedLinks = links.Values
             .OrderBy(link => link.Link.Order)
             .ThenBy(link => link.Link.Id, StringComparer.Ordinal)
@@ -118,6 +120,7 @@ internal static class TraceabilityValidator
             }
         }
 
+        var contactDiscoveryTimer = measureContactDiscovery ? Stopwatch.StartNew() : null;
         for (var leftIndex = 0; leftIndex < orderedLinks.Length; leftIndex++)
         {
             var left = orderedLinks[leftIndex];
@@ -130,14 +133,7 @@ internal static class TraceabilityValidator
                 var leftBends = InteriorPoints(left);
                 var rightBends = InteriorPoints(right);
                 PerformanceAudit.Increment("segment-segment pair checks", (long)leftSegments.Length * rightSegments.Length);
-                IReadOnlyList<RouteContactFact> contacts;
-                using (PerformanceAudit.Measure(
-                    "canonical route contact discovery",
-                    inputRoutes: 2,
-                    inputSegments: leftSegments.Length + rightSegments.Length))
-                {
-                    contacts = CanonicalRouteContactDiscovery.Discover(left, right, requiredParallelSpacing);
-                }
+                var contacts = CanonicalRouteContactDiscovery.Discover(left, right, requiredParallelSpacing);
                 var sharedSegments = contacts
                     .Where(item => item.Contact.Kind == CanonicalContactKind.PositiveCollinearOverlap)
                     .Select(item => SharedSegment(item.FirstSegment, item.SecondSegment))
@@ -209,6 +205,13 @@ internal static class TraceabilityValidator
             }
         }
 
+        if (contactDiscoveryTimer is not null)
+        {
+            contactDiscoveryTimer.Stop();
+            PerformanceAudit.Increment(
+                "validator canonical contact discovery and finding projection microseconds",
+                contactDiscoveryTimer.ElapsedTicks * 1_000_000 / Stopwatch.Frequency);
+        }
         return new TraceabilityValidationResult(violations);
     }
 
