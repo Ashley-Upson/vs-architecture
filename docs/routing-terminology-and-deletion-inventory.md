@@ -98,6 +98,7 @@ This inventory defines the vocabulary boundary between the consolidated link-aut
 | `EnvelopeIdentity` members | Stable identity of allocation envelope | `EnvelopeIdentity` | common allocator | development | none | Keep canonical | none |
 | `Bounds` members and `Rect` | Two-dimensional occupied geometry | `Bounds` concept (`Rect` compatibility type) | all layout/serialization | shared | none | Retain type for compatibility | separate geometry API review |
 | `MovementScope*` | Coherent placement movement identity/definition | canonical | common constraints | development | spacing scope enum | Keep | none |
+| `DifferenceAlternativeComponentSolver` | Selects coherent positional alternatives and formally rejects positive cyclic SCCs | canonical development authority | common constraints | development | none | Keep | production authority decision |
 
 ## Historical Stage B and Stage C disposition
 
@@ -114,6 +115,7 @@ Stage letters describe completed work phases and are not active architecture. Ac
 | Whole-graph experimental models | Search execution entry points | Delete zero-consumer records and unreachable branches. |
 | Capacity/grouping records | Some remain production-owned | Delete only zero-consumer development records; retain production corridor records until authority review. |
 | Rollback experiment methods | Search for no callers and obsolete diagnostics | Delete immediately when compiler/reference audit confirms orphaning. |
+| Mutual destination-cycle diagnostic | Superseded by formal SCC analysis over complete alternatives | Deleted with its focused mutual-pair tests. |
 
 The former multi-layer zigzag transition-coordinate implementation has no remaining symbol or consumer. Long common downward links compile from one horizontal departure demand plus one `VerticalLinkColumnDemand`. The adjacent one-InterLayer topology remains deliberately separate because it has no long vertical column to allocate.
 

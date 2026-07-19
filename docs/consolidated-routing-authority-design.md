@@ -524,6 +524,19 @@ The fixture assigns three rails, creates six turns, regenerates three routes and
 
 Normal common-coordinate authority still requires production mappings for terminal, return and obstacle-bypass regions; shared transition/junction allocation; exact or explicitly accepted coordinate migration; persistent-constraint convergence on real positive-missing-extent components; mixed supported/unsupported component handling; and full hard-validity, visual and performance acceptance. The development fixture does not grant normal production authority.
 
+### Positional alternative closure
+
+Development authority now retains hierarchy-preserving destination, blocker, sibling-prefix/suffix and
+project-prefix/suffix choices until the complete connected positional component is analysed. Selected inequalities form
+a directed graph; strongly connected components containing positive weight are rejected without coordinate iteration.
+Search branches only on alternative-bearing conflicts contributing to positive SCCs and preserves deterministic local
+choices elsewhere.
+
+The deduplicated cCoder component exposes 16 multiple-choice conflicts and 131 alternative edges. Cycle-focused search
+evaluates and rejects 52 selections and finds no complete acyclic solution. The outcome is an atomic pre-execution
+rollback: no node placement or regenerated path escapes. Return slot allocation remains independently complete at 74/74.
+Normal production remains outside this analysis and retains its accepted byte-identical output.
+
 ### Corrected node-width diagnostics and performance
 
 Diagnostics now report every winning requirement (`Current`, `Text`, `Incoming`, `Outgoing`), whether the node actually changed from the preceding production formula, and a single or multiple resize cause. Current inputs still resize only `ICoreContextFactory`, `AuthorizationBroker`, `ICoreAuthInfo` and `IEventHub`, all in deduplicated cCoder and all because incoming demand wins. Counts remain: StandardIo duplicated 22 text; StandardIo deduplicated 11 text; cCoder duplicated 427 current and 667 text; cCoder deduplicated 21 current, 155 text and four incoming. No ties occur.

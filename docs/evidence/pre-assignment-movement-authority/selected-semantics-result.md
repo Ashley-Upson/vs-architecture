@@ -64,8 +64,21 @@ placement satisfies the selected directions. The diagnostic bound and telemetry 
 cycle; they are not production changes.
 
 Trying deterministic opposing directions removed the initial reciprocal pair but did not solve the larger dependency
-graph. The remaining choice is semantic: permit a different coherent horizontal movement alternative for at least one
-member of the cycle, or authorize a positional reorder. Neither is implied by allocated InterLayer slots.
+graph. The subsequent component-alternative tranche retained every complete hierarchy-preserving destination, blocker,
+sibling-prefix/suffix and project-prefix/suffix choice produced for the real conflicts. Formal SCC analysis replaced the
+one-off opposing-direction restart and mutual-pair diagnostic.
+
+The immutable real placement produces 16 connected positional conflicts. Every conflict has multiple valid alternatives:
+131 directed alternative edges form 52 cycle-focused selections. Formal analysis rejects all 52 selections and finds no
+complete acyclic solution. The final rejected selection contains a two-scope positive SCC with total weight 2,575.
+
+This is the complete proof available without positional reordering. The search includes bundled blocker scopes that move
+all blockers for a destination column coherently. Broader scopes excluded by alternative production contain unsupported
+incident links and cannot form a complete atomic movement closure. Return exterior-side selection cannot change the
+result because the contradiction exists before return assignment; all 74 returns remain independently assignable.
+
+Positional reordering remains prohibited. The next transition requires common-authority support for every incident link
+in one of the currently incomplete broader movement scopes, or explicit approval to change established positional order.
 
 The normal 16-iteration run consequently reports one destination conflict, three vertical-column obstacles, no return
 stub obstacle, non-converged horizontal and changed-interval closure, 79 invalidated links, and zero regenerated output
@@ -76,5 +89,7 @@ routes. The component is rejected before execution; all findings remain identica
 - Development authority: opt-in only.
 - Atomic result: rolled back.
 - Routes emitted after rollback: 0.
+- Alternative selections evaluated/rejected: 52/52.
+- Complete acyclic solutions: 0.
 - Required production SHA-256: `08D70BBA59130F8D56EC4F411D3A5BB360B6FB1BBA800D5C43FE1A6386DAB7F6`.
 - VSIX packaged: no.
