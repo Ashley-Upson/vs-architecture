@@ -371,7 +371,7 @@
     },
     {
       "Stage": "project-region generation",
-      "ElapsedMilliseconds": 38,
+      "ElapsedMilliseconds": 36,
       "Invocation": 1
     },
     {
@@ -406,7 +406,7 @@
     },
     {
       "Stage": "project-region positional placement",
-      "ElapsedMilliseconds": 0,
+      "ElapsedMilliseconds": 1,
       "Invocation": 1
     },
     {
@@ -430,8 +430,23 @@
       "Invocation": 1
     },
     {
-      "Stage": "project-region InterLayer slot allocation",
-      "ElapsedMilliseconds": 25,
+      "Stage": "project-region InterLayer discovery",
+      "ElapsedMilliseconds": 6,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region horizontal slot allocation",
+      "ElapsedMilliseconds": 2,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region vertical and return column allocation",
+      "ElapsedMilliseconds": 12,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region constrained materialisation",
+      "ElapsedMilliseconds": 0,
       "Invocation": 1
     },
     {
@@ -455,9 +470,24 @@
       "Invocation": 2
     },
     {
-      "Stage": "project-region InterLayer slot allocation",
+      "Stage": "project-region InterLayer discovery",
       "ElapsedMilliseconds": 0,
-      "Invocation": 2
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region horizontal slot allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region vertical and return column allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region constrained materialisation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
     },
     {
       "Stage": "project-region canonical normalization",

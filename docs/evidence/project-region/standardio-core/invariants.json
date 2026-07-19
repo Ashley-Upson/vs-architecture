@@ -1,10 +1,10 @@
 {
   "mode": "IndependentProjectRegion",
   "semanticProjectCount": 1,
-  "semanticNodeCount": 12,
-  "semanticLinkCount": 15,
-  "renderNodeCount": 12,
-  "renderLinkCount": 15,
+  "semanticNodeCount": 318,
+  "semanticLinkCount": 359,
+  "renderNodeCount": 11,
+  "renderLinkCount": 12,
   "eligible": true,
   "fallbackReasons": [],
   "legacyRenderLayoutUsed": false,
@@ -14,16 +14,16 @@
   "verticalColumnXAuthority": "VerticalLinkColumnAllocator / ReturnColumnAllocator",
   "topologySelectionAuthority": "CanonicalTopologyFamilySelector",
   "topologyFamilies": {
-    "AdjacentDownward": 9,
-    "LongDownward": 6
+    "AdjacentDownward": 8,
+    "LongDownward": 4
   },
-  "interLayersDiscovered": 8,
-  "slotDemands": 21,
-  "slotsAssigned": 21,
-  "interLayersExpanded": 6,
+  "interLayersDiscovered": 7,
+  "slotDemands": 16,
+  "slotsAssigned": 16,
+  "interLayersExpanded": 5,
   "corridorLaneYAssignmentsRemaining": 0,
   "repairBasedHorizontalOffsetsRemaining": 0,
-  "destinationColumnsAssigned": 6,
+  "destinationColumnsAssigned": 4,
   "returnColumnsAssigned": 0,
   "returnSideSelections": {},
   "corridorLaneXAssignmentsRemaining": 0,
@@ -33,395 +33,325 @@
   "repairTopologyMutationRemaining": 0,
   "projectLabelGeometry": [
     {
-      "ProjectId": "p",
+      "ProjectId": "project_0f6497b0fa0241a2",
       "ProjectBounds": {
-        "X": 193,
+        "X": 55,
         "Y": -9,
-        "Width": 1166,
-        "Height": 1100,
-        "Right": 1359,
-        "Bottom": 1091,
-        "CenterX": 776,
-        "CenterY": 541
+        "Width": 1852,
+        "Height": 940,
+        "Right": 1907,
+        "Bottom": 931,
+        "CenterX": 981,
+        "CenterY": 461
       },
       "ProjectLabelTextBounds": {
-        "X": 720,
+        "X": 841,
         "Y": -9,
-        "Width": 112,
+        "Width": 280,
         "Height": 34,
-        "Right": 832,
+        "Right": 1121,
         "Bottom": 25,
-        "CenterX": 776,
+        "CenterX": 981,
         "CenterY": 8
       },
       "ProjectLabelObstacleBounds": {
-        "X": 710,
+        "X": 831,
         "Y": -19,
-        "Width": 132,
+        "Width": 300,
         "Height": 54,
-        "Right": 842,
+        "Right": 1131,
         "Bottom": 35,
-        "CenterX": 776,
+        "CenterX": 981,
         "CenterY": 8
       }
     }
   ],
   "logicalRoutes": [
     {
-      "logicalEdgeId": "e01",
-      "family": "LongDownward",
-      "points": [
-        {
-          "X": 671,
-          "Y": 130
-        },
-        {
-          "X": 671,
-          "Y": 140
-        },
-        {
-          "X": 572,
-          "Y": 140
-        },
-        {
-          "X": 572,
-          "Y": 532
-        },
-        {
-          "X": 704,
-          "Y": 532
-        },
-        {
-          "X": 704,
-          "Y": 566
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e02",
-      "family": "LongDownward",
-      "points": [
-        {
-          "X": 719,
-          "Y": 130
-        },
-        {
-          "X": 719,
-          "Y": 152
-        },
-        {
-          "X": 1234,
-          "Y": 152
-        },
-        {
-          "X": 1234,
-          "Y": 656
-        },
-        {
-          "X": 1234,
-          "Y": 690
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e03",
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_1_type_466186956498cd9b_0_type_461bae762f3ade9c__edge_7d1f8b9fbfba9fe9",
       "family": "AdjacentDownward",
       "points": [
         {
-          "X": 647,
-          "Y": 130
+          "X": 1254,
+          "Y": 782
         },
         {
-          "X": 647,
-          "Y": 176
-        },
-        {
-          "X": 683,
-          "Y": 176
-        },
-        {
-          "X": 683,
-          "Y": 198
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e04",
-      "family": "AdjacentDownward",
-      "points": [
-        {
-          "X": 716,
-          "Y": 646
-        },
-        {
-          "X": 716,
-          "Y": 668
-        },
-        {
-          "X": 799,
-          "Y": 668
-        },
-        {
-          "X": 799,
-          "Y": 690
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e05",
-      "family": "AdjacentDownward",
-      "points": [
-        {
-          "X": 811,
-          "Y": 770
-        },
-        {
-          "X": 811,
+          "X": 1254,
           "Y": 804
         },
         {
-          "X": 964,
+          "X": 974,
           "Y": 804
         },
         {
-          "X": 964,
+          "X": 974,
           "Y": 826
         }
       ]
     },
     {
-      "logicalEdgeId": "e06",
-      "family": "LongDownward",
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_1_type_466186956498cd9b__edge_7da61f6e3ee9058e",
+      "family": "AdjacentDownward",
       "points": [
         {
-          "X": 1222,
-          "Y": 770
+          "X": 1260,
+          "Y": 662
         },
         {
-          "X": 1222,
-          "Y": 780
+          "X": 1260,
+          "Y": 672
         },
         {
-          "X": 330,
-          "Y": 780
+          "X": 1254,
+          "Y": 672
         },
         {
-          "X": 330,
-          "Y": 916
-        },
-        {
-          "X": 330,
-          "Y": 986
+          "X": 1254,
+          "Y": 702
         }
       ]
     },
     {
-      "logicalEdgeId": "e07",
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_2_type_9e7139e5c24b05a8_0_type_228ccaee5d0f0d35_0_type_e495f4e17e435848__edge_3b364c831ab4f203",
       "family": "AdjacentDownward",
       "points": [
         {
-          "X": 1246,
-          "Y": 770
+          "X": 1658,
+          "Y": 782
         },
         {
-          "X": 1246,
+          "X": 1658,
           "Y": 804
         },
         {
-          "X": 1184,
+          "X": 1378,
           "Y": 804
         },
         {
-          "X": 1184,
+          "X": 1378,
           "Y": 826
         }
       ]
     },
     {
-      "logicalEdgeId": "e08",
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_2_type_9e7139e5c24b05a8_0_type_228ccaee5d0f0d35__edge_ecf23da18b883808",
       "family": "AdjacentDownward",
       "points": [
         {
-          "X": 683,
-          "Y": 278
+          "X": 1676,
+          "Y": 662
         },
         {
-          "X": 683,
+          "X": 1676,
+          "Y": 672
+        },
+        {
+          "X": 1658,
+          "Y": 672
+        },
+        {
+          "X": 1658,
+          "Y": 702
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_2_type_9e7139e5c24b05a8_1_type_fb3d387637bcb95d__edge_a8b4df7898f5d81d",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1409,
+          "Y": 526
+        },
+        {
+          "X": 1409,
+          "Y": 560
+        },
+        {
+          "X": 1248,
+          "Y": 560
+        },
+        {
+          "X": 1248,
+          "Y": 582
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_2_type_9e7139e5c24b05a8__edge_4d3e6c2082afaded",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1253,
+          "Y": 402
+        },
+        {
+          "X": 1253,
+          "Y": 424
+        },
+        {
+          "X": 1409,
+          "Y": 424
+        },
+        {
+          "X": 1409,
+          "Y": 446
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879_2_type_9e7139e5c24b05a8__edge_fba71145410af459",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1277,
+          "Y": 402
+        },
+        {
+          "X": 1277,
+          "Y": 412
+        },
+        {
+          "X": 1676,
+          "Y": 412
+        },
+        {
+          "X": 1676,
+          "Y": 548
+        },
+        {
+          "X": 1676,
+          "Y": 582
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879__edge_3f6367462907fda6",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1405,
+          "Y": 254
+        },
+        {
+          "X": 1405,
+          "Y": 264
+        },
+        {
+          "X": 238,
+          "Y": 264
+        },
+        {
+          "X": 238,
+          "Y": 792
+        },
+        {
+          "X": 238,
+          "Y": 826
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879__edge_8dcfadd762382e72",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1453,
+          "Y": 254
+        },
+        {
+          "X": 1453,
+          "Y": 300
+        },
+        {
+          "X": 1277,
+          "Y": 300
+        },
+        {
+          "X": 1277,
+          "Y": 322
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f_0_type_b487c8238de8e879__edge_c4a8476f812c0352",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1429,
+          "Y": 254
+        },
+        {
+          "X": 1429,
+          "Y": 276
+        },
+        {
+          "X": 1032,
+          "Y": 276
+        },
+        {
+          "X": 1032,
+          "Y": 536
+        },
+        {
+          "X": 1272,
+          "Y": 536
+        },
+        {
+          "X": 1272,
+          "Y": 582
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f__edge_5065776253dc0f10",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1305,
+          "Y": 130
+        },
+        {
+          "X": 1305,
+          "Y": 140
+        },
+        {
+          "X": 1181,
+          "Y": 140
+        },
+        {
+          "X": 1181,
           "Y": 288
         },
         {
-          "X": 683,
-          "Y": 318
+          "X": 1253,
+          "Y": 288
+        },
+        {
+          "X": 1253,
+          "Y": 322
         }
       ]
     },
     {
-      "logicalEdgeId": "e09",
+      "logicalEdgeId": "tree_type_54fd1ba0225c424f__type_54fd1ba0225c424f__edge_fd83f5acbd3d7627",
       "family": "AdjacentDownward",
       "points": [
         {
-          "X": 671,
-          "Y": 398
-        },
-        {
-          "X": 671,
-          "Y": 420
-        },
-        {
-          "X": 716,
-          "Y": 420
-        },
-        {
-          "X": 716,
-          "Y": 442
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e10",
-      "family": "LongDownward",
-      "points": [
-        {
-          "X": 787,
-          "Y": 770
-        },
-        {
-          "X": 787,
-          "Y": 792
-        },
-        {
-          "X": 306,
-          "Y": 792
-        },
-        {
-          "X": 306,
-          "Y": 928
-        },
-        {
-          "X": 306,
-          "Y": 986
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e11",
-      "family": "AdjacentDownward",
-      "points": [
-        {
-          "X": 716,
-          "Y": 522
-        },
-        {
-          "X": 716,
-          "Y": 544
-        },
-        {
-          "X": 728,
-          "Y": 544
-        },
-        {
-          "X": 728,
-          "Y": 566
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e12",
-      "family": "LongDownward",
-      "points": [
-        {
-          "X": 695,
+          "X": 1329,
           "Y": 130
         },
         {
-          "X": 695,
-          "Y": 164
+          "X": 1329,
+          "Y": 152
         },
         {
-          "X": 557,
-          "Y": 164
+          "X": 1429,
+          "Y": 152
         },
         {
-          "X": 557,
-          "Y": 940
-        },
-        {
-          "X": 701,
-          "Y": 940
-        },
-        {
-          "X": 701,
-          "Y": 986
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e13",
-      "family": "LongDownward",
-      "points": [
-        {
-          "X": 695,
-          "Y": 398
-        },
-        {
-          "X": 695,
-          "Y": 408
-        },
-        {
-          "X": 605,
-          "Y": 408
-        },
-        {
-          "X": 605,
-          "Y": 952
-        },
-        {
-          "X": 725,
-          "Y": 952
-        },
-        {
-          "X": 725,
-          "Y": 986
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e14",
-      "family": "AdjacentDownward",
-      "points": [
-        {
-          "X": 964,
-          "Y": 906
-        },
-        {
-          "X": 964,
-          "Y": 964
-        },
-        {
-          "X": 749,
-          "Y": 964
-        },
-        {
-          "X": 749,
-          "Y": 986
-        }
-      ]
-    },
-    {
-      "logicalEdgeId": "e15",
-      "family": "AdjacentDownward",
-      "points": [
-        {
-          "X": 1184,
-          "Y": 906
-        },
-        {
-          "X": 1184,
-          "Y": 964
-        },
-        {
-          "X": 1184,
-          "Y": 986
+          "X": 1429,
+          "Y": 174
         }
       ]
     }
@@ -442,7 +372,7 @@
     },
     {
       "Stage": "project-region generation",
-      "ElapsedMilliseconds": 36,
+      "ElapsedMilliseconds": 32,
       "Invocation": 1
     },
     {
@@ -472,12 +402,12 @@
     },
     {
       "Stage": "project-region serialization",
-      "ElapsedMilliseconds": 0,
+      "ElapsedMilliseconds": 39,
       "Invocation": 1
     },
     {
       "Stage": "project-region positional placement",
-      "ElapsedMilliseconds": 0,
+      "ElapsedMilliseconds": 1,
       "Invocation": 1
     },
     {
@@ -487,12 +417,12 @@
     },
     {
       "Stage": "project-region canonical topology selection",
-      "ElapsedMilliseconds": 3,
+      "ElapsedMilliseconds": 2,
       "Invocation": 1
     },
     {
       "Stage": "project-region terminal allocation",
-      "ElapsedMilliseconds": 2,
+      "ElapsedMilliseconds": 1,
       "Invocation": 1
     },
     {
@@ -502,17 +432,17 @@
     },
     {
       "Stage": "project-region InterLayer discovery",
-      "ElapsedMilliseconds": 6,
+      "ElapsedMilliseconds": 5,
       "Invocation": 1
     },
     {
       "Stage": "project-region horizontal slot allocation",
-      "ElapsedMilliseconds": 2,
+      "ElapsedMilliseconds": 1,
       "Invocation": 1
     },
     {
       "Stage": "project-region vertical and return column allocation",
-      "ElapsedMilliseconds": 12,
+      "ElapsedMilliseconds": 11,
       "Invocation": 1
     },
     {
@@ -567,7 +497,7 @@
     },
     {
       "Stage": "project-region logical validation",
-      "ElapsedMilliseconds": 1,
+      "ElapsedMilliseconds": 0,
       "Invocation": 1
     }
   ]
