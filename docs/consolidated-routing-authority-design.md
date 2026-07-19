@@ -1,5 +1,7 @@
 # Consolidated routing authority design
 
+> Vocabulary note: active common-authority code now uses link, link path, link segment, link transition, link connection, inter-layer slot, and vertical link column. Historical evidence below retains the terminology used when it was captured.
+
 Date: 2026-07-18. This document defines the agreed target and the first shared foundations. It does not replace the historical audits and it does not claim the current legacy/grouped migration is complete.
 
 ## Confirmed product rules
