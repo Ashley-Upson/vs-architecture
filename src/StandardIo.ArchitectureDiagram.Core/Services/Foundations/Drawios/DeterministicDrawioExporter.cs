@@ -2,12 +2,68 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json;
 using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
+    public ProjectRegionGenerationResult GenerateProjectRegion(
+        DiagramModel diagram,
+        DiagramSettings settings)
+    {
+        if (diagram is null) throw new ArgumentNullException(nameof(diagram));
+        settings ??= DiagramSettings.CreateDefault();
+        var timings = new List<PipelineStageMetric>();
+        var reasons = ProjectRegionEligibility.Explain(diagram);
+        var graph = Measure(timings, "project-region semantic preparation", () => RenderGraph.From(diagram, settings));
+        var layout = Measure(timings, "project-region generation", () => RenderLayout.BuildProjectRegion(graph, settings));
+        var ownership = Measure(timings, "project-region ownership compilation", () =>
+            CoordinateOwnershipCompiler.Compile(layout.Nodes, layout.Projects, layout.Links, settings.ShowProjectContainers));
+        if (settings.ShowProjectContainers)
+        {
+            var projects = Measure(timings, "project-region bounds", () => ProjectOwnershipBoundsCompiler.Compile(
+                layout.Projects, layout.Nodes, ownership, settings.Layout.ContainerPadding,
+                settings.Layout.ProjectHeaderHeight));
+            layout = layout.WithProjects(projects);
+            ownership = Measure(timings, "project-region ownership rebase", () =>
+                CoordinateOwnershipCompiler.Rebase(ownership, projects));
+        }
+        var document = Measure(timings, "project-region serialization", () =>
+            new DiagramFileBuilder(settings).Build(layout, ownership));
+        var hard = layout.Traceability.Violations.Where(violation =>
+            violation.Code != TraceabilityViolationCode.PerpendicularCrossing).ToArray();
+        if (hard.Length > 0) reasons = reasons.Concat(new[] { $"HardValidationFindings:{hard.Length}" }).ToArray();
+        var allTimings = timings.Concat(layout.StageTimings).ToArray();
+        var invariantJson = JsonSerializer.Serialize(new
+        {
+            mode = "IndependentProjectRegion",
+            semanticProjectCount = diagram.Projects.Count,
+            semanticNodeCount = diagram.Projects.Sum(project => project.Types.Count) + diagram.ExternalDependencies.Count,
+            semanticLinkCount = diagram.Edges.Count,
+            renderNodeCount = layout.Nodes.Count,
+            renderLinkCount = layout.Links.Count,
+            eligible = reasons.Count == 0,
+            fallbackReasons = reasons,
+            legacyRenderLayoutUsed = false,
+            legacyCoordinatesUsed = false,
+            legacyPathsUsed = false,
+            findings = layout.Traceability.Violations.Select(violation => new
+            {
+                code = violation.Code.ToString(),
+                edgeId = violation.EdgeId,
+                violation.OtherEdgeId,
+                violation.OtherNodeId,
+                violation.Description
+            }),
+            timings = allTimings
+        }, new JsonSerializerOptions { WriteIndented = true });
+        return new ProjectRegionGenerationResult(
+            reasons.Count == 0, reasons, document, invariantJson, allTimings,
+            layout.Nodes.Count, layout.Links.Count);
+    }
+
     public DevelopmentCommonAuthorityTrialResult GenerateDevelopmentCommonAuthorityTrial(
         DiagramModel diagram,
         DiagramSettings settings)

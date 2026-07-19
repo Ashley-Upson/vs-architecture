@@ -1297,6 +1297,49 @@ internal sealed partial class RenderLayout
             return attachments.Single(item => item.RouteId == link.Id).AxisCoordinate - node.CenterX;
         }
 
+        internal static RenderLayout BuildProjectRegion(RenderGraph graph, DiagramSettings settings)
+        {
+            var timings = new List<PipelineStageMetric>();
+            var placed = MeasureStage(timings, "project-region positional placement", () =>
+                PlacementPipeline.Place(graph, settings, new LayoutRevision(0)));
+            var activePlacement = placed;
+            var positioned = MeasureStage(timings, "project-region topology production", () =>
+                PositionLinks(graph, settings, activePlacement.Nodes));
+            var repaired = MeasureStage(timings, "project-region route compilation and repair", () =>
+                RouteRepairCoordinator.Repair(activePlacement.Nodes, positioned.Links, settings, new RouteRepairBudget()));
+            var expansion = ExpandLayersForLaneDemand(
+                activePlacement.Nodes, repaired.Links, repaired.PostRepairValidation, settings);
+            if (expansion.Changed)
+            {
+                activePlacement = activePlacement.Revise(
+                    expansion.Nodes,
+                    PlacementPipeline.PositionProjects(graph, settings, expansion.Nodes));
+                positioned = MeasureStage(timings, "project-region topology regeneration", () =>
+                    PositionLinks(graph, settings, activePlacement.Nodes));
+                repaired = MeasureStage(timings, "project-region regenerated route compilation and repair", () =>
+                    RouteRepairCoordinator.Repair(activePlacement.Nodes, positioned.Links, settings, new RouteRepairBudget()));
+            }
+            var links = repaired.Links;
+            var validation = repaired.PostRepairValidation;
+            return new RenderLayout(
+                graph,
+                activePlacement.Nodes,
+                activePlacement.Projects,
+                links,
+                positioned.Selection,
+                positioned.RegionalSelection,
+                repaired.Traversals,
+                validation,
+                repaired.Corridors,
+                repaired.Lanes,
+                repairAttempts: repaired.Attempts,
+                repairWorkUsed: repaired.EstimatedWorkUsed,
+                repairBudgetExhausted: repaired.WorkBudgetExhausted,
+                repairRunReason: repaired.RunReason,
+                stageTimings: timings,
+                layoutRevision: activePlacement.Revision);
+        }
+
         private static double Ratio(int x, Rect rect)
         {
             return Math.Max(0, Math.Min(1, (x - rect.X) / (double)rect.Width));

@@ -80,7 +80,7 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-common-authority-trial <directory>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-common-authority-trial <directory>] [--development-project-region <directory>]");
     }
 
     private static async Task<int> GenerateDrawioAsync(
@@ -89,26 +89,50 @@ public static class Program
         DiagramSettings settings)
     {
         var workspaceTimer = Stopwatch.StartNew();
-        WorkspacePathLoadResult target;
-        using (GenerationPerformanceSession.Current?.Measure("project/workspace acquisition"))
+        WorkspacePathLoadResult? target = null;
+        DiagramModel diagram = null!;
+        if (!string.IsNullOrWhiteSpace(options.DiagramManifestPath))
         {
-            target = await provider.GetRequiredService<IWorkspacePathBroker>()
-                .LoadAsync(
-                    options.InputPath!,
-                    new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
-                .ConfigureAwait(false);
+            diagram = DiagramModelSerializer.Import(File.ReadAllText(options.DiagramManifestPath));
+        }
+        else
+        {
+            using (GenerationPerformanceSession.Current?.Measure("project/workspace acquisition"))
+            {
+                target = await provider.GetRequiredService<IWorkspacePathBroker>()
+                    .LoadAsync(
+                        options.InputPath!,
+                        new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
+                    .ConfigureAwait(false);
+            }
         }
         workspaceTimer.Stop();
         var analysisTimer = Stopwatch.StartNew();
-        DiagramModel diagram;
-        using (GenerationPerformanceSession.Current?.Measure("semantic analysis", outputObjects: target.Projects.Count))
-        {
-            diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
-                .AnalyzeAsync(target.Projects, settings)
-                .ConfigureAwait(false);
-        }
+        if (target is not null)
+            using (GenerationPerformanceSession.Current?.Measure("semantic analysis", outputObjects: target.Projects.Count))
+            {
+                diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
+                    .AnalyzeAsync(target.Projects, settings)
+                    .ConfigureAwait(false);
+            }
         analysisTimer.Stop();
         var exporter = provider.GetRequiredService<IDeterministicDrawioExporter>();
+        if (!string.IsNullOrWhiteSpace(options.ProjectRegionDirectory))
+        {
+            var concrete = (DeterministicDrawioExporter)exporter;
+            var legacy = concrete.GenerateResult(diagram, settings).Document;
+            var region = concrete.GenerateProjectRegion(diagram, settings);
+            var directory = Path.GetFullPath(options.ProjectRegionDirectory);
+            Directory.CreateDirectory(directory);
+            var evidenceBroker = provider.GetRequiredService<IDiagramFileBroker>();
+            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "legacy-before.drawio"), legacy).ConfigureAwait(false);
+            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "common-after.drawio"), region.Document).ConfigureAwait(false);
+            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "invariants.json"), region.InvariantJson).ConfigureAwait(false);
+            Console.WriteLine($"Project region evidence: {directory}");
+            Console.WriteLine(region.Eligible ? "Project region eligible." :
+                $"Project region fallback: {string.Join(",", region.FallbackReasons)}");
+            return 0;
+        }
         if (!string.IsNullOrWhiteSpace(options.CommonAuthorityTrialDirectory))
         {
             var trial = ((DeterministicDrawioExporter)exporter)
@@ -133,7 +157,7 @@ public static class Program
             new PipelineStageMetric("semantic analysis", analysisTimer.ElapsedMilliseconds)
         });
         var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
-            ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
+            ? Path.Combine(Directory.GetCurrentDirectory(), $"{target?.Name ?? "diagram"}.architecture.drawio")
             : Path.GetFullPath(options.OutputPath);
         var broker = provider.GetRequiredService<IDiagramFileBroker>();
         using (GenerationPerformanceSession.Current?.Measure("file write", outputObjects: generation.Document.Length))
@@ -224,6 +248,10 @@ public static class Program
 
         public string? CommonAuthorityTrialDirectory { get; private set; }
 
+        public string? ProjectRegionDirectory { get; private set; }
+
+        public string? DiagramManifestPath { get; private set; }
+
         public int SerializationRepeatCount { get; private set; }
 
         public bool StrictValidation { get; private set; }
@@ -277,6 +305,12 @@ public static class Program
                         break;
                     case "--development-common-authority-trial":
                         options.CommonAuthorityTrialDirectory = ReadValue(args, ref index, arg);
+                        break;
+                    case "--development-project-region":
+                        options.ProjectRegionDirectory = ReadValue(args, ref index, arg);
+                        break;
+                    case "--diagram-manifest":
+                        options.DiagramManifestPath = ReadValue(args, ref index, arg);
                         break;
                     default:
                         if (arg.StartsWith("-", StringComparison.Ordinal))
