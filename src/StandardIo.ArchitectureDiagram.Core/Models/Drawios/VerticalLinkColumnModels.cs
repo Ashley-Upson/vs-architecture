@@ -2,6 +2,10 @@ using System.Collections.Generic;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
+internal sealed record DownwardLinkTopologyDemand(
+    IReadOnlyList<LinkSegmentDemand> SegmentDemands,
+    IReadOnlyList<VerticalLinkColumnDemand> VerticalColumnDemands);
+
 internal sealed record VerticalLinkColumnDemand(
     string Id,
     string LinkId,

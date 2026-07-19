@@ -30,7 +30,8 @@ internal static class DevelopmentCommonAuthorityTrial
         var bands = InterLayerDemandDiscovery.Observe(placement, generated, settings, production.Traceability);
         var contexts = AdjacentDownwardContextFactory.Create(production, bands);
         var adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
-        var generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts);
+        var generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(
+            contexts, settings.Layout.LinkPadding);
         phase["eligibility and rail-demand production"] = Elapsed(timer);
 
         timer.Restart();

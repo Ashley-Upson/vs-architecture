@@ -4,7 +4,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal sealed record GeneralDownwardLinkPlan(
     AdjacentDownwardLinkObservation Observation,
-    IReadOnlyList<int> TransitionXCoordinates,
+    IReadOnlyList<VerticalLinkColumnDemand> VerticalColumnDemands,
     string SourceNodeId,
     string TargetNodeId);
 
@@ -22,6 +22,7 @@ internal sealed record GeneralDownwardLinkAssignment(
 
 internal sealed record GeneralDownwardAssignmentReport(
     IReadOnlyList<CommonAuthorityRegionObservation> Regions,
+    VerticalLinkColumnAssignment VerticalColumns,
     IReadOnlyList<GeneralDownwardLinkAssignment> Routes,
     long AssignmentMicroseconds,
     long TransitionMicroseconds);

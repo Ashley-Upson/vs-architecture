@@ -107,7 +107,7 @@ internal static class AdjacentDownwardLinkDemandDiscovery
         InterLayerLinkMembership membership,
         IReadOnlyList<Point> points)
     {
-        return DownwardLinkSegmentDemandFactory.Create(context, new[] { membership.InterLayerId }).Demands;
+        return DownwardLinkSegmentDemandFactory.Create(context, new[] { membership.InterLayerId }).SegmentDemands;
     }
 
     private static IReadOnlyList<ExistingSegmentMapping> ExistingMappings(

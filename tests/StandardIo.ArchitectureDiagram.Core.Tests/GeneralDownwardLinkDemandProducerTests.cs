@@ -33,7 +33,7 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
     }
 
     [Fact]
-    public void Multi_band_route_emits_ordered_demands_and_orthogonal_deterministic_transitions()
+    public void Multi_band_route_emits_one_departure_band_and_one_full_depth_vertical_column()
     {
         var contexts = new[] { Context("b", 3), Context("a", 2) };
         var forward = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts);
@@ -43,17 +43,23 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
             forward.Routes.SelectMany(item => item.Observation.Demands).Select(item => item.Id),
             reverse.Routes.SelectMany(item => item.Observation.Demands).Select(item => item.Id));
         var route = Assert.Single(forward.Routes, item => item.Observation.LogicalRouteId == "b");
-        Assert.Equal(3, route.Observation.Demands.Count(item => item.Role == LinkSegmentRole.Through));
-        Assert.Equal(new int?[] { 1, 2, 3 }, route.Observation.Demands.Where(item => item.Role == LinkSegmentRole.Through)
-            .Select(item => item.TurnOrder));
+        Assert.Single(route.Observation.Demands, item => item.Role == LinkSegmentRole.Through);
+        var column = Assert.Single(route.VerticalColumnDemands);
+        Assert.Equal(120, column.PreferredX);
+        Assert.Equal(new AxisInterval(120, 120), column.AllowedXInterval);
+        Assert.Equal(0, column.SourceLayer);
+        Assert.Equal(3, column.DestinationLayer);
 
-        var assigned = GeneralDownwardCommonAllocator.Assign(forward, Nodes(), 12, 4);
-        var reconstructed = Assert.Single(assigned.Routes, item => item.LogicalRouteId == "b");
+        var assigned = GeneralDownwardCommonAllocator.Assign(
+            GeneralDownwardLinkSegmentDemandProducer.Observe(new[] { Context("b", 3) }), Nodes(), 12, 4);
+        var reconstructed = Assert.Single(assigned.Routes);
         Assert.True(reconstructed.IsValid);
         Assert.All(reconstructed.ReconstructedPoints.Zip(reconstructed.ReconstructedPoints.Skip(1)), pair =>
             Assert.True(pair.First.X == pair.Second.X || pair.First.Y == pair.Second.Y));
         Assert.DoesNotContain(reconstructed.ReconstructedPoints.Zip(reconstructed.ReconstructedPoints.Skip(1)), pair =>
             pair.First == pair.Second);
+        Assert.Equal(4, reconstructed.ReconstructedPoints.Count);
+        Assert.Equal(reconstructed.ReconstructedPoints[2].X, reconstructed.ReconstructedPoints[3].X);
     }
 
     [Fact]
@@ -61,12 +67,12 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
     {
         var report = GeneralDownwardLinkSegmentDemandProducer.Observe(new[] { Context("route", 2) });
         var nodes = Nodes();
-        nodes["obstacle"] = new NodeLayout(Node("obstacle", 3), new Rect(60, 100, 20, 80), 1, false);
+        nodes["obstacle"] = new NodeLayout(Node("obstacle", 3), new Rect(110, 100, 20, 80), 1, false);
 
         var route = Assert.Single(GeneralDownwardCommonAllocator.Assign(report, nodes, 12, 4).Routes);
 
         Assert.False(route.IsValid);
-        Assert.Contains(route.Diagnostics, item => item.StartsWith("ObstacleBypassRequired:", StringComparison.Ordinal));
+        Assert.Contains(route.Diagnostics, item => item.StartsWith("VerticalColumnBlocked:", StringComparison.Ordinal));
     }
 
     private static AdjacentDownwardLinkContext Context(string id, int bands)
