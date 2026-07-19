@@ -37,6 +37,8 @@ internal static class DevelopmentCommonAuthorityTrial
         timer.Restart();
         var common = GeneralDownwardCommonAllocator.Assign(
             generalObservation, production.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        var returns = ReturnLinkCommonAllocator.Assign(
+            contexts, production.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var interactions = DiscoverInteractions(production.Links, settings.Layout.ParallelLaneSpacing).ToList();
         var movementClosures = new List<object>();
         var blockedByUnclosedMovement = new HashSet<string>(StringComparer.Ordinal);
@@ -71,15 +73,20 @@ internal static class DevelopmentCommonAuthorityTrial
         var stableInteractions = interactions.Distinct().OrderBy(item => item.FirstRouteId, StringComparer.Ordinal)
             .ThenBy(item => item.SecondRouteId, StringComparer.Ordinal).ThenBy(item => item.Kind, StringComparer.Ordinal).ToArray();
         var attribution = MixedBoundaryAttributor.Attribute(contexts, adjacentObservation, stableInteractions, bands);
-        var capabilities = generalObservation.Routes.Select(item => new CommonAuthorityRouteCapability(
+        var returnIds = new HashSet<string>(returns.Plans.Select(item => item.LogicalRouteId), StringComparer.Ordinal);
+        var capabilities = generalObservation.Routes.Where(item => !returnIds.Contains(item.Observation.LogicalRouteId))
+            .Select(item => new CommonAuthorityRouteCapability(
             item.Observation.LogicalRouteId,
             item.Observation.Eligible,
-            item.Observation.Eligible ? "Eligible" : item.Observation.RejectionReason?.ToString() ?? "Unsupported"));
+            item.Observation.Eligible ? "Eligible" : item.Observation.RejectionReason?.ToString() ?? "Unsupported"))
+            .Concat(returns.Assignments.Select(item => new CommonAuthorityRouteCapability(
+                item.LogicalRouteId, item.IsValid, item.IsValid ? "EligibleReturnTopology" : "ReturnAssignmentFailed")));
         var closure = CommonAuthorityComponentClassifier.Classify(capabilities, stableInteractions);
         phase["conflict grouping and rail assignment"] = Elapsed(timer);
 
         timer.Restart();
-        var assignmentByRoute = common.Routes.ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
+        var assignmentByRoute = common.Routes.Concat(returns.Assignments)
+            .ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
         var current = production.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var attempts = new List<DevelopmentTrialComponentAttempt>();
         var acceptedRouteIds = new HashSet<string>(StringComparer.Ordinal);
@@ -173,7 +180,15 @@ internal static class DevelopmentCommonAuthorityTrial
         {
             mode = "DevelopmentOnlyCommonAuthorityTrial",
             normalProductionExposure = false,
-            eligibleRoutes = generalObservation.Routes.Count(item => item.Observation.Eligible),
+            eligibleRoutes = generalObservation.Routes.Count(item => item.Observation.Eligible) +
+                returns.Assignments.Count(item => item.IsValid),
+            returnTopologies = new
+            {
+                sameLayer = returns.Plans.Count(item => item.Kind == ReturnLinkTopologyKind.SameLayer),
+                upward = returns.Plans.Count(item => item.Kind == ReturnLinkTopologyKind.Upward),
+                assignedColumns = returns.VerticalColumns.ColumnsByDemandId.Count,
+                acceptedAssignments = returns.Assignments.Count(item => item.IsValid)
+            },
             eligibleClosedComponents = closure.Components.Count(item => item.Disposition == CommonAuthorityComponentDisposition.Eligible),
             rejectedPreExecutionComponents = attempts.Count(item => item.Status == "rejected before execution"),
             acceptedComponents = attempts.Count(item => item.Status == "accepted"),
