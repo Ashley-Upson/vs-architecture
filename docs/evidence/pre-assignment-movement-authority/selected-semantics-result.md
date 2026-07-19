@@ -1,79 +1,80 @@
-# Selected movement semantics: real closure result
+# Allocated return slots: real closure result
 
-This evidence follows the accepted return-column ownership and destination-column difference-constraint decisions.
-The implementation remains available only through the opt-in development authority. Normal production does not execute
-it and no provisional placement or route is emitted when the closure is rejected.
+This evidence records the opt-in development-authority result after return departure and arrival segments were integrated
+with the canonical deterministic InterLayer slot allocator. Normal production does not execute this path. Rejected trial
+geometry remains atomic and is not emitted.
 
 ## Reproduction
 
 ```powershell
-dotnet build src\StandardIo.ArchitectureDiagram.Cli\StandardIo.ArchitectureDiagram.Cli.csproj -c Release --no-restore
+dotnet build src\StandardIo.ArchitectureDiagram.Cli\StandardIo.ArchitectureDiagram.Cli.csproj -c Release
 dotnet run --project src\StandardIo.ArchitectureDiagram.Cli\StandardIo.ArchitectureDiagram.Cli.csproj -c Release --no-build -- "C:\Users\Ash\Documents\ccoder\ccoder.ContentManagement\src\cCoder.ContentManagement\cCoder.ContentManagement.csproj" --settings "C:\Users\Ash\Documents\standard-io\artifacts\node-duplication\real-project-deduplicated-settings.json" --renderer drawio --development-common-authority-trial "C:\Users\Ash\Documents\standard-io\artifacts\pre-assignment-authority-trial"
 ```
 
-The complete per-link ownership, candidate coordinates, blocker identities and solvability classifications are in
-`artifacts/pre-assignment-authority-trial/trial-report.json` under
-`preAssignmentMovement.returnColumnConstraintDetails`.
+The generated `before.drawio`, atomically rolled-back `after.drawio`, and complete `trial-report.json` are written under
+`artifacts/pre-assignment-authority-trial`.
 
 ## Implemented semantics
 
-- Return columns carry a stable ownership envelope derived from the smallest contiguous ordered project span containing
-  both endpoints. Same-project, intervening-project, cross-project and root/canvas ownership fixtures are deterministic.
-- Destination-aligned columns are represented by explicit column-to-envelope and column-to-column inequalities.
-- The destination column remains attached to the destination midpoint. The solver compares coherent destination and
-  blocker movement scopes rather than shifting a column independently.
-- Difference constraints are persisted against immutable base placement. Reapplying an unchanged minimum cannot create
-  an additional move.
-- Generic subtree-separation proposals no longer stand in for destination-column or return-column constraints.
+- A return retains one departure horizontal, one ownership-local exterior column, and one arrival horizontal.
+- Departure and arrival are ordinary `LinkSegmentDemand` records with `ReturnDeparture` and `ReturnArrival` roles.
+- Same-layer departure and arrival use different InterLayers. Upward routes use the InterLayers immediately below the
+  source and above the destination.
+- Return and ordinary horizontal demands share conflict grouping, deterministic lowest-slot allocation, exact persistent
+  InterLayer height proposals, vertical suffix materialisation, invalidation, and changed-interval reassignment.
+- Project-owned external nodes participate in layer bounds and move with their owning suffix.
+- No side terminal, extra horizontal segment, free-form Y adjustment, positional reorder, or legacy repair was added.
 
-## Real result
+## Real return result
 
-The selected semantics remove every real destination-column obstacle:
+| Measurement | Result |
+| --- | ---: |
+| Same-layer returns | 32 |
+| Upward returns | 42 |
+| Departure demands | 74 |
+| Arrival demands | 74 |
+| Distinct departure InterLayers | 7 |
+| Distinct arrival InterLayers | 5 |
+| Slot regions | 8 |
+| Assigned return segments | 148 |
+| Assigned exterior columns | 74 |
+| Valid return assignments | 74/74 |
+| Remaining return blockers | 0 |
+| Persistent InterLayer constraints | 8 |
+| Vertical materialisation iterations | 11 |
 
-| Measurement | Before | After |
-| --- | ---: | ---: |
-| Blocked destination columns | 9 | 0 |
-| Persistent difference constraints | 0 | 29 |
-| Persistent iterations | - | 7 |
-| Provisionally moved nodes | 30 | 34 |
-| Invalidated links | 72 | 84 |
+This closes the former 21 ordering-invariant fixed-Y blockers. Both existing-slot reuse and exact InterLayer expansion are
+exercised by focused fixtures; the real report retains the final persistent height requirements for depths 1 through 8.
 
-The post-movement return evaluation finds 21 obstructed return demands. All 21 belong to the cCoder project's
-`projects:0-0:layout-4` ownership envelope and all 21 are classified as
-`OrderingInvariantInteriorBlocker`. Their left exteriors contain 66 blocker incidences and their right exteriors contain
-463 blocker incidences. No left or right candidate is valid.
+## New qualifying blocker
 
-This count supersedes the earlier five-stub baseline. Clearing the destination columns and evaluating the complete
-ownership-local return set exposes 21 affected links; it does not turn five previously valid return paths into invalid
-production output because the development transaction is rejected atomically.
+Full real closure cannot reach a finite horizontal fixed point. The return slot allocation itself is complete, but the
+reprojected destination-column constraints expose a positive three-subtree cycle in the large cCoder project:
 
-## Qualifying blocker
+```text
+layout subtree ..._4_type_9a3beb03... must move right to clear ..._6_type_a0340b84...
+layout subtree ..._5_type_a9f0314f... must move right to clear ..._4_type_9a3beb03...
+layout subtree ..._6_type_a0340b84... must move right to clear ..._5_type_a9f0314f...
+```
 
-The remaining return problem has no horizontal order-preserving solution under the selected semantics.
+A diagnostic run raised the iteration bound from 16 to 128 without changing semantics. After initial propagation, the
+three requirements repeated in order and each three-iteration circuit increased all required coordinates by 7 pixels.
+Representative final requirements were X >= 29306, X >= 29811, and X >= 29192. Therefore no finite monotonic horizontal
+placement satisfies the selected directions. The diagnostic bound and telemetry were removed after establishing the
+cycle; they are not production changes.
 
-For a same-project return, the valid column lies outside the complete project ownership envelope. A blocker lying
-between an endpoint and the left exterior cannot be moved beyond the left exterior: moving that project-owned blocker
-also expands or translates the ownership boundary. Moving it across the endpoint reverses positional order. The same
-argument applies on the right. Every remaining real demand has at least one blocker on both sides.
+Trying deterministic opposing directions removed the initial reciprocal pair but did not solve the larger dependency
+graph. The remaining choice is semantic: permit a different coherent horizontal movement alternative for at least one
+member of the cycle, or authorize a positional reorder. Neither is implied by allocated InterLayer slots.
 
-Consequently, subtree, sibling-suffix, or whole-project horizontal movement can preserve ordering or clear one side, but
-cannot make either ownership-local exterior reachable. Continuing through depth-2 allocation, regeneration, validation,
-compaction, or obsolete-code deletion would consume provisional geometry from a closure that must roll back. Those
-stages remain intentionally unexecuted.
+The normal 16-iteration run consequently reports one destination conflict, three vertical-column obstacles, no return
+stub obstacle, non-converged horizontal and changed-interval closure, 79 invalidated links, and zero regenerated output
+routes. The component is rejected before execution; all findings remain identical to production.
 
-The smallest remaining product decision is whether an exterior return may select a different vertical departure/arrival
-stub slot before travelling horizontally, while preserving the chosen ownership-local column and positional ordering.
-The alternative is to authorize positional reordering of owned subtrees. The vertical-slot option is recommended because
-it preserves hierarchy and project ordering; it is a new route-topology semantic and is not implied by the accepted
-horizontal movement rules.
+## Production isolation
 
-## Production isolation and verification
-
-- Atomic result: rolled back; zero routes regenerated into output.
-- Production SHA-256: `08D70BBA59130F8D56EC4F411D3A5BB360B6FB1BBA800D5C43FE1A6386DAB7F6`.
-- Focused ownership, difference-constraint, and solvability tests: 14/14 passing.
-- Full suite: 402/402 passing.
-- Release solution build: succeeded with the existing six VSIX dependency/analyzer warnings and no errors.
-- Fresh-process normal benchmark: 14,549 / 14,887 / 15,023 ms minimum/median/maximum over five measured runs.
-- Benchmark repeat hashes: one.
+- Development authority: opt-in only.
+- Atomic result: rolled back.
+- Routes emitted after rollback: 0.
+- Required production SHA-256: `08D70BBA59130F8D56EC4F411D3A5BB360B6FB1BBA800D5C43FE1A6386DAB7F6`.
 - VSIX packaged: no.
