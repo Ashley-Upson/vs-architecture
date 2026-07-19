@@ -25,7 +25,7 @@ internal static class AdjacentDownwardLinkDemandDiscovery
                 continue;
             }
 
-            var bandMembership = context.BandMemberships
+            var interLayerMembership = context.InterLayerMemberships
                 .OrderBy(item => item.FirstSegmentIndex)
                 .ThenBy(item => item.LastSegmentIndex)
                 .ThenBy(item => item.Id, StringComparer.Ordinal)
@@ -33,11 +33,11 @@ internal static class AdjacentDownwardLinkDemandDiscovery
             var throughSegment = authoritative[1] == authoritative[2]
                 ? new Segment(authoritative[1], authoritative[1])
                 : new Segment(authoritative[1], authoritative[2]);
-            var demands = Demands(context, bandMembership, authoritative);
+            var demands = Demands(context, interLayerMembership, authoritative);
             demandTicks += Stopwatch.GetTimestamp() - demandStarted;
 
             var adaptationStarted = Stopwatch.GetTimestamp();
-            var mappings = ExistingMappings(context, bandMembership, throughSegment, demands[1]);
+            var mappings = ExistingMappings(context, interLayerMembership, throughSegment, demands[1]);
             var selected = SelectAssignedLinkSegments(context, demands, mappings, authoritative);
             adaptationTicks += Stopwatch.GetTimestamp() - adaptationStarted;
 
@@ -77,10 +77,10 @@ internal static class AdjacentDownwardLinkDemandDiscovery
     {
         canonical = Normalize(CompletePoints(context.Route));
         if (context.ExposureTreeSpecific) return AdjacentDownwardRejectionReason.ExposureTreeSpecific;
-        if (context.BandMemberships.Any(item => item.RouteRevision != context.RouteRevision ||
-                item.BandId.LayoutRevision != context.LayoutRevision) ||
-            context.BandDemands.Any(item => item.RouteRevision != context.RouteRevision ||
-                item.BandId.LayoutRevision != context.LayoutRevision))
+        if (context.InterLayerMemberships.Any(item => item.RouteRevision != context.RouteRevision ||
+                item.InterLayerId.LayoutRevision != context.LayoutRevision) ||
+            context.InterLayerDemands.Any(item => item.RouteRevision != context.RouteRevision ||
+                item.InterLayerId.LayoutRevision != context.LayoutRevision))
             return AdjacentDownwardRejectionReason.RevisionMismatch;
         if (canonical.Zip(canonical.Skip(1), (a, b) => new Segment(a, b)).Any(item => !item.IsOrthogonal))
             return AdjacentDownwardRejectionReason.NonOrthogonal;
@@ -89,7 +89,7 @@ internal static class AdjacentDownwardLinkDemandDiscovery
         if (context.Target.Depth > context.Source.Depth + 1) return AdjacentDownwardRejectionReason.SkippedLayer;
         if (!string.Equals(context.Source.Node.ProjectId, context.Target.Node.ProjectId, StringComparison.Ordinal))
             return AdjacentDownwardRejectionReason.CrossProject;
-        if (context.BandMemberships.Select(item => item.BandId).Distinct().Count() != 1)
+        if (context.InterLayerMemberships.Select(item => item.InterLayerId).Distinct().Count() != 1)
             return AdjacentDownwardRejectionReason.MultipleInterLayer;
         if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom ||
@@ -107,7 +107,7 @@ internal static class AdjacentDownwardLinkDemandDiscovery
         InterLayerLinkMembership membership,
         IReadOnlyList<Point> points)
     {
-        return DownwardLinkSegmentDemandFactory.Create(context, new[] { membership.BandId }).Demands;
+        return DownwardLinkSegmentDemandFactory.Create(context, new[] { membership.InterLayerId }).Demands;
     }
 
     private static IReadOnlyList<ExistingSegmentMapping> ExistingMappings(
@@ -121,41 +121,41 @@ internal static class AdjacentDownwardLinkDemandDiscovery
                      item.EdgeId == context.Route.Link.Id && item.Segment.IsHorizontal &&
                      item.Segment.OverlapLength(through) == through.Length))
         {
-            if (!context.CorridorLanes.TryGetLane(mapping.CorridorId, context.Route.Link.Id, out var lane)) continue;
+            if (!context.CorridorLanes.TryGetLane(mapping.CorridorId, context.Route.Link.Id, out var slot)) continue;
             var corridor = context.Corridors.Corridors[mapping.CorridorId];
-            result.Add(Mapping(ExistingSegmentMappingSource.LegacyCorridor, demand, lane.LaneIndex, through.Start.Y,
+            result.Add(Mapping(ExistingSegmentMappingSource.LegacyCorridor, demand, slot.LaneIndex, through.Start.Y,
                 ("corridorId", corridor.Id), ("role", corridor.Role.ToString()),
                 ("regionKey", corridor.RegionKey), ("obstacleBoundaryKey", corridor.ObstacleBoundaryKey)));
         }
 
-        foreach (var bandDemand in context.BandDemands.Where(item => item.BandId == membership.BandId))
-            result.Add(Mapping(ExistingSegmentMappingSource.InterLayerObservation, demand, bandDemand.SlotIndex, through.Start.Y,
-                ("bandId", bandDemand.BandId.ToString()), ("direction", bandDemand.Direction.ToString()),
-                ("membershipRole", bandDemand.Role.ToString())));
+        foreach (var interLayerDemand in context.InterLayerDemands.Where(item => item.InterLayerId == membership.InterLayerId))
+            result.Add(Mapping(ExistingSegmentMappingSource.InterLayerObservation, demand, interLayerDemand.SlotIndex, through.Start.Y,
+                ("interLayerId", interLayerDemand.InterLayerId.ToString()), ("direction", interLayerDemand.Direction.ToString()),
+                ("membershipRole", interLayerDemand.Role.ToString())));
 
         if (context.GroupedPlan is not null)
         {
-            foreach (var group in context.GroupedPlan.Groups.Where(item => item.BandId == membership.BandId))
+            foreach (var group in context.GroupedPlan.Groups.Where(item => item.InterLayerId == membership.InterLayerId))
             foreach (var groupDemand in group.Demands.Where(item => item.LogicalEdgeIdentity == context.Route.Link.Id))
                 result.Add(Mapping(ExistingSegmentMappingSource.InterLayerSpacingConstraint, demand,
-                    group.AssignedLanes[groupDemand.Id], through.Start.Y,
+                    group.AssignedSlots[groupDemand.Id], through.Start.Y,
                     ("groupId", group.Id), ("movementScope", group.MovementScope.ToString()),
                     ("currentExtent", group.CurrentExtent.ToString()), ("requiredExtent", group.RequiredExtent.ToString())));
         }
 
-        return result.OrderBy(item => item.Source).ThenBy(item => item.Rail.SlotIndex)
-            .ThenBy(item => item.Rail.Id, StringComparer.Ordinal).ToArray();
+        return result.OrderBy(item => item.Source).ThenBy(item => item.Segment.SlotIndex)
+            .ThenBy(item => item.Segment.Id, StringComparer.Ordinal).ToArray();
     }
 
     private static ExistingSegmentMapping Mapping(
         ExistingSegmentMappingSource source,
         LinkSegmentDemand demand,
-        int laneIndex,
+        int slotIndex,
         int axis,
         params (string Key, string Value)[] metadata) =>
         new(source, new AssignedLinkSegment(
             $"{demand.LogicalRouteId}:assigned:through:{source}", demand.Id, demand.LogicalRouteId,
-            demand.Orientation, axis, laneIndex, demand.OccupiedInterval, demand.Role,
+            demand.Orientation, axis, slotIndex, demand.OccupiedInterval, demand.Role,
             demand.PlacementRevision, demand.RouteRevision),
             metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
 
@@ -165,57 +165,57 @@ internal static class AdjacentDownwardLinkDemandDiscovery
         IReadOnlyList<ExistingSegmentMapping> mappings,
         IReadOnlyList<Point> points)
     {
-        var through = mappings.OrderBy(item => item.Source).Select(item => item.Rail).FirstOrDefault();
+        var through = mappings.OrderBy(item => item.Source).Select(item => item.Segment).FirstOrDefault();
         if (through is null) return Array.Empty<AssignedLinkSegment>();
         return new[]
         {
-            AssignedTerminal(context, demands[0], points[0].X, 0),
+            AssignedConnection(context, demands[0], points[0].X, 0),
             through,
-            AssignedTerminal(context, demands[2], points[3].X, 0)
+            AssignedConnection(context, demands[2], points[3].X, 0)
         };
     }
 
-    private static AssignedLinkSegment AssignedTerminal(AdjacentDownwardLinkContext context, LinkSegmentDemand demand, int axis, int lane) =>
+    private static AssignedLinkSegment AssignedConnection(AdjacentDownwardLinkContext context, LinkSegmentDemand demand, int axis, int slot) =>
         new($"{context.Route.Link.Id}:assigned:{demand.Role}", demand.Id, context.Route.Link.Id,
-            demand.Orientation, axis, lane, demand.OccupiedInterval, demand.Role,
+            demand.Orientation, axis, slot, demand.OccupiedInterval, demand.Role,
             context.LayoutRevision, context.RouteRevision);
 
     private static IReadOnlyList<LinkTransition> Transitions(
         AdjacentDownwardLinkContext context,
-        IReadOnlyList<AssignedLinkSegment> rails,
+        IReadOnlyList<AssignedLinkSegment> segments,
         IReadOnlyList<Point> points)
     {
-        if (rails.Count != 3) return Array.Empty<LinkTransition>();
+        if (segments.Count != 3) return Array.Empty<LinkTransition>();
         return new[]
         {
             new LinkTransition($"{context.Route.Link.Id}:transition:0", context.Route.Link.Id,
-                rails[0].Id, rails[1].Id, points[1], 0, context.LayoutRevision, context.RouteRevision),
+                segments[0].Id, segments[1].Id, points[1], 0, context.LayoutRevision, context.RouteRevision),
             new LinkTransition($"{context.Route.Link.Id}:transition:1", context.Route.Link.Id,
-                rails[1].Id, rails[2].Id, points[2], 1, context.LayoutRevision, context.RouteRevision)
+                segments[1].Id, segments[2].Id, points[2], 1, context.LayoutRevision, context.RouteRevision)
         };
     }
 
     internal static IReadOnlyList<Point> Reconstruct(
         Point source,
         Point target,
-        IReadOnlyList<AssignedLinkSegment> rails,
+        IReadOnlyList<AssignedLinkSegment> segments,
         IReadOnlyList<LinkTransition> transitions)
     {
-        if (rails.Count != 3 || transitions.Count != 2) return Array.Empty<Point>();
-        var byId = rails.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        if (segments.Count != 3 || transitions.Count != 2) return Array.Empty<Point>();
+        var byId = segments.ToDictionary(item => item.Id, StringComparer.Ordinal);
         foreach (var transition in transitions.OrderBy(item => item.Order))
         {
             if (!byId.TryGetValue(transition.FromAssignedLinkSegmentId, out var from) ||
                 !byId.TryGetValue(transition.ToAssignedLinkSegmentId, out var to) ||
-                !OnRail(transition.Turn, from) || !OnRail(transition.Turn, to))
+                !OnSegment(transition.Turn, from) || !OnSegment(transition.Turn, to))
                 return Array.Empty<Point>();
         }
         return Normalize(new[] { source }.Concat(transitions.OrderBy(item => item.Order).Select(item => item.Turn)).Concat(new[] { target }));
     }
 
-    private static bool OnRail(Point point, AssignedLinkSegment rail) => rail.Orientation == LinkSegmentOrientation.Horizontal
-        ? point.Y == rail.AxisCoordinate && rail.OccupiedInterval.ContainsClosed(point.X)
-        : point.X == rail.AxisCoordinate && rail.OccupiedInterval.ContainsClosed(point.Y);
+    private static bool OnSegment(Point point, AssignedLinkSegment segment) => segment.Orientation == LinkSegmentOrientation.Horizontal
+        ? point.Y == segment.AxisCoordinate && segment.OccupiedInterval.ContainsClosed(point.X)
+        : point.X == segment.AxisCoordinate && segment.OccupiedInterval.ContainsClosed(point.Y);
 
     private static AdjacentDownwardLinkObservation Rejected(
         string routeId,

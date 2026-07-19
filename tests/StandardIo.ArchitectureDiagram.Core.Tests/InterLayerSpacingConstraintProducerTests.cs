@@ -20,7 +20,7 @@ public sealed class InterLayerSpacingConstraintProducerTests
         var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
         var originalUpper = fixture.Placement.Nodes["a"].Rect;
         var originalLower = fixture.Placement.Nodes["x"].Rect;
-        var missing = report.Bands[0].MissingExtent;
+        var missing = report.InterLayers[0].MissingExtent;
 
         var result = InterLayerSpacingConstraintProducer.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
 

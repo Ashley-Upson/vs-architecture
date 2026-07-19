@@ -21,7 +21,7 @@ internal sealed record CommonAuthorityDevelopmentFixtureResult(
     int LayersMoved,
     int SpaceAdded,
     int RoutesRegenerated,
-    int RailsAssigned,
+    int SegmentsAssigned,
     int TurnsAssigned,
     IReadOnlyList<LinkInvalidation> Invalidations,
     long ConvergenceMicroseconds,

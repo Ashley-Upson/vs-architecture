@@ -24,18 +24,18 @@ internal static class CommonAuthorityDevelopmentFixture
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"),
             PlacementRevision, RouteRevision)).ToArray();
         var region = new LinkSegmentAllocationRegionIdentity(
-            LinkSegmentOrientation.Horizontal, new AxisInterval(130, 270), "ccoder:band:0:1:retained-component",
+            LinkSegmentOrientation.Horizontal, new AxisInterval(130, 270), "ccoder:interLayer:0:1:retained-component",
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"), PlacementRevision);
         var assignment = DeterministicSlotAllocator.Assign(region, demands, new LinkSegmentAssignmentOptions(Separation, 10));
         var after = before.Select(route =>
         {
-            var rail = assignment.SegmentsByDemandId[$"{route.Id}:through"];
+            var segment = assignment.SegmentsByDemandId[$"{route.Id}:through"];
             return route with
             {
                 Points = new[]
                 {
-                    route.Points[0], new Point(route.Points[0].X, rail.AxisCoordinate),
-                    new Point(route.Points[3].X, rail.AxisCoordinate), route.Points[3]
+                    route.Points[0], new Point(route.Points[0].X, segment.AxisCoordinate),
+                    new Point(route.Points[3].X, segment.AxisCoordinate), route.Points[3]
                 }
             };
         }).ToArray();
@@ -48,8 +48,8 @@ internal static class CommonAuthorityDevelopmentFixture
         var afterDefects = Validate(nodes, after);
         timer.Stop();
         return new CommonAuthorityDevelopmentFixtureResult(
-            Drawio(nodes, before, "Before: existing shared rail"),
-            Drawio(nodes, after, "After: common deterministic rails"),
+            Drawio(nodes, before, "Before: existing shared segment"),
+            Drawio(nodes, after, "After: common deterministic segments"),
             beforeDefects, afterDefects, 0, 0,
             Math.Max(0, assignment.RequiredExtent - region.AllowedAxisRange.Length),
             after.Length, assignment.SegmentsByDemandId.Count, after.Length * 2, invalidations,
@@ -109,7 +109,7 @@ internal static class CommonAuthorityDevelopmentFixture
                             new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
         return new XDocument(new XDeclaration("1.0", "UTF-8", null),
             new XElement("mxfile", new XAttribute("host", "app.diagrams.net"), new XAttribute("compressed", "false"),
-                new XElement("diagram", new XAttribute("id", "common-rail-real-component"), new XAttribute("name", "Page-1"),
+                new XElement("diagram", new XAttribute("id", "common-segment-real-component"), new XAttribute("name", "Page-1"),
                     new XElement("mxGraphModel", new XAttribute("grid", "1"), new XAttribute("gridSize", "10"),
                         new XAttribute("page", "0"), new XAttribute("background", "#101010"), root)))).ToString();
     }

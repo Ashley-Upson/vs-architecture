@@ -211,7 +211,7 @@ internal static class DrawioDiagnosticReportBuilder
             interLayerBands = bandReport is null ? null : new
             {
                 telemetry = bandReport.Telemetry,
-                bands = bandReport.Bands.Select(band => new
+                bands = bandReport.InterLayers.Select(band => new
                 {
                     id = band.Id.ToString(),
                     band.Id.UpperLayer,
@@ -222,8 +222,8 @@ internal static class DrawioDiagnosticReportBuilder
                     band.MissingExtent,
                     band.OverlapGroupCount,
                     band.MaximumSimultaneousOverlap,
-                    band.HypotheticalLaneCount,
-                    band.ReturnLaneCount,
+                    band.HypotheticalSlotCount,
+                    band.ReturnSlotCount,
                     band.ReturnRegions,
                     band.Memberships,
                     band.Demands,
@@ -246,8 +246,8 @@ internal static class DrawioDiagnosticReportBuilder
                     routes = group.Demands.Select(item => item.LogicalEdgeIdentity)
                         .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray(),
                     segments = group.Demands.Select(item => item.Id).ToArray(),
-                    group.CurrentLaneCount,
-                    group.RequiredLaneCount,
+                    group.CurrentSlotCount,
+                    group.RequiredSlotCount,
                     group.CurrentExtent,
                     group.RequiredExtent,
                     group.MissingExtent,
@@ -342,13 +342,13 @@ internal static class DrawioDiagnosticReportBuilder
         int padding)
     {
         if (bandReport is null) return null;
-        var memberships = bandReport.Bands.SelectMany(item => item.Memberships)
+        var memberships = bandReport.InterLayers.SelectMany(item => item.Memberships)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkMembership>)group.ToArray(), StringComparer.Ordinal);
-        var demands = bandReport.Bands.SelectMany(item => item.Demands)
+        var demands = bandReport.InterLayers.SelectMany(item => item.Demands)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkDemand>)group.ToArray(), StringComparer.Ordinal);
-        var ranges = bandReport.Bands.ToDictionary(
+        var ranges = bandReport.InterLayers.ToDictionary(
             item => item.Id, item => new AxisInterval(item.UpperBoundary, item.LowerBoundary));
         var routeRevision = bandReport.Telemetry.RouteRevision;
         var duplicatedExposureTree = layout.Graph.PlacementParentByNode.Count == 0 &&
@@ -477,8 +477,8 @@ internal static class DrawioDiagnosticReportBuilder
                 laneMappings = item.ExistingSegmentMappings.Select(mapping => new
                 {
                     source = mapping.Source.ToString(),
-                    mapping.Rail.SlotIndex,
-                    mapping.Rail.AxisCoordinate,
+                    mapping.Segment.SlotIndex,
+                    mapping.Segment.AxisCoordinate,
                     mapping.SpecializedMetadata
                 }),
                 transitions = item.Transitions.Select(transition => new
@@ -699,10 +699,10 @@ internal static class DrawioDiagnosticReportBuilder
                     var classification = terminal ? "terminal attachment artefact" :
                         boundary ? "ownership-anchor artefact" :
                         fallback ? "fallback geometry" : "actual final diagonal route";
-                    var memberships = bandReport?.Bands.SelectMany(band => band.Memberships)
+                    var memberships = bandReport?.InterLayers.SelectMany(band => band.Memberships)
                         .Where(membership => membership.LogicalEdgeIdentity == link.Link.Id &&
                             index >= membership.FirstSegmentIndex && index <= membership.LastSegmentIndex)
-                        .Select(membership => membership.BandId.ToString()).Distinct(StringComparer.Ordinal)
+                        .Select(membership => membership.InterLayerId.ToString()).Distinct(StringComparer.Ordinal)
                         .OrderBy(id => id, StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
                     var findings = layout.Traceability.Violations.Where(finding =>
                             finding.EdgeId == link.Link.Id || finding.OtherEdgeId == link.Link.Id)

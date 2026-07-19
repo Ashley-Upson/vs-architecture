@@ -38,12 +38,12 @@ internal static class MixedBoundaryAttributor
                 SemanticFamily(context),
                 observed[routeId].Eligible,
                 secondary,
-                context.BandMemberships.Select(item => item.BandId.ToString()).Distinct(StringComparer.Ordinal)
+                context.InterLayerMemberships.Select(item => item.InterLayerId.ToString()).Distinct(StringComparer.Ordinal)
                     .OrderBy(item => item, StringComparer.Ordinal).ToArray(),
                 adjacentInteractions);
         }).ToArray();
 
-        var deficient = bands.Bands.Where(item => item.MissingExtent > 0).OrderBy(item => item.Id.UpperLayer)
+        var deficient = bands.InterLayers.Where(item => item.MissingExtent > 0).OrderBy(item => item.Id.UpperLayer)
             .Select(band => new DeficientBandAttribution(
                 band.Id.ToString(), band.CurrentExtent, band.RequiredExtent, band.MissingExtent,
                 band.Memberships.Select(item => item.LogicalEdgeIdentity).Distinct(StringComparer.Ordinal)
@@ -132,7 +132,7 @@ internal static class MixedBoundaryAttributor
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom ||
             context.Route.TargetPoint.Y != context.Target.Rect.Y)
             result.Add(AdjacentDownwardRejectionReason.UnsupportedConnectionTopology.ToString());
-        if (context.BandMemberships.Select(item => item.BandId).Distinct().Count() > 1)
+        if (context.InterLayerMemberships.Select(item => item.InterLayerId).Distinct().Count() > 1)
             result.Add(AdjacentDownwardRejectionReason.MultipleInterLayer.ToString());
         return result.OrderBy(item => item, StringComparer.Ordinal).ToArray();
     }

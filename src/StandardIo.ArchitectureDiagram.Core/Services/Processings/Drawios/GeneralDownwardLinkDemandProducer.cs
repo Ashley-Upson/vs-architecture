@@ -21,7 +21,7 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
                     Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
                     ObservationalLinkPathParity.UnableToMap, canonical, new[] { rejection.Value.ToString() }), Array.Empty<int>(),
                     context.Route.Link.SourceId, context.Route.Link.TargetId);
-            var crossed = context.BandAxisRanges.Keys.Where(id =>
+            var crossed = context.InterLayerAxisRanges.Keys.Where(id =>
                     id.UpperLayer >= context.Source.Depth && id.LowerLayer <= context.Target.Depth)
                 .OrderBy(id => id.UpperLayer).ThenBy(id => id.LowerLayer).ToArray();
             if (crossed.Length != context.Target.Depth - context.Source.Depth)
@@ -29,7 +29,7 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
                     context.Route.Link.Id, false, AdjacentDownwardRejectionReason.MultipleInterLayer,
                     Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingSegmentMapping>(), Array.Empty<AssignedLinkSegment>(),
                     Array.Empty<LinkTransition>(), Array.Empty<Point>(), ObservationalLinkPathParity.UnableToMap,
-                    canonical, new[] { "A semantic crossed band is unavailable in the current placement revision." }), Array.Empty<int>(),
+                    canonical, new[] { "A semantic crossed inter-layer is unavailable in the current placement revision." }), Array.Empty<int>(),
                     context.Route.Link.SourceId, context.Route.Link.TargetId);
             var produced = DownwardLinkSegmentDemandFactory.Create(context, crossed);
             return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
@@ -54,7 +54,7 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
         if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom || context.Route.TargetPoint.Y != context.Target.Rect.Y)
             return AdjacentDownwardRejectionReason.UnsupportedConnectionTopology;
-        if (context.LayoutRevision != context.BandAxisRanges.Keys.Select(item => item.LayoutRevision)
+        if (context.LayoutRevision != context.InterLayerAxisRanges.Keys.Select(item => item.LayoutRevision)
                 .DefaultIfEmpty(context.LayoutRevision).First())
             return AdjacentDownwardRejectionReason.RevisionMismatch;
         return null;

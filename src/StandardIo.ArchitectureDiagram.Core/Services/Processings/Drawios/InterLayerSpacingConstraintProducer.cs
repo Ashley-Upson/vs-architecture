@@ -23,13 +23,13 @@ internal static class InterLayerSpacingConstraintProducer
     {
         routes.EnsureCompatible(placement);
         if (report.Telemetry.UnsupportedShapeCount > 0 ||
-            !report.Bands.Any(band => band.MissingExtent > 0) ||
+            !report.InterLayers.Any(interLayer => interLayer.MissingExtent > 0) ||
             placement.Graph.Nodes.Any(node => node.Id.StartsWith("tree_", StringComparison.Ordinal))) return false;
         return routes.Links.Values.All(link =>
             placement.Nodes.TryGetValue(link.Link.SourceId, out var source) &&
             placement.Nodes.TryGetValue(link.Link.TargetId, out var target) &&
             target.Depth == source.Depth + 1 &&
-            report.Bands.SelectMany(band => band.Memberships)
+            report.InterLayers.SelectMany(interLayer => interLayer.Memberships)
                 .Count(item => item.LogicalEdgeIdentity == link.Link.Id) == 1);
     }
 
@@ -40,24 +40,24 @@ internal static class InterLayerSpacingConstraintProducer
         DiagramSettings settings)
     {
         if (!Supports(placement, routes, report))
-            throw new InvalidOperationException("Grouped vertical bands support only orthogonal adjacent-layer downward routes.");
+            throw new InvalidOperationException("Grouped vertical interLayers support only orthogonal adjacent-layer downward routes.");
         var groups = new List<InterLayerConflictComponent>();
         var constraints = new MonotonicSpacingConstraintStore();
         long comparisons = 0;
         var proposals = 0;
         var increased = 0;
-        foreach (var band in report.Bands.OrderBy(item => item.Id.UpperLayer))
+        foreach (var interLayer in report.InterLayers.OrderBy(item => item.Id.UpperLayer))
         {
-            var bandGroups = InterLayerConflictGrouper.Group(
-                band, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding, out var bandComparisons);
-            comparisons += bandComparisons;
-            groups.AddRange(bandGroups);
-            var required = bandGroups.Select(item => item.RequiredExtent).DefaultIfEmpty(band.CurrentExtent).Max();
+            var interLayerGroups = InterLayerConflictGrouper.Group(
+                interLayer, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding, out var interLayerComparisons);
+            comparisons += interLayerComparisons;
+            groups.AddRange(interLayerGroups);
+            var required = interLayerGroups.Select(item => item.RequiredExtent).DefaultIfEmpty(interLayer.CurrentExtent).Max();
             var proposal = new MinimumSpacingConstraint(
-                new SpacingConstraintKey(band.LowerBoundary, 0, SpacingConstraintScope.LayerBoundary,
-                    $"{band.Id.UpperLayer}-{band.Id.LowerLayer}"),
+                new SpacingConstraintKey(interLayer.LowerBoundary, 0, SpacingConstraintScope.LayerBoundary,
+                    $"{interLayer.Id.UpperLayer}-{interLayer.Id.LowerLayer}"),
                 required,
-                string.Join("+", bandGroups.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal)));
+                string.Join("+", interLayerGroups.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal)));
             proposals++;
             if (constraints.Merge(proposal)) increased++;
         }
@@ -78,11 +78,11 @@ internal static class InterLayerSpacingConstraintProducer
     {
         var plan = Plan(placement, routes, report, settings);
         var deltaByLowerLayer = new Dictionary<int, int>();
-        foreach (var band in report.Bands)
+        foreach (var interLayer in report.InterLayers)
         {
             var constraint = plan.Constraints.Single(item =>
-                item.Key.StableIdentity == $"{band.Id.UpperLayer}-{band.Id.LowerLayer}");
-            deltaByLowerLayer[band.Id.LowerLayer] = Math.Max(0, constraint.Minimum - band.CurrentExtent);
+                item.Key.StableIdentity == $"{interLayer.Id.UpperLayer}-{interLayer.Id.LowerLayer}");
+            deltaByLowerLayer[interLayer.Id.LowerLayer] = Math.Max(0, constraint.Minimum - interLayer.CurrentExtent);
         }
         int DeltaForDepth(int depth) => deltaByLowerLayer.Where(item => item.Key <= depth).Sum(item => item.Value);
         var movedNodes = placement.Nodes.ToDictionary(item => item.Key, item =>
@@ -92,29 +92,29 @@ internal static class InterLayerSpacingConstraintProducer
         }, StringComparer.Ordinal);
         var revised = placement.Revise(movedNodes,
             PlacementPipeline.PositionProjects(placement.Graph, settings, movedNodes));
-        var laneByRoute = plan.Groups.SelectMany(group => group.Demands.Select(demand => new
+        var slotByLink = plan.Groups.SelectMany(group => group.Demands.Select(demand => new
             {
                 demand.LogicalEdgeIdentity,
-                Lane = group.AssignedLanes[demand.Id],
-                group.BandId
+                Slot = group.AssignedSlots[demand.Id],
+                group.InterLayerId
             })).GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.OrderBy(item => item.BandId.UpperLayer).First(), StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => group.OrderBy(item => item.InterLayerId.UpperLayer).First(), StringComparer.Ordinal);
         var regenerated = routes.Links.ToDictionary(item => item.Key, item =>
         {
-            if (!laneByRoute.TryGetValue(item.Key, out var assignment)) return item.Value;
+            if (!slotByLink.TryGetValue(item.Key, out var assignment)) return item.Value;
             var old = item.Value;
             var sourceNode = revised.Nodes[old.Link.SourceId];
             var targetNode = revised.Nodes[old.Link.TargetId];
             var sourcePoint = new Point(old.SourcePoint.X, sourceNode.Rect.Bottom);
             var targetPoint = new Point(old.TargetPoint.X, targetNode.Rect.Y);
-            var band = report.Bands.Single(value => value.Id.UpperLayer == assignment.BandId.UpperLayer);
-            var laneY = band.UpperBoundary + settings.Layout.LinkPadding +
-                assignment.Lane * settings.Layout.ParallelLaneSpacing;
+            var interLayer = report.InterLayers.Single(value => value.Id.UpperLayer == assignment.InterLayerId.UpperLayer);
+            var slotY = interLayer.UpperBoundary + settings.Layout.LinkPadding +
+                assignment.Slot * settings.Layout.ParallelLaneSpacing;
             var sourceExit = new Point(sourcePoint.X, sourcePoint.Y + settings.Layout.LinkPadding);
             var targetEntry = new Point(targetPoint.X, targetPoint.Y - settings.Layout.LinkPadding);
             var points = Simplify(new[]
             {
-                sourceExit, new Point(sourceExit.X, laneY), new Point(targetEntry.X, laneY), targetEntry
+                sourceExit, new Point(sourceExit.X, slotY), new Point(targetEntry.X, slotY), targetEntry
             });
             return new LinkLayout(old.Link, sourcePoint, targetPoint, points,
                 old.ExitX, old.EntryX, old.ExitY, old.EntryY);

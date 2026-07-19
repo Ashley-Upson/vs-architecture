@@ -19,11 +19,11 @@ internal sealed record MinimumSpacingConstraint(
 
 internal sealed record InterLayerConflictComponent(
     string Id,
-    InterLayerId BandId,
+    InterLayerId InterLayerId,
     IReadOnlyList<InterLayerLinkDemand> Demands,
-    IReadOnlyDictionary<string, int> AssignedLanes,
-    int CurrentLaneCount,
-    int RequiredLaneCount,
+    IReadOnlyDictionary<string, int> AssignedSlots,
+    int CurrentSlotCount,
+    int RequiredSlotCount,
     int CurrentExtent,
     int RequiredExtent,
     int MissingExtent,

@@ -11,7 +11,7 @@ public sealed class MixedBoundaryAttributorTests
         var contexts = new[] { Context("route", sourceDepth: 0, targetDepth: 2) };
         var observation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
         var result = MixedBoundaryAttributor.Attribute(contexts, observation,
-            Array.Empty<CommonAuthorityInteraction>(), Bands(contexts[0]));
+            Array.Empty<CommonAuthorityInteraction>(), InterLayers(contexts[0]));
 
         var route = Assert.Single(result.Routes);
         Assert.Equal(DownwardIntegrationFamily.MultiBandDownward, route.PrimaryFamily);
@@ -40,7 +40,7 @@ public sealed class MixedBoundaryAttributorTests
             EmptyCorridors(), EmptyLanes(), null, false);
     }
 
-    private static InterLayerReport Bands(AdjacentDownwardLinkContext context) =>
+    private static InterLayerReport InterLayers(AdjacentDownwardLinkContext context) =>
         new(Array.Empty<InterLayerObservation>(), Array.Empty<InterLayerFindingCorrelation>(),
             new InterLayerTelemetry(new LayoutRevision(1), new RouteRevision(0), 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
 

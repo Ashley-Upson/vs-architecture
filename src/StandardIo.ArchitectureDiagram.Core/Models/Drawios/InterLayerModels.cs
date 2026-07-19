@@ -5,7 +5,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal readonly record struct InterLayerId(int UpperLayer, int LowerLayer, LayoutRevision LayoutRevision)
 {
-    public override string ToString() => $"band:{UpperLayer}:{LowerLayer}:layout-{LayoutRevision.Value}";
+    public override string ToString() => $"inter-layer:{UpperLayer}:{LowerLayer}:layout-{LayoutRevision.Value}";
 }
 
 internal enum InterLayerMembershipRole { SourceTransition, TargetTransition, Through, Return }
@@ -15,7 +15,7 @@ internal sealed record InterLayerLinkMembership(
     string Id,
     string LogicalEdgeIdentity,
     RouteRevision RouteRevision,
-    InterLayerId BandId,
+    InterLayerId InterLayerId,
     int FirstSegmentIndex,
     int LastSegmentIndex,
     InterLayerMembershipRole Role);
@@ -24,7 +24,7 @@ internal sealed record InterLayerLinkDemand(
     string Id,
     string LogicalEdgeIdentity,
     RouteRevision RouteRevision,
-    InterLayerId BandId,
+    InterLayerId InterLayerId,
     int SegmentIndex,
     InterLayerMembershipRole Role,
     int XStart,
@@ -44,8 +44,8 @@ internal sealed record InterLayerObservation(
     IReadOnlyList<InterLayerLinkDemand> Demands,
     int OverlapGroupCount,
     int MaximumSimultaneousOverlap,
-    int HypotheticalLaneCount,
-    int ReturnLaneCount,
+    int HypotheticalSlotCount,
+    int ReturnSlotCount,
     IReadOnlyList<InterLayerReturnRegionObservation> ReturnRegions,
     IReadOnlyList<string> UnsupportedShapes);
 
@@ -61,7 +61,7 @@ internal sealed record InterLayerFindingCorrelation(
     TraceabilityViolationCode Code,
     string EdgeId,
     string? OtherEdgeId,
-    IReadOnlyList<InterLayerId> BandIds,
+    IReadOnlyList<InterLayerId> InterLayerIds,
     IReadOnlyList<string> DemandIds,
     bool? PlausiblyBandResolvable,
     string Reason);
@@ -72,7 +72,7 @@ internal sealed record InterLayerTelemetry(
     int NodeCount,
     int RouteCount,
     int SegmentCount,
-    int BandCount,
+    int InterLayerCount,
     int MembershipCount,
     int MaximumBandsCrossed,
     int HorizontalDemandCount,
@@ -84,7 +84,7 @@ internal sealed record InterLayerTelemetry(
     long ElapsedMicroseconds);
 
 internal sealed record InterLayerReport(
-    IReadOnlyList<InterLayerObservation> Bands,
+    IReadOnlyList<InterLayerObservation> InterLayers,
     IReadOnlyList<InterLayerFindingCorrelation> FindingCorrelations,
     InterLayerTelemetry Telemetry);
 
@@ -115,7 +115,7 @@ internal sealed record NonOrthogonalSegmentDiagnostic(
     Point End,
     int DeltaX,
     int DeltaY,
-    IReadOnlyList<string> BandMemberships,
+    IReadOnlyList<string> InterLayerMemberships,
     string RouteProducer,
     LogicalRouteStage RouteStage,
     bool TraversalFallback,

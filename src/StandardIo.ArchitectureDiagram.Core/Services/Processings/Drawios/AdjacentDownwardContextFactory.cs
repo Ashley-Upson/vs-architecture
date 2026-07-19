@@ -10,13 +10,13 @@ internal static class AdjacentDownwardContextFactory
         RenderLayout layout,
         InterLayerReport bandReport)
     {
-        var memberships = bandReport.Bands.SelectMany(item => item.Memberships)
+        var memberships = bandReport.InterLayers.SelectMany(item => item.Memberships)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkMembership>)group.ToArray(), StringComparer.Ordinal);
-        var demands = bandReport.Bands.SelectMany(item => item.Demands)
+        var demands = bandReport.InterLayers.SelectMany(item => item.Demands)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkDemand>)group.ToArray(), StringComparer.Ordinal);
-        var ranges = bandReport.Bands.ToDictionary(
+        var ranges = bandReport.InterLayers.ToDictionary(
             item => item.Id, item => new AxisInterval(item.UpperBoundary, item.LowerBoundary));
         var duplicatedExposureTree = layout.Graph.PlacementParentByNode.Count == 0 &&
             layout.Graph.Nodes.Any(item => item.Id.StartsWith("tree_", StringComparison.Ordinal));

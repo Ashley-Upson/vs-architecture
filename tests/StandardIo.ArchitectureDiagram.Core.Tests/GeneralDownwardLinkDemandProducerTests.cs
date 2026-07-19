@@ -15,14 +15,14 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
         {
             context with
             {
-                BandMemberships = new[]
+                InterLayerMemberships = new[]
                 {
-                    new InterLayerLinkMembership("m", "route", new RouteRevision(0), context.BandAxisRanges.Keys.Single(),
+                    new InterLayerLinkMembership("m", "route", new RouteRevision(0), context.InterLayerAxisRanges.Keys.Single(),
                         0, 2, InterLayerMembershipRole.Through)
                 },
-                BandDemands = new[]
+                InterLayerDemands = new[]
                 {
-                    new InterLayerLinkDemand("d", "route", new RouteRevision(0), context.BandAxisRanges.Keys.Single(),
+                    new InterLayerLinkDemand("d", "route", new RouteRevision(0), context.InterLayerAxisRanges.Keys.Single(),
                         1, InterLayerMembershipRole.Through, 20, 120, 0, InterLayerLinkDirection.Right, 0)
                 }
             }

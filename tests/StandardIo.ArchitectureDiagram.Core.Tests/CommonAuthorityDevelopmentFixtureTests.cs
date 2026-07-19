@@ -35,7 +35,7 @@ public sealed class CommonAuthorityDevelopmentFixtureTests
         Assert.Equal(first.BeforeDrawio, second.BeforeDrawio);
         Assert.Equal(first.AfterDrawio, second.AfterDrawio);
         Assert.Equal(3, first.RoutesRegenerated);
-        Assert.Equal(3, first.RailsAssigned);
+        Assert.Equal(3, first.SegmentsAssigned);
         Assert.Equal(6, first.TurnsAssigned);
         Assert.Equal(3, first.Invalidations.Count);
         Assert.All(first.Invalidations, item => Assert.Equal(LinkInvalidationCause.AssignedLinkSegmentChanged, item.Cause));

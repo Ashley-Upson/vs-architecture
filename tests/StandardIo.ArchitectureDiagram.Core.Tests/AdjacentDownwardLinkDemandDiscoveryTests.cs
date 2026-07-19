@@ -56,7 +56,7 @@ public sealed class AdjacentDownwardLinkDemandDiscoveryTests
             ExistingSegmentMappingSource.InterLayerObservation,
             ExistingSegmentMappingSource.InterLayerSpacingConstraint
         }, result.ExistingSegmentMappings.Select(item => item.Source));
-        Assert.All(result.ExistingSegmentMappings, item => Assert.Equal(120, item.Rail.AxisCoordinate));
+        Assert.All(result.ExistingSegmentMappings, item => Assert.Equal(120, item.Segment.AxisCoordinate));
         Assert.Equal(ExistingSegmentMappingSource.LegacyCorridor, result.ExistingSegmentMappings[0].Source);
     }
 
@@ -140,7 +140,7 @@ public sealed class AdjacentDownwardLinkDemandDiscoveryTests
     public void Multiple_memberships_in_one_band_remain_one_band_eligible()
     {
         var context = Context("route");
-        var second = context.BandMemberships[0] with
+        var second = context.InterLayerMemberships[0] with
         {
             Id = "route:band:second",
             FirstSegmentIndex = 1,
@@ -149,7 +149,7 @@ public sealed class AdjacentDownwardLinkDemandDiscoveryTests
 
         var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[]
         {
-            context with { BandMemberships = context.BandMemberships.Concat(new[] { second }).ToArray() }
+            context with { InterLayerMemberships = context.InterLayerMemberships.Concat(new[] { second }).ToArray() }
         }).Routes);
 
         Assert.True(result.Eligible);

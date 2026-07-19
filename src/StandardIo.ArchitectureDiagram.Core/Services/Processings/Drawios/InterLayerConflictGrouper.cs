@@ -7,39 +7,39 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 internal static class InterLayerConflictGrouper
 {
     public static IReadOnlyList<InterLayerConflictComponent> Group(
-        InterLayerObservation band,
+        InterLayerObservation interLayer,
         int clearance,
         int padding,
         out long comparisons)
     {
-        var commonDemands = band.Demands.Select(item => new LinkSegmentDemand(
+        var commonDemands = interLayer.Demands.Select(item => new LinkSegmentDemand(
             item.Id, item.LogicalEdgeIdentity, LinkSegmentOrientation.Horizontal,
-            new AxisInterval(item.XStart, item.XEnd), new AxisInterval(band.UpperBoundary, band.LowerBoundary),
+            new AxisInterval(item.XStart, item.XEnd), new AxisInterval(interLayer.UpperBoundary, interLayer.LowerBoundary),
             null, item.Role == InterLayerMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
             item.ConnectionOrder, item.SegmentIndex,
-            new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
-            band.Id.LayoutRevision, item.RouteRevision)).ToArray();
+            new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{interLayer.Id.LowerLayer}"),
+            interLayer.Id.LayoutRevision, item.RouteRevision)).ToArray();
         var region = new LinkSegmentAllocationRegionIdentity(
-            LinkSegmentOrientation.Horizontal, new AxisInterval(band.UpperBoundary, band.LowerBoundary),
-            band.Id.ToString(), new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
-            band.Id.LayoutRevision);
+            LinkSegmentOrientation.Horizontal, new AxisInterval(interLayer.UpperBoundary, interLayer.LowerBoundary),
+            interLayer.Id.ToString(), new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{interLayer.Id.LowerLayer}"),
+            interLayer.Id.LayoutRevision);
         var common = DeterministicSlotAllocator.Assign(region, commonDemands,
             new LinkSegmentAssignmentOptions(clearance, padding, EndpointContactCreatesComponent: true));
         comparisons = common.ConflictComparisons;
-        var byId = band.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var byId = interLayer.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var groups = new List<InterLayerConflictComponent>();
         foreach (var commonComponent in common.Components)
         {
             var component = commonComponent.Demands.Select(item => byId[item.Id]).ToArray();
             var assigned = commonComponent.Segments.ToDictionary(item => item.DemandId, item => item.SlotIndex, StringComparer.Ordinal);
-            var laneCount = commonComponent.Segments.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1;
+            var slotCount = commonComponent.Segments.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1;
             var identity = string.Join("+", component.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
             groups.Add(new InterLayerConflictComponent(
-                $"group:{band.Id}:{identity}", band.Id,
+                $"group:{interLayer.Id}:{identity}", interLayer.Id,
                 component.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 assigned,
                 component.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1,
-                laneCount, band.CurrentExtent, commonComponent.RequiredExtent, commonComponent.MissingExtent,
+                slotCount, interLayer.CurrentExtent, commonComponent.RequiredExtent, commonComponent.MissingExtent,
                 SpacingConstraintScope.LayerBoundary));
         }
         return groups.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();

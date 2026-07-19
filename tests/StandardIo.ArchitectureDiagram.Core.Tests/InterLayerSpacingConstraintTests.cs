@@ -56,7 +56,7 @@ public sealed class GroupedSpacingTests
 
         Assert.Single(groups);
         Assert.Equal(new[] { "a", "b", "c" }, groups[0].Demands.Select(item => item.Id));
-        Assert.Equal(2, groups[0].RequiredLaneCount);
+        Assert.Equal(2, groups[0].RequiredSlotCount);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class GroupedSpacingTests
         var groups = InterLayerConflictGrouper.Group(band, 5, 5, out _);
 
         Assert.Equal(2, groups.Count);
-        Assert.All(groups, group => Assert.Equal(1, group.RequiredLaneCount));
+        Assert.All(groups, group => Assert.Equal(1, group.RequiredSlotCount));
     }
 
     [Fact]

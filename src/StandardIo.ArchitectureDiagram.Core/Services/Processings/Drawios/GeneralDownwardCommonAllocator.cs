@@ -57,29 +57,29 @@ internal static class GeneralDownwardCommonAllocator
         var throughDemands = observation.Demands.Where(item => item.Role == LinkSegmentRole.Through)
             .OrderBy(item => item.TurnOrder).ToArray();
         if (throughDemands.Any(item => !assignedByDemand.ContainsKey(item.Id)))
-            return Invalid(observation.LogicalRouteId, "A crossed-band rail was not assigned.");
+            return Invalid(observation.LogicalRouteId, "A crossed-interLayer segment was not assigned.");
         var through = throughDemands.Select(item => assignedByDemand[item.Id]).ToArray();
         var source = observation.CanonicalAuthoritativePoints[0];
         var target = observation.CanonicalAuthoritativePoints[observation.CanonicalAuthoritativePoints.Count - 1];
-        var departure = TerminalRail(observation, LinkSegmentRole.ConnectionDeparture, source.X,
+        var departure = ConnectionSegment(observation, LinkSegmentRole.ConnectionDeparture, source.X,
             new AxisInterval(source.Y, through[0].AxisCoordinate));
-        var arrival = TerminalRail(observation, LinkSegmentRole.ConnectionArrival, target.X,
+        var arrival = ConnectionSegment(observation, LinkSegmentRole.ConnectionArrival, target.X,
             new AxisInterval(through[through.Length - 1].AxisCoordinate, target.Y));
-        var rails = new[] { departure }.Concat(through).Concat(new[] { arrival }).ToArray();
+        var segments = new[] { departure }.Concat(through).Concat(new[] { arrival }).ToArray();
         var points = new List<Point> { source };
         var transitions = new List<LinkTransition>();
         var currentX = source.X;
         for (var index = 0; index < through.Length; index++)
         {
-            var rail = through[index];
+            var segment = through[index];
             var nextX = plan.TransitionXCoordinates[index];
-            var firstTurn = new Point(currentX, rail.AxisCoordinate);
-            var secondTurn = new Point(nextX, rail.AxisCoordinate);
+            var firstTurn = new Point(currentX, segment.AxisCoordinate);
+            var secondTurn = new Point(nextX, segment.AxisCoordinate);
             Add(points, firstTurn);
             Add(points, secondTurn);
             transitions.Add(new LinkTransition($"{observation.LogicalRouteId}:turn:{index}:entry",
                 observation.LogicalRouteId, index == 0 ? departure.Id : through[index - 1].Id,
-                rail.Id, firstTurn, transitions.Count, rail.PlacementRevision, rail.RouteRevision));
+                segment.Id, firstTurn, transitions.Count, segment.PlacementRevision, segment.RouteRevision));
             if (index + 1 < through.Length)
             {
                 var vertical = new Segment(secondTurn, new Point(nextX, through[index + 1].AxisCoordinate));
@@ -95,11 +95,11 @@ internal static class GeneralDownwardCommonAllocator
         if (normalized.Zip(normalized.Skip(1), (a, b) => new Segment(a, b)).Any(item => !item.IsOrthogonal) ||
             HasImmediateReversal(normalized))
             return Invalid(observation.LogicalRouteId, "ReconstructionInvariantFailure");
-        return new GeneralDownwardLinkAssignment(observation.LogicalRouteId, rails, transitions,
+        return new GeneralDownwardLinkAssignment(observation.LogicalRouteId, segments, transitions,
             normalized, Array.Empty<string>(), true);
     }
 
-    private static AssignedLinkSegment TerminalRail(
+    private static AssignedLinkSegment ConnectionSegment(
         AdjacentDownwardLinkObservation route,
         LinkSegmentRole role,
         int axis,

@@ -31,7 +31,7 @@ internal static class AdjacentDownwardCommonAuthorityObserver
                 : new GenerationConstraint(
                     new GenerationConstraintKey(item.Region.MovementScope.Value, GenerationConstraintKind.MinimumHeight),
                     item.Assignment.RequiredExtent,
-                    $"Common rail allocation {item.Region.EnvelopeIdentity}")
+                    $"Common segment allocation {item.Region.EnvelopeIdentity}")
         }).ToArray();
         var store = new GenerationConstraintStore();
         foreach (var proposal in regions.Select(item => item.ConstraintProposal).Where(item => item is not null))
@@ -48,7 +48,7 @@ internal static class AdjacentDownwardCommonAuthorityObserver
             if (!byDemand.TryGetValue(demand.Id, out var common))
                 return new CommonAuthorityLinkPathComparison(route.LogicalRouteId, null,
                     new Dictionary<ExistingSegmentMappingSource, CommonAssignmentParity>(), Array.Empty<Point>(),
-                    CommonLinkPathReconstructionParity.UnableToReconstruct, new[] { "Common through rail was not assigned." });
+                    CommonLinkPathReconstructionParity.UnableToReconstruct, new[] { "Common through segment was not assigned." });
             var reconstructionStarted = Stopwatch.GetTimestamp();
             var existingDeparture = route.SelectedAssignedLinkSegments.Single(item => item.Role == LinkSegmentRole.ConnectionDeparture);
             var existingArrival = route.SelectedAssignedLinkSegments.Single(item => item.Role == LinkSegmentRole.ConnectionArrival);
@@ -87,12 +87,12 @@ internal static class AdjacentDownwardCommonAuthorityObserver
                         : CommonLinkPathReconstructionParity.ValidDifferentGeometry;
             var existingParity = route.ExistingSegmentMappings.GroupBy(item => item.Source).ToDictionary(
                 item => item.Key,
-                item => Compare(common, item.First().Rail));
+                item => Compare(common, item.First().Segment));
             parityTicks += Stopwatch.GetTimestamp() - parityStarted;
             return new CommonAuthorityLinkPathComparison(route.LogicalRouteId, common, existingParity, reconstructed, routeParity,
                 routeParity is CommonLinkPathReconstructionParity.ExactGeometry
                     ? Array.Empty<string>()
-                    : new[] { "Common assignment changes the observational through-rail coordinate or lane ordering." });
+                    : new[] { "Common assignment changes the observational through-segment coordinate or slot ordering." });
         }).ToArray();
         return new CommonAuthorityParityReport(regions, routes, Microseconds(assignmentTimer),
             Microseconds(constraintTimer), Microseconds(reconstructionTicks), Microseconds(parityTicks));

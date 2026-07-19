@@ -13,7 +13,7 @@ public sealed class InterLayerDemandDiscoveryTests
 
         var report = Observe(fixture);
 
-        var membership = Assert.Single(Assert.Single(report.Bands).Memberships);
+        var membership = Assert.Single(Assert.Single(report.InterLayers).Memberships);
         Assert.Equal(InterLayerMembershipRole.SourceTransition, membership.Role);
     }
 
@@ -25,7 +25,7 @@ public sealed class InterLayerDemandDiscoveryTests
 
         var report = Observe(fixture);
 
-        Assert.Equal(new[] { 0, 1 }, report.Bands.Where(b => b.Memberships.Count > 0).Select(b => b.Id.UpperLayer));
+        Assert.Equal(new[] { 0, 1 }, report.InterLayers.Where(b => b.Memberships.Count > 0).Select(b => b.Id.UpperLayer));
         Assert.Equal(2, report.Telemetry.MaximumBandsCrossed);
     }
 
@@ -35,7 +35,7 @@ public sealed class InterLayerDemandDiscoveryTests
         var fixture = Fixture(new[] { Node("target", 0), Node("source", 1) },
             Link("edge", "source", "target", 0, (80, 100), (80, 50), (10, 50), (10, 20)));
 
-        var membership = Assert.Single(Assert.Single(Observe(fixture).Bands).Memberships);
+        var membership = Assert.Single(Assert.Single(Observe(fixture).InterLayers).Memberships);
 
         Assert.Equal(InterLayerMembershipRole.Return, membership.Role);
     }
@@ -46,7 +46,7 @@ public sealed class InterLayerDemandDiscoveryTests
         var fixture = Fixture(new[] { Node("source", 0), Node("target", 1) },
             Link("edge", "source", "target", 0, (10, 20), (10, 40), (60, 40), (60, 70), (90, 70), (90, 100)));
 
-        var demands = Assert.Single(Observe(fixture).Bands).Demands;
+        var demands = Assert.Single(Observe(fixture).InterLayers).Demands;
 
         Assert.Equal(2, demands.Count);
         Assert.Equal(2, demands.Select(demand => demand.SegmentIndex).Distinct().Count());
@@ -59,9 +59,9 @@ public sealed class InterLayerDemandDiscoveryTests
             Link("one", "a", "x", 0, (0, 20), (0, 50), (50, 50), (50, 100)),
             Link("two", "b", "y", 1, (50, 20), (50, 50), (90, 50), (90, 100)));
 
-        var band = Assert.Single(Observe(fixture).Bands);
+        var band = Assert.Single(Observe(fixture).InterLayers);
 
-        Assert.Equal(2, band.HypotheticalLaneCount);
+        Assert.Equal(2, band.HypotheticalSlotCount);
         Assert.Equal(2, band.MaximumSimultaneousOverlap);
     }
 
@@ -72,7 +72,7 @@ public sealed class InterLayerDemandDiscoveryTests
             Link("one", "a", "x", 0, (0, 20), (0, 50), (40, 50), (40, 100)),
             Link("two", "b", "y", 1, (60, 20), (60, 50), (100, 50), (100, 100)));
 
-        Assert.All(Assert.Single(Observe(fixture).Bands).Demands, demand => Assert.Equal(0, demand.SlotIndex));
+        Assert.All(Assert.Single(Observe(fixture).InterLayers).Demands, demand => Assert.Equal(0, demand.SlotIndex));
     }
 
     [Fact]
@@ -83,9 +83,9 @@ public sealed class InterLayerDemandDiscoveryTests
             Link("two", "b", "y", 1, (10, 20), (10, 50), (90, 50), (90, 100)),
             Link("three", "c", "z", 2, (20, 20), (20, 50), (80, 50), (80, 100)));
 
-        var band = Assert.Single(Observe(fixture).Bands);
+        var band = Assert.Single(Observe(fixture).InterLayers);
 
-        Assert.Equal(3, band.HypotheticalLaneCount);
+        Assert.Equal(3, band.HypotheticalSlotCount);
         Assert.Equal(new[] { 0, 1, 2 }, band.Demands.OrderBy(d => d.ConnectionOrder).Select(d => d.SlotIndex));
     }
 
@@ -95,7 +95,7 @@ public sealed class InterLayerDemandDiscoveryTests
         var fixture = Fixture(new[] { Node("source", 0), Node("target", 1) },
             Link("edge", "source", "target", 0, (10, 20), (10, 100)));
 
-        Assert.Empty(Assert.Single(Observe(fixture).Bands).Demands);
+        Assert.Empty(Assert.Single(Observe(fixture).InterLayers).Demands);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public sealed class InterLayerDemandDiscoveryTests
         var forward = Observe(Fixture(nodes, links));
         var reverse = Observe(Fixture(nodes.AsEnumerable().Reverse(), links.AsEnumerable().Reverse().ToArray()));
 
-        Assert.Equal(forward.Bands.SelectMany(b => b.Demands), reverse.Bands.SelectMany(b => b.Demands));
+        Assert.Equal(forward.InterLayers.SelectMany(b => b.Demands), reverse.InterLayers.SelectMany(b => b.Demands));
         Assert.Equal(forward.Telemetry with { ElapsedMicroseconds = 0 }, reverse.Telemetry with { ElapsedMicroseconds = 0 });
     }
 
@@ -157,7 +157,7 @@ public sealed class InterLayerDemandDiscoveryTests
         var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, settings, findings);
 
         Assert.True(Assert.Single(report.FindingCorrelations).PlausiblyBandResolvable);
-        Assert.True(Assert.Single(report.Bands).MissingExtent > 0);
+        Assert.True(Assert.Single(report.InterLayers).MissingExtent > 0);
     }
 
     [Fact]

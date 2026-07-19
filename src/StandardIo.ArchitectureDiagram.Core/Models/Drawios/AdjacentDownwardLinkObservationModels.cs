@@ -35,9 +35,9 @@ internal sealed record AdjacentDownwardLinkContext(
     NodeLayout Target,
     LayoutRevision LayoutRevision,
     RouteRevision RouteRevision,
-    IReadOnlyList<InterLayerLinkMembership> BandMemberships,
-    IReadOnlyList<InterLayerLinkDemand> BandDemands,
-    IReadOnlyDictionary<InterLayerId, AxisInterval> BandAxisRanges,
+    IReadOnlyList<InterLayerLinkMembership> InterLayerMemberships,
+    IReadOnlyList<InterLayerLinkDemand> InterLayerDemands,
+    IReadOnlyDictionary<InterLayerId, AxisInterval> InterLayerAxisRanges,
     CorridorObservation Corridors,
     CorridorLaneAllocation CorridorLanes,
     InterLayerSpacingConstraintPlan? GroupedPlan,
@@ -45,7 +45,7 @@ internal sealed record AdjacentDownwardLinkContext(
 
 internal sealed record ExistingSegmentMapping(
     ExistingSegmentMappingSource Source,
-    AssignedLinkSegment Rail,
+    AssignedLinkSegment Segment,
     IReadOnlyDictionary<string, string> SpecializedMetadata);
 
 internal sealed record AdjacentDownwardLinkObservation(

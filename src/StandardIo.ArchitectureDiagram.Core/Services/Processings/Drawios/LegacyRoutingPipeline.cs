@@ -139,7 +139,7 @@ internal sealed partial class RenderLayout
         {
             InterLayerSpacingConstraintResult? grouped = null;
             var iterations = 0;
-            while (bands.Bands.Any(band => band.MissingExtent > 0))
+            while (bands.InterLayers.Any(interLayer => interLayer.MissingExtent > 0))
             {
                 if (iterations++ >= 16)
                     throw new InvalidOperationException("Grouped vertical-band constraints did not converge after 16 iterations.");
