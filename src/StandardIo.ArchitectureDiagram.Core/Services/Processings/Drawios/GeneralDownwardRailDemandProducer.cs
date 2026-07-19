@@ -1,0 +1,62 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+
+namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
+
+internal static class GeneralDownwardRailDemandProducer
+{
+    public static GeneralDownwardObservationReport Observe(IEnumerable<AdjacentDownwardRouteContext> source)
+    {
+        var timer = Stopwatch.StartNew();
+        var routes = source.OrderBy(item => item.Route.Link.Id, StringComparer.Ordinal).Select(context =>
+        {
+            var canonical = AdjacentDownwardRailDemandObserver.Normalize(
+                new[] { context.Route.SourcePoint }.Concat(context.Route.Points).Concat(new[] { context.Route.TargetPoint }));
+            var rejection = Rejection(context);
+            if (rejection is not null)
+                return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
+                    context.Route.Link.Id, false, rejection, Array.Empty<RailDemand>(), Array.Empty<ExistingLaneMapping>(),
+                    Array.Empty<AssignedRail>(), Array.Empty<RailTransition>(), Array.Empty<Point>(),
+                    ObservationalRouteParity.UnableToMap, canonical, new[] { rejection.Value.ToString() }), Array.Empty<int>(),
+                    context.Route.Link.SourceId, context.Route.Link.TargetId);
+            var crossed = context.BandAxisRanges.Keys.Where(id =>
+                    id.UpperLayer >= context.Source.Depth && id.LowerLayer <= context.Target.Depth)
+                .OrderBy(id => id.UpperLayer).ThenBy(id => id.LowerLayer).ToArray();
+            if (crossed.Length != context.Target.Depth - context.Source.Depth)
+                return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
+                    context.Route.Link.Id, false, AdjacentDownwardRejectionReason.MultipleBand,
+                    Array.Empty<RailDemand>(), Array.Empty<ExistingLaneMapping>(), Array.Empty<AssignedRail>(),
+                    Array.Empty<RailTransition>(), Array.Empty<Point>(), ObservationalRouteParity.UnableToMap,
+                    canonical, new[] { "A semantic crossed band is unavailable in the current placement revision." }), Array.Empty<int>(),
+                    context.Route.Link.SourceId, context.Route.Link.TargetId);
+            var produced = DownwardRailDemandFactory.Create(context, crossed);
+            return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
+                context.Route.Link.Id, true, null, produced.Demands, Array.Empty<ExistingLaneMapping>(),
+                Array.Empty<AssignedRail>(), Array.Empty<RailTransition>(), Array.Empty<Point>(),
+                ObservationalRouteParity.UnableToMap, canonical, Array.Empty<string>()), produced.TransitionXs,
+                context.Route.Link.SourceId, context.Route.Link.TargetId);
+        }).ToArray();
+        timer.Stop();
+        return new GeneralDownwardObservationReport(routes,
+            timer.ElapsedTicks * 1_000_000 / Stopwatch.Frequency);
+    }
+
+    private static AdjacentDownwardRejectionReason? Rejection(AdjacentDownwardRouteContext context)
+    {
+        if (context.ExposureTreeSpecific) return AdjacentDownwardRejectionReason.ExposureTreeSpecific;
+        if (context.Target.Depth <= context.Source.Depth)
+            return context.Target.Depth == context.Source.Depth
+                ? AdjacentDownwardRejectionReason.SameLayer : AdjacentDownwardRejectionReason.UpwardOrReturn;
+        if (!string.Equals(context.Source.Node.ProjectId, context.Target.Node.ProjectId, StringComparison.Ordinal))
+            return AdjacentDownwardRejectionReason.CrossProject;
+        if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
+            context.Route.SourcePoint.Y != context.Source.Rect.Bottom || context.Route.TargetPoint.Y != context.Target.Rect.Y)
+            return AdjacentDownwardRejectionReason.UnsupportedTerminalTopology;
+        if (context.LayoutRevision != context.BandAxisRanges.Keys.Select(item => item.LayoutRevision)
+                .DefaultIfEmpty(context.LayoutRevision).First())
+            return AdjacentDownwardRejectionReason.RevisionMismatch;
+        return null;
+    }
+}

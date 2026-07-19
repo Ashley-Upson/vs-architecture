@@ -107,28 +107,7 @@ internal static class AdjacentDownwardRailDemandObserver
         BandRouteMembership membership,
         IReadOnlyList<Point> points)
     {
-        var routeId = context.Route.Link.Id;
-        var throughDemand = context.BandDemands
-            .Where(item => item.BandId == membership.BandId)
-            .OrderBy(item => item.Id, StringComparer.Ordinal).FirstOrDefault();
-        var terminalOrder = throughDemand?.TerminalOrder ?? context.Route.Link.Order;
-        return new[]
-        {
-            new RailDemand($"{routeId}:rail:departure", routeId, RailOrientation.Vertical,
-                new AxisInterval(points[0].Y, points[1].Y), new AxisInterval(points[0].X, points[0].X),
-                points[0].X, RailSemanticRole.TerminalDeparture, terminalOrder, 0,
-                new MovementScopeIdentity(MovementScopeKind.Node, context.Source.Node.Id), context.LayoutRevision, context.RouteRevision),
-            new RailDemand($"{routeId}:rail:through", routeId, RailOrientation.Horizontal,
-                new AxisInterval(points[1].X, points[2].X),
-                context.BandAxisRanges[membership.BandId],
-                points[1].Y, RailSemanticRole.Through, null, 1,
-                new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{context.Target.Depth}"),
-                context.LayoutRevision, context.RouteRevision),
-            new RailDemand($"{routeId}:rail:arrival", routeId, RailOrientation.Vertical,
-                new AxisInterval(points[2].Y, points[3].Y), new AxisInterval(points[3].X, points[3].X),
-                points[3].X, RailSemanticRole.TerminalArrival, terminalOrder, 2,
-                new MovementScopeIdentity(MovementScopeKind.Node, context.Target.Node.Id), context.LayoutRevision, context.RouteRevision)
-        };
+        return DownwardRailDemandFactory.Create(context, new[] { membership.BandId }).Demands;
     }
 
     private static IReadOnlyList<ExistingLaneMapping> ExistingMappings(
