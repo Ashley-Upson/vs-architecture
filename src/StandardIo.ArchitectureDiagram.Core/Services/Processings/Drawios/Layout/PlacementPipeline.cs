@@ -43,15 +43,15 @@ internal static class PlacementPipeline
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
             var outgoing = graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-            var separation = TerminalDemandCalculator.AttachmentSeparation(
+            var separation = LinkConnectionDemandCalculator.AttachmentSeparation(
                 settings.Layout.EdgePortSpacing, settings.Layout.ParallelLaneSpacing);
 
             return graph.Nodes.ToDictionary(
                 node => node.Id,
-                node => TerminalDemandCalculator.Measure(
+                node => LinkConnectionDemandCalculator.Measure(
                     node.Id,
                     settings.Layout.NodeWidth,
-                    TerminalDemandCalculator.EstimatedTextWidth(node.Name, node.FullName),
+                    LinkConnectionDemandCalculator.EstimatedTextWidth(node.Name, node.FullName),
                     incoming.TryGetValue(node.Id, out var incomingCount) ? incomingCount : 0,
                     outgoing.TryGetValue(node.Id, out var outgoingCount) ? outgoingCount : 0,
                     separation,

@@ -62,8 +62,8 @@ internal static class AdjacentDownwardComponentProjector
     }
 
     private static ConflictEdge Edge(
-        AdjacentDownwardRouteObservation first,
-        AdjacentDownwardRouteObservation second,
+        AdjacentDownwardLinkObservation first,
+        AdjacentDownwardLinkObservation second,
         string cause) => new(first.LogicalRouteId, second.LogicalRouteId, cause);
 
     private static IReadOnlyList<ConflictEdge> Stable(IEnumerable<ConflictEdge> edges) => edges

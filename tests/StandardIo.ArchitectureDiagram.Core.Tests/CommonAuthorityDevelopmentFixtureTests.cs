@@ -5,12 +5,12 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class CommonRailDevelopmentFixtureTests
+public sealed class CommonAuthorityDevelopmentFixtureTests
 {
     [Fact]
     public void Real_extracted_component_reduces_hard_findings_without_legacy_repair()
     {
-        var result = CommonRailDevelopmentFixture.Build();
+        var result = CommonAuthorityDevelopmentFixture.Build();
 
         Assert.Equal(1, result.BeforeDefects.SharedSegment);
         Assert.Equal(1, result.BeforeDefects.ParallelSpacing);
@@ -29,8 +29,8 @@ public sealed class CommonRailDevelopmentFixtureTests
     [Fact]
     public void Real_extracted_component_is_complete_deterministic_and_preserves_dependencies()
     {
-        var first = CommonRailDevelopmentFixture.Build();
-        var second = CommonRailDevelopmentFixture.Build();
+        var first = CommonAuthorityDevelopmentFixture.Build();
+        var second = CommonAuthorityDevelopmentFixture.Build();
 
         Assert.Equal(first.BeforeDrawio, second.BeforeDrawio);
         Assert.Equal(first.AfterDrawio, second.AfterDrawio);

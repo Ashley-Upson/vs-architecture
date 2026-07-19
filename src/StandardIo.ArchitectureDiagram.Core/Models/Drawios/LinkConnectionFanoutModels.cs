@@ -5,7 +5,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 internal enum FanoutDirection { Source, Target }
 internal enum FanoutSide { Left, Right }
 
-internal sealed record TerminalFanoutMembership(
+internal sealed record LinkConnectionFanoutMembership(
     string GroupId,
     FanoutDirection Direction,
     string SharedNodeId,
@@ -14,13 +14,13 @@ internal sealed record TerminalFanoutMembership(
     int RemoteNodeOrder,
     FanoutSide Side);
 
-internal sealed record TerminalFanoutGroup(
+internal sealed record LinkConnectionFanoutGroup(
     string Id,
     FanoutDirection Direction,
     string SharedNodeId,
-    IReadOnlyList<TerminalFanoutMembership> Routes);
+    IReadOnlyList<LinkConnectionFanoutMembership> Routes);
 
-internal sealed record TerminalTransition(
+internal sealed record LinkConnectionTransition(
     string Id,
     string EdgeId,
     int RouteRevision,

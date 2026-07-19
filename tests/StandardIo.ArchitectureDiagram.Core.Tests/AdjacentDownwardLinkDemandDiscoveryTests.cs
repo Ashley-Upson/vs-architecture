@@ -6,18 +6,18 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
+public sealed class AdjacentDownwardLinkDemandDiscoveryTests
 {
     [Fact]
     public void Adjacent_downward_route_emits_complete_demands_and_exact_reconstruction()
     {
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route") }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[] { Context("route") }).Routes);
 
         Assert.True(result.Eligible);
         Assert.Equal(new[] { LinkSegmentRole.ConnectionDeparture, LinkSegmentRole.Through, LinkSegmentRole.ConnectionArrival },
             result.Demands.Select(item => item.Role));
         Assert.Equal(2, result.Transitions.Count);
-        Assert.Equal(ObservationalRouteParity.ExactPointParity, result.Parity);
+        Assert.Equal(ObservationalLinkPathParity.ExactPointParity, result.Parity);
         Assert.Equal(result.CanonicalAuthoritativePoints, result.ReconstructedPoints);
     }
 
@@ -25,7 +25,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     public void Existing_terminal_coordinates_are_preserved()
     {
         var context = Context("route");
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { context }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[] { context }).Routes);
 
         Assert.Equal(context.Route.SourcePoint, result.ReconstructedPoints[0]);
         Assert.Equal(context.Route.TargetPoint, result.ReconstructedPoints[^1]);
@@ -37,8 +37,8 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     public void Multiple_routes_and_reversed_enumeration_have_stable_demand_identities()
     {
         var contexts = new[] { Context("b", lane: 1), Context("a", lane: 0) };
-        var forward = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts).Routes;
-        var reverse = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts.AsEnumerable().Reverse()).Routes;
+        var forward = AdjacentDownwardLinkDemandDiscovery.Observe(contexts).Routes;
+        var reverse = AdjacentDownwardLinkDemandDiscovery.Observe(contexts.AsEnumerable().Reverse()).Routes;
 
         Assert.Equal(new[] { "a", "b" }, forward.Select(item => item.LogicalRouteId));
         Assert.Equal(forward.SelectMany(item => item.Demands).Select(item => item.Id),
@@ -48,16 +48,16 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     [Fact]
     public void Existing_lane_sources_map_deterministically_to_assigned_rail()
     {
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route", includeAllLaneSources: true) }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[] { Context("route", includeAllLaneSources: true) }).Routes);
 
         Assert.Equal(new[]
         {
-            ExistingLaneMappingSource.LegacyCorridor,
-            ExistingLaneMappingSource.StageBHypothetical,
-            ExistingLaneMappingSource.StageCGrouped
-        }, result.ExistingLaneMappings.Select(item => item.Source));
-        Assert.All(result.ExistingLaneMappings, item => Assert.Equal(120, item.Rail.AxisCoordinate));
-        Assert.Equal(ExistingLaneMappingSource.LegacyCorridor, result.ExistingLaneMappings[0].Source);
+            ExistingSegmentMappingSource.LegacyCorridor,
+            ExistingSegmentMappingSource.InterLayerObservation,
+            ExistingSegmentMappingSource.InterLayerSpacingConstraint
+        }, result.ExistingSegmentMappings.Select(item => item.Source));
+        Assert.All(result.ExistingSegmentMappings, item => Assert.Equal(120, item.Rail.AxisCoordinate));
+        Assert.Equal(ExistingSegmentMappingSource.LegacyCorridor, result.ExistingSegmentMappings[0].Source);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     [Fact]
     public void Component_projection_removes_competition_after_existing_lane_separation()
     {
-        var report = AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("a", lane: 0), Context("b", lane: 1) });
+        var report = AdjacentDownwardLinkDemandDiscovery.Observe(new[] { Context("a", lane: 0), Context("b", lane: 1) });
 
         var projection = AdjacentDownwardComponentProjector.Project(report, 12);
 
@@ -87,7 +87,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     [Fact]
     public void Turn_transitions_are_orthogonal_and_owned_by_both_rails()
     {
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route") }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[] { Context("route") }).Routes);
         var rails = result.SelectedAssignedLinkSegments.ToDictionary(item => item.Id);
 
         Assert.All(result.Transitions, transition =>
@@ -105,7 +105,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
         {
             Route = Link("diagonal", new Point(20, 80), new Point(80, 200), new[] { new Point(50, 120) })
         };
-        var report = AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { skipped, Context("eligible"), diagonalRoute });
+        var report = AdjacentDownwardLinkDemandDiscovery.Observe(new[] { skipped, Context("eligible"), diagonalRoute });
 
         Assert.True(report.Routes.Single(item => item.LogicalRouteId == "eligible").Eligible);
         Assert.Equal(AdjacentDownwardRejectionReason.SkippedLayer,
@@ -119,7 +119,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     {
         var context = Context("route") with { RouteRevision = new RouteRevision(2) };
 
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { context }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[] { context }).Routes);
 
         Assert.Equal(AdjacentDownwardRejectionReason.RevisionMismatch, result.RejectionReason);
     }
@@ -127,7 +127,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     [Fact]
     public void Observation_revision_is_independent_of_logical_route_history_revision()
     {
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[]
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[]
         {
             Context("route", observationRevision: 2)
         }).Routes);
@@ -147,19 +147,19 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
             LastSegmentIndex = 2
         };
 
-        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[]
+        var result = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[]
         {
             context with { BandMemberships = context.BandMemberships.Concat(new[] { second }).ToArray() }
         }).Routes);
 
         Assert.True(result.Eligible);
-        Assert.Equal(ObservationalRouteParity.ExactPointParity, result.Parity);
+        Assert.Equal(ObservationalLinkPathParity.ExactPointParity, result.Parity);
     }
 
     [Fact]
     public void Reconstruction_never_uses_original_points_as_fallback()
     {
-        var reconstructed = AdjacentDownwardLinkSegmentDemandObserver.Reconstruct(
+        var reconstructed = AdjacentDownwardLinkDemandDiscovery.Reconstruct(
             new Point(20, 80), new Point(80, 200), Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>());
 
         Assert.Empty(reconstructed);
@@ -168,14 +168,14 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     [Fact]
     public void Common_allocator_reconstructs_without_reusing_existing_through_rail()
     {
-        var observed = AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route", lane: 3) });
+        var observed = AdjacentDownwardLinkDemandDiscovery.Observe(new[] { Context("route", lane: 3) });
 
-        var common = AdjacentDownwardCommonRailObserver.Observe(observed, 12, 4);
+        var common = AdjacentDownwardCommonAuthorityObserver.Observe(observed, 12, 4);
 
         var route = Assert.Single(common.Routes);
         Assert.NotNull(route.CommonThroughRail);
         Assert.Equal(0, route.CommonThroughRail!.SlotIndex);
-        Assert.Equal(CommonRouteReconstructionParity.ValidDifferentGeometry, route.ReconstructionParity);
+        Assert.Equal(CommonLinkPathReconstructionParity.ValidDifferentGeometry, route.ReconstructionParity);
         Assert.Equal(84, route.ReconstructedPoints[1].Y);
     }
 
@@ -183,10 +183,10 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     public void Common_allocator_assigns_complete_interacting_route_group_deterministically()
     {
         var contexts = new[] { Context("b", lane: 1), Context("a", lane: 0) };
-        var forward = AdjacentDownwardCommonRailObserver.Observe(
-            AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts), 12, 4);
-        var reverse = AdjacentDownwardCommonRailObserver.Observe(
-            AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts.AsEnumerable().Reverse()), 12, 4);
+        var forward = AdjacentDownwardCommonAuthorityObserver.Observe(
+            AdjacentDownwardLinkDemandDiscovery.Observe(contexts), 12, 4);
+        var reverse = AdjacentDownwardCommonAuthorityObserver.Observe(
+            AdjacentDownwardLinkDemandDiscovery.Observe(contexts.AsEnumerable().Reverse()), 12, 4);
 
         Assert.Single(forward.Regions);
         Assert.Equal(2, forward.Regions[0].Assignment.SegmentsByDemandId.Count);
@@ -198,10 +198,10 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     public void Common_required_extent_projects_a_persistent_constraint_without_moving_live_layout()
     {
         var contexts = Enumerable.Range(0, 12).Select(index => Context($"route-{index:D2}", lane: index)).ToArray();
-        var observed = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
+        var observed = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
         var before = observed.Routes.Select(item => item.CanonicalAuthoritativePoints.ToArray()).ToArray();
 
-        var common = AdjacentDownwardCommonRailObserver.Observe(observed, 12, 4);
+        var common = AdjacentDownwardCommonAuthorityObserver.Observe(observed, 12, 4);
 
         var region = Assert.Single(common.Regions);
         Assert.NotNull(region.ConstraintProposal);
@@ -209,7 +209,7 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
         Assert.Equal(before, observed.Routes.Select(item => item.CanonicalAuthoritativePoints.ToArray()).ToArray());
     }
 
-    private static AdjacentDownwardRouteContext Context(
+    private static AdjacentDownwardLinkContext Context(
         string id,
         int lane = 0,
         int targetDepth = 1,
@@ -218,14 +218,14 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
     {
         var layoutRevision = new LayoutRevision(1);
         var routeRevision = new RouteRevision(observationRevision);
-        var bandId = new InterLayerBandId(0, 1, layoutRevision);
+        var bandId = new InterLayerId(0, 1, layoutRevision);
         var source = Node($"{id}-source", new Rect(0, 0, 100, 80), 0);
         var target = Node($"{id}-target", new Rect(40, 200, 100, 80), targetDepth);
         var laneY = 120 + lane * 24;
         var route = Link(id, new Point(20, 80), new Point(80, 200), new[] { new Point(20, laneY), new Point(80, laneY) });
-        var membership = new BandRouteMembership($"{id}:band", id, routeRevision, bandId, 0, 2, BandMembershipRole.SourceTransition);
-        var demand = new BandRouteDemand($"{id}:band:demand", id, routeRevision, bandId, 1,
-            BandMembershipRole.SourceTransition, 20, 80, 0, BandRouteDirection.Right, lane);
+        var membership = new InterLayerLinkMembership($"{id}:band", id, routeRevision, bandId, 0, 2, InterLayerMembershipRole.SourceTransition);
+        var demand = new InterLayerLinkDemand($"{id}:band:demand", id, routeRevision, bandId, 1,
+            InterLayerMembershipRole.SourceTransition, 20, 80, 0, InterLayerLinkDirection.Right, lane);
         var corridorId = $"corridor:{id}";
         var corridor = new RoutingCorridor(corridorId, CorridorOrientation.Horizontal,
             new Rect(0, 100, 120, 40), 12, 4);
@@ -247,15 +247,15 @@ public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
                 }, Array.Empty<string>())
             : EmptyLanes();
         var grouped = includeAllLaneSources
-            ? new GroupedVerticalBandPlan(
-                new[] { new BandConflictGroup($"group:{id}", bandId, new[] { demand },
+            ? new InterLayerSpacingConstraintPlan(
+                new[] { new InterLayerConflictComponent($"group:{id}", bandId, new[] { demand },
                     new Dictionary<string, int> { [demand.Id] = lane }, 1, 1, 80, 80, 0,
                     SpacingConstraintScope.LayerBoundary) },
                 Array.Empty<MinimumSpacingConstraint>(), Array.Empty<string>(), new GroupedSpacingTelemetry(1, 0, 0, 0, 0))
             : null;
-        return new AdjacentDownwardRouteContext(
+        return new AdjacentDownwardLinkContext(
             route, source, target, layoutRevision, routeRevision, new[] { membership }, new[] { demand },
-            new Dictionary<InterLayerBandId, AxisInterval> { [bandId] = new(80, 200) },
+            new Dictionary<InterLayerId, AxisInterval> { [bandId] = new(80, 200) },
             corridors, lanes, grouped, false);
     }
 

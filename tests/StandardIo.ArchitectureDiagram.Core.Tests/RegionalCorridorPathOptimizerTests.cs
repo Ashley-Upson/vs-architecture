@@ -68,7 +68,7 @@ public sealed class RegionalCorridorPathOptimizerTests
 
         var score = GlobalCorridorPathSelector.Score(selection, Capacities(), 10);
 
-        Assert.Equal(0, score.TerminalFanoutViolations);
+        Assert.Equal(0, score.LinkConnectionFanoutViolations);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class RegionalCorridorPathOptimizerTests
         var result = GlobalCorridorPathSelector.Select(candidates, Capacities(), 10, 4);
 
         Assert.Equal("accepted", result.Selected["a"].Signature.Value);
-        Assert.Equal(0, result.FinalScore.TerminalFanoutViolations);
+        Assert.Equal(0, result.FinalScore.LinkConnectionFanoutViolations);
     }
     [Fact]
     public void Optimise_changes_only_local_conflict_in_one_hundred_edge_diagram()
@@ -303,7 +303,7 @@ public sealed class RegionalCorridorPathOptimizerTests
 
     private static IReadOnlyDictionary<string, int> Capacities() => new Dictionary<string, int>(StringComparer.Ordinal);
 
-    private static TerminalFanoutMembership Membership(
+    private static LinkConnectionFanoutMembership Membership(
         string groupId, int terminal, int lane, int remote, FanoutSide side) =>
         new(groupId, FanoutDirection.Source, "node", terminal, lane, remote, side);
 

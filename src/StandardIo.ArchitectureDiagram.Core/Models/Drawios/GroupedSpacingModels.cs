@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal enum IntervalContactKind { Disjoint, EndpointContact, PositiveOverlap }
-internal enum RoutePointContactKind { None, StraightContinuation, AmbiguousBend, CleanCrossover }
+internal enum LinkPathPointContactKind { None, StraightContinuation, AmbiguousBend, CleanCrossover }
 internal enum SpacingConstraintScope { LayerBoundary, SiblingSubtree, SiblingSuffix, ProjectRoot, RootProjectGroup }
 
 internal readonly record struct SpacingConstraintKey(
@@ -17,10 +17,10 @@ internal sealed record MinimumSpacingConstraint(
     int Minimum,
     string GroupId);
 
-internal sealed record BandConflictGroup(
+internal sealed record InterLayerConflictComponent(
     string Id,
-    InterLayerBandId BandId,
-    IReadOnlyList<BandRouteDemand> Demands,
+    InterLayerId BandId,
+    IReadOnlyList<InterLayerLinkDemand> Demands,
     IReadOnlyDictionary<string, int> AssignedLanes,
     int CurrentLaneCount,
     int RequiredLaneCount,

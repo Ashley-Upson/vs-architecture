@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal enum TerminalAttachmentSide { IncomingTop, OutgoingBottom }
+internal enum LinkConnectionSide { IncomingTop, OutgoingBottom }
 
-internal sealed record TerminalNodeDemand(
+internal sealed record NodeConnectionDemand(
     string NodeId,
     int CurrentWidth,
     int TextSpaceRequirement,
@@ -16,25 +16,25 @@ internal sealed record TerminalNodeDemand(
     int TotalHorizontalPadding,
     int AttachmentSeparation);
 
-internal sealed record TerminalAttachmentRequest(
+internal sealed record LinkConnectionRequest(
     string RouteId,
     int RemoteAxisCoordinate,
-    TerminalAttachmentSide Side);
+    LinkConnectionSide Side);
 
-internal sealed record TerminalAttachment(
+internal sealed record LinkConnectionAssignment(
     string RouteId,
-    TerminalAttachmentSide Side,
+    LinkConnectionSide Side,
     int AxisCoordinate,
     int Order);
 
-internal static class TerminalDemandCalculator
+internal static class LinkConnectionDemandCalculator
 {
     internal const int EstimatedCharacterWidth = 8;
 
     public static int AttachmentSeparation(int edgePortSpacing, int parallelLaneSpacing) =>
         Math.Max(edgePortSpacing, checked(parallelLaneSpacing * 2));
 
-    public static TerminalNodeDemand Measure(
+    public static NodeConnectionDemand Measure(
         string nodeId,
         int currentWidth,
         int measuredTextWidth,
@@ -51,18 +51,18 @@ internal static class TerminalDemandCalculator
         var incoming = checked(Math.Max(0, incomingCount - 1) * attachmentSeparation + totalHorizontalPadding);
         var outgoing = checked(Math.Max(0, outgoingCount - 1) * attachmentSeparation + totalHorizontalPadding);
         var required = Math.Max(currentWidth, Math.Max(text, Math.Max(incoming, outgoing)));
-        return new TerminalNodeDemand(
+        return new NodeConnectionDemand(
             nodeId, currentWidth, text, incoming, outgoing, required,
             totalHorizontalPadding, attachmentSeparation);
     }
 
-    public static IReadOnlyList<TerminalAttachment> Allocate(
+    public static IReadOnlyList<LinkConnectionAssignment> Allocate(
         Rect node,
-        IEnumerable<TerminalAttachmentRequest> requests,
+        IEnumerable<LinkConnectionRequest> requests,
         int totalHorizontalPadding,
         int attachmentSeparation)
     {
-        var result = new List<TerminalAttachment>();
+        var result = new List<LinkConnectionAssignment>();
         foreach (var side in requests.GroupBy(request => request.Side).OrderBy(group => group.Key))
         {
             var ordered = side.OrderBy(request => request.RemoteAxisCoordinate)
@@ -77,7 +77,7 @@ internal static class TerminalDemandCalculator
             for (var index = 0; index < ordered.Length; index++)
             {
                 var coordinate = (int)Math.Round(start + index * attachmentSeparation);
-                result.Add(new TerminalAttachment(ordered[index].RouteId, side.Key, coordinate, index));
+                result.Add(new LinkConnectionAssignment(ordered[index].RouteId, side.Key, coordinate, index));
             }
         }
         return result.OrderBy(item => item.Side).ThenBy(item => item.Order)

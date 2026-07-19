@@ -7,9 +7,9 @@ using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class InterLayerBandObserver
+internal static class InterLayerDemandDiscovery
 {
-    public static InterLayerBandReport Observe(
+    public static InterLayerReport Observe(
         PlacedGraph placement,
         GeneratedLogicalRoutes routes,
         DiagramSettings settings,
@@ -35,7 +35,7 @@ internal static class InterLayerBandObserver
         var builders = Enumerable.Range(0, maximumLayer)
             .Where(upper => layers.ContainsKey(upper) && layers.ContainsKey(upper + 1))
             .Select(upper => new BandBuilder(
-                new InterLayerBandId(upper, upper + 1, placement.Revision),
+                new InterLayerId(upper, upper + 1, placement.Revision),
                 layers[upper].Max(node => node.Rect.Bottom),
                 layers[upper + 1].Min(node => node.Rect.Y)))
             .ToDictionary(builder => builder.Id.UpperLayer);
@@ -65,7 +65,7 @@ internal static class InterLayerBandObserver
                 var item = orderedTouched[membershipIndex];
                 var role = Role(source.Depth, target.Depth, membershipIndex, orderedTouched.Length);
                 var membershipId = $"{link.Link.Id}:band-{item.Band.Id.UpperLayer}:segments-{item.First}-{item.Last}";
-                item.Band.Memberships.Add(new BandRouteMembership(
+                item.Band.Memberships.Add(new InterLayerLinkMembership(
                     membershipId, link.Link.Id, routes.Revision, item.Band.Id, item.First, item.Last, role));
                 for (var segmentIndex = item.First; segmentIndex <= item.Last; segmentIndex++)
                 {
@@ -79,7 +79,7 @@ internal static class InterLayerBandObserver
                     item.Band.PendingDemands.Add(new PendingDemand(
                         $"{membershipId}:segment-{segmentIndex}", link.Link.Id, routes.Revision, item.Band.Id,
                         segmentIndex, role, Math.Min(start.X, end.X), Math.Max(start.X, end.X),
-                        link.Link.Order, end.X >= start.X ? BandRouteDirection.Right : BandRouteDirection.Left));
+                        link.Link.Order, end.X >= start.X ? InterLayerLinkDirection.Right : InterLayerLinkDirection.Left));
                 }
             }
         }
@@ -94,19 +94,19 @@ internal static class InterLayerBandObserver
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
             .Select(group => group.Select(item => item.BandId).Distinct().Count())
             .DefaultIfEmpty(0).Max();
-        var telemetry = new InterLayerBandTelemetry(
+        var telemetry = new InterLayerTelemetry(
             placement.Revision, routes.Revision, placement.Nodes.Count, routes.Links.Count,
             routes.Links.Values.Sum(link => link.Points.Count + 1), observations.Length,
             observations.Sum(band => band.Memberships.Count), bandsByEdge,
             observations.Sum(band => band.Demands.Count), observations.Sum(band => band.OverlapGroupCount),
             observations.Select(band => band.MaximumSimultaneousOverlap).DefaultIfEmpty(0).Max(),
-            observations.Sum(band => band.Demands.Count(demand => demand.Role == BandMembershipRole.Return)),
+            observations.Sum(band => band.Demands.Count(demand => demand.Role == InterLayerMembershipRole.Return)),
             observations.Sum(band => band.UnsupportedShapes.Count), comparisons,
             (long)(timer.ElapsedTicks * 1_000_000d / Stopwatch.Frequency));
         PerformanceAudit.Increment("inter-layer bands observed", telemetry.BandCount);
         PerformanceAudit.Increment("inter-layer band demands", telemetry.HorizontalDemandCount);
         PerformanceAudit.Increment("inter-layer interval comparisons", comparisons);
-        return new InterLayerBandReport(observations, correlations, telemetry);
+        return new InterLayerReport(observations, correlations, telemetry);
     }
 
     private static bool IntersectsVerticalRange(Point start, Point end, int upper, int lower) =>
@@ -127,25 +127,25 @@ internal static class InterLayerBandObserver
         if (current.Count > 0) yield return current.ToArray();
     }
 
-    private static BandMembershipRole Role(int sourceLayer, int targetLayer, int index, int count)
+    private static InterLayerMembershipRole Role(int sourceLayer, int targetLayer, int index, int count)
     {
-        if (targetLayer < sourceLayer) return BandMembershipRole.Return;
-        if (index == 0) return BandMembershipRole.SourceTransition;
-        if (index == count - 1) return BandMembershipRole.TargetTransition;
-        return BandMembershipRole.Through;
+        if (targetLayer < sourceLayer) return InterLayerMembershipRole.Return;
+        if (index == 0) return InterLayerMembershipRole.SourceTransition;
+        if (index == count - 1) return InterLayerMembershipRole.TargetTransition;
+        return InterLayerMembershipRole.Through;
     }
 
-    private static IReadOnlyList<BandFindingCorrelation> Correlate(
+    private static IReadOnlyList<InterLayerFindingCorrelation> Correlate(
         TraceabilityValidationResult? findings,
-        IReadOnlyList<InterLayerBandObservation> bands)
+        IReadOnlyList<InterLayerObservation> bands)
     {
-        if (findings is null) return Array.Empty<BandFindingCorrelation>();
+        if (findings is null) return Array.Empty<InterLayerFindingCorrelation>();
         return findings.Violations.Select(finding =>
         {
             var relevant = bands.Where(band => band.Memberships.Any(membership =>
                 membership.LogicalEdgeIdentity == finding.EdgeId || membership.LogicalEdgeIdentity == finding.OtherEdgeId)).ToArray();
             var underSized = relevant.Any(band => band.MissingExtent > 0);
-            return new BandFindingCorrelation(
+            return new InterLayerFindingCorrelation(
                 finding.Code, finding.EdgeId, finding.OtherEdgeId, relevant.Select(band => band.Id).ToArray(),
                 relevant.SelectMany(band => band.Demands).Where(demand =>
                     demand.LogicalEdgeIdentity == finding.EdgeId || demand.LogicalEdgeIdentity == finding.OtherEdgeId)
@@ -158,18 +158,18 @@ internal static class InterLayerBandObserver
 
     private sealed class BandBuilder
     {
-        public BandBuilder(InterLayerBandId id, int upperBoundary, int lowerBoundary)
+        public BandBuilder(InterLayerId id, int upperBoundary, int lowerBoundary)
         { Id = id; UpperBoundary = upperBoundary; LowerBoundary = lowerBoundary; }
-        public InterLayerBandId Id { get; }
+        public InterLayerId Id { get; }
         public int UpperBoundary { get; }
         public int LowerBoundary { get; }
-        public List<BandRouteMembership> Memberships { get; } = new();
+        public List<InterLayerLinkMembership> Memberships { get; } = new();
         public List<PendingDemand> PendingDemands { get; } = new();
         public List<string> UnsupportedShapes { get; } = new();
 
-        public InterLayerBandObservation Build(int clearance, int padding, ref long comparisons)
+        public InterLayerObservation Build(int clearance, int padding, ref long comparisons)
         {
-            var demands = new List<BandRouteDemand>();
+            var demands = new List<InterLayerLinkDemand>();
             var maximumOverlap = 0;
             var overlapGroups = 0;
             var laneCount = 0;
@@ -191,21 +191,21 @@ internal static class InterLayerBandObserver
                 foreach (var demand in pending)
                     demands.Add(demand.ToDemand(common.SegmentsByDemandId[demand.Id].SlotIndex));
                 laneCount = Math.Max(laneCount, createdSlots);
-                if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = createdSlots;
+                if (roleGroup.Key == InterLayerMembershipRole.Return) returnLaneCount = createdSlots;
                 else ordinaryLaneCount = Math.Max(ordinaryLaneCount, createdSlots);
             }
             var current = Math.Max(0, LowerBoundary - UpperBoundary);
-            var ordinary = demands.Where(item => item.Role != BandMembershipRole.Return).ToArray();
-            var returns = demands.Where(item => item.Role == BandMembershipRole.Return).ToArray();
-            var returnRegions = returns.Select(item => new BandReturnRegionObservation(
-                item.Id, item.LogicalEdgeIdentity, item.Direction == BandRouteDirection.Left ? "left" : "right",
+            var ordinary = demands.Where(item => item.Role != InterLayerMembershipRole.Return).ToArray();
+            var returns = demands.Where(item => item.Role == InterLayerMembershipRole.Return).ToArray();
+            var returnRegions = returns.Select(item => new InterLayerReturnRegionObservation(
+                item.Id, item.LogicalEdgeIdentity, item.Direction == InterLayerLinkDirection.Left ? "left" : "right",
                 item.XStart, item.XEnd, ordinary.Any(other =>
                     item.XStart < other.XEnd + clearance && other.XStart < item.XEnd + clearance))).ToArray();
             var effectiveLanes = returnRegions.Any(item => item.ConflictsWithDownwardTraffic)
                 ? ordinaryLaneCount + returnLaneCount
                 : Math.Max(ordinaryLaneCount, returnLaneCount);
             var required = PendingDemands.Count == 0 ? current : padding * 2 + Math.Max(1, effectiveLanes) * clearance;
-            return new InterLayerBandObservation(Id, UpperBoundary, LowerBoundary, current, required,
+            return new InterLayerObservation(Id, UpperBoundary, LowerBoundary, current, required,
                 Math.Max(0, required - current), Memberships.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 demands.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(), overlapGroups,
                 maximumOverlap, Math.Max(laneCount, effectiveLanes), returnLaneCount, returnRegions,
@@ -213,16 +213,16 @@ internal static class InterLayerBandObserver
         }
     }
 
-    private sealed record PendingDemand(string Id, string EdgeId, RouteRevision Revision, InterLayerBandId BandId,
-        int SegmentIndex, BandMembershipRole Role, int XStart, int XEnd, int TerminalOrder, BandRouteDirection Direction)
+    private sealed record PendingDemand(string Id, string EdgeId, RouteRevision Revision, InterLayerId BandId,
+        int SegmentIndex, InterLayerMembershipRole Role, int XStart, int XEnd, int TerminalOrder, InterLayerLinkDirection Direction)
     {
-        public BandRouteDemand ToDemand(int lane) => new(Id, EdgeId, Revision, BandId, SegmentIndex, Role,
+        public InterLayerLinkDemand ToDemand(int lane) => new(Id, EdgeId, Revision, BandId, SegmentIndex, Role,
             XStart, XEnd, TerminalOrder, Direction, lane);
 
         public LinkSegmentDemand ToLinkSegmentDemand(int upperBoundary, int lowerBoundary) => new(
             Id, EdgeId, LinkSegmentOrientation.Horizontal, new AxisInterval(XStart, XEnd),
             new AxisInterval(upperBoundary, lowerBoundary), null,
-            Role == BandMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
+            Role == InterLayerMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
             TerminalOrder, SegmentIndex,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{BandId.LowerLayer}"),
             BandId.LayoutRevision, Revision);

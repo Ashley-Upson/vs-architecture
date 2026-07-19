@@ -9,9 +9,9 @@ public sealed class GroupedSpacingTests
     [Fact]
     public void Inclusive_intervals_distinguish_disjoint_contact_and_overlap()
     {
-        Assert.Equal(IntervalContactKind.Disjoint, BandConflictGrouper.Contact(0, 10, 20, 30));
-        Assert.Equal(IntervalContactKind.EndpointContact, BandConflictGrouper.Contact(0, 10, 10, 20));
-        Assert.Equal(IntervalContactKind.PositiveOverlap, BandConflictGrouper.Contact(0, 15, 10, 20));
+        Assert.Equal(IntervalContactKind.Disjoint, InterLayerConflictGrouper.Contact(0, 10, 20, 30));
+        Assert.Equal(IntervalContactKind.EndpointContact, InterLayerConflictGrouper.Contact(0, 10, 10, 20));
+        Assert.Equal(IntervalContactKind.PositiveOverlap, InterLayerConflictGrouper.Contact(0, 15, 10, 20));
     }
 
     [Fact]
@@ -21,8 +21,8 @@ public sealed class GroupedSpacingTests
         var turn = new Segment(new Point(10, 10), new Point(10, 20));
         var second = new Segment(new Point(10, 10), new Point(20, 10));
 
-        Assert.Equal(RoutePointContactKind.AmbiguousBend,
-            BandConflictGrouper.ClassifyContact(first, turn, second, null));
+        Assert.Equal(LinkPathPointContactKind.AmbiguousBend,
+            InterLayerConflictGrouper.ClassifyContact(first, turn, second, null));
     }
 
     [Fact]
@@ -31,8 +31,8 @@ public sealed class GroupedSpacingTests
         var horizontal = new Segment(new Point(0, 10), new Point(20, 10));
         var vertical = new Segment(new Point(10, 0), new Point(10, 20));
 
-        Assert.Equal(RoutePointContactKind.CleanCrossover,
-            BandConflictGrouper.ClassifyContact(horizontal, null, vertical, null));
+        Assert.Equal(LinkPathPointContactKind.CleanCrossover,
+            InterLayerConflictGrouper.ClassifyContact(horizontal, null, vertical, null));
     }
 
     [Fact]
@@ -42,8 +42,8 @@ public sealed class GroupedSpacingTests
         var vertical = new Segment(new Point(10, 0), new Point(10, 20));
         var turn = new Segment(new Point(20, 10), new Point(20, 20));
 
-        Assert.Equal(RoutePointContactKind.AmbiguousBend,
-            BandConflictGrouper.ClassifyContact(horizontal, turn, vertical, null));
+        Assert.Equal(LinkPathPointContactKind.AmbiguousBend,
+            InterLayerConflictGrouper.ClassifyContact(horizontal, turn, vertical, null));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class GroupedSpacingTests
         var band = Band(
             Demand("a", 0, 20), Demand("b", 15, 35), Demand("c", 30, 50));
 
-        var groups = BandConflictGrouper.Group(band, 1, 5, out _);
+        var groups = InterLayerConflictGrouper.Group(band, 1, 5, out _);
 
         Assert.Single(groups);
         Assert.Equal(new[] { "a", "b", "c" }, groups[0].Demands.Select(item => item.Id));
@@ -64,7 +64,7 @@ public sealed class GroupedSpacingTests
     {
         var band = Band(Demand("a", 0, 10), Demand("b", 20, 30));
 
-        var groups = BandConflictGrouper.Group(band, 5, 5, out _);
+        var groups = InterLayerConflictGrouper.Group(band, 5, 5, out _);
 
         Assert.Equal(2, groups.Count);
         Assert.All(groups, group => Assert.Equal(1, group.RequiredLaneCount));
@@ -99,12 +99,12 @@ public sealed class GroupedSpacingTests
         Assert.Equal(156, forward.Minimum(key));
     }
 
-    private static InterLayerBandObservation Band(params BandRouteDemand[] demands) => new(
-        new InterLayerBandId(0, 1, new LayoutRevision(1)), 20, 100, 80, 80, 0,
-        new BandRouteMembership[0], demands, 0, 0, 0, 0,
-        new BandReturnRegionObservation[0], new string[0]);
+    private static InterLayerObservation Band(params InterLayerLinkDemand[] demands) => new(
+        new InterLayerId(0, 1, new LayoutRevision(1)), 20, 100, 80, 80, 0,
+        new InterLayerLinkMembership[0], demands, 0, 0, 0, 0,
+        new InterLayerReturnRegionObservation[0], new string[0]);
 
-    private static BandRouteDemand Demand(string id, int start, int end) => new(
-        id, id, new RouteRevision(1), new InterLayerBandId(0, 1, new LayoutRevision(1)),
-        1, BandMembershipRole.SourceTransition, start, end, 0, BandRouteDirection.Right, 0);
+    private static InterLayerLinkDemand Demand(string id, int start, int end) => new(
+        id, id, new RouteRevision(1), new InterLayerId(0, 1, new LayoutRevision(1)),
+        1, InterLayerMembershipRole.SourceTransition, start, end, 0, InterLayerLinkDirection.Right, 0);
 }

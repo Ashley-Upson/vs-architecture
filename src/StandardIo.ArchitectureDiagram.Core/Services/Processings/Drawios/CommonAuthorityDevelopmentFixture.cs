@@ -6,13 +6,13 @@ using System.Xml.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class CommonRailDevelopmentFixture
+internal static class CommonAuthorityDevelopmentFixture
 {
     private const int Separation = 12;
     private static readonly LayoutRevision PlacementRevision = new(3);
     private static readonly RouteRevision RouteRevision = new(79);
 
-    public static CommonRailDevelopmentFixtureResult Build()
+    public static CommonAuthorityDevelopmentFixtureResult Build()
     {
         var timer = Stopwatch.StartNew();
         var nodes = Nodes();
@@ -47,7 +47,7 @@ internal static class CommonRailDevelopmentFixture
         var beforeDefects = Validate(nodes, before);
         var afterDefects = Validate(nodes, after);
         timer.Stop();
-        return new CommonRailDevelopmentFixtureResult(
+        return new CommonAuthorityDevelopmentFixtureResult(
             Drawio(nodes, before, "Before: existing shared rail"),
             Drawio(nodes, after, "After: common deterministic rails"),
             beforeDefects, afterDefects, 0, 0,

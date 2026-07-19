@@ -53,7 +53,7 @@ internal sealed record CorridorObservation(
     IReadOnlyDictionary<string, CorridorJunction> Junctions,
     IReadOnlyList<CorridorSegmentMapping> SegmentMappings,
     IReadOnlyDictionary<string, CorridorUsage> Usage,
-    IReadOnlyList<TerminalTransition>? TerminalTransitions = null);
+    IReadOnlyList<LinkConnectionTransition>? LinkConnectionTransitions = null);
 
 internal sealed record AllocatedCorridorLane(
     string CorridorId,

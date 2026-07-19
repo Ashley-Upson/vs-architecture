@@ -7,7 +7,7 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class GroupedVerticalBandPlannerTests
+public sealed class InterLayerSpacingConstraintProducerTests
 {
     [Fact]
     public void Complete_vertical_delta_moves_lower_layers_once_and_keeps_upper_fixed()
@@ -17,12 +17,12 @@ public sealed class GroupedVerticalBandPlannerTests
             Link("one", "a", "x", 0, 10, 80), Link("two", "b", "y", 1, 20, 70));
         fixture.Settings.Layout.ParallelLaneSpacing = 40;
         fixture.Settings.Layout.LinkPadding = 20;
-        var report = InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
+        var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
         var originalUpper = fixture.Placement.Nodes["a"].Rect;
         var originalLower = fixture.Placement.Nodes["x"].Rect;
         var missing = report.Bands[0].MissingExtent;
 
-        var result = GroupedVerticalBandPlanner.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
+        var result = InterLayerSpacingConstraintProducer.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
 
         Assert.Equal(originalUpper, result.Placement.Nodes["a"].Rect);
         Assert.Equal(originalLower.Y + missing, result.Placement.Nodes["x"].Rect.Y);
@@ -36,9 +36,9 @@ public sealed class GroupedVerticalBandPlannerTests
         var fixture = Fixture(new[] { Node("a", 0, 0), Node("x", 1, 0) },
             Link("edge", "a", "x", 0, 10, 80));
         fixture.Settings.Layout.ParallelLaneSpacing = 100;
-        var report = InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
+        var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
 
-        var result = GroupedVerticalBandPlanner.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
+        var result = InterLayerSpacingConstraintProducer.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
 
         Assert.Equal(fixture.Routes.Revision.Next(), result.Routes.Revision);
         Assert.Contains("edge", result.Plan.InvalidatedRoutes);
@@ -52,11 +52,11 @@ public sealed class GroupedVerticalBandPlannerTests
     {
         var fixture = Fixture(new[] { Node("a", 0, 0), Node("middle", 1, 0), Node("x", 2, 0) },
             Link("edge", "a", "x", 0, 10, 80));
-        var report = InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
+        var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
 
-        Assert.False(GroupedVerticalBandPlanner.Supports(fixture.Placement, fixture.Routes, report));
+        Assert.False(InterLayerSpacingConstraintProducer.Supports(fixture.Placement, fixture.Routes, report));
         Assert.Throws<InvalidOperationException>(() =>
-            GroupedVerticalBandPlanner.Plan(fixture.Placement, fixture.Routes, report, fixture.Settings));
+            InterLayerSpacingConstraintProducer.Plan(fixture.Placement, fixture.Routes, report, fixture.Settings));
     }
 
     [Fact]
@@ -106,10 +106,10 @@ public sealed class GroupedVerticalBandPlannerTests
         Assert.All(layout.Links.Values.SelectMany(Segments), segment => Assert.True(segment.IsOrthogonal));
     }
 
-    private static GroupedVerticalBandResult Apply(FixtureData fixture)
+    private static InterLayerSpacingConstraintResult Apply(FixtureData fixture)
     {
-        var report = InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
-        return GroupedVerticalBandPlanner.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
+        var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, fixture.Settings);
+        return InterLayerSpacingConstraintProducer.Apply(fixture.Placement, fixture.Routes, report, fixture.Settings);
     }
 
     private static FixtureData Fixture(IEnumerable<NodeLayout> nodes, params LinkLayout[] links)

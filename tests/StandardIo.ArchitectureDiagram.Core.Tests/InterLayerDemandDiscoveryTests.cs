@@ -3,7 +3,7 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-public sealed class InterLayerBandObserverTests
+public sealed class InterLayerDemandDiscoveryTests
 {
     [Fact]
     public void Adjacent_downward_route_belongs_to_one_band()
@@ -14,7 +14,7 @@ public sealed class InterLayerBandObserverTests
         var report = Observe(fixture);
 
         var membership = Assert.Single(Assert.Single(report.Bands).Memberships);
-        Assert.Equal(BandMembershipRole.SourceTransition, membership.Role);
+        Assert.Equal(InterLayerMembershipRole.SourceTransition, membership.Role);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class InterLayerBandObserverTests
 
         var membership = Assert.Single(Assert.Single(Observe(fixture).Bands).Memberships);
 
-        Assert.Equal(BandMembershipRole.Return, membership.Role);
+        Assert.Equal(InterLayerMembershipRole.Return, membership.Role);
     }
 
     [Fact]
@@ -120,9 +120,9 @@ public sealed class InterLayerBandObserverTests
             Link("edge", "source", "target", 0, (10, 20), (10, 100)));
         var moved = fixture.Placement.Revise(fixture.Placement.Nodes, fixture.Placement.Projects);
 
-        Assert.Throws<InvalidOperationException>(() => InterLayerBandObserver.Observe(
+        Assert.Throws<InvalidOperationException>(() => InterLayerDemandDiscovery.Observe(
             moved, fixture.Routes, DiagramSettings.CreateDefault()));
-        Assert.Throws<InvalidOperationException>(() => InterLayerBandObserver.Observe(
+        Assert.Throws<InvalidOperationException>(() => InterLayerDemandDiscovery.Observe(
             fixture.Placement, fixture.Routes, DiagramSettings.CreateDefault(), expectedRouteRevision: new RouteRevision(4)));
     }
 
@@ -138,7 +138,7 @@ public sealed class InterLayerBandObserverTests
         cancellation.Cancel();
 
         Assert.Equal(before, fixture.Routes.Links["edge"].RouteState.AuthoritativePoints);
-        Assert.Throws<OperationCanceledException>(() => InterLayerBandObserver.Observe(
+        Assert.Throws<OperationCanceledException>(() => InterLayerDemandDiscovery.Observe(
             fixture.Placement, fixture.Routes, DiagramSettings.CreateDefault(), cancellationToken: cancellation.Token));
     }
 
@@ -154,7 +154,7 @@ public sealed class InterLayerBandObserverTests
             new TraceabilityViolation(TraceabilityViolationCode.SharedSegment, "edge", null, 20, "fixture")
         });
 
-        var report = InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, settings, findings);
+        var report = InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, settings, findings);
 
         Assert.True(Assert.Single(report.FindingCorrelations).PlausiblyBandResolvable);
         Assert.True(Assert.Single(report.Bands).MissingExtent > 0);
@@ -175,7 +175,7 @@ public sealed class InterLayerBandObserverTests
         var enabledDiagnostics = enabled.Diagnostics;
 
         Assert.Equal(0, before.Counters.Where(item => item.Name == "inter-layer bands observed").Sum(item => item.Value));
-        Assert.Contains(after.Phases, phase => phase.Phase == "Stage B observation");
+        Assert.Contains(after.Phases, phase => phase.Phase == "Inter-layer demand discovery");
         Assert.Contains("\"interLayerBands\"", diagnostic.ReportJson);
         Assert.NotNull(enabledDiagnostics);
         Assert.Equal(disabled.Document, documentBeforeDiagnostic);
@@ -185,7 +185,7 @@ public sealed class InterLayerBandObserverTests
     [Fact]
     public void Observer_contract_has_no_legacy_routing_model_dependencies()
     {
-        var dependencyNames = typeof(InterLayerBandObserver).GetMethods(
+        var dependencyNames = typeof(InterLayerDemandDiscovery).GetMethods(
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
             .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType)
                 .Append(method.ReturnType))
@@ -199,8 +199,8 @@ public sealed class InterLayerBandObserverTests
             name.Contains("Junction", StringComparison.Ordinal));
     }
 
-    private static InterLayerBandReport Observe(FixtureData fixture) =>
-        InterLayerBandObserver.Observe(fixture.Placement, fixture.Routes, DiagramSettings.CreateDefault());
+    private static InterLayerReport Observe(FixtureData fixture) =>
+        InterLayerDemandDiscovery.Observe(fixture.Placement, fixture.Routes, DiagramSettings.CreateDefault());
 
     private static FixtureData Fixture(IEnumerable<NodeLayout> nodes, params LinkLayout[] links)
     {

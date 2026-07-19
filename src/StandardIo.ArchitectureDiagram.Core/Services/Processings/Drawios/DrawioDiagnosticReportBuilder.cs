@@ -36,7 +36,7 @@ internal static class DrawioDiagnosticReportBuilder
         LayoutSettings layoutSettings,
         IReadOnlyList<PipelineStageMetric> stageTimings,
         bool diagnosticReuse,
-        InterLayerBandReport? bandReport = null)
+        InterLayerReport? bandReport = null)
     {
         var requiredSpacing = layoutSettings.ParallelLaneSpacing;
         var projectNames = layout.Graph.Projects.ToDictionary(project => project.Id, project => project.Name, StringComparer.Ordinal);
@@ -274,7 +274,7 @@ internal static class DrawioDiagnosticReportBuilder
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         var outgoing = layout.Graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        var separation = TerminalDemandCalculator.AttachmentSeparation(
+        var separation = LinkConnectionDemandCalculator.AttachmentSeparation(
             settings.EdgePortSpacing, settings.ParallelLaneSpacing);
         var changedNodeIds = new HashSet<string>(StringComparer.Ordinal);
         var constraintTimer = Stopwatch.StartNew();
@@ -284,8 +284,8 @@ internal static class DrawioDiagnosticReportBuilder
         {
             var incomingCount = incoming.TryGetValue(node.Id, out var inc) ? inc : 0;
             var outgoingCount = outgoing.TryGetValue(node.Id, out var outgoingValue) ? outgoingValue : 0;
-            var textWidth = TerminalDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
-            var demand = TerminalDemandCalculator.Measure(
+            var textWidth = LinkConnectionDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
+            var demand = LinkConnectionDemandCalculator.Measure(
                 node.Id, settings.NodeWidth, textWidth, incomingCount, outgoingCount,
                 separation, settings.LinkNodeWidthPadding);
             var legacyWidth = Math.Max(settings.NodeWidth, Math.Max(
@@ -316,14 +316,14 @@ internal static class DrawioDiagnosticReportBuilder
         var componentTimer = Stopwatch.StartNew();
         var claims = layout.Links.Values.SelectMany(link => new[]
         {
-            new TerminalAttachmentClaim(link.Link.Id, link.Link.SourceId,
-                TerminalAttachmentSide.OutgoingBottom, "bottom", link.SourcePoint.X),
-            new TerminalAttachmentClaim(link.Link.Id, link.Link.TargetId,
-                TerminalAttachmentSide.IncomingTop, "top", link.TargetPoint.X)
+            new LinkConnectionClaim(link.Link.Id, link.Link.SourceId,
+                LinkConnectionSide.OutgoingBottom, "bottom", link.SourcePoint.X),
+            new LinkConnectionClaim(link.Link.Id, link.Link.TargetId,
+                LinkConnectionSide.IncomingTop, "top", link.TargetPoint.X)
         }).ToArray();
         var ids = layout.Links.Keys.OrderBy(id => id, StringComparer.Ordinal).ToArray();
-        var unresolved = ConflictComponentBuilder.Build(ids, id => id, TerminalInteractionEdges.BeforeAllocation(claims));
-        var resolved = ConflictComponentBuilder.Build(ids, id => id, TerminalInteractionEdges.AfterAllocation(claims));
+        var unresolved = ConflictComponentBuilder.Build(ids, id => id, LinkConnectionInteractions.BeforeAllocation(claims));
+        var resolved = ConflictComponentBuilder.Build(ids, id => id, LinkConnectionInteractions.AfterAllocation(claims));
         componentTimer.Stop();
 
         return new FoundationCostObservation(
@@ -337,41 +337,41 @@ internal static class DrawioDiagnosticReportBuilder
 
     private static object? ObserveAdjacentDownward(
         RenderLayout layout,
-        InterLayerBandReport? bandReport,
+        InterLayerReport? bandReport,
         int requiredSpacing,
         int padding)
     {
         if (bandReport is null) return null;
         var memberships = bandReport.Bands.SelectMany(item => item.Memberships)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<BandRouteMembership>)group.ToArray(), StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkMembership>)group.ToArray(), StringComparer.Ordinal);
         var demands = bandReport.Bands.SelectMany(item => item.Demands)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<BandRouteDemand>)group.ToArray(), StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkDemand>)group.ToArray(), StringComparer.Ordinal);
         var ranges = bandReport.Bands.ToDictionary(
             item => item.Id, item => new AxisInterval(item.UpperBoundary, item.LowerBoundary));
         var routeRevision = bandReport.Telemetry.RouteRevision;
         var duplicatedExposureTree = layout.Graph.PlacementParentByNode.Count == 0 &&
             layout.Graph.Nodes.Any(item => item.Id.StartsWith("tree_", StringComparison.Ordinal));
         var contexts = layout.Links.Values.OrderBy(item => item.Link.Id, StringComparer.Ordinal).Select(route =>
-            new AdjacentDownwardRouteContext(
+            new AdjacentDownwardLinkContext(
                 route,
                 layout.Nodes[route.Link.SourceId],
                 layout.Nodes[route.Link.TargetId],
                 layout.LayoutRevision,
                 routeRevision,
                 memberships.TryGetValue(route.Link.Id, out var routeMemberships)
-                    ? routeMemberships : Array.Empty<BandRouteMembership>(),
+                    ? routeMemberships : Array.Empty<InterLayerLinkMembership>(),
                 demands.TryGetValue(route.Link.Id, out var routeDemands)
-                    ? routeDemands : Array.Empty<BandRouteDemand>(),
+                    ? routeDemands : Array.Empty<InterLayerLinkDemand>(),
                 ranges,
                 layout.Corridors,
                 layout.Lanes,
                 layout.GroupedSpacingPlan,
                 duplicatedExposureTree)).ToArray();
-        var observation = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
+        var observation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
         var projection = AdjacentDownwardComponentProjector.Project(observation, requiredSpacing);
-        var common = AdjacentDownwardCommonRailObserver.Observe(observation, requiredSpacing, padding);
+        var common = AdjacentDownwardCommonAuthorityObserver.Observe(observation, requiredSpacing, padding);
         var eligible = observation.Routes.Where(item => item.Eligible).ToArray();
         var assignedPairs = new HashSet<string>(projection.AssignedEdges.Select(EdgePair), StringComparer.Ordinal);
         var removedEdges = projection.UnassignedEdges
@@ -379,7 +379,7 @@ internal static class DrawioDiagnosticReportBuilder
             .ToArray();
         var routesInRemovedEdges = removedEdges.SelectMany(item => new[] { item.FirstId, item.SecondId })
             .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
-        var assignedSources = eligible.SelectMany(item => item.ExistingLaneMappings).GroupBy(item => item.Source)
+        var assignedSources = eligible.SelectMany(item => item.ExistingSegmentMappings).GroupBy(item => item.Source)
             .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count());
         return new
         {
@@ -474,7 +474,7 @@ internal static class DrawioDiagnosticReportBuilder
                     placementRevision = demand.PlacementRevision.Value,
                     routeRevision = demand.RouteRevision.Value
                 }),
-                laneMappings = item.ExistingLaneMappings.Select(mapping => new
+                laneMappings = item.ExistingSegmentMappings.Select(mapping => new
                 {
                     source = mapping.Source.ToString(),
                     mapping.Rail.SlotIndex,
@@ -528,7 +528,7 @@ internal static class DrawioDiagnosticReportBuilder
 
     private static object ObserveNodeWidths(RenderLayout layout, LayoutSettings settings)
     {
-        var separation = TerminalDemandCalculator.AttachmentSeparation(
+        var separation = LinkConnectionDemandCalculator.AttachmentSeparation(
             settings.EdgePortSpacing, settings.ParallelLaneSpacing);
         var incoming = layout.Graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
@@ -538,8 +538,8 @@ internal static class DrawioDiagnosticReportBuilder
         {
             var incomingCount = incoming.TryGetValue(node.Id, out var inc) ? inc : 0;
             var outgoingCount = outgoing.TryGetValue(node.Id, out var outgoingValue) ? outgoingValue : 0;
-            var measuredText = TerminalDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
-            var demand = TerminalDemandCalculator.Measure(
+            var measuredText = LinkConnectionDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
+            var demand = LinkConnectionDemandCalculator.Measure(
                 node.Id, settings.NodeWidth, measuredText, incomingCount, outgoingCount,
                 separation, settings.LinkNodeWidthPadding);
             var legacyWidth = Math.Max(settings.NodeWidth, Math.Max(
@@ -667,7 +667,7 @@ internal static class DrawioDiagnosticReportBuilder
     private static IReadOnlyList<NonOrthogonalSegmentDiagnostic> NonOrthogonalSegments(
         RenderLayout layout,
         CoordinateOwnershipCompilation ownership,
-        InterLayerBandReport? bandReport)
+        InterLayerReport? bandReport)
     {
         var anchors = new HashSet<Point>(ownership.Anchors.Select(anchor => anchor.AbsolutePoint));
         return layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal).SelectMany(link =>
@@ -905,7 +905,7 @@ internal static class DrawioDiagnosticReportBuilder
         nodeCollisionOrInvalidGeometryCount = score.InvalidGeometry,
         sharedSegmentLength = score.SharedSegmentLength,
         spacingDeficit = score.SpacingDeficit,
-        terminalFanoutViolations = score.TerminalFanoutViolations,
+        terminalFanoutViolations = score.LinkConnectionFanoutViolations,
         ambiguousTransitions = score.AmbiguousTransitions,
         capacityFailure = score.CapacityFailure,
         perpendicularCrossingsAndCongestion = score.CrossingsAndCongestion,

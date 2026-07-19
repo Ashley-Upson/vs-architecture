@@ -15,7 +15,7 @@ public sealed class CorridorLaneGeometryCompilerTests
         var revised = original.AcceptGeometry(
             new[] { original.SourcePoint }.Concat(original.Points).Concat(new[] { original.TargetPoint }),
             LogicalRouteStage.Selected,
-            "TerminalFanoutOrdering");
+            "LinkConnectionFanoutOrdering");
         var corridor = new RoutingCorridor("H:20:80", CorridorOrientation.Horizontal, new Rect(0, 20, 200, 60), 12, 3);
         var observation = new CorridorObservation(
             new Dictionary<string, RoutingCorridor> { [corridor.Id] = corridor },

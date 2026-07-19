@@ -11,15 +11,15 @@ internal static class MixedBoundaryAttributor
         DownwardIntegrationFamily.MultiBandDownward,
         DownwardIntegrationFamily.SameLayer,
         DownwardIntegrationFamily.UpwardOrReturn,
-        DownwardIntegrationFamily.UnsupportedTerminalTopology,
+        DownwardIntegrationFamily.UnsupportedConnectionTopology,
         DownwardIntegrationFamily.NonOrthogonalRegeneration
     };
 
     public static MixedBoundaryAttribution Attribute(
-        IReadOnlyList<AdjacentDownwardRouteContext> contexts,
+        IReadOnlyList<AdjacentDownwardLinkContext> contexts,
         AdjacentDownwardObservationReport observation,
         IReadOnlyList<CommonAuthorityInteraction> interactions,
-        InterLayerBandReport bands)
+        InterLayerReport bands)
     {
         var observed = observation.Routes.ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
         var contextById = contexts.ToDictionary(item => item.Route.Link.Id, StringComparer.Ordinal);
@@ -90,7 +90,7 @@ internal static class MixedBoundaryAttributor
     private static bool CandidateSupports(DownwardIntegrationFamily candidate, AttributedTrialRoute route)
     {
         var terminalUnsupported = route.SecondaryReasons.Contains(
-            AdjacentDownwardRejectionReason.UnsupportedTerminalTopology.ToString());
+            AdjacentDownwardRejectionReason.UnsupportedConnectionTopology.ToString());
         return candidate switch
         {
             DownwardIntegrationFamily.MultiBandDownward =>
@@ -98,7 +98,7 @@ internal static class MixedBoundaryAttributor
                 !terminalUnsupported,
             DownwardIntegrationFamily.SameLayer => route.PrimaryFamily == DownwardIntegrationFamily.SameLayer && !terminalUnsupported,
             DownwardIntegrationFamily.UpwardOrReturn => route.PrimaryFamily == DownwardIntegrationFamily.UpwardOrReturn && !terminalUnsupported,
-            DownwardIntegrationFamily.UnsupportedTerminalTopology =>
+            DownwardIntegrationFamily.UnsupportedConnectionTopology =>
                 route.PrimaryFamily == DownwardIntegrationFamily.AdjacentDownward && terminalUnsupported,
             DownwardIntegrationFamily.NonOrthogonalRegeneration =>
                 route.PrimaryFamily == DownwardIntegrationFamily.AdjacentDownward && !terminalUnsupported &&
@@ -107,7 +107,7 @@ internal static class MixedBoundaryAttributor
         };
     }
 
-    private static DownwardIntegrationFamily SemanticFamily(AdjacentDownwardRouteContext context)
+    private static DownwardIntegrationFamily SemanticFamily(AdjacentDownwardLinkContext context)
     {
         if (context.ExposureTreeSpecific) return DownwardIntegrationFamily.ExposureTreeSpecific;
         if (!string.Equals(context.Source.Node.ProjectId, context.Target.Node.ProjectId, StringComparison.Ordinal))
@@ -120,8 +120,8 @@ internal static class MixedBoundaryAttributor
     }
 
     private static IReadOnlyList<string> SecondaryReasons(
-        AdjacentDownwardRouteContext context,
-        AdjacentDownwardRouteObservation observation)
+        AdjacentDownwardLinkContext context,
+        AdjacentDownwardLinkObservation observation)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         if (observation.RejectionReason is not null) result.Add(observation.RejectionReason.Value.ToString());
@@ -131,9 +131,9 @@ internal static class MixedBoundaryAttributor
         if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom ||
             context.Route.TargetPoint.Y != context.Target.Rect.Y)
-            result.Add(AdjacentDownwardRejectionReason.UnsupportedTerminalTopology.ToString());
+            result.Add(AdjacentDownwardRejectionReason.UnsupportedConnectionTopology.ToString());
         if (context.BandMemberships.Select(item => item.BandId).Distinct().Count() > 1)
-            result.Add(AdjacentDownwardRejectionReason.MultipleBand.ToString());
+            result.Add(AdjacentDownwardRejectionReason.MultipleInterLayer.ToString());
         return result.OrderBy(item => item, StringComparer.Ordinal).ToArray();
     }
 }

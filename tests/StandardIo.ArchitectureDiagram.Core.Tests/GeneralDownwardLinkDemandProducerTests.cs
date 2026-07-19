@@ -11,19 +11,19 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
     {
         var context = Context("route", 1);
         var general = Assert.Single(GeneralDownwardLinkSegmentDemandProducer.Observe(new[] { context }).Routes);
-        var adjacent = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[]
+        var adjacent = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[]
         {
             context with
             {
                 BandMemberships = new[]
                 {
-                    new BandRouteMembership("m", "route", new RouteRevision(0), context.BandAxisRanges.Keys.Single(),
-                        0, 2, BandMembershipRole.Through)
+                    new InterLayerLinkMembership("m", "route", new RouteRevision(0), context.BandAxisRanges.Keys.Single(),
+                        0, 2, InterLayerMembershipRole.Through)
                 },
                 BandDemands = new[]
                 {
-                    new BandRouteDemand("d", "route", new RouteRevision(0), context.BandAxisRanges.Keys.Single(),
-                        1, BandMembershipRole.Through, 20, 120, 0, BandRouteDirection.Right, 0)
+                    new InterLayerLinkDemand("d", "route", new RouteRevision(0), context.BandAxisRanges.Keys.Single(),
+                        1, InterLayerMembershipRole.Through, 20, 120, 0, InterLayerLinkDirection.Right, 0)
                 }
             }
         }).Routes);
@@ -69,7 +69,7 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
         Assert.Contains(route.Diagnostics, item => item.StartsWith("ObstacleBypassRequired:", StringComparison.Ordinal));
     }
 
-    private static AdjacentDownwardRouteContext Context(string id, int bands)
+    private static AdjacentDownwardLinkContext Context(string id, int bands)
     {
         var source = new NodeLayout(Node("source", 0), new Rect(0, 0, 40, 40), 0, false);
         var targetY = bands * 100 + 60;
@@ -77,10 +77,10 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
         var route = new LinkLayout(new RenderLink(id, "source", "target", "Dependency", 0),
             new Point(20, 40), new Point(120, targetY), new[] { new Point(20, 80), new Point(120, 80) }, .5, .5);
         var ranges = Enumerable.Range(0, bands).ToDictionary(
-            depth => new InterLayerBandId(depth, depth + 1, new LayoutRevision(1)),
+            depth => new InterLayerId(depth, depth + 1, new LayoutRevision(1)),
             depth => new AxisInterval(depth * 100 + 60, depth * 100 + 120));
-        return new AdjacentDownwardRouteContext(route, source, target, new LayoutRevision(1), new RouteRevision(0),
-            Array.Empty<BandRouteMembership>(), Array.Empty<BandRouteDemand>(), ranges,
+        return new AdjacentDownwardLinkContext(route, source, target, new LayoutRevision(1), new RouteRevision(0),
+            Array.Empty<InterLayerLinkMembership>(), Array.Empty<InterLayerLinkDemand>(), ranges,
             EmptyCorridors(), EmptyLanes(), null, false);
     }
 

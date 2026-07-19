@@ -76,19 +76,19 @@ internal static class CorridorObserver
                 },
                 StringComparer.Ordinal);
         var junctions = BuildJunctions(corridors.Values);
-        var transitions = BuildTerminalTransitions(nodes, links, mappings, corridors, laneSpacing);
+        var transitions = BuildLinkConnectionTransitions(nodes, links, mappings, corridors, laneSpacing);
 
         return new CorridorObservation(corridors, junctions, mappings, usage, transitions);
     }
 
-    private static IReadOnlyList<TerminalTransition> BuildTerminalTransitions(
+    private static IReadOnlyList<LinkConnectionTransition> BuildLinkConnectionTransitions(
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, LinkLayout> links,
         IReadOnlyList<CorridorSegmentMapping> mappings,
         IReadOnlyDictionary<string, RoutingCorridor> corridors,
         int laneSpacing)
     {
-        var result = new List<TerminalTransition>();
+        var result = new List<LinkConnectionTransition>();
         Add(FanoutDirection.Source);
         Add(FanoutDirection.Target);
         return result.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
@@ -128,7 +128,7 @@ internal static class CorridorObserver
                                 corridors[mapping.CorridorId].Role == CorridorRole.Ordinary)
                             .OrderBy(mapping => direction == FanoutDirection.Source ? mapping.SegmentIndex : -mapping.SegmentIndex)
                             .FirstOrDefault();
-                        result.Add(new TerminalTransition(
+                        result.Add(new LinkConnectionTransition(
                             $"terminal:{direction}:{group.Key}:{side.Key}:{index}",
                             link.Link.Id,
                             link.RouteState.Revision,

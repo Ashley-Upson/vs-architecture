@@ -37,7 +37,7 @@ internal sealed partial class RenderLayout
             int capacityFailureCount = 0,
             int capacityExpansionCount = 0,
             LayoutRevision layoutRevision = default,
-            GroupedVerticalBandPlan? groupedSpacingPlan = null,
+            InterLayerSpacingConstraintPlan? groupedSpacingPlan = null,
             int groupedSpacingIterations = 0)
         {
             Graph = graph;
@@ -110,7 +110,7 @@ internal sealed partial class RenderLayout
 
         public LayoutRevision LayoutRevision { get; }
 
-        public GroupedVerticalBandPlan? GroupedSpacingPlan { get; }
+        public InterLayerSpacingConstraintPlan? GroupedSpacingPlan { get; }
 
         public int GroupedSpacingIterations { get; }
 
@@ -563,7 +563,7 @@ internal sealed partial class RenderLayout
                     : Enumerable.Empty<CorridorPathCandidate>()).ToArray();
                 var compatibleCandidates = nodeSafeLocalCandidates
                     .Concat(exteriorCandidates)
-                    .Where(candidate => PreservesTerminalFanoutGeometry(acceptedCandidate, candidate))
+                    .Where(candidate => PreservesLinkConnectionFanoutGeometry(acceptedCandidate, candidate))
                     .ToArray();
                 var alternatives = compatibleCandidates
                     .Append(acceptedCandidate)
@@ -616,7 +616,7 @@ internal sealed partial class RenderLayout
             bool isAcceptedPath,
             string? exposureRootId = null,
             string? exposureBranchId = null,
-            IReadOnlyList<TerminalFanoutMembership>? fanoutMemberships = null)
+            IReadOnlyList<LinkConnectionFanoutMembership>? fanoutMemberships = null)
         {
             var complete = new[] { source }.Concat(route).Concat(new[] { target }).ToArray();
             var length = Segments(complete).Sum(segment => segment.Length);
@@ -680,14 +680,14 @@ internal sealed partial class RenderLayout
                 });
         }
 
-        private static IReadOnlyList<TerminalFanoutMembership> FanoutMemberships(
+        private static IReadOnlyList<LinkConnectionFanoutMembership> FanoutMemberships(
             RenderGraph graph,
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, LinkLayout> layouts,
             RenderLink link)
         {
             using var timing = PerformanceAudit.Measure("fan-out processing");
-            var memberships = new List<TerminalFanoutMembership>();
+            var memberships = new List<LinkConnectionFanoutMembership>();
             Add(graph.Links.Where(item => item.SourceId == link.SourceId).ToArray(), FanoutDirection.Source, link.SourceId, true);
             Add(graph.Links.Where(item => item.TargetId == link.TargetId).ToArray(), FanoutDirection.Target, link.TargetId, false);
             return memberships;
@@ -707,7 +707,7 @@ internal sealed partial class RenderLayout
                 var remoteOrder = Array.FindIndex(orderedRemote, item => item.Id == link.Id);
                 var sharedX = nodes[sharedNodeId].Rect.CenterX;
                 var remoteX = source ? nodes[link.TargetId].Rect.CenterX : nodes[link.SourceId].Rect.CenterX;
-                memberships.Add(new TerminalFanoutMembership(
+                memberships.Add(new LinkConnectionFanoutMembership(
                     $"{direction.ToString().ToLowerInvariant()}:{sharedNodeId}",
                     direction,
                     sharedNodeId,
@@ -718,7 +718,7 @@ internal sealed partial class RenderLayout
             }
         }
 
-        private static bool PreservesTerminalFanoutGeometry(
+        private static bool PreservesLinkConnectionFanoutGeometry(
             CorridorPathCandidate accepted,
             CorridorPathCandidate candidate)
         {
@@ -727,7 +727,7 @@ internal sealed partial class RenderLayout
                 return true;
             }
 
-            return TerminalRouteCompatibility.Preserves(accepted, candidate);
+            return LinkConnectionPathCompatibility.Preserves(accepted, candidate);
         }
 
         private static (string? RootId, string? BranchId) ExposureScope(string edgeId, bool exposureTree)
@@ -1274,13 +1274,13 @@ internal sealed partial class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes,
             bool sourcePort)
         {
-            var side = sourcePort ? TerminalAttachmentSide.OutgoingBottom : TerminalAttachmentSide.IncomingTop;
+            var side = sourcePort ? LinkConnectionSide.OutgoingBottom : LinkConnectionSide.IncomingTop;
             var node = nodes[sourcePort ? link.SourceId : link.TargetId].Rect;
-            var requests = group.Select(item => new TerminalAttachmentRequest(
+            var requests = group.Select(item => new LinkConnectionRequest(
                 item.Id,
                 sourcePort ? nodes[item.TargetId].Rect.CenterX : nodes[item.SourceId].Rect.CenterX,
                 side));
-            var attachments = TerminalDemandCalculator.Allocate(
+            var attachments = LinkConnectionDemandCalculator.Allocate(
                 node, requests, totalHorizontalPadding, spacing);
             return attachments.Single(item => item.RouteId == link.Id).AxisCoordinate - node.CenterX;
         }

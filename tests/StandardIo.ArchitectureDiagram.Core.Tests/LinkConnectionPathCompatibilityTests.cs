@@ -3,7 +3,7 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class TerminalRouteCompatibilityTests
+public sealed class LinkConnectionPathCompatibilityTests
 {
     [Fact]
     public void Preserves_terminal_and_stub_but_allows_first_avoidance_bend_to_move()
@@ -27,7 +27,7 @@ public sealed class TerminalRouteCompatibilityTests
             new Point(300, 200)
         });
 
-        Assert.True(TerminalRouteCompatibility.Preserves(accepted, alternative));
+        Assert.True(LinkConnectionPathCompatibility.Preserves(accepted, alternative));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class TerminalRouteCompatibilityTests
             new Point(300, 200)
         });
 
-        Assert.False(TerminalRouteCompatibility.Preserves(accepted, alternative));
+        Assert.False(LinkConnectionPathCompatibility.Preserves(accepted, alternative));
     }
 
     private static CorridorPathCandidate Candidate(IReadOnlyList<Point> points) =>
@@ -61,7 +61,7 @@ public sealed class TerminalRouteCompatibilityTests
             points,
             FanoutMemberships: new[]
             {
-                new TerminalFanoutMembership(
+                new LinkConnectionFanoutMembership(
                     "group",
                     FanoutDirection.Source,
                     "source",

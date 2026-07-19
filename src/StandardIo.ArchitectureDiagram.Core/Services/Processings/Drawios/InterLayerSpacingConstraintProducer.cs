@@ -5,21 +5,21 @@ using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal sealed record GroupedVerticalBandPlan(
-    IReadOnlyList<BandConflictGroup> Groups,
+internal sealed record InterLayerSpacingConstraintPlan(
+    IReadOnlyList<InterLayerConflictComponent> Groups,
     IReadOnlyList<MinimumSpacingConstraint> Constraints,
     IReadOnlyList<string> InvalidatedRoutes,
     GroupedSpacingTelemetry Telemetry);
 
-internal sealed record GroupedVerticalBandResult(
+internal sealed record InterLayerSpacingConstraintResult(
     PlacedGraph Placement,
     GeneratedLogicalRoutes Routes,
-    GroupedVerticalBandPlan Plan,
+    InterLayerSpacingConstraintPlan Plan,
     int Iterations);
 
-internal static class GroupedVerticalBandPlanner
+internal static class InterLayerSpacingConstraintProducer
 {
-    public static bool Supports(PlacedGraph placement, GeneratedLogicalRoutes routes, InterLayerBandReport report)
+    public static bool Supports(PlacedGraph placement, GeneratedLogicalRoutes routes, InterLayerReport report)
     {
         routes.EnsureCompatible(placement);
         if (report.Telemetry.UnsupportedShapeCount > 0 ||
@@ -33,22 +33,22 @@ internal static class GroupedVerticalBandPlanner
                 .Count(item => item.LogicalEdgeIdentity == link.Link.Id) == 1);
     }
 
-    public static GroupedVerticalBandPlan Plan(
+    public static InterLayerSpacingConstraintPlan Plan(
         PlacedGraph placement,
         GeneratedLogicalRoutes routes,
-        InterLayerBandReport report,
+        InterLayerReport report,
         DiagramSettings settings)
     {
         if (!Supports(placement, routes, report))
             throw new InvalidOperationException("Grouped vertical bands support only orthogonal adjacent-layer downward routes.");
-        var groups = new List<BandConflictGroup>();
+        var groups = new List<InterLayerConflictComponent>();
         var constraints = new MonotonicSpacingConstraintStore();
         long comparisons = 0;
         var proposals = 0;
         var increased = 0;
         foreach (var band in report.Bands.OrderBy(item => item.Id.UpperLayer))
         {
-            var bandGroups = BandConflictGrouper.Group(
+            var bandGroups = InterLayerConflictGrouper.Group(
                 band, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding, out var bandComparisons);
             comparisons += bandComparisons;
             groups.AddRange(bandGroups);
@@ -64,16 +64,16 @@ internal static class GroupedVerticalBandPlanner
         var invalidated = groups.SelectMany(group => group.Demands)
             .Select(item => item.LogicalEdgeIdentity).Distinct(StringComparer.Ordinal)
             .OrderBy(item => item, StringComparer.Ordinal).ToArray();
-        return new GroupedVerticalBandPlan(groups.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+        return new InterLayerSpacingConstraintPlan(groups.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
             constraints.Snapshot(), invalidated,
             new GroupedSpacingTelemetry(groups.Count,
                 groups.Sum(group => Math.Max(0, group.Demands.Count - 1)), proposals, increased, comparisons));
     }
 
-    public static GroupedVerticalBandResult Apply(
+    public static InterLayerSpacingConstraintResult Apply(
         PlacedGraph placement,
         GeneratedLogicalRoutes routes,
-        InterLayerBandReport report,
+        InterLayerReport report,
         DiagramSettings settings)
     {
         var plan = Plan(placement, routes, report, settings);
@@ -119,7 +119,7 @@ internal static class GroupedVerticalBandPlanner
             return new LinkLayout(old.Link, sourcePoint, targetPoint, points,
                 old.ExitX, old.EntryX, old.ExitY, old.EntryY);
         }, StringComparer.Ordinal);
-        return new GroupedVerticalBandResult(revised,
+        return new InterLayerSpacingConstraintResult(revised,
             new GeneratedLogicalRoutes(revised, regenerated, routes.Revision.Next()), plan,
             deltaByLowerLayer.Values.Any(value => value > 0) ? 1 : 0);
     }

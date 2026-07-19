@@ -20,8 +20,8 @@ internal sealed partial class RenderLayout
             var provisionalLinks = positionedLinks.Links;
             var initialGenerated = new GeneratedLogicalRoutes(
                 placement, provisionalLinks, new RouteRevision(0));
-            var initialBands = InterLayerBandObserver.Observe(placement, initialGenerated, settings);
-            if (GroupedVerticalBandPlanner.Supports(placement, initialGenerated, initialBands))
+            var initialBands = InterLayerDemandDiscovery.Observe(placement, initialGenerated, settings);
+            if (InterLayerSpacingConstraintProducer.Supports(placement, initialGenerated, initialBands))
             {
                 return RunGroupedVerticalBands(
                     placement, initialGenerated, initialBands, settings, timings);
@@ -133,28 +133,28 @@ internal sealed partial class RenderLayout
         private static LegacyRoutingResult RunGroupedVerticalBands(
             PlacedGraph placement,
             GeneratedLogicalRoutes routes,
-            InterLayerBandReport bands,
+            InterLayerReport bands,
             DiagramSettings settings,
             ICollection<PipelineStageMetric> timings)
         {
-            GroupedVerticalBandResult? grouped = null;
+            InterLayerSpacingConstraintResult? grouped = null;
             var iterations = 0;
             while (bands.Bands.Any(band => band.MissingExtent > 0))
             {
                 if (iterations++ >= 16)
                     throw new InvalidOperationException("Grouped vertical-band constraints did not converge after 16 iterations.");
                 grouped = MeasureStage(timings, "grouped band materialization and regeneration", () =>
-                    GroupedVerticalBandPlanner.Apply(placement, routes, bands, settings));
+                    InterLayerSpacingConstraintProducer.Apply(placement, routes, bands, settings));
                 placement = grouped.Placement;
                 routes = grouped.Routes;
-                bands = InterLayerBandObserver.Observe(placement, routes, settings);
+                bands = InterLayerDemandDiscovery.Observe(placement, routes, settings);
             }
 
             if (grouped is null)
             {
-                grouped = new GroupedVerticalBandResult(
+                grouped = new InterLayerSpacingConstraintResult(
                     placement, routes,
-                    GroupedVerticalBandPlanner.Plan(placement, routes, bands, settings), 0);
+                    InterLayerSpacingConstraintProducer.Plan(placement, routes, bands, settings), 0);
             }
             var normalizedLinks = MeasureStage(timings, "normalization", () =>
                 LogicalRouteNormalizer.Normalize(placement.Nodes, routes.Links, settings.Layout.LinkPadding));
@@ -256,6 +256,6 @@ internal sealed partial class RenderLayout
         int CorridorRebuildCount,
         int CapacityFailureCount,
         int CapacityExpansionCount,
-        GroupedVerticalBandPlan? GroupedSpacingPlan = null,
+        InterLayerSpacingConstraintPlan? GroupedSpacingPlan = null,
         int GroupedSpacingIterations = 0);
 }

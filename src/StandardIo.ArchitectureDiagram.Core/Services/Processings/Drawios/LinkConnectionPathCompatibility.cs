@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class TerminalRouteCompatibility
+internal static class LinkConnectionPathCompatibility
 {
     private const int ProtectedPointCount = 2;
 

@@ -5,9 +5,9 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class AdjacentDownwardCommonRailObserver
+internal static class AdjacentDownwardCommonAuthorityObserver
 {
-    public static CommonRailParityReport Observe(AdjacentDownwardObservationReport source, int separation, int padding)
+    public static CommonAuthorityParityReport Observe(AdjacentDownwardObservationReport source, int separation, int padding)
     {
         var eligible = source.Routes.Where(item => item.Eligible).OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal).ToArray();
         var through = eligible.Select(item => item.Demands.Single(demand => demand.Role == LinkSegmentRole.Through)).ToArray();
@@ -17,7 +17,7 @@ internal static class AdjacentDownwardCommonRailObserver
             var sample = group.First();
             var region = new LinkSegmentAllocationRegionIdentity(sample.Orientation, sample.AllowedAxisRange,
                 group.Key, sample.MovementScope, sample.PlacementRevision);
-            return new CommonRailRegionObservation(region,
+            return new CommonAuthorityRegionObservation(region,
                 DeterministicSlotAllocator.Assign(region, group, new LinkSegmentAssignmentOptions(separation, padding)), null);
         }).ToArray();
         assignmentTimer.Stop();
@@ -46,9 +46,9 @@ internal static class AdjacentDownwardCommonRailObserver
         {
             var demand = route.Demands.Single(item => item.Role == LinkSegmentRole.Through);
             if (!byDemand.TryGetValue(demand.Id, out var common))
-                return new CommonRailRouteComparison(route.LogicalRouteId, null,
-                    new Dictionary<ExistingLaneMappingSource, CommonAssignmentParity>(), Array.Empty<Point>(),
-                    CommonRouteReconstructionParity.UnableToReconstruct, new[] { "Common through rail was not assigned." });
+                return new CommonAuthorityLinkPathComparison(route.LogicalRouteId, null,
+                    new Dictionary<ExistingSegmentMappingSource, CommonAssignmentParity>(), Array.Empty<Point>(),
+                    CommonLinkPathReconstructionParity.UnableToReconstruct, new[] { "Common through rail was not assigned." });
             var reconstructionStarted = Stopwatch.GetTimestamp();
             var existingDeparture = route.SelectedAssignedLinkSegments.Single(item => item.Role == LinkSegmentRole.ConnectionDeparture);
             var existingArrival = route.SelectedAssignedLinkSegments.Single(item => item.Role == LinkSegmentRole.ConnectionArrival);
@@ -73,28 +73,28 @@ internal static class AdjacentDownwardCommonRailObserver
                     common.PlacementRevision, common.RouteRevision)
             };
             var assigned = new[] { departure, common, arrival };
-            var reconstructed = AdjacentDownwardLinkSegmentDemandObserver.Reconstruct(
+            var reconstructed = AdjacentDownwardLinkDemandDiscovery.Reconstruct(
                 route.CanonicalAuthoritativePoints[0],
                 route.CanonicalAuthoritativePoints[route.CanonicalAuthoritativePoints.Count - 1], assigned, transitions);
             reconstructionTicks += Stopwatch.GetTimestamp() - reconstructionStarted;
             var parityStarted = Stopwatch.GetTimestamp();
             var routeParity = reconstructed.Count == 0
-                ? CommonRouteReconstructionParity.UnableToReconstruct
+                ? CommonLinkPathReconstructionParity.UnableToReconstruct
                 : reconstructed.Zip(reconstructed.Skip(1), (a, b) => new Segment(a, b)).Any(item => !item.IsOrthogonal)
-                    ? CommonRouteReconstructionParity.HardInvariantRegression
+                    ? CommonLinkPathReconstructionParity.HardInvariantRegression
                     : reconstructed.SequenceEqual(route.CanonicalAuthoritativePoints)
-                        ? CommonRouteReconstructionParity.ExactGeometry
-                        : CommonRouteReconstructionParity.ValidDifferentGeometry;
-            var existingParity = route.ExistingLaneMappings.GroupBy(item => item.Source).ToDictionary(
+                        ? CommonLinkPathReconstructionParity.ExactGeometry
+                        : CommonLinkPathReconstructionParity.ValidDifferentGeometry;
+            var existingParity = route.ExistingSegmentMappings.GroupBy(item => item.Source).ToDictionary(
                 item => item.Key,
                 item => Compare(common, item.First().Rail));
             parityTicks += Stopwatch.GetTimestamp() - parityStarted;
-            return new CommonRailRouteComparison(route.LogicalRouteId, common, existingParity, reconstructed, routeParity,
-                routeParity is CommonRouteReconstructionParity.ExactGeometry
+            return new CommonAuthorityLinkPathComparison(route.LogicalRouteId, common, existingParity, reconstructed, routeParity,
+                routeParity is CommonLinkPathReconstructionParity.ExactGeometry
                     ? Array.Empty<string>()
                     : new[] { "Common assignment changes the observational through-rail coordinate or lane ordering." });
         }).ToArray();
-        return new CommonRailParityReport(regions, routes, Microseconds(assignmentTimer),
+        return new CommonAuthorityParityReport(regions, routes, Microseconds(assignmentTimer),
             Microseconds(constraintTimer), Microseconds(reconstructionTicks), Microseconds(parityTicks));
     }
 

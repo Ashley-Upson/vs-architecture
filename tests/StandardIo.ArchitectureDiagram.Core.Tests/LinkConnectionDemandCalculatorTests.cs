@@ -4,7 +4,7 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class TerminalDemandCalculatorTests
+public sealed class LinkConnectionDemandCalculatorTests
 {
     [Fact]
     public void Retains_a_larger_current_width()
@@ -48,12 +48,12 @@ public sealed class TerminalDemandCalculatorTests
         var node = new Rect(100, 20, 92, 80);
         var requests = new[]
         {
-            new TerminalAttachmentRequest("c", 300, TerminalAttachmentSide.OutgoingBottom),
-            new TerminalAttachmentRequest("a", 100, TerminalAttachmentSide.OutgoingBottom),
-            new TerminalAttachmentRequest("b", 200, TerminalAttachmentSide.OutgoingBottom)
+            new LinkConnectionRequest("c", 300, LinkConnectionSide.OutgoingBottom),
+            new LinkConnectionRequest("a", 100, LinkConnectionSide.OutgoingBottom),
+            new LinkConnectionRequest("b", 200, LinkConnectionSide.OutgoingBottom)
         };
 
-        var result = TerminalDemandCalculator.Allocate(node, requests.AsEnumerable().Reverse(), 20, 24);
+        var result = LinkConnectionDemandCalculator.Allocate(node, requests.AsEnumerable().Reverse(), 20, 24);
 
         Assert.Equal(new[] { "a", "b", "c" }, result.Select(item => item.RouteId));
         Assert.Equal(new[] { 122, 146, 170 }, result.Select(item => item.AxisCoordinate));
@@ -66,19 +66,19 @@ public sealed class TerminalDemandCalculatorTests
         var node = new Rect(0, 0, 92, 80);
         var requests = new[]
         {
-            new TerminalAttachmentRequest("in-a", 0, TerminalAttachmentSide.IncomingTop),
-            new TerminalAttachmentRequest("in-b", 1, TerminalAttachmentSide.IncomingTop),
-            new TerminalAttachmentRequest("out-a", 0, TerminalAttachmentSide.OutgoingBottom),
-            new TerminalAttachmentRequest("out-b", 1, TerminalAttachmentSide.OutgoingBottom)
+            new LinkConnectionRequest("in-a", 0, LinkConnectionSide.IncomingTop),
+            new LinkConnectionRequest("in-b", 1, LinkConnectionSide.IncomingTop),
+            new LinkConnectionRequest("out-a", 0, LinkConnectionSide.OutgoingBottom),
+            new LinkConnectionRequest("out-b", 1, LinkConnectionSide.OutgoingBottom)
         };
 
-        var result = TerminalDemandCalculator.Allocate(node, requests, 20, 24);
+        var result = LinkConnectionDemandCalculator.Allocate(node, requests, 20, 24);
 
         Assert.Equal(
-            result.Where(item => item.Side == TerminalAttachmentSide.IncomingTop).Select(item => item.AxisCoordinate),
-            result.Where(item => item.Side == TerminalAttachmentSide.OutgoingBottom).Select(item => item.AxisCoordinate));
+            result.Where(item => item.Side == LinkConnectionSide.IncomingTop).Select(item => item.AxisCoordinate),
+            result.Where(item => item.Side == LinkConnectionSide.OutgoingBottom).Select(item => item.AxisCoordinate));
     }
 
-    private static TerminalNodeDemand Measure(int current, int text, int incoming, int outgoing) =>
-        TerminalDemandCalculator.Measure("node", current, text, incoming, outgoing, 24, 20);
+    private static NodeConnectionDemand Measure(int current, int text, int incoming, int outgoing) =>
+        LinkConnectionDemandCalculator.Measure("node", current, text, incoming, outgoing, 24, 20);
 }

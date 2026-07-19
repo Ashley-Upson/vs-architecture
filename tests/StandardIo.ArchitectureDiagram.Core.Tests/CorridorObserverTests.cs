@@ -121,7 +121,7 @@ public sealed class CorridorObserverTests
         };
 
         var observation = CorridorObserver.Observe(nodes, links, 12, 4);
-        var sourceTransitions = observation.TerminalTransitions!
+        var sourceTransitions = observation.LinkConnectionTransitions!
             .Where(item => item.Direction == FanoutDirection.Source)
             .OrderBy(item => item.LaneOrder)
             .ToArray();

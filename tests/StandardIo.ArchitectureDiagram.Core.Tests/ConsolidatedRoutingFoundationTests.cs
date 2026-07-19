@@ -12,12 +12,12 @@ public sealed class ConsolidatedRoutingFoundationTests
     {
         var claims = new[]
         {
-            new TerminalAttachmentClaim("incoming", "node", TerminalAttachmentSide.IncomingTop, "top"),
-            new TerminalAttachmentClaim("outgoing", "node", TerminalAttachmentSide.OutgoingBottom, "bottom")
+            new LinkConnectionClaim("incoming", "node", LinkConnectionSide.IncomingTop, "top"),
+            new LinkConnectionClaim("outgoing", "node", LinkConnectionSide.OutgoingBottom, "bottom")
         };
 
         var components = ConflictComponentBuilder.Build(
-            new[] { "incoming", "outgoing" }, id => id, TerminalInteractionEdges.BeforeAllocation(claims));
+            new[] { "incoming", "outgoing" }, id => id, LinkConnectionInteractions.BeforeAllocation(claims));
 
         Assert.Equal(2, components.Count);
     }
@@ -27,8 +27,8 @@ public sealed class ConsolidatedRoutingFoundationTests
     {
         var unresolved = new[]
         {
-            new TerminalAttachmentClaim("a", "node", TerminalAttachmentSide.OutgoingBottom, "bottom"),
-            new TerminalAttachmentClaim("b", "node", TerminalAttachmentSide.OutgoingBottom, "bottom")
+            new LinkConnectionClaim("a", "node", LinkConnectionSide.OutgoingBottom, "bottom"),
+            new LinkConnectionClaim("b", "node", LinkConnectionSide.OutgoingBottom, "bottom")
         };
         var resolved = new[]
         {
@@ -37,9 +37,9 @@ public sealed class ConsolidatedRoutingFoundationTests
         };
 
         Assert.Single(ConflictComponentBuilder.Build(
-            new[] { "a", "b" }, id => id, TerminalInteractionEdges.BeforeAllocation(unresolved)));
+            new[] { "a", "b" }, id => id, LinkConnectionInteractions.BeforeAllocation(unresolved)));
         Assert.Equal(2, ConflictComponentBuilder.Build(
-            new[] { "a", "b" }, id => id, TerminalInteractionEdges.AfterAllocation(resolved)).Count);
+            new[] { "a", "b" }, id => id, LinkConnectionInteractions.AfterAllocation(resolved)).Count);
     }
 
     [Fact]

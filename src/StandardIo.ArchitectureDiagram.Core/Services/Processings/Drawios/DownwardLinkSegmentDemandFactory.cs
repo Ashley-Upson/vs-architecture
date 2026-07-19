@@ -7,8 +7,8 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 internal static class DownwardLinkSegmentDemandFactory
 {
     public static (IReadOnlyList<LinkSegmentDemand> Demands, IReadOnlyList<int> TransitionXs) Create(
-        AdjacentDownwardRouteContext context,
-        IReadOnlyList<InterLayerBandId> crossedBands)
+        AdjacentDownwardLinkContext context,
+        IReadOnlyList<InterLayerId> crossedBands)
     {
         if (crossedBands.Count == 0) return (Array.Empty<LinkSegmentDemand>(), Array.Empty<int>());
         var sourceX = context.Route.SourcePoint.X;

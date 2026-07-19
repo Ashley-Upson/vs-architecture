@@ -2,17 +2,17 @@ using System.Collections.Generic;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal sealed record GeneralDownwardRoutePlan(
-    AdjacentDownwardRouteObservation Observation,
+internal sealed record GeneralDownwardLinkPlan(
+    AdjacentDownwardLinkObservation Observation,
     IReadOnlyList<int> TransitionXCoordinates,
     string SourceNodeId,
     string TargetNodeId);
 
 internal sealed record GeneralDownwardObservationReport(
-    IReadOnlyList<GeneralDownwardRoutePlan> Routes,
+    IReadOnlyList<GeneralDownwardLinkPlan> Routes,
     long DemandProductionMicroseconds);
 
-internal sealed record GeneralDownwardRouteAssignment(
+internal sealed record GeneralDownwardLinkAssignment(
     string LogicalRouteId,
     IReadOnlyList<AssignedLinkSegment> AssignedLinkSegments,
     IReadOnlyList<LinkTransition> Transitions,
@@ -21,7 +21,7 @@ internal sealed record GeneralDownwardRouteAssignment(
     bool IsValid);
 
 internal sealed record GeneralDownwardAssignmentReport(
-    IReadOnlyList<CommonRailRegionObservation> Regions,
-    IReadOnlyList<GeneralDownwardRouteAssignment> Routes,
+    IReadOnlyList<CommonAuthorityRegionObservation> Regions,
+    IReadOnlyList<GeneralDownwardLinkAssignment> Routes,
     long AssignmentMicroseconds,
     long TransitionMicroseconds);

@@ -7,35 +7,35 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class GeneralDownwardLinkSegmentDemandProducer
 {
-    public static GeneralDownwardObservationReport Observe(IEnumerable<AdjacentDownwardRouteContext> source)
+    public static GeneralDownwardObservationReport Observe(IEnumerable<AdjacentDownwardLinkContext> source)
     {
         var timer = Stopwatch.StartNew();
         var routes = source.OrderBy(item => item.Route.Link.Id, StringComparer.Ordinal).Select(context =>
         {
-            var canonical = AdjacentDownwardLinkSegmentDemandObserver.Normalize(
+            var canonical = AdjacentDownwardLinkDemandDiscovery.Normalize(
                 new[] { context.Route.SourcePoint }.Concat(context.Route.Points).Concat(new[] { context.Route.TargetPoint }));
             var rejection = Rejection(context);
             if (rejection is not null)
-                return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
-                    context.Route.Link.Id, false, rejection, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingLaneMapping>(),
+                return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
+                    context.Route.Link.Id, false, rejection, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingSegmentMapping>(),
                     Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
-                    ObservationalRouteParity.UnableToMap, canonical, new[] { rejection.Value.ToString() }), Array.Empty<int>(),
+                    ObservationalLinkPathParity.UnableToMap, canonical, new[] { rejection.Value.ToString() }), Array.Empty<int>(),
                     context.Route.Link.SourceId, context.Route.Link.TargetId);
             var crossed = context.BandAxisRanges.Keys.Where(id =>
                     id.UpperLayer >= context.Source.Depth && id.LowerLayer <= context.Target.Depth)
                 .OrderBy(id => id.UpperLayer).ThenBy(id => id.LowerLayer).ToArray();
             if (crossed.Length != context.Target.Depth - context.Source.Depth)
-                return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
-                    context.Route.Link.Id, false, AdjacentDownwardRejectionReason.MultipleBand,
-                    Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingLaneMapping>(), Array.Empty<AssignedLinkSegment>(),
-                    Array.Empty<LinkTransition>(), Array.Empty<Point>(), ObservationalRouteParity.UnableToMap,
+                return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
+                    context.Route.Link.Id, false, AdjacentDownwardRejectionReason.MultipleInterLayer,
+                    Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingSegmentMapping>(), Array.Empty<AssignedLinkSegment>(),
+                    Array.Empty<LinkTransition>(), Array.Empty<Point>(), ObservationalLinkPathParity.UnableToMap,
                     canonical, new[] { "A semantic crossed band is unavailable in the current placement revision." }), Array.Empty<int>(),
                     context.Route.Link.SourceId, context.Route.Link.TargetId);
             var produced = DownwardLinkSegmentDemandFactory.Create(context, crossed);
-            return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
-                context.Route.Link.Id, true, null, produced.Demands, Array.Empty<ExistingLaneMapping>(),
+            return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
+                context.Route.Link.Id, true, null, produced.Demands, Array.Empty<ExistingSegmentMapping>(),
                 Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
-                ObservationalRouteParity.UnableToMap, canonical, Array.Empty<string>()), produced.TransitionXs,
+                ObservationalLinkPathParity.UnableToMap, canonical, Array.Empty<string>()), produced.TransitionXs,
                 context.Route.Link.SourceId, context.Route.Link.TargetId);
         }).ToArray();
         timer.Stop();
@@ -43,7 +43,7 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
             timer.ElapsedTicks * 1_000_000 / Stopwatch.Frequency);
     }
 
-    private static AdjacentDownwardRejectionReason? Rejection(AdjacentDownwardRouteContext context)
+    private static AdjacentDownwardRejectionReason? Rejection(AdjacentDownwardLinkContext context)
     {
         if (context.ExposureTreeSpecific) return AdjacentDownwardRejectionReason.ExposureTreeSpecific;
         if (context.Target.Depth <= context.Source.Depth)
@@ -53,7 +53,7 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
             return AdjacentDownwardRejectionReason.CrossProject;
         if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom || context.Route.TargetPoint.Y != context.Target.Rect.Y)
-            return AdjacentDownwardRejectionReason.UnsupportedTerminalTopology;
+            return AdjacentDownwardRejectionReason.UnsupportedConnectionTopology;
         if (context.LayoutRevision != context.BandAxisRanges.Keys.Select(item => item.LayoutRevision)
                 .DefaultIfEmpty(context.LayoutRevision).First())
             return AdjacentDownwardRejectionReason.RevisionMismatch;

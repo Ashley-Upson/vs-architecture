@@ -19,7 +19,7 @@ internal sealed record CorridorPathCandidate(
     bool IsAcceptedPath = false,
     string? ExposureRootId = null,
     string? ExposureBranchId = null,
-    IReadOnlyList<TerminalFanoutMembership>? FanoutMemberships = null);
+    IReadOnlyList<LinkConnectionFanoutMembership>? FanoutMemberships = null);
 
 internal sealed record GlobalRouteScore(
     int InvalidGeometry,
@@ -30,7 +30,7 @@ internal sealed record GlobalRouteScore(
     int CrossingsAndCongestion,
     int RouteEnvelopeExpansion,
     int PathEconomy,
-    int TerminalFanoutViolations = 0) : IComparable<GlobalRouteScore>
+    int LinkConnectionFanoutViolations = 0) : IComparable<GlobalRouteScore>
 {
     public int CompareTo(GlobalRouteScore? other)
     {
@@ -39,10 +39,10 @@ internal sealed record GlobalRouteScore(
             return -1;
         }
 
-        var left = new[] { InvalidGeometry, SharedSegmentLength, SpacingDeficit, TerminalFanoutViolations, AmbiguousTransitions,
+        var left = new[] { InvalidGeometry, SharedSegmentLength, SpacingDeficit, LinkConnectionFanoutViolations, AmbiguousTransitions,
             CapacityFailure, VisualCost(CrossingsAndCongestion, RouteEnvelopeExpansion, PathEconomy),
             CrossingsAndCongestion, RouteEnvelopeExpansion, PathEconomy };
-        var right = new[] { other.InvalidGeometry, other.SharedSegmentLength, other.SpacingDeficit, other.TerminalFanoutViolations,
+        var right = new[] { other.InvalidGeometry, other.SharedSegmentLength, other.SpacingDeficit, other.LinkConnectionFanoutViolations,
             other.AmbiguousTransitions, other.CapacityFailure,
             VisualCost(other.CrossingsAndCongestion, other.RouteEnvelopeExpansion, other.PathEconomy),
             other.CrossingsAndCongestion, other.RouteEnvelopeExpansion, other.PathEconomy };

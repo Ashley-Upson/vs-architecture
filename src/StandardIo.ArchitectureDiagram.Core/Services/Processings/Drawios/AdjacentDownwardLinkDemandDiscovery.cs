@@ -5,15 +5,15 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class AdjacentDownwardLinkSegmentDemandObserver
+internal static class AdjacentDownwardLinkDemandDiscovery
 {
-    public static AdjacentDownwardObservationReport Observe(IEnumerable<AdjacentDownwardRouteContext> contexts)
+    public static AdjacentDownwardObservationReport Observe(IEnumerable<AdjacentDownwardLinkContext> contexts)
     {
         var demandTicks = 0L;
         var adaptationTicks = 0L;
         var reconstructionTicks = 0L;
         var parityTicks = 0L;
-        var observations = new List<AdjacentDownwardRouteObservation>();
+        var observations = new List<AdjacentDownwardLinkObservation>();
         foreach (var context in contexts.OrderBy(item => item.Route.Link.Id, StringComparer.Ordinal))
         {
             var demandStarted = Stopwatch.GetTimestamp();
@@ -48,17 +48,17 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
 
             var parityStarted = Stopwatch.GetTimestamp();
             var parity = reconstructed.Count == 0
-                ? ObservationalRouteParity.UnableToMap
+                ? ObservationalLinkPathParity.UnableToMap
                 : reconstructed.SequenceEqual(authoritative)
-                    ? ObservationalRouteParity.ExactPointParity
+                    ? ObservationalLinkPathParity.ExactPointParity
                     : SameTopology(reconstructed, authoritative)
-                        ? ObservationalRouteParity.TopologyParityCoordinateDifference
-                        : ObservationalRouteParity.UnableToMap;
+                        ? ObservationalLinkPathParity.TopologyParityCoordinateDifference
+                        : ObservationalLinkPathParity.UnableToMap;
             parityTicks += Stopwatch.GetTimestamp() - parityStarted;
-            observations.Add(new AdjacentDownwardRouteObservation(
+            observations.Add(new AdjacentDownwardLinkObservation(
                 context.Route.Link.Id, true, null, demands, mappings, selected, transitions,
                 reconstructed, parity, authoritative,
-                parity == ObservationalRouteParity.ExactPointParity
+                parity == ObservationalLinkPathParity.ExactPointParity
                     ? Array.Empty<string>()
                     : new[] { "Common reconstruction does not exactly match the canonical authoritative route." }));
         }
@@ -72,7 +72,7 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
     }
 
     private static AdjacentDownwardRejectionReason? Rejection(
-        AdjacentDownwardRouteContext context,
+        AdjacentDownwardLinkContext context,
         out IReadOnlyList<Point> canonical)
     {
         canonical = Normalize(CompletePoints(context.Route));
@@ -90,7 +90,7 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
         if (!string.Equals(context.Source.Node.ProjectId, context.Target.Node.ProjectId, StringComparison.Ordinal))
             return AdjacentDownwardRejectionReason.CrossProject;
         if (context.BandMemberships.Select(item => item.BandId).Distinct().Count() != 1)
-            return AdjacentDownwardRejectionReason.MultipleBand;
+            return AdjacentDownwardRejectionReason.MultipleInterLayer;
         if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom ||
             context.Route.TargetPoint.Y != context.Target.Rect.Y ||
@@ -98,38 +98,38 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
             canonical[0].X != canonical[1].X ||
             canonical[1].Y != canonical[2].Y ||
             canonical[2].X != canonical[3].X)
-            return AdjacentDownwardRejectionReason.UnsupportedTerminalTopology;
+            return AdjacentDownwardRejectionReason.UnsupportedConnectionTopology;
         return null;
     }
 
     private static IReadOnlyList<LinkSegmentDemand> Demands(
-        AdjacentDownwardRouteContext context,
-        BandRouteMembership membership,
+        AdjacentDownwardLinkContext context,
+        InterLayerLinkMembership membership,
         IReadOnlyList<Point> points)
     {
         return DownwardLinkSegmentDemandFactory.Create(context, new[] { membership.BandId }).Demands;
     }
 
-    private static IReadOnlyList<ExistingLaneMapping> ExistingMappings(
-        AdjacentDownwardRouteContext context,
-        BandRouteMembership membership,
+    private static IReadOnlyList<ExistingSegmentMapping> ExistingMappings(
+        AdjacentDownwardLinkContext context,
+        InterLayerLinkMembership membership,
         Segment through,
         LinkSegmentDemand demand)
     {
-        var result = new List<ExistingLaneMapping>();
+        var result = new List<ExistingSegmentMapping>();
         foreach (var mapping in context.Corridors.SegmentMappings.Where(item =>
                      item.EdgeId == context.Route.Link.Id && item.Segment.IsHorizontal &&
                      item.Segment.OverlapLength(through) == through.Length))
         {
             if (!context.CorridorLanes.TryGetLane(mapping.CorridorId, context.Route.Link.Id, out var lane)) continue;
             var corridor = context.Corridors.Corridors[mapping.CorridorId];
-            result.Add(Mapping(ExistingLaneMappingSource.LegacyCorridor, demand, lane.LaneIndex, through.Start.Y,
+            result.Add(Mapping(ExistingSegmentMappingSource.LegacyCorridor, demand, lane.LaneIndex, through.Start.Y,
                 ("corridorId", corridor.Id), ("role", corridor.Role.ToString()),
                 ("regionKey", corridor.RegionKey), ("obstacleBoundaryKey", corridor.ObstacleBoundaryKey)));
         }
 
         foreach (var bandDemand in context.BandDemands.Where(item => item.BandId == membership.BandId))
-            result.Add(Mapping(ExistingLaneMappingSource.StageBHypothetical, demand, bandDemand.SlotIndex, through.Start.Y,
+            result.Add(Mapping(ExistingSegmentMappingSource.InterLayerObservation, demand, bandDemand.SlotIndex, through.Start.Y,
                 ("bandId", bandDemand.BandId.ToString()), ("direction", bandDemand.Direction.ToString()),
                 ("membershipRole", bandDemand.Role.ToString())));
 
@@ -137,7 +137,7 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
         {
             foreach (var group in context.GroupedPlan.Groups.Where(item => item.BandId == membership.BandId))
             foreach (var groupDemand in group.Demands.Where(item => item.LogicalEdgeIdentity == context.Route.Link.Id))
-                result.Add(Mapping(ExistingLaneMappingSource.StageCGrouped, demand,
+                result.Add(Mapping(ExistingSegmentMappingSource.InterLayerSpacingConstraint, demand,
                     group.AssignedLanes[groupDemand.Id], through.Start.Y,
                     ("groupId", group.Id), ("movementScope", group.MovementScope.ToString()),
                     ("currentExtent", group.CurrentExtent.ToString()), ("requiredExtent", group.RequiredExtent.ToString())));
@@ -147,8 +147,8 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
             .ThenBy(item => item.Rail.Id, StringComparer.Ordinal).ToArray();
     }
 
-    private static ExistingLaneMapping Mapping(
-        ExistingLaneMappingSource source,
+    private static ExistingSegmentMapping Mapping(
+        ExistingSegmentMappingSource source,
         LinkSegmentDemand demand,
         int laneIndex,
         int axis,
@@ -160,9 +160,9 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
             metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
 
     private static IReadOnlyList<AssignedLinkSegment> SelectAssignedLinkSegments(
-        AdjacentDownwardRouteContext context,
+        AdjacentDownwardLinkContext context,
         IReadOnlyList<LinkSegmentDemand> demands,
-        IReadOnlyList<ExistingLaneMapping> mappings,
+        IReadOnlyList<ExistingSegmentMapping> mappings,
         IReadOnlyList<Point> points)
     {
         var through = mappings.OrderBy(item => item.Source).Select(item => item.Rail).FirstOrDefault();
@@ -175,13 +175,13 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
         };
     }
 
-    private static AssignedLinkSegment AssignedTerminal(AdjacentDownwardRouteContext context, LinkSegmentDemand demand, int axis, int lane) =>
+    private static AssignedLinkSegment AssignedTerminal(AdjacentDownwardLinkContext context, LinkSegmentDemand demand, int axis, int lane) =>
         new($"{context.Route.Link.Id}:assigned:{demand.Role}", demand.Id, context.Route.Link.Id,
             demand.Orientation, axis, lane, demand.OccupiedInterval, demand.Role,
             context.LayoutRevision, context.RouteRevision);
 
     private static IReadOnlyList<LinkTransition> Transitions(
-        AdjacentDownwardRouteContext context,
+        AdjacentDownwardLinkContext context,
         IReadOnlyList<AssignedLinkSegment> rails,
         IReadOnlyList<Point> points)
     {
@@ -217,13 +217,13 @@ internal static class AdjacentDownwardLinkSegmentDemandObserver
         ? point.Y == rail.AxisCoordinate && rail.OccupiedInterval.ContainsClosed(point.X)
         : point.X == rail.AxisCoordinate && rail.OccupiedInterval.ContainsClosed(point.Y);
 
-    private static AdjacentDownwardRouteObservation Rejected(
+    private static AdjacentDownwardLinkObservation Rejected(
         string routeId,
         AdjacentDownwardRejectionReason reason,
         IReadOnlyList<Point> authoritative) =>
-        new(routeId, false, reason, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingLaneMapping>(),
+        new(routeId, false, reason, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingSegmentMapping>(),
             Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
-            ObservationalRouteParity.UnableToMap, authoritative, new[] { reason.ToString() });
+            ObservationalLinkPathParity.UnableToMap, authoritative, new[] { reason.ToString() });
 
     private static IReadOnlyList<Point> CompletePoints(LinkLayout route) =>
         new[] { route.SourcePoint }.Concat(route.Points).Concat(new[] { route.TargetPoint }).ToArray();

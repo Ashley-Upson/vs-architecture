@@ -27,9 +27,9 @@ internal static class DevelopmentCommonAuthorityTrial
         var placement = new PlacedGraph(production.Graph, production.Nodes, production.Projects, production.LayoutRevision);
         var routeRevision = new RouteRevision(production.Links.Values.Select(item => item.RouteState.Revision).DefaultIfEmpty(0).Max());
         var generated = new GeneratedLogicalRoutes(placement, production.Links, routeRevision);
-        var bands = InterLayerBandObserver.Observe(placement, generated, settings, production.Traceability);
+        var bands = InterLayerDemandDiscovery.Observe(placement, generated, settings, production.Traceability);
         var contexts = AdjacentDownwardContextFactory.Create(production, bands);
-        var adjacentObservation = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
+        var adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
         var generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts);
         phase["eligibility and rail-demand production"] = Elapsed(timer);
 

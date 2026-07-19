@@ -8,7 +8,7 @@ internal enum DownwardIntegrationFamily
     MultiBandDownward,
     SameLayer,
     UpwardOrReturn,
-    UnsupportedTerminalTopology,
+    UnsupportedConnectionTopology,
     NonOrthogonalRegeneration,
     CrossProject,
     ExposureTreeSpecific

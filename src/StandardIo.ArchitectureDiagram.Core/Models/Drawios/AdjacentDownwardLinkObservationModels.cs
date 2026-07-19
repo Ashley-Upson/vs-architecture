@@ -10,67 +10,67 @@ internal enum AdjacentDownwardRejectionReason
     CrossProject,
     ExposureTreeSpecific,
     NonOrthogonal,
-    MultipleBand,
-    UnsupportedTerminalTopology,
+    MultipleInterLayer,
+    UnsupportedConnectionTopology,
     RevisionMismatch
 }
 
-internal enum ExistingLaneMappingSource
+internal enum ExistingSegmentMappingSource
 {
     LegacyCorridor,
-    StageBHypothetical,
-    StageCGrouped
+    InterLayerObservation,
+    InterLayerSpacingConstraint
 }
 
-internal enum ObservationalRouteParity
+internal enum ObservationalLinkPathParity
 {
     ExactPointParity,
     TopologyParityCoordinateDifference,
     UnableToMap
 }
 
-internal sealed record AdjacentDownwardRouteContext(
+internal sealed record AdjacentDownwardLinkContext(
     LinkLayout Route,
     NodeLayout Source,
     NodeLayout Target,
     LayoutRevision LayoutRevision,
     RouteRevision RouteRevision,
-    IReadOnlyList<BandRouteMembership> BandMemberships,
-    IReadOnlyList<BandRouteDemand> BandDemands,
-    IReadOnlyDictionary<InterLayerBandId, AxisInterval> BandAxisRanges,
+    IReadOnlyList<InterLayerLinkMembership> BandMemberships,
+    IReadOnlyList<InterLayerLinkDemand> BandDemands,
+    IReadOnlyDictionary<InterLayerId, AxisInterval> BandAxisRanges,
     CorridorObservation Corridors,
     CorridorLaneAllocation CorridorLanes,
-    GroupedVerticalBandPlan? GroupedPlan,
+    InterLayerSpacingConstraintPlan? GroupedPlan,
     bool ExposureTreeSpecific);
 
-internal sealed record ExistingLaneMapping(
-    ExistingLaneMappingSource Source,
+internal sealed record ExistingSegmentMapping(
+    ExistingSegmentMappingSource Source,
     AssignedLinkSegment Rail,
     IReadOnlyDictionary<string, string> SpecializedMetadata);
 
-internal sealed record AdjacentDownwardRouteObservation(
+internal sealed record AdjacentDownwardLinkObservation(
     string LogicalRouteId,
     bool Eligible,
     AdjacentDownwardRejectionReason? RejectionReason,
     IReadOnlyList<LinkSegmentDemand> Demands,
-    IReadOnlyList<ExistingLaneMapping> ExistingLaneMappings,
+    IReadOnlyList<ExistingSegmentMapping> ExistingSegmentMappings,
     IReadOnlyList<AssignedLinkSegment> SelectedAssignedLinkSegments,
     IReadOnlyList<LinkTransition> Transitions,
     IReadOnlyList<Point> ReconstructedPoints,
-    ObservationalRouteParity Parity,
+    ObservationalLinkPathParity Parity,
     IReadOnlyList<Point> CanonicalAuthoritativePoints,
     IReadOnlyList<string> Diagnostics);
 
 internal sealed record AdjacentDownwardObservationReport(
-    IReadOnlyList<AdjacentDownwardRouteObservation> Routes,
+    IReadOnlyList<AdjacentDownwardLinkObservation> Routes,
     long DemandProductionMicroseconds,
     long ExistingLaneAdaptationMicroseconds,
     long ReconstructionMicroseconds,
     long ParityComparisonMicroseconds);
 
 internal sealed record AdjacentDownwardComponentProjection(
-    IReadOnlyList<ConflictComponent<AdjacentDownwardRouteObservation>> UnassignedComponents,
-    IReadOnlyList<ConflictComponent<AdjacentDownwardRouteObservation>> AssignedComponents,
+    IReadOnlyList<ConflictComponent<AdjacentDownwardLinkObservation>> UnassignedComponents,
+    IReadOnlyList<ConflictComponent<AdjacentDownwardLinkObservation>> AssignedComponents,
     IReadOnlyList<ConflictEdge> UnassignedEdges,
     IReadOnlyList<ConflictEdge> AssignedEdges,
     long ElapsedMicroseconds);

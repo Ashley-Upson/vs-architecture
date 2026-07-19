@@ -11,7 +11,7 @@ internal enum CommonAssignmentParity
     UnableToMap
 }
 
-internal enum CommonRouteReconstructionParity
+internal enum CommonLinkPathReconstructionParity
 {
     ExactGeometry,
     ValidDifferentGeometry,
@@ -19,22 +19,22 @@ internal enum CommonRouteReconstructionParity
     UnableToReconstruct
 }
 
-internal sealed record CommonRailRouteComparison(
+internal sealed record CommonAuthorityLinkPathComparison(
     string LogicalRouteId,
     AssignedLinkSegment? CommonThroughRail,
-    IReadOnlyDictionary<ExistingLaneMappingSource, CommonAssignmentParity> ExistingParity,
+    IReadOnlyDictionary<ExistingSegmentMappingSource, CommonAssignmentParity> ExistingParity,
     IReadOnlyList<Point> ReconstructedPoints,
-    CommonRouteReconstructionParity ReconstructionParity,
+    CommonLinkPathReconstructionParity ReconstructionParity,
     IReadOnlyList<string> Diagnostics);
 
-internal sealed record CommonRailRegionObservation(
+internal sealed record CommonAuthorityRegionObservation(
     LinkSegmentAllocationRegionIdentity Region,
     DeterministicSlotAssignment Assignment,
     GenerationConstraint? ConstraintProposal);
 
-internal sealed record CommonRailParityReport(
-    IReadOnlyList<CommonRailRegionObservation> Regions,
-    IReadOnlyList<CommonRailRouteComparison> Routes,
+internal sealed record CommonAuthorityParityReport(
+    IReadOnlyList<CommonAuthorityRegionObservation> Regions,
+    IReadOnlyList<CommonAuthorityLinkPathComparison> Routes,
     long AssignmentMicroseconds,
     long ConstraintProjectionMicroseconds,
     long ReconstructionMicroseconds,

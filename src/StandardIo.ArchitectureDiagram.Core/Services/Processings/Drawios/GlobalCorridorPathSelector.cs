@@ -195,7 +195,7 @@ internal static class GlobalCorridorPathSelector
     }
 
     private static int FanoutViolations(IEnumerable<CorridorPathCandidate> candidates) =>
-        candidates.SelectMany(candidate => candidate.FanoutMemberships ?? Array.Empty<TerminalFanoutMembership>())
+        candidates.SelectMany(candidate => candidate.FanoutMemberships ?? Array.Empty<LinkConnectionFanoutMembership>())
             .GroupBy(item => item.GroupId, StringComparer.Ordinal)
             .Sum(group =>
             {

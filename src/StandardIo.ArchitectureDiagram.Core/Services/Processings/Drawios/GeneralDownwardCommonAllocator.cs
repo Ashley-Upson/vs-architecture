@@ -33,7 +33,7 @@ internal static class GeneralDownwardCommonAllocator
                     proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(
                         region, assignment.RequiredExtent, currentLowerY);
                 }
-                return new CommonRailRegionObservation(region, assignment,
+                return new CommonAuthorityRegionObservation(region, assignment,
                     proposal);
             }).ToArray();
         timer.Stop();
@@ -48,8 +48,8 @@ internal static class GeneralDownwardCommonAllocator
             transitionTimer.ElapsedTicks * 1_000_000 / Stopwatch.Frequency);
     }
 
-    private static GeneralDownwardRouteAssignment Reconstruct(
-        GeneralDownwardRoutePlan plan,
+    private static GeneralDownwardLinkAssignment Reconstruct(
+        GeneralDownwardLinkPlan plan,
         IReadOnlyDictionary<string, AssignedLinkSegment> assignedByDemand,
         IReadOnlyDictionary<string, NodeLayout> nodes)
     {
@@ -91,16 +91,16 @@ internal static class GeneralDownwardCommonAllocator
             currentX = nextX;
         }
         Add(points, target);
-        var normalized = AdjacentDownwardLinkSegmentDemandObserver.Normalize(points);
+        var normalized = AdjacentDownwardLinkDemandDiscovery.Normalize(points);
         if (normalized.Zip(normalized.Skip(1), (a, b) => new Segment(a, b)).Any(item => !item.IsOrthogonal) ||
             HasImmediateReversal(normalized))
             return Invalid(observation.LogicalRouteId, "ReconstructionInvariantFailure");
-        return new GeneralDownwardRouteAssignment(observation.LogicalRouteId, rails, transitions,
+        return new GeneralDownwardLinkAssignment(observation.LogicalRouteId, rails, transitions,
             normalized, Array.Empty<string>(), true);
     }
 
     private static AssignedLinkSegment TerminalRail(
-        AdjacentDownwardRouteObservation route,
+        AdjacentDownwardLinkObservation route,
         LinkSegmentRole role,
         int axis,
         AxisInterval occupied)
@@ -113,7 +113,7 @@ internal static class GeneralDownwardCommonAllocator
     private static string RegionKey(LinkSegmentDemand demand) =>
         $"{demand.Orientation}:{demand.AllowedAxisRange.Minimum}:{demand.AllowedAxisRange.Maximum}:" +
         $"{demand.MovementScope?.Kind}:{demand.MovementScope?.Id}:{demand.PlacementRevision.Value}";
-    private static GeneralDownwardRouteAssignment Invalid(string routeId, string reason) =>
+    private static GeneralDownwardLinkAssignment Invalid(string routeId, string reason) =>
         new(routeId, Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(), new[] { reason }, false);
     private static void Add(ICollection<Point> points, Point point)
     {

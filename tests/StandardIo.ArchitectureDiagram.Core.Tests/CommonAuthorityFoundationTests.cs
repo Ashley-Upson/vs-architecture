@@ -67,7 +67,7 @@ public sealed class CommonAuthorityFoundationTests
         Assert.All(forward.TransitionsByRouteId, pair =>
         {
             var routeRails = rails.Where(item => item.LogicalRouteId == pair.Key).ToArray();
-            var reconstructed = AdjacentDownwardLinkSegmentDemandObserver.Reconstruct(
+            var reconstructed = AdjacentDownwardLinkDemandDiscovery.Reconstruct(
                 new Point(routeRails[0].AxisCoordinate, 0), new Point(routeRails[2].AxisCoordinate, 200),
                 routeRails, pair.Value);
             Assert.All(reconstructed.Zip(reconstructed.Skip(1)), pair =>

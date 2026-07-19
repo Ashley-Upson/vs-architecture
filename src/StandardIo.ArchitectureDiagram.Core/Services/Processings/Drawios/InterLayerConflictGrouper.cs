@@ -4,10 +4,10 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class BandConflictGrouper
+internal static class InterLayerConflictGrouper
 {
-    public static IReadOnlyList<BandConflictGroup> Group(
-        InterLayerBandObservation band,
+    public static IReadOnlyList<InterLayerConflictComponent> Group(
+        InterLayerObservation band,
         int clearance,
         int padding,
         out long comparisons)
@@ -15,7 +15,7 @@ internal static class BandConflictGrouper
         var commonDemands = band.Demands.Select(item => new LinkSegmentDemand(
             item.Id, item.LogicalEdgeIdentity, LinkSegmentOrientation.Horizontal,
             new AxisInterval(item.XStart, item.XEnd), new AxisInterval(band.UpperBoundary, band.LowerBoundary),
-            null, item.Role == BandMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
+            null, item.Role == InterLayerMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
             item.ConnectionOrder, item.SegmentIndex,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
             band.Id.LayoutRevision, item.RouteRevision)).ToArray();
@@ -27,14 +27,14 @@ internal static class BandConflictGrouper
             new LinkSegmentAssignmentOptions(clearance, padding, EndpointContactCreatesComponent: true));
         comparisons = common.ConflictComparisons;
         var byId = band.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
-        var groups = new List<BandConflictGroup>();
+        var groups = new List<InterLayerConflictComponent>();
         foreach (var commonComponent in common.Components)
         {
             var component = commonComponent.Demands.Select(item => byId[item.Id]).ToArray();
             var assigned = commonComponent.Segments.ToDictionary(item => item.DemandId, item => item.SlotIndex, StringComparer.Ordinal);
             var laneCount = commonComponent.Segments.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1;
             var identity = string.Join("+", component.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
-            groups.Add(new BandConflictGroup(
+            groups.Add(new InterLayerConflictComponent(
                 $"group:{band.Id}:{identity}", band.Id,
                 component.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 assigned,
@@ -55,26 +55,26 @@ internal static class BandConflictGrouper
         return gap < clearance ? IntervalContactKind.EndpointContact : IntervalContactKind.Disjoint;
     }
 
-    public static RoutePointContactKind ClassifyContact(
+    public static LinkPathPointContactKind ClassifyContact(
         Segment first,
         Segment? firstContinuation,
         Segment second,
         Segment? secondContinuation)
     {
-        // Preserve the existing Stage C policy: any caller-supplied continuation makes
+        // Preserve the existing inter-layer spacing policy: any caller-supplied continuation makes
         // the contact ambiguous. The canonical classifier provides the geometry fact;
         // this adapter retains the current consumer policy and therefore route parity.
         if (firstContinuation is not null || secondContinuation is not null)
-            return RoutePointContactKind.AmbiguousBend;
+            return LinkPathPointContactKind.AmbiguousBend;
         var contact = CanonicalContactClassifier.Classify(
             new ContactSegment(first, Next: firstContinuation),
             new ContactSegment(second, Next: secondContinuation));
         return contact.Kind switch
         {
-            CanonicalContactKind.CleanPerpendicularCrossover => RoutePointContactKind.CleanCrossover,
+            CanonicalContactKind.CleanPerpendicularCrossover => LinkPathPointContactKind.CleanCrossover,
             CanonicalContactKind.SharedBend or
-            CanonicalContactKind.BendInvolvedPerpendicularContact => RoutePointContactKind.AmbiguousBend,
-            _ => RoutePointContactKind.StraightContinuation
+            CanonicalContactKind.BendInvolvedPerpendicularContact => LinkPathPointContactKind.AmbiguousBend,
+            _ => LinkPathPointContactKind.StraightContinuation
         };
     }
 

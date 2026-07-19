@@ -113,16 +113,16 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             .DefaultIfEmpty(0)
             .Max());
         var generated = new GeneratedLogicalRoutes(placement, prepared.Layout.Links, routeRevision);
-        InterLayerBandReport bands;
+        InterLayerReport bands;
         using (PerformanceAudit.Measure(
-            "Stage B observation",
+            "Inter-layer demand discovery",
             placement.Nodes.Count,
             generated.Links.Count,
             generated.Links.Values.Sum(link => link.Points.Count + 1),
             layoutRevision: placement.Revision.Value,
             routeRevision: routeRevision.Value))
         {
-            bands = InterLayerBandObserver.Observe(
+            bands = InterLayerDemandDiscovery.Observe(
                 placement, generated, prepared.Settings, prepared.Layout.Traceability);
         }
         var reportJson = DrawioDiagnosticReportBuilder.BuildJson(

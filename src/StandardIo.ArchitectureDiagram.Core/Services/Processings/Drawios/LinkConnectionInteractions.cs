@@ -4,29 +4,29 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal sealed record TerminalAttachmentClaim(
+internal sealed record LinkConnectionClaim(
     string LogicalRouteId,
     string NodeId,
-    TerminalAttachmentSide Side,
+    LinkConnectionSide Side,
     string RegionId,
     int? AssignedAxisCoordinate = null);
 
-internal static class TerminalInteractionEdges
+internal static class LinkConnectionInteractions
 {
-    public static IReadOnlyList<ConflictEdge> BeforeAllocation(IEnumerable<TerminalAttachmentClaim> claims) =>
+    public static IReadOnlyList<ConflictEdge> BeforeAllocation(IEnumerable<LinkConnectionClaim> claims) =>
         PairGroups(claims.GroupBy(KeyBeforeAllocation), "TerminalSideCompetition");
 
-    public static IReadOnlyList<ConflictEdge> AfterAllocation(IEnumerable<TerminalAttachmentClaim> claims) =>
+    public static IReadOnlyList<ConflictEdge> AfterAllocation(IEnumerable<LinkConnectionClaim> claims) =>
         PairGroups(
             claims.Where(claim => claim.AssignedAxisCoordinate.HasValue)
                 .GroupBy(claim => $"{KeyBeforeAllocation(claim)}:{claim.AssignedAxisCoordinate!.Value}"),
             "AssignedTerminalContact");
 
-    private static string KeyBeforeAllocation(TerminalAttachmentClaim claim) =>
+    private static string KeyBeforeAllocation(LinkConnectionClaim claim) =>
         $"{claim.NodeId}:{claim.Side}:{claim.RegionId}";
 
     private static IReadOnlyList<ConflictEdge> PairGroups(
-        IEnumerable<IGrouping<string, TerminalAttachmentClaim>> groups,
+        IEnumerable<IGrouping<string, LinkConnectionClaim>> groups,
         string cause)
     {
         var edges = new List<ConflictEdge>();

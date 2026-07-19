@@ -12,7 +12,7 @@ internal sealed record DevelopmentFixtureDefects(
     int BendInvolvedPerpendicularContact,
     int EndpointToInteriorContact);
 
-internal sealed record CommonRailDevelopmentFixtureResult(
+internal sealed record CommonAuthorityDevelopmentFixtureResult(
     string BeforeDrawio,
     string AfterDrawio,
     DevelopmentFixtureDefects BeforeDefects,

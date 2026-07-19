@@ -9,7 +9,7 @@ public sealed class MixedBoundaryAttributorTests
     public void Multiple_band_rejection_does_not_obscure_semantic_downward_family()
     {
         var contexts = new[] { Context("route", sourceDepth: 0, targetDepth: 2) };
-        var observation = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
+        var observation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
         var result = MixedBoundaryAttributor.Attribute(contexts, observation,
             Array.Empty<CommonAuthorityInteraction>(), Bands(contexts[0]));
 
@@ -19,7 +19,7 @@ public sealed class MixedBoundaryAttributorTests
         Assert.Contains("SkippedLayer", route.SecondaryReasons);
     }
 
-    private static AdjacentDownwardRouteContext Context(string id, int sourceDepth, int targetDepth)
+    private static AdjacentDownwardLinkContext Context(string id, int sourceDepth, int targetDepth)
     {
         var sourceNode = new RenderNode("source", "project", "Source", "Source", "Class", false, "", 0,
             Array.Empty<string>(), Array.Empty<StandardIo.ArchitectureDiagram.Core.Models.TypeProperty>(), 0);
@@ -28,21 +28,21 @@ public sealed class MixedBoundaryAttributorTests
         var target = new NodeLayout(targetNode, new Rect(100, 300, 40, 40), targetDepth, false);
         var link = new LinkLayout(new RenderLink(id, "source", "target", "Dependency", 0),
             new Point(20, 40), new Point(120, 300), new[] { new Point(20, 140), new Point(120, 140) }, .5, .5);
-        var band0 = new InterLayerBandId(0, 1, new LayoutRevision(1));
-        var band1 = new InterLayerBandId(1, 2, new LayoutRevision(1));
-        return new AdjacentDownwardRouteContext(link, source, target, new LayoutRevision(1), new RouteRevision(0),
+        var band0 = new InterLayerId(0, 1, new LayoutRevision(1));
+        var band1 = new InterLayerId(1, 2, new LayoutRevision(1));
+        return new AdjacentDownwardLinkContext(link, source, target, new LayoutRevision(1), new RouteRevision(0),
             new[]
             {
-                new BandRouteMembership("m0", id, new RouteRevision(0), band0, 0, 1, BandMembershipRole.SourceTransition),
-                new BandRouteMembership("m1", id, new RouteRevision(0), band1, 1, 2, BandMembershipRole.TargetTransition)
-            }, Array.Empty<BandRouteDemand>(),
-            new Dictionary<InterLayerBandId, AxisInterval> { [band0] = new(40, 140), [band1] = new(160, 300) },
+                new InterLayerLinkMembership("m0", id, new RouteRevision(0), band0, 0, 1, InterLayerMembershipRole.SourceTransition),
+                new InterLayerLinkMembership("m1", id, new RouteRevision(0), band1, 1, 2, InterLayerMembershipRole.TargetTransition)
+            }, Array.Empty<InterLayerLinkDemand>(),
+            new Dictionary<InterLayerId, AxisInterval> { [band0] = new(40, 140), [band1] = new(160, 300) },
             EmptyCorridors(), EmptyLanes(), null, false);
     }
 
-    private static InterLayerBandReport Bands(AdjacentDownwardRouteContext context) =>
-        new(Array.Empty<InterLayerBandObservation>(), Array.Empty<BandFindingCorrelation>(),
-            new InterLayerBandTelemetry(new LayoutRevision(1), new RouteRevision(0), 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+    private static InterLayerReport Bands(AdjacentDownwardLinkContext context) =>
+        new(Array.Empty<InterLayerObservation>(), Array.Empty<InterLayerFindingCorrelation>(),
+            new InterLayerTelemetry(new LayoutRevision(1), new RouteRevision(0), 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
 
     private static CorridorObservation EmptyCorridors() => new(
         new Dictionary<string, RoutingCorridor>(), new Dictionary<string, CorridorJunction>(),

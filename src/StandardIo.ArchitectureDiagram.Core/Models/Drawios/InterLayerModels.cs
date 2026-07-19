@@ -3,53 +3,53 @@ using System.Collections.Generic;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal readonly record struct InterLayerBandId(int UpperLayer, int LowerLayer, LayoutRevision LayoutRevision)
+internal readonly record struct InterLayerId(int UpperLayer, int LowerLayer, LayoutRevision LayoutRevision)
 {
     public override string ToString() => $"band:{UpperLayer}:{LowerLayer}:layout-{LayoutRevision.Value}";
 }
 
-internal enum BandMembershipRole { SourceTransition, TargetTransition, Through, Return }
-internal enum BandRouteDirection { Left, Right, Down, Up }
+internal enum InterLayerMembershipRole { SourceTransition, TargetTransition, Through, Return }
+internal enum InterLayerLinkDirection { Left, Right, Down, Up }
 
-internal sealed record BandRouteMembership(
+internal sealed record InterLayerLinkMembership(
     string Id,
     string LogicalEdgeIdentity,
     RouteRevision RouteRevision,
-    InterLayerBandId BandId,
+    InterLayerId BandId,
     int FirstSegmentIndex,
     int LastSegmentIndex,
-    BandMembershipRole Role);
+    InterLayerMembershipRole Role);
 
-internal sealed record BandRouteDemand(
+internal sealed record InterLayerLinkDemand(
     string Id,
     string LogicalEdgeIdentity,
     RouteRevision RouteRevision,
-    InterLayerBandId BandId,
+    InterLayerId BandId,
     int SegmentIndex,
-    BandMembershipRole Role,
+    InterLayerMembershipRole Role,
     int XStart,
     int XEnd,
     int ConnectionOrder,
-    BandRouteDirection Direction,
+    InterLayerLinkDirection Direction,
     int SlotIndex);
 
-internal sealed record InterLayerBandObservation(
-    InterLayerBandId Id,
+internal sealed record InterLayerObservation(
+    InterLayerId Id,
     int UpperBoundary,
     int LowerBoundary,
     int CurrentExtent,
     int RequiredExtent,
     int MissingExtent,
-    IReadOnlyList<BandRouteMembership> Memberships,
-    IReadOnlyList<BandRouteDemand> Demands,
+    IReadOnlyList<InterLayerLinkMembership> Memberships,
+    IReadOnlyList<InterLayerLinkDemand> Demands,
     int OverlapGroupCount,
     int MaximumSimultaneousOverlap,
     int HypotheticalLaneCount,
     int ReturnLaneCount,
-    IReadOnlyList<BandReturnRegionObservation> ReturnRegions,
+    IReadOnlyList<InterLayerReturnRegionObservation> ReturnRegions,
     IReadOnlyList<string> UnsupportedShapes);
 
-internal sealed record BandReturnRegionObservation(
+internal sealed record InterLayerReturnRegionObservation(
     string DemandId,
     string LogicalEdgeIdentity,
     string SideChoice,
@@ -57,16 +57,16 @@ internal sealed record BandReturnRegionObservation(
     int XEnd,
     bool ConflictsWithDownwardTraffic);
 
-internal sealed record BandFindingCorrelation(
+internal sealed record InterLayerFindingCorrelation(
     TraceabilityViolationCode Code,
     string EdgeId,
     string? OtherEdgeId,
-    IReadOnlyList<InterLayerBandId> BandIds,
+    IReadOnlyList<InterLayerId> BandIds,
     IReadOnlyList<string> DemandIds,
     bool? PlausiblyBandResolvable,
     string Reason);
 
-internal sealed record InterLayerBandTelemetry(
+internal sealed record InterLayerTelemetry(
     LayoutRevision LayoutRevision,
     RouteRevision RouteRevision,
     int NodeCount,
@@ -83,10 +83,10 @@ internal sealed record InterLayerBandTelemetry(
     long IntervalComparisons,
     long ElapsedMicroseconds);
 
-internal sealed record InterLayerBandReport(
-    IReadOnlyList<InterLayerBandObservation> Bands,
-    IReadOnlyList<BandFindingCorrelation> FindingCorrelations,
-    InterLayerBandTelemetry Telemetry);
+internal sealed record InterLayerReport(
+    IReadOnlyList<InterLayerObservation> Bands,
+    IReadOnlyList<InterLayerFindingCorrelation> FindingCorrelations,
+    InterLayerTelemetry Telemetry);
 
 internal sealed record PhysicalSegmentDiagnostic(
     string Id,
