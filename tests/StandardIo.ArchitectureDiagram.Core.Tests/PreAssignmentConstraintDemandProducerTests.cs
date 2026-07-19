@@ -17,7 +17,7 @@ public sealed class PreAssignmentConstraintDemandProducerTests
         });
 
         Assert.Equal(1, report.DestinationColumnConflicts);
-        Assert.Contains(report.Demands, item => item.Reason == PositionalConstraintReason.DestinationColumnSeparation);
+        Assert.Single(report.ColumnToColumnConstraints);
     }
 
     [Fact]
@@ -43,13 +43,47 @@ public sealed class PreAssignmentConstraintDemandProducerTests
         });
 
         Assert.True(report.VerticalColumnObstacles > 0);
-        Assert.Contains(report.Demands, item => item.Reason == PositionalConstraintReason.VerticalColumnClearance &&
-            (item.LeftStructureId == "blocker" || item.RightStructureId == "blocker"));
+        var difference = Assert.Single(report.ColumnToEnvelopeConstraints);
+        Assert.Equal("a:column", difference.ColumnDemandId);
+        Assert.Equal("target-a", difference.DestinationSubtreeId);
+        Assert.Equal("blocker", difference.BlockingSubtreeId);
+    }
+
+    [Fact]
+    public void Column_to_envelope_materialisation_moves_destination_to_the_nearest_valid_side()
+    {
+        var placement = Placement();
+        var report = Detect(placement, new[]
+        {
+            Plan("a", "target-a", placement.Nodes["target-a"].Rect.CenterX, new AxisInterval(40, 300))
+        });
+        var routes = Routes(placement);
+
+        var constraints = ColumnDifferenceConstraintMaterializer.Propose(placement,
+            report.ColumnToEnvelopeConstraints, report.ColumnToColumnConstraints, routes,
+            new HashSet<string>(routes.Keys, StringComparer.Ordinal));
+        var moved = HorizontalMovementConstraintMaterializer.Materialize(placement, constraints, Settings(), routes);
+
+        Assert.True(moved.Placement.Nodes["target-a"].Rect.CenterX < placement.Nodes["blocker"].Rect.X);
+        Assert.True(moved.Placement.Nodes["target-a"].Rect.CenterX < moved.Placement.Nodes["blocker"].Rect.X);
     }
 
     private static PreAssignmentConstraintDemandReport Detect(PlacedGraph placement, IReadOnlyList<GeneralDownwardLinkPlan> plans) =>
         PreAssignmentConstraintDemandProducer.Detect(placement,
             new GeneralDownwardObservationReport(plans, 0), Array.Empty<AdjacentDownwardLinkContext>(), 12, 8);
+
+    private static IReadOnlyDictionary<string, LinkLayout> Routes(PlacedGraph placement) =>
+        placement.Graph.Links.ToDictionary(link => link.Id, link => new LinkLayout(link,
+            new Point(placement.Nodes[link.SourceId].Rect.CenterX, placement.Nodes[link.SourceId].Rect.Bottom),
+            new Point(placement.Nodes[link.TargetId].Rect.CenterX, placement.Nodes[link.TargetId].Rect.Y),
+            Array.Empty<Point>(), .5, .5), StringComparer.Ordinal);
+
+    private static DiagramSettings Settings()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.ShowProjectContainers = false;
+        return settings;
+    }
 
     private static GeneralDownwardLinkPlan Plan(string id, string target, int x, AxisInterval vertical)
     {

@@ -39,16 +39,13 @@ internal static class PreAssignmentConstraintDemandProducer
             conflicts++;
             columnColumnConstraints.Add(new ColumnToColumnDifferenceConstraint(
                 $"column-column:{first.Id}:{second.Id}", first.LinkId, second.LinkId,
+                first.PreferredX, second.PreferredX,
                 first.DestinationSubtreeId, second.DestinationSubtreeId,
                 new AxisInterval(Math.Max(first.SourceLayer, second.SourceLayer),
                     Math.Min(first.DestinationLayer, second.DestinationLayer)), separation,
                 PreAssignmentMovementPlanner.CandidateScopes(first.DestinationSubtreeId, placement, HorizontalMovementDirection.Left)
                     .Concat(PreAssignmentMovementPlanner.CandidateScopes(second.DestinationSubtreeId, placement, HorizontalMovementDirection.Right))
                     .Distinct().ToArray(), placement.Revision));
-            AddSeparation(demands, placement, first.DestinationSubtreeId, second.DestinationSubtreeId,
-                separation, PositionalConstraintReason.DestinationColumnSeparation,
-                new AxisInterval(Math.Min(first.SourceLayer, second.SourceLayer), Math.Max(first.DestinationLayer, second.DestinationLayer)),
-                new[] { first.LinkId, second.LinkId }, placement.Revision, first.LinkRevision);
         }
 
         var obstacles = 0;
@@ -64,15 +61,10 @@ internal static class PreAssignmentConstraintDemandProducer
             {
                 obstacles++;
                 var inflated = blocker.Rect.Inflate(column.RequiredClearance);
-                var currentGap = blocker.Rect.CenterX <= target.Rect.CenterX
-                    ? target.Rect.X - blocker.Rect.Right
-                    : blocker.Rect.X - target.Rect.Right;
-                var requiredShift = blocker.Rect.CenterX <= target.Rect.CenterX
-                    ? Math.Max(0, inflated.Right - column.PreferredX + 1)
-                    : Math.Max(0, column.PreferredX - inflated.X + 1);
                 columnEnvelopeConstraints.Add(new ColumnToEnvelopeDifferenceConstraint(
                     $"column-envelope:{column.Id}:{blocker.Node.Id}", column.LinkId, column.Id,
-                    column.DestinationSubtreeId, blocker.Node.Id, blocker.Rect,
+                    column.PreferredX,
+                    column.DestinationSubtreeId, target.Rect, blocker.Node.Id, blocker.Rect,
                     new AxisInterval(column.SourceLayer, column.DestinationLayer), column.RequiredClearance,
                     new HorizontalDifferenceAlternative(HorizontalMovementDirection.Left,
                         inflated.X - 1,
@@ -83,12 +75,6 @@ internal static class PreAssignmentConstraintDemandProducer
                         PreAssignmentMovementPlanner.CandidateScopes(column.DestinationSubtreeId, placement, HorizontalMovementDirection.Right)
                             .Concat(PreAssignmentMovementPlanner.CandidateScopes(blocker.Node.Id, placement, HorizontalMovementDirection.Left)).Distinct().ToArray()),
                     placement.Revision, placement.Revision));
-                AddSeparation(demands, placement,
-                    blocker.Rect.CenterX <= target.Rect.CenterX ? blocker.Node.Id : target.Node.Id,
-                    blocker.Rect.CenterX <= target.Rect.CenterX ? target.Node.Id : blocker.Node.Id,
-                    Math.Max(separation, currentGap + requiredShift), PositionalConstraintReason.VerticalColumnClearance,
-                    new AxisInterval(column.SourceLayer, column.DestinationLayer), new[] { column.LinkId },
-                    placement.Revision, column.LinkRevision);
             }
         }
 
@@ -115,14 +101,7 @@ internal static class PreAssignmentConstraintDemandProducer
                     : Math.Abs(context.Route.SourcePoint.X - leftX) <= Math.Abs(rightX - context.Route.SourcePoint.X)
                         ? leftBlockers
                         : rightBlockers;
-            foreach (var blocker in selectedBlockers.Distinct().OrderBy(item => item, StringComparer.Ordinal))
-            {
-                returnObstacles++;
-                AddSeparation(demands, placement, blocker, context.Source.Node.Id, separation + padding,
-                    PositionalConstraintReason.ReturnStubClearance,
-                    new AxisInterval(context.Target.Depth, context.Source.Depth), new[] { context.Route.Link.Id },
-                    placement.Revision, context.RouteRevision);
-            }
+            returnObstacles += selectedBlockers.Distinct(StringComparer.Ordinal).Count();
         }
         return new PreAssignmentConstraintDemandReport(
             demands.GroupBy(item => item.Id, StringComparer.Ordinal).Select(item => item.First())

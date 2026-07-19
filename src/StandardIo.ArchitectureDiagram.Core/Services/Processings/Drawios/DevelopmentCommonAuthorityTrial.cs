@@ -49,10 +49,20 @@ internal static class DevelopmentCommonAuthorityTrial
         PlacedGraph activePlacement;
         IReadOnlyDictionary<string, LinkLayout> projectedLinks;
         var persistentIterations = 0;
+        var differenceConstraintStore = new GenerationConstraintStore();
+        var lockedColumnDirections = new Dictionary<string, HorizontalMovementDirection>(StringComparer.Ordinal);
         while (true)
         {
+            var differenceConstraints = ColumnDifferenceConstraintMaterializer.Propose(
+                placement, positionalDemands.ColumnToEnvelopeConstraints,
+                positionalDemands.ColumnToColumnConstraints, production.Links, potentiallySupportedRoutes,
+                lockedColumnDirections);
+            var differenceIncreased = false;
+            foreach (var constraint in differenceConstraints)
+                differenceIncreased |= differenceConstraintStore.Merge(constraint);
             movement = PreAssignmentMovementPlanner.Solve(
-                placement, persistentDemands.Values, settings, production.Links, potentiallySupportedRoutes);
+                placement, persistentDemands.Values, settings, production.Links, potentiallySupportedRoutes,
+                differenceConstraintStore.Snapshot());
             activePlacement = movement.Placement.Revision != placement.Revision ? movement.Placement : placement;
             projectedLinks = activePlacement.Revision != placement.Revision
                 ? PreAssignmentRouteProjection.Project(activePlacement, production.Links, settings)
@@ -82,7 +92,7 @@ internal static class DevelopmentCommonAuthorityTrial
                 next.ColumnToColumnConstraints,
                 next.ReturnColumnConstraints,
                 next.DestinationColumnConflicts, next.VerticalColumnObstacles, next.ReturnStubObstacles);
-            if (!increased) break;
+            if (!increased && !differenceIncreased) break;
         }
         var movementPlanned = activePlacement.Revision != placement.Revision;
         phase["positional constraint solving and position materialisation"] = Elapsed(timer);
@@ -298,6 +308,16 @@ internal static class DevelopmentCommonAuthorityTrial
                 positionalDemands.ReturnStubObstacles,
                 constraintsProposed = positionalDemands.Demands.Count,
                 constraintsAccepted = movement.Solutions.Where(item => item.IsValid).Sum(item => item.AcceptedCandidates.Count),
+                columnToEnvelopeDemands = positionalDemands.ColumnToEnvelopeConstraints.Count,
+                columnToColumnDemands = positionalDemands.ColumnToColumnConstraints.Count,
+                returnColumnEnvelopeDemands = positionalDemands.ReturnColumnConstraints.Count,
+                orderingInvariantReturnBlockers = positionalDemands.ReturnColumnConstraints.Count(item =>
+                    ReturnColumnSolvabilityAnalyzer.Analyze(item) ==
+                    ReturnColumnHorizontalSolvability.OrderingInvariantInteriorBlocker),
+                differenceConstraints = differenceConstraintStore.Snapshot().Select(item => new
+                {
+                    scope = item.Key.Scope.ToString(), kind = item.Key.Kind.ToString(), item.Minimum, item.Reason
+                }),
                 components = movement.Components.Count,
                 solvedComponents = movement.Solutions.Count(item => item.IsValid),
                 nodesMoved = movement.Placement.Nodes.Count(item => item.Value.Rect != placement.Nodes[item.Key].Rect),

@@ -12,7 +12,8 @@ internal static class PreAssignmentMovementPlanner
         IEnumerable<PositionalConstraintDemand> source,
         DiagramSettings settings,
         IReadOnlyDictionary<string, LinkLayout> links,
-        ISet<string>? commonAuthorityRouteIds = null)
+        ISet<string>? commonAuthorityRouteIds = null,
+        IReadOnlyList<GenerationConstraint>? differenceConstraints = null)
     {
         var demands = source.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
         var components = Components(demands, immutableBase, links);
@@ -55,7 +56,8 @@ internal static class PreAssignmentMovementPlanner
                 valid ? "Solved" : "NoCompleteCoherentMovement"));
         }
 
-        var validConstraints = solutions.Where(item => item.IsValid).SelectMany(item => item.Constraints).ToArray();
+        var validConstraints = solutions.Where(item => item.IsValid).SelectMany(item => item.Constraints)
+            .Concat(differenceConstraints ?? Array.Empty<GenerationConstraint>()).ToArray();
         var movement = HorizontalMovementConstraintMaterializer.Materialize(immutableBase, validConstraints, settings, links);
         return new PreAssignmentMovementResult(movement.Placement, components, solutions, store.Snapshot(),
             movement.InvalidatedLinkIds, validConstraints.Length == 0 ? 0 : 1);
