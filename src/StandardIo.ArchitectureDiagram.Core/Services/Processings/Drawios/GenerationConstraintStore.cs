@@ -11,7 +11,6 @@ internal sealed class GenerationConstraintStore
 
     public bool Merge(GenerationConstraint proposal)
     {
-        if (proposal.Minimum < 0) throw new ArgumentOutOfRangeException(nameof(proposal));
         if (constraints.TryGetValue(proposal.Key, out var current))
         {
             if (proposal.Key.Kind == GenerationConstraintKind.MaximumX && current.Minimum <= proposal.Minimum)

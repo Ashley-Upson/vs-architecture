@@ -8,6 +8,21 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class ConsolidatedRoutingFoundationTests
 {
     [Fact]
+    public void Absolute_coordinate_constraints_may_be_negative()
+    {
+        var store = new GenerationConstraintStore();
+        var constraint = new GenerationConstraint(
+            new GenerationConstraintKey(
+                new MovementScopeIdentity(MovementScopeKind.ProjectRoot, "project"),
+                GenerationConstraintKind.MaximumX),
+            -120,
+            "negative canvas coordinate");
+
+        Assert.True(store.Merge(constraint));
+        Assert.Equal(-120, Assert.Single(store.Snapshot()).Minimum);
+    }
+
+    [Fact]
     public void Independent_terminal_sides_do_not_create_one_component()
     {
         var claims = new[]
