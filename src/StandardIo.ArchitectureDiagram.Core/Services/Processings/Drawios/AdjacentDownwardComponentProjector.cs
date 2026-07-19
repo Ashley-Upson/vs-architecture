@@ -28,18 +28,18 @@ internal static class AdjacentDownwardComponentProjector
                     if (leftDemand.MovementScope == rightDemand.MovementScope)
                         unassigned.Add(Edge(left, right, "UnresolvedTerminalCompetition"));
                 }
-                else if (ContactInteractionPolicy.CreatesUnassignedRailEdge(leftDemand, rightDemand))
+                else if (ContactInteractionPolicy.CreatesUnassignedLinkSegmentEdge(leftDemand, rightDemand))
                     unassigned.Add(Edge(left, right, "UnassignedLinkSegmentDemand"));
             }
 
-            foreach (var leftRail in left.SelectedAssignedLinkSegments)
-            foreach (var rightRail in right.SelectedAssignedLinkSegments.Where(item => item.Role == leftRail.Role))
+            foreach (var leftSegment in left.SelectedAssignedLinkSegments)
+            foreach (var rightSegment in right.SelectedAssignedLinkSegments.Where(item => item.Role == leftSegment.Role))
             {
-                if (!ContactInteractionPolicy.CreatesAssignedLinkSegmentEdge(leftRail, rightRail, requiredSpacing)) continue;
-                if (leftRail.Role is LinkSegmentRole.ConnectionDeparture or LinkSegmentRole.ConnectionArrival)
+                if (!ContactInteractionPolicy.CreatesAssignedLinkSegmentEdge(leftSegment, rightSegment, requiredSpacing)) continue;
+                if (leftSegment.Role is LinkSegmentRole.ConnectionDeparture or LinkSegmentRole.ConnectionArrival)
                 {
-                    var leftScope = left.Demands.Single(item => item.Id == leftRail.DemandId).MovementScope;
-                    var rightScope = right.Demands.Single(item => item.Id == rightRail.DemandId).MovementScope;
+                    var leftScope = left.Demands.Single(item => item.Id == leftSegment.DemandId).MovementScope;
+                    var rightScope = right.Demands.Single(item => item.Id == rightSegment.DemandId).MovementScope;
                     if (leftScope == rightScope)
                         assigned.Add(Edge(left, right, "ConflictingAssignedTerminal"));
                 }

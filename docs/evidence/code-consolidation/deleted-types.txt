@@ -24,6 +24,14 @@ Renamed rather than retained as compatibility aliases:
 - InterLayerBandObserver -> InterLayerDemandDiscovery
 - GroupedVerticalBandPlanner -> InterLayerSpacingConstraintProducer
 
+Deleted or removed in the authority-boundary continuation:
+
+- MultiBandDownward terminology -> MultiLayerDownward
+- TransitionXCoordinates multi-layer zigzag state
+- multi-layer per-InterLayer transition reconstruction
+- active rail wording in common phase names, interaction policy, defect contracts, and movement diagnostics
+- eager normal-production PositionalHierarchy and subtree-envelope construction
+
 No empty compatibility aliases were retained.
 
 Audited and retained because they still have active consumers:

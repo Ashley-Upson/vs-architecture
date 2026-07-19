@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -10,6 +11,9 @@ internal static class PositionalHierarchyAnalyzer
     public static PositionalHierarchy Analyze(PlacedGraph placement)
     {
         if (placement is null) throw new ArgumentNullException(nameof(placement));
+        using var timing = PerformanceAudit.Measure(
+            "positional hierarchy", inputNodes: placement.Nodes.Count, inputRoutes: placement.Graph.Links.Count,
+            layoutRevision: placement.Revision.Value);
         var graph = placement.Graph;
         var stableNodes = graph.Nodes.OrderBy(node => node.Order).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray();
         var nodeById = stableNodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
@@ -60,7 +64,10 @@ internal static class PositionalHierarchyAnalyzer
                 .ToArray(),
             StringComparer.Ordinal);
         var roots = stableNodes.Where(node => !parentByNode.ContainsKey(node.Id)).Select(node => node.Id).ToArray();
-        var envelopes = BuildEnvelopes(stableNodes, children, placement);
+        Dictionary<string, PositionalSubtreeEnvelope> envelopes;
+        using (PerformanceAudit.Measure("subtree-envelope calculation", inputNodes: stableNodes.Length,
+                   layoutRevision: placement.Revision.Value))
+            envelopes = BuildEnvelopes(stableNodes, children, placement);
 
         return new PositionalHierarchy(
             Snapshot(parentByNode),

@@ -23,7 +23,7 @@ public sealed class ContactInteractionPolicyTests
         var first = Demand("first", 0, 100, 20, 60);
         var second = Demand("second", 40, 120, 40, 80);
 
-        Assert.True(ContactInteractionPolicy.CreatesUnassignedRailEdge(first, second));
+            Assert.True(ContactInteractionPolicy.CreatesUnassignedLinkSegmentEdge(first, second));
     }
 
     [Fact]

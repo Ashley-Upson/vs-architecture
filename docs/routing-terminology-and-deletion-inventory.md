@@ -2,6 +2,8 @@
 
 This inventory defines the vocabulary boundary between the consolidated link-authority model and the retained normal-production router. It is intentionally behavioural-neutral: normal production remains owned by `LegacyRoutingPipeline` until the development authority passes the later review gate.
 
+> Current audit, 19 July 2026: every `Rename now` entry below has been completed in active code. The old names remain in this table only as migration history. `MultiBandDownward` was also replaced by `MultiLayerDownward`; active diagnostics now say link segment rather than rail. Remaining `route` wording is limited to path selection, public/serialized compatibility, and the explicitly retained legacy boundary.
+
 ## Canonical vocabulary
 
 | Canonical term | Meaning |
@@ -112,6 +114,10 @@ Stage letters describe completed work phases and are not active architecture. Ac
 | Whole-graph experimental models | Search execution entry points | Delete zero-consumer records and unreachable branches. |
 | Capacity/grouping records | Some remain production-owned | Delete only zero-consumer development records; retain production corridor records until authority review. |
 | Rollback experiment methods | Search for no callers and obsolete diagnostics | Delete immediately when compiler/reference audit confirms orphaning. |
+
+The former multi-layer zigzag transition-coordinate implementation has no remaining symbol or consumer. Long common downward links compile from one horizontal departure demand plus one `VerticalLinkColumnDemand`. The adjacent one-InterLayer topology remains deliberately separate because it has no long vertical column to allocate.
+
+Disconnected-node production placement remains inside `PlacementPipeline` solely to preserve byte-identical normal output. `DisconnectedNodeProjectLayouter` is the development-authority replacement and its deletion gate is approval to change normal placement/parentage.
 
 ## Structural boundary
 

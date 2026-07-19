@@ -14,7 +14,7 @@ public sealed class MixedBoundaryAttributorTests
             Array.Empty<CommonAuthorityInteraction>(), InterLayers(contexts[0]));
 
         var route = Assert.Single(result.Routes);
-        Assert.Equal(DownwardIntegrationFamily.MultiBandDownward, route.PrimaryFamily);
+        Assert.Equal(DownwardIntegrationFamily.MultiLayerDownward, route.PrimaryFamily);
         Assert.False(route.CurrentlyEligible);
         Assert.Contains("SkippedLayer", route.SecondaryReasons);
     }

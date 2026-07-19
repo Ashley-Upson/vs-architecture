@@ -8,7 +8,7 @@ internal static class MixedBoundaryAttributor
 {
     private static readonly DownwardIntegrationFamily[] Candidates =
     {
-        DownwardIntegrationFamily.MultiBandDownward,
+        DownwardIntegrationFamily.MultiLayerDownward,
         DownwardIntegrationFamily.SameLayer,
         DownwardIntegrationFamily.UpwardOrReturn,
         DownwardIntegrationFamily.UnsupportedConnectionTopology,
@@ -93,8 +93,8 @@ internal static class MixedBoundaryAttributor
             AdjacentDownwardRejectionReason.UnsupportedConnectionTopology.ToString());
         return candidate switch
         {
-            DownwardIntegrationFamily.MultiBandDownward =>
-                route.PrimaryFamily is DownwardIntegrationFamily.AdjacentDownward or DownwardIntegrationFamily.MultiBandDownward &&
+            DownwardIntegrationFamily.MultiLayerDownward =>
+                route.PrimaryFamily is DownwardIntegrationFamily.AdjacentDownward or DownwardIntegrationFamily.MultiLayerDownward &&
                 !terminalUnsupported,
             DownwardIntegrationFamily.SameLayer => route.PrimaryFamily == DownwardIntegrationFamily.SameLayer && !terminalUnsupported,
             DownwardIntegrationFamily.UpwardOrReturn => route.PrimaryFamily == DownwardIntegrationFamily.UpwardOrReturn && !terminalUnsupported,
@@ -116,7 +116,7 @@ internal static class MixedBoundaryAttributor
         if (context.Target.Depth < context.Source.Depth) return DownwardIntegrationFamily.UpwardOrReturn;
         return context.Target.Depth == context.Source.Depth + 1
             ? DownwardIntegrationFamily.AdjacentDownward
-            : DownwardIntegrationFamily.MultiBandDownward;
+            : DownwardIntegrationFamily.MultiLayerDownward;
     }
 
     private static IReadOnlyList<string> SecondaryReasons(

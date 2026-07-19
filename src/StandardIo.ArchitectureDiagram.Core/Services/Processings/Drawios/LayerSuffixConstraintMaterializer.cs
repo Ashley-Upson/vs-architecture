@@ -19,7 +19,7 @@ internal static class LayerSuffixConstraintMaterializer
         return new GenerationConstraint(
             new GenerationConstraintKey(region.MovementScope.Value, GenerationConstraintKind.MinimumY),
             currentLowerLayerY + missing,
-            $"Common rail extent {region.EnvelopeIdentity}");
+            $"Common link-segment extent {region.EnvelopeIdentity}");
     }
 
     public static LayerSuffixConstraintIteration Materialize(

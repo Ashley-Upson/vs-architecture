@@ -17,6 +17,7 @@ internal readonly record struct RouteRevision(int Value)
 
 internal sealed class PlacedGraph
 {
+    private readonly Lazy<PositionalHierarchy> positionalHierarchy;
     public PlacedGraph(
         RenderGraph graph,
         IReadOnlyDictionary<string, NodeLayout> nodes,
@@ -56,7 +57,9 @@ internal sealed class PlacedGraph
         Nodes = Snapshot(nodes);
         ProjectPlacement = projectPlacement ?? throw new ArgumentNullException(nameof(projectPlacement));
         Revision = revision;
-        PositionalHierarchy = PositionalHierarchyAnalyzer.Analyze(this);
+        positionalHierarchy = new Lazy<PositionalHierarchy>(
+            () => PositionalHierarchyAnalyzer.Analyze(this),
+            System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     public RenderGraph Graph { get; }
@@ -68,7 +71,7 @@ internal sealed class PlacedGraph
     public IReadOnlyDictionary<string, ProjectLayout> Projects => ProjectPlacement.Layouts;
     public NodeOwnership NodeOwnership => ProjectPlacement.NodeOwnership;
     public LayoutRevision Revision { get; }
-    public PositionalHierarchy PositionalHierarchy { get; }
+    public PositionalHierarchy PositionalHierarchy => positionalHierarchy.Value;
 
     public PlacedGraph Revise(
         IReadOnlyDictionary<string, NodeLayout> nodes,

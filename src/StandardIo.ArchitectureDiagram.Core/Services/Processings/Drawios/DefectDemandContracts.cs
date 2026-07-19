@@ -9,19 +9,19 @@ internal static class DefectDemandContracts
         HardGeometryDefectKind.NodeCollision => new(
             defect, DefectResolutionKind.LinkSegmentDemandAlternatives,
             new[] { LinkSegmentRole.ObstacleBypass }, true,
-            "Produce viable-side obstacle bypass rail alternatives."),
+            "Produce viable-side obstacle bypass link-segment alternatives."),
         HardGeometryDefectKind.SharedSegment => new(
             defect, DefectResolutionKind.LinkSegmentDemandAlternatives,
             new[] { LinkSegmentRole.Through }, true,
-            "Produce distinct parallel rail demands for the competing routes."),
+            "Produce distinct parallel link-segment demands for the competing links."),
         HardGeometryDefectKind.ReusedBend => new(
             defect, DefectResolutionKind.LinkSegmentDemandAlternatives,
             new[] { LinkSegmentRole.TurnTransition }, true,
-            "Produce distinct turn or transition rail demands."),
+            "Produce distinct turn or transition link-segment demands."),
         HardGeometryDefectKind.SpacingDeficit => new(
             defect, DefectResolutionKind.IncreasedExtentDemand,
             Array.Empty<LinkSegmentRole>(), true,
-            "Increase the rail or rectangle extent requirement."),
+            "Increase the link-segment or rectangle extent requirement."),
         HardGeometryDefectKind.NonOrthogonalSegment => new(
             defect, DefectResolutionKind.RejectTopologyAndRegenerate,
             Array.Empty<LinkSegmentRole>(), false,

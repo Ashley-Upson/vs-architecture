@@ -11,6 +11,10 @@ Normal production remains byte-authoritative and continues to enter the retained
 | Route repair coordinator | Applies legacy heuristic correction under a bounded budget | Forbidden for common-owned links; delete when no normal-production link requires repair. |
 | Canonical shared-node candidate builder | Supplies normal-production candidates for canonical targets | Delete after common positional hierarchy and topology producers own those links. |
 | Ownership segmentation and project bounds | Serializes logical paths into coordinate-owned Draw.io cells | Shared serializer boundary; retained, not legacy routing. |
+| Production standalone-node placement | Preserves the accepted byte-identical normal layout | Delete after the development `DisconnectedNodeProjectLayouter` receives production-layout approval. |
+| Legacy connection/path generation for 39 unsupported links | Twenty return stubs collide before reaching an exterior column; nineteen long links need missing InterLayer observation plus destination-column/subtree separation | Delete only after both coherent movement capabilities close the real 249-link movement boundary. |
+
+The retained 39-link boundary is not an arbitrary fallback. Both unsupported groups participate in the same real movement closure, so implementing either group alone unlocks no movement proposal. Common-owned links never invoke the retained repair, corner-separation, waypoint-nudging, or traversal-fallback implementations.
 
 ## Dependency rule
 

@@ -5,7 +5,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 internal enum DownwardIntegrationFamily
 {
     AdjacentDownward,
-    MultiBandDownward,
+    MultiLayerDownward,
     SameLayer,
     UpwardOrReturn,
     UnsupportedConnectionTopology,
