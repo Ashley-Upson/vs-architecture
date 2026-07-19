@@ -15,7 +15,7 @@ internal static class HorizontalMovementConstraintMaterializer
     {
         var nodes = immutableBase.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var applied = new List<MovementScopeIdentity>();
-        var maximumDelta = 0;
+        var deltaByNode = immutableBase.Nodes.Keys.ToDictionary(item => item, _ => 0, StringComparer.Ordinal);
         foreach (var constraint in constraints
                      .Where(item => item.Key.Kind == GenerationConstraintKind.MinimumX ||
                          item.Key.Kind == GenerationConstraintKind.MaximumX)
@@ -25,15 +25,21 @@ internal static class HorizontalMovementConstraintMaterializer
         {
             var members = Members(constraint.Key.Scope, immutableBase).ToArray();
             if (members.Length == 0) throw new InvalidOperationException($"Movement scope {constraint.Key.Scope} has no nodes.");
-            var currentLeft = members.Min(id => nodes[id].Rect.X);
+            var currentLeft = members.Min(id => immutableBase.Nodes[id].Rect.X);
             var delta = constraint.Key.Kind == GenerationConstraintKind.MinimumX
                 ? Math.Max(0, constraint.Minimum - currentLeft)
                 : Math.Min(0, constraint.Minimum - currentLeft);
             if (delta == 0) continue;
-            foreach (var id in members) nodes[id] = nodes[id] with { Rect = nodes[id].Rect.Translate(delta, 0) };
-            maximumDelta = Math.Max(maximumDelta, delta);
+            foreach (var id in members)
+            {
+                var current = deltaByNode[id];
+                deltaByNode[id] = current == 0 || Math.Abs(delta) > Math.Abs(current) ? delta : current;
+            }
             applied.Add(constraint.Key.Scope);
         }
+        foreach (var item in deltaByNode.Where(item => item.Value != 0))
+            nodes[item.Key] = nodes[item.Key] with { Rect = nodes[item.Key].Rect.Translate(item.Value, 0) };
+        var maximumDelta = deltaByNode.Values.Select(Math.Abs).DefaultIfEmpty(0).Max();
 
         var moved = nodes.Where(item => item.Value.Rect != immutableBase.Nodes[item.Key].Rect)
             .Select(item => item.Key).OrderBy(item => item, StringComparer.Ordinal).ToArray();

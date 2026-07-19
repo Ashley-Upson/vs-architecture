@@ -51,8 +51,6 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
         if (context.Target.Depth <= context.Source.Depth)
             return context.Target.Depth == context.Source.Depth
                 ? AdjacentDownwardRejectionReason.SameLayer : AdjacentDownwardRejectionReason.UpwardOrReturn;
-        if (!string.Equals(context.Source.Node.ProjectId, context.Target.Node.ProjectId, StringComparison.Ordinal))
-            return AdjacentDownwardRejectionReason.CrossProject;
         if (context.Route.ExitY != 1 || context.Route.EntryY != 0 ||
             context.Route.SourcePoint.Y != context.Source.Rect.Bottom || context.Route.TargetPoint.Y != context.Target.Rect.Y)
             return AdjacentDownwardRejectionReason.UnsupportedConnectionTopology;

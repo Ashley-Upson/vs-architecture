@@ -11,7 +11,8 @@ internal static class PreAssignmentMovementPlanner
         PlacedGraph immutableBase,
         IEnumerable<PositionalConstraintDemand> source,
         DiagramSettings settings,
-        IReadOnlyDictionary<string, LinkLayout> links)
+        IReadOnlyDictionary<string, LinkLayout> links,
+        ISet<string>? commonAuthorityRouteIds = null)
     {
         var demands = source.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
         var components = Components(demands, immutableBase, links);
@@ -19,7 +20,8 @@ internal static class PreAssignmentMovementPlanner
         var solutions = new List<PositionalConstraintSolution>();
         foreach (var component in components)
         {
-            var evaluated = component.Demands.SelectMany(demand => Candidates(demand, immutableBase, links)).ToArray();
+            var evaluated = component.Demands.SelectMany(demand =>
+                Candidates(demand, immutableBase, links, commonAuthorityRouteIds)).ToArray();
             var accepted = new List<PositionalMovementCandidate>();
             var constraints = new List<GenerationConstraint>();
             foreach (var demand in component.Demands)
@@ -89,7 +91,8 @@ internal static class PreAssignmentMovementPlanner
     private static IEnumerable<PositionalMovementCandidate> Candidates(
         PositionalConstraintDemand demand,
         PlacedGraph placement,
-        IReadOnlyDictionary<string, LinkLayout> links)
+        IReadOnlyDictionary<string, LinkLayout> links,
+        ISet<string>? commonAuthorityRouteIds)
     {
         foreach (var scope in demand.CandidateMovementScopes.OrderBy(item => item.Kind).ThenBy(item => item.Id, StringComparer.Ordinal))
         {
@@ -110,7 +113,16 @@ internal static class PreAssignmentMovementPlanner
             var deficit = Math.Max(0, left.Right + demand.MinimumSeparation - right.X);
             var direction = movesLeft ? HorizontalMovementDirection.Left : HorizontalMovementDirection.Right;
             var movedSet = new HashSet<string>(members, StringComparer.Ordinal);
-            var invalidated = links.Values.Count(link => movedSet.Contains(link.Link.SourceId) || movedSet.Contains(link.Link.TargetId));
+            var invalidatedRoutes = links.Values.Where(link => movedSet.Contains(link.Link.SourceId) ||
+                movedSet.Contains(link.Link.TargetId)).Select(link => link.Link.Id).ToArray();
+            if (commonAuthorityRouteIds is not null && invalidatedRoutes.Any(id => !commonAuthorityRouteIds.Contains(id)))
+            {
+                var missing = invalidatedRoutes.Where(id => !commonAuthorityRouteIds.Contains(id))
+                    .OrderBy(id => id, StringComparer.Ordinal).First();
+                yield return Rejected(demand, scope, $"IncompleteCommonAuthorityClosure:{missing}");
+                continue;
+            }
+            var invalidated = invalidatedRoutes.Length;
             var projectExpansion = scope.Kind == MovementScopeKind.ProjectRoot ||
                 scope.Kind == MovementScopeKind.OrderedProjectPrefix || scope.Kind == MovementScopeKind.OrderedProjectSuffix
                 ? deficit : 0;

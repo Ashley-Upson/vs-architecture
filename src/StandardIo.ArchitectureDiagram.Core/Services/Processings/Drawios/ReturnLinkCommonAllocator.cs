@@ -15,7 +15,6 @@ internal static class ReturnLinkCommonAllocator
         var contexts = source.Where(item =>
                 !item.ExposureTreeSpecific &&
                 item.Source.Node.ProjectId is not null &&
-                string.Equals(item.Source.Node.ProjectId, item.Target.Node.ProjectId, StringComparison.Ordinal) &&
                 item.Target.Depth <= item.Source.Depth &&
                 item.Route.ExitY == 1 && item.Route.EntryY == 0 &&
                 item.Route.SourcePoint.Y == item.Source.Rect.Bottom &&

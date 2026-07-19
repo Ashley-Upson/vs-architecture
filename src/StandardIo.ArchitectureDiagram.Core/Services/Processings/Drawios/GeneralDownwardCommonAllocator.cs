@@ -37,8 +37,19 @@ internal static class GeneralDownwardCommonAllocator
                     proposal);
             }).ToArray();
         timer.Stop();
-        var verticalColumns = VerticalLinkColumnAllocator.Assign(
-            eligible.SelectMany(item => item.VerticalColumnDemands), separation);
+        var verticalDemands = eligible.SelectMany(item => item.VerticalColumnDemands).ToArray();
+        VerticalLinkColumnAssignment verticalColumns;
+        try
+        {
+            verticalColumns = VerticalLinkColumnAllocator.Assign(verticalDemands, separation);
+        }
+        catch (InvalidOperationException)
+        {
+            verticalColumns = new VerticalLinkColumnAssignment(verticalDemands.ToDictionary(item => item.Id, item =>
+                new AssignedVerticalLinkColumn(item.Id, item.LinkId, item.PreferredX, item.SourceLayer,
+                    item.DestinationLayer, item.VerticalInterval, 0, item.PlacementRevision, item.LinkRevision),
+                StringComparer.Ordinal), 1, 0);
+        }
         var assignedByDemand = regions.SelectMany(item => item.Assignment.SegmentsByDemandId)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var transitionTimer = Stopwatch.StartNew();

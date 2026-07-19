@@ -34,24 +34,54 @@ internal static class DevelopmentCommonAuthorityTrial
             contexts, settings.Layout.LinkPadding);
         var positionalDemands = PreAssignmentConstraintDemandProducer.Detect(
             placement, generalObservation, contexts, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        var potentiallySupportedRoutes = new HashSet<string>(
+            generalObservation.Routes.Where(item => item.Observation.Eligible)
+                .Select(item => item.Observation.LogicalRouteId), StringComparer.Ordinal);
+        foreach (var context in contexts.Where(item => item.Target.Depth <= item.Source.Depth &&
+                     !item.ExposureTreeSpecific && item.Source.Node.ProjectId is not null &&
+                     item.Route.ExitY == 1 && item.Route.EntryY == 0))
+            potentiallySupportedRoutes.Add(context.Route.Link.Id);
         phase["provisional topology and positional constraint detection"] = Elapsed(timer);
 
         timer.Restart();
-        var movement = PreAssignmentMovementPlanner.Solve(
-            placement, positionalDemands.Demands, settings, production.Links);
-        var movementAccepted = movement.Solutions.All(item => item.IsValid);
-        var activePlacement = movementAccepted ? movement.Placement : placement;
-        var projectedLinks = movementAccepted && activePlacement.Revision != placement.Revision
-            ? PreAssignmentRouteProjection.Project(activePlacement, production.Links, settings)
-            : production.Links;
-        var provisionalLayout = production.WithTrialGeometry(
-            production.Graph, activePlacement.Nodes, activePlacement.Projects, projectedLinks,
-            production.Traceability, activePlacement.Revision);
-        generated = new GeneratedLogicalRoutes(activePlacement, projectedLinks, routeRevision.Next());
-        bands = InterLayerDemandDiscovery.Observe(activePlacement, generated, settings, production.Traceability);
-        contexts = AdjacentDownwardContextFactory.Create(provisionalLayout, bands);
-        adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
-        generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts, settings.Layout.LinkPadding);
+        var persistentDemands = positionalDemands.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        PreAssignmentMovementResult movement;
+        PlacedGraph activePlacement;
+        IReadOnlyDictionary<string, LinkLayout> projectedLinks;
+        var persistentIterations = 0;
+        while (true)
+        {
+            movement = PreAssignmentMovementPlanner.Solve(
+                placement, persistentDemands.Values, settings, production.Links, potentiallySupportedRoutes);
+            activePlacement = movement.Placement.Revision != placement.Revision ? movement.Placement : placement;
+            projectedLinks = activePlacement.Revision != placement.Revision
+                ? PreAssignmentRouteProjection.Project(activePlacement, production.Links, settings)
+                : production.Links;
+            var provisionalLayout = production.WithTrialGeometry(
+                production.Graph, activePlacement.Nodes, activePlacement.Projects, projectedLinks,
+                production.Traceability, activePlacement.Revision);
+            generated = new GeneratedLogicalRoutes(activePlacement, projectedLinks, routeRevision.Next());
+            bands = InterLayerDemandDiscovery.Observe(activePlacement, generated, settings, production.Traceability);
+            contexts = AdjacentDownwardContextFactory.Create(provisionalLayout, bands);
+            adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
+            generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts, settings.Layout.LinkPadding);
+            var next = PreAssignmentConstraintDemandProducer.Detect(
+                activePlacement, generalObservation, contexts, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+            var increased = false;
+            foreach (var demand in next.Demands)
+                if (!persistentDemands.TryGetValue(demand.Id, out var existing) ||
+                    demand.MinimumSeparation > existing.MinimumSeparation)
+                {
+                    persistentDemands[demand.Id] = demand;
+                    increased = true;
+                }
+            persistentIterations++;
+            positionalDemands = new PreAssignmentConstraintDemandReport(
+                persistentDemands.Values.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+                next.DestinationColumnConflicts, next.VerticalColumnObstacles, next.ReturnStubObstacles);
+            if (!increased) break;
+        }
+        var movementPlanned = activePlacement.Revision != placement.Revision;
         phase["positional constraint solving and position materialisation"] = Elapsed(timer);
 
         timer.Restart();
@@ -106,11 +136,50 @@ internal static class DevelopmentCommonAuthorityTrial
         timer.Restart();
         var assignmentByRoute = common.Routes.Concat(returns.Assignments)
             .ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
-        var current = projectedLinks.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var current = production.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var attempts = new List<DevelopmentTrialComponentAttempt>();
         var acceptedRouteIds = new HashSet<string>(StringComparer.Ordinal);
+        var movementComponentAccepted = activePlacement.Revision == placement.Revision;
+        if (!movementComponentAccepted)
+        {
+            var invalidated = movement.InvalidatedLinkIds.OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var unavailable = invalidated.Where(routeId =>
+                !assignmentByRoute.TryGetValue(routeId, out var assignment) || !assignment.IsValid ||
+                assignment.ReconstructedPoints.Count == 0).ToArray();
+            if (unavailable.Length == 0)
+            {
+                var movementCandidate = current.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+                foreach (var routeId in invalidated)
+                    movementCandidate[routeId] = movementCandidate[routeId].AcceptGeometry(
+                        assignmentByRoute[routeId].ReconstructedPoints, LogicalRouteStage.Validated,
+                        "PreAssignmentMovementClosure");
+                var validation = TraceabilityValidator.Validate(
+                    activePlacement.Nodes, movementCandidate, settings.Layout.ParallelLaneSpacing);
+                var hard = validation.Violations.Where(item => invalidated.Contains(item.EdgeId, StringComparer.Ordinal) ||
+                    item.OtherEdgeId is not null && invalidated.Contains(item.OtherEdgeId, StringComparer.Ordinal)).ToArray();
+                if (hard.Length == 0)
+                {
+                    current = movementCandidate;
+                    foreach (var routeId in invalidated) acceptedRouteIds.Add(routeId);
+                    movementComponentAccepted = true;
+                    attempts.Add(new DevelopmentTrialComponentAttempt("pre-assignment-movement", "accepted", "Validated",
+                        invalidated, invalidated));
+                }
+                else
+                    attempts.Add(new DevelopmentTrialComponentAttempt("pre-assignment-movement", "rejected after validation",
+                        "HardGeometryFinding", invalidated,
+                        hard.Select(item => $"{item.Code}:{item.EdgeId}:{item.OtherEdgeId}").ToArray()));
+            }
+            else
+                attempts.Add(new DevelopmentTrialComponentAttempt("pre-assignment-movement", "rejected before execution",
+                    "IncompleteMovementClosure", invalidated, unavailable.SelectMany(routeId =>
+                        assignmentByRoute.TryGetValue(routeId, out var assignment)
+                            ? assignment.Diagnostics.Select(diagnostic => $"{routeId}:{diagnostic}")
+                            : new[] { $"{routeId}:MissingAssignment" }).ToArray()));
+        }
         foreach (var component in closure.Components.OrderBy(item => item.Id, StringComparer.Ordinal))
         {
+            if (!movementComponentAccepted && activePlacement.Revision != placement.Revision) break;
             if (component.Disposition != CommonAuthorityComponentDisposition.Eligible)
             {
                 attempts.Add(Attempt(component, "rejected before execution", component.Reason, Array.Empty<string>()));
@@ -118,6 +187,7 @@ internal static class DevelopmentCommonAuthorityTrial
             }
 
             var routeIds = component.Routes.Select(item => item.LogicalRouteId).OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            if (routeIds.Any(acceptedRouteIds.Contains)) continue;
             var movementBlocked = routeIds.Where(blockedByUnclosedMovement.Contains).ToArray();
             if (movementBlocked.Length > 0)
             {
@@ -171,8 +241,14 @@ internal static class DevelopmentCommonAuthorityTrial
         phase["turn assignment, regeneration and component validation"] = Elapsed(timer);
 
         timer.Restart();
-        var trialNodes = activePlacement.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        var trialProjects = activePlacement.Projects.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var committedPlacement = movementComponentAccepted ? activePlacement : placement;
+        if (!movementComponentAccepted)
+        {
+            current = production.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            acceptedRouteIds.Clear();
+        }
+        var trialNodes = committedPlacement.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var trialProjects = committedPlacement.Projects.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var trialGraph = production.Graph;
         var disconnected = DisconnectedNodeProjectLayouter.Create(production.Graph, production.Nodes, settings);
         if (disconnected is not null)
@@ -212,7 +288,8 @@ internal static class DevelopmentCommonAuthorityTrial
             routeCapabilities = capabilities,
             preAssignmentMovement = new
             {
-                movementAccepted,
+                movementPlanned,
+                movementAccepted = movementComponentAccepted,
                 positionalDemands.DestinationColumnConflicts,
                 positionalDemands.VerticalColumnObstacles,
                 positionalDemands.ReturnStubObstacles,
@@ -222,7 +299,7 @@ internal static class DevelopmentCommonAuthorityTrial
                 solvedComponents = movement.Solutions.Count(item => item.IsValid),
                 nodesMoved = movement.Placement.Nodes.Count(item => item.Value.Rect != placement.Nodes[item.Key].Rect),
                 movement.InvalidatedLinkIds,
-                movement.Iterations,
+                iterations = persistentIterations,
                 solutions = movement.Solutions.Select(solution => new
                 {
                     solution.Component.Id,

@@ -49,10 +49,17 @@ internal static class PreAssignmentConstraintDemandProducer
                      .OrderBy(node => node.Node.Id, StringComparer.Ordinal))
             {
                 obstacles++;
+                var inflated = blocker.Rect.Inflate(column.RequiredClearance);
+                var currentGap = blocker.Rect.CenterX <= target.Rect.CenterX
+                    ? target.Rect.X - blocker.Rect.Right
+                    : blocker.Rect.X - target.Rect.Right;
+                var requiredShift = blocker.Rect.CenterX <= target.Rect.CenterX
+                    ? Math.Max(0, inflated.Right - column.PreferredX + 1)
+                    : Math.Max(0, column.PreferredX - inflated.X + 1);
                 AddSeparation(demands, placement,
                     blocker.Rect.CenterX <= target.Rect.CenterX ? blocker.Node.Id : target.Node.Id,
                     blocker.Rect.CenterX <= target.Rect.CenterX ? target.Node.Id : blocker.Node.Id,
-                    separation + padding, PositionalConstraintReason.VerticalColumnClearance,
+                    Math.Max(separation, currentGap + requiredShift), PositionalConstraintReason.VerticalColumnClearance,
                     new AxisInterval(column.SourceLayer, column.DestinationLayer), new[] { column.LinkId },
                     placement.Revision, column.LinkRevision);
             }
@@ -60,8 +67,7 @@ internal static class PreAssignmentConstraintDemandProducer
 
         var returnObstacles = 0;
         foreach (var context in contexts.Where(item => item.Target.Depth <= item.Source.Depth &&
-                     !item.ExposureTreeSpecific && item.Source.Node.ProjectId is not null &&
-                     string.Equals(item.Source.Node.ProjectId, item.Target.Node.ProjectId, StringComparison.Ordinal)))
+                     !item.ExposureTreeSpecific && item.Source.Node.ProjectId is not null))
         {
             var projectNodes = placement.Nodes.Values.Where(item =>
                 string.Equals(item.Node.ProjectId, context.Source.Node.ProjectId, StringComparison.Ordinal)).ToArray();
@@ -72,13 +78,17 @@ internal static class PreAssignmentConstraintDemandProducer
             var leftBlockers = StubBlockers(context, leftX, departureY, arrivalY, placement.Nodes).ToArray();
             var rightBlockers = StubBlockers(context, rightX, departureY, arrivalY, placement.Nodes).ToArray();
             if (leftBlockers.Length == 0 || rightBlockers.Length == 0) continue;
-            foreach (var blocker in leftBlockers.Concat(rightBlockers).Distinct().OrderBy(item => item, StringComparer.Ordinal))
+            var selectedBlockers = leftBlockers.Length < rightBlockers.Length
+                ? leftBlockers
+                : rightBlockers.Length < leftBlockers.Length
+                    ? rightBlockers
+                    : Math.Abs(context.Route.SourcePoint.X - leftX) <= Math.Abs(rightX - context.Route.SourcePoint.X)
+                        ? leftBlockers
+                        : rightBlockers;
+            foreach (var blocker in selectedBlockers.Distinct().OrderBy(item => item, StringComparer.Ordinal))
             {
                 returnObstacles++;
-                var other = placement.Nodes[blocker].Rect.CenterX <= context.Source.Rect.CenterX
-                    ? context.Source.Node.Id : blocker;
-                var first = other == blocker ? blocker : context.Source.Node.Id;
-                AddSeparation(demands, placement, first, other, separation + padding,
+                AddSeparation(demands, placement, blocker, context.Source.Node.Id, separation + padding,
                     PositionalConstraintReason.ReturnStubClearance,
                     new AxisInterval(context.Target.Depth, context.Source.Depth), new[] { context.Route.Link.Id },
                     placement.Revision, context.RouteRevision);
