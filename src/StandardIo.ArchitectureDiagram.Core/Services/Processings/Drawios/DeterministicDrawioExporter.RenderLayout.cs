@@ -38,7 +38,8 @@ internal sealed partial class RenderLayout
             int capacityExpansionCount = 0,
             LayoutRevision layoutRevision = default,
             InterLayerSpacingConstraintPlan? groupedSpacingPlan = null,
-            int groupedSpacingIterations = 0)
+            int groupedSpacingIterations = 0,
+            IReadOnlyDictionary<string, CanonicalTopologyPlan>? canonicalTopologyPlans = null)
         {
             Graph = graph;
             Nodes = nodes;
@@ -64,6 +65,8 @@ internal sealed partial class RenderLayout
             LayoutRevision = layoutRevision;
             GroupedSpacingPlan = groupedSpacingPlan;
             GroupedSpacingIterations = groupedSpacingIterations;
+            CanonicalTopologyPlans = canonicalTopologyPlans ??
+                new Dictionary<string, CanonicalTopologyPlan>(StringComparer.Ordinal);
         }
 
         public RenderGraph Graph { get; }
@@ -114,11 +117,13 @@ internal sealed partial class RenderLayout
 
         public int GroupedSpacingIterations { get; }
 
+        public IReadOnlyDictionary<string, CanonicalTopologyPlan> CanonicalTopologyPlans { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
             new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
                 PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason, StageTimings,
                 RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount,
-                LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
+                LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations, CanonicalTopologyPlans);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -1283,6 +1288,8 @@ internal sealed partial class RenderLayout
             var placed = MeasureStage(timings, "project-region positional placement", () =>
                 PlacementPipeline.Place(graph, settings, new LayoutRevision(0)));
             var activePlacement = placed;
+            var topology = MeasureStage(timings, "project-region canonical topology selection", () =>
+                CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
             var positioned = MeasureStage(timings, "project-region topology production", () =>
                 PositionLinks(graph, settings, activePlacement.Nodes));
             var repaired = MeasureStage(timings, "project-region route compilation and repair", () =>
@@ -1294,6 +1301,8 @@ internal sealed partial class RenderLayout
                 activePlacement = activePlacement.Revise(
                     expansion.Nodes,
                     PlacementPipeline.PositionProjects(graph, settings, expansion.Nodes));
+                topology = MeasureStage(timings, "project-region canonical topology reselection", () =>
+                    CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
                 positioned = MeasureStage(timings, "project-region topology regeneration", () =>
                     PositionLinks(graph, settings, activePlacement.Nodes));
                 repaired = MeasureStage(timings, "project-region regenerated route compilation and repair", () =>
@@ -1317,7 +1326,8 @@ internal sealed partial class RenderLayout
                 repairBudgetExhausted: repaired.WorkBudgetExhausted,
                 repairRunReason: repaired.RunReason,
                 stageTimings: timings,
-                layoutRevision: activePlacement.Revision);
+                layoutRevision: activePlacement.Revision,
+                canonicalTopologyPlans: topology.Plans);
         }
 
         private static double Ratio(int x, Rect rect)

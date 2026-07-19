@@ -25,7 +25,8 @@ public sealed class ProjectRegionRendererTests
         Assert.True(report.GetProperty("fallbackOccursOutsideRenderer").GetBoolean());
         Assert.Equal("CorridorLaneAllocator", report.GetProperty("horizontalSegmentYAuthority").GetString());
         Assert.Equal("CorridorLaneAllocator", report.GetProperty("verticalColumnXAuthority").GetString());
-        Assert.Equal("RenderLayout.PositionLinks", report.GetProperty("topologySelectionAuthority").GetString());
+        Assert.Equal("CanonicalTopologyFamilySelector", report.GetProperty("topologySelectionAuthority").GetString());
+        Assert.Equal(15, report.GetProperty("topologyFamilies").EnumerateObject().Sum(item => item.Value.GetInt32()));
         Assert.Equal("EdgeTraversalCompiler", report.GetProperty("obstacleCompilationAuthority").GetString());
         Assert.Equal(12, report.GetProperty("semanticNodeCount").GetInt32());
         Assert.Equal(15, report.GetProperty("semanticLinkCount").GetInt32());

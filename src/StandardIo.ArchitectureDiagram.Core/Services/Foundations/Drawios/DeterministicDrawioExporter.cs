@@ -51,7 +51,10 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             legacyPathsUsed = false,
             horizontalSegmentYAuthority = "CorridorLaneAllocator",
             verticalColumnXAuthority = "CorridorLaneAllocator",
-            topologySelectionAuthority = "RenderLayout.PositionLinks",
+            topologySelectionAuthority = "CanonicalTopologyFamilySelector",
+            topologyFamilies = layout.CanonicalTopologyPlans.Values
+                .GroupBy(plan => plan.Family).OrderBy(group => group.Key)
+                .ToDictionary(group => group.Key.ToString(), group => group.Count()),
             obstacleCompilationAuthority = "EdgeTraversalCompiler",
             boundedTopologyRecompileAuthority = "RouteRepairCoordinator",
             interLayerSlotAllocationUsed = false,
