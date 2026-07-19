@@ -28,13 +28,15 @@ internal static class DevelopmentCommonAuthorityTrial
         var routeRevision = new RouteRevision(production.Links.Values.Select(item => item.RouteState.Revision).DefaultIfEmpty(0).Max());
         var generated = new GeneratedLogicalRoutes(placement, production.Links, routeRevision);
         var bands = InterLayerBandObserver.Observe(placement, generated, settings, production.Traceability);
-        var observation = AdjacentDownwardRailDemandObserver.Observe(AdjacentDownwardContextFactory.Create(production, bands));
+        var contexts = AdjacentDownwardContextFactory.Create(production, bands);
+        var observation = AdjacentDownwardRailDemandObserver.Observe(contexts);
         phase["eligibility and rail-demand production"] = Elapsed(timer);
 
         timer.Restart();
         var common = AdjacentDownwardCommonRailObserver.Observe(
             observation, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var interactions = DiscoverInteractions(production.Links, settings.Layout.ParallelLaneSpacing);
+        var attribution = MixedBoundaryAttributor.Attribute(contexts, observation, interactions, bands);
         var capabilities = observation.Routes.Select(item => new CommonAuthorityRouteCapability(
             item.LogicalRouteId,
             item.Eligible,
@@ -155,6 +157,7 @@ internal static class DevelopmentCommonAuthorityTrial
                 demandCount = item.Assignment.RailsByDemandId.Count,
                 movementScope = item.Region.MovementScope?.ToString()
             }).ToArray(),
+            mixedBoundaryAttribution = attribution,
             advisoryCleanCrossovers = closure.AdvisoryCrossovers.Count,
             beforeFindings = FullCounts(production.Nodes, production.Links, production.Traceability, settings.Layout.ParallelLaneSpacing),
             afterFindings = FullCounts(production.Nodes, current, finalValidation, settings.Layout.ParallelLaneSpacing),
