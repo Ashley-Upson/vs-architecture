@@ -152,8 +152,18 @@ internal static class DevelopmentCommonAuthorityTrial
         phase["turn assignment, regeneration and component validation"] = Elapsed(timer);
 
         timer.Restart();
-        var finalValidation = TraceabilityValidator.Validate(production.Nodes, current, settings.Layout.ParallelLaneSpacing);
-        var layout = production.WithTrialLinks(current, finalValidation);
+        var trialNodes = production.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var trialProjects = production.Projects.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var trialGraph = production.Graph;
+        var disconnected = DisconnectedNodeProjectLayouter.Create(production.Graph, production.Nodes, settings);
+        if (disconnected is not null)
+        {
+            foreach (var node in disconnected.Nodes) trialNodes[node.Key] = node.Value;
+            trialProjects[disconnected.Project.Id] = disconnected.ProjectLayout;
+            trialGraph = production.Graph.WithDisconnectedProject(disconnected);
+        }
+        var finalValidation = TraceabilityValidator.Validate(trialNodes, current, settings.Layout.ParallelLaneSpacing);
+        var layout = production.WithTrialGeometry(trialGraph, trialNodes, trialProjects, current, finalValidation);
         phase["combined validation"] = Elapsed(timer);
         var acceptedBefore = production.Links.Values.Where(item => acceptedRouteIds.Contains(item.Link.Id)).ToArray();
         var acceptedAfter = current.Values.Where(item => acceptedRouteIds.Contains(item.Link.Id)).ToArray();
@@ -188,6 +198,13 @@ internal static class DevelopmentCommonAuthorityTrial
                 upward = returns.Plans.Count(item => item.Kind == ReturnLinkTopologyKind.Upward),
                 assignedColumns = returns.VerticalColumns.ColumnsByDemandId.Count,
                 acceptedAssignments = returns.Assignments.Count(item => item.IsValid)
+            },
+            disconnectedNodes = disconnected is null ? null : new
+            {
+                projectId = disconnected.Project.Id,
+                nodeCount = disconnected.NodeIds.Count,
+                nodesPerLayer = disconnected.NodesPerLayer,
+                bounds = disconnected.ProjectLayout.Rect
             },
             eligibleClosedComponents = closure.Components.Count(item => item.Disposition == CommonAuthorityComponentDisposition.Eligible),
             rejectedPreExecutionComponents = attempts.Count(item => item.Status == "rejected before execution"),

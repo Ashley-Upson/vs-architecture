@@ -128,6 +128,17 @@ internal sealed partial class RenderLayout
                 StageTimings, RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount,
                 CapacityExpansionCount, LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
 
+        internal RenderLayout WithTrialGeometry(
+            RenderGraph graph,
+            IReadOnlyDictionary<string, NodeLayout> nodes,
+            IReadOnlyDictionary<string, ProjectLayout> projects,
+            IReadOnlyDictionary<string, LinkLayout> links,
+            TraceabilityValidationResult traceability) =>
+            new(graph, nodes, projects, links, PathSelection, RegionalPathSelection, Traversals, traceability, Corridors, Lanes,
+                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, "DevelopmentCommonAuthorityTrial",
+                StageTimings, RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount,
+                CapacityExpansionCount, LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
+
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var timings = new List<PipelineStageMetric>();

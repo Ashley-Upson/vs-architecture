@@ -37,6 +37,13 @@ internal sealed class RenderGraph
 
         public IReadOnlyDictionary<string, string> PlacementParentByNode { get; }
 
+        internal RenderGraph WithDisconnectedProject(DisconnectedNodeProjectLayout disconnected) =>
+            new RenderGraph(
+                Projects.Where(project => !string.Equals(project.Id, disconnected.Project.Id, StringComparison.Ordinal))
+                    .Concat(new[] { disconnected.Project }).ToArray(),
+                Nodes.Select(node => disconnected.Nodes.TryGetValue(node.Id, out var layout) ? layout.Node : node).ToArray(),
+                Links, DataModels, PlacementParentByNode);
+
         public static RenderGraph From(DiagramModel diagram)
         {
             return FromBaseDiagram(diagram, NodeDuplicationPolicy.AllowAll);
