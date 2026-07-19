@@ -53,15 +53,17 @@ internal enum MovementScopeKind
 {
     Node,
     LayoutSubtree,
+    OrderedSiblingPrefix,
     OrderedSiblingSuffix,
     LayerAndLowerSuffix,
     ProjectRoot,
+    OrderedProjectPrefix,
     OrderedProjectSuffix
 }
 
 internal readonly record struct MovementScopeIdentity(MovementScopeKind Kind, string Id);
 
-internal enum GenerationConstraintKind { MinimumX, MinimumY, MinimumWidth, MinimumHeight }
+internal enum GenerationConstraintKind { MinimumX, MaximumX, MinimumY, MinimumWidth, MinimumHeight }
 
 internal readonly record struct GenerationConstraintKey(
     MovementScopeIdentity Scope,

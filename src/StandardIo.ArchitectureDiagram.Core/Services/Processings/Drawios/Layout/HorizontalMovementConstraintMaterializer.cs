@@ -17,7 +17,8 @@ internal static class HorizontalMovementConstraintMaterializer
         var applied = new List<MovementScopeIdentity>();
         var maximumDelta = 0;
         foreach (var constraint in constraints
-                     .Where(item => item.Key.Kind == GenerationConstraintKind.MinimumX)
+                     .Where(item => item.Key.Kind == GenerationConstraintKind.MinimumX ||
+                         item.Key.Kind == GenerationConstraintKind.MaximumX)
                      .OrderBy(item => item.Key.Scope.Kind)
                      .ThenBy(item => item.Key.Scope.Id, StringComparer.Ordinal)
                      .ThenBy(item => item.Reason, StringComparer.Ordinal))
@@ -25,7 +26,9 @@ internal static class HorizontalMovementConstraintMaterializer
             var members = Members(constraint.Key.Scope, immutableBase).ToArray();
             if (members.Length == 0) throw new InvalidOperationException($"Movement scope {constraint.Key.Scope} has no nodes.");
             var currentLeft = members.Min(id => nodes[id].Rect.X);
-            var delta = Math.Max(0, constraint.Minimum - currentLeft);
+            var delta = constraint.Key.Kind == GenerationConstraintKind.MinimumX
+                ? Math.Max(0, constraint.Minimum - currentLeft)
+                : Math.Min(0, constraint.Minimum - currentLeft);
             if (delta == 0) continue;
             foreach (var id in members) nodes[id] = nodes[id] with { Rect = nodes[id].Rect.Translate(delta, 0) };
             maximumDelta = Math.Max(maximumDelta, delta);
@@ -56,6 +59,12 @@ internal static class HorizontalMovementConstraintMaterializer
                 return new[] { scope.Id };
             case MovementScopeKind.LayoutSubtree:
                 return Descendants(scope.Id, hierarchy);
+            case MovementScopeKind.OrderedSiblingPrefix:
+                if (!hierarchy.ParentByNode.TryGetValue(scope.Id, out var prefixParentId))
+                    throw new InvalidOperationException($"Node {scope.Id} has no positional sibling group.");
+                var prefixSiblings = hierarchy.ChildrenByNode[prefixParentId];
+                var end = prefixSiblings.ToList().IndexOf(scope.Id);
+                return prefixSiblings.Take(end + 1).SelectMany(id => Descendants(id, hierarchy)).ToArray();
             case MovementScopeKind.OrderedSiblingSuffix:
                 if (!hierarchy.ParentByNode.TryGetValue(scope.Id, out var parentId))
                     throw new InvalidOperationException($"Node {scope.Id} has no positional sibling group.");
@@ -64,6 +73,11 @@ internal static class HorizontalMovementConstraintMaterializer
                 return siblings.Skip(start).SelectMany(id => Descendants(id, hierarchy)).ToArray();
             case MovementScopeKind.ProjectRoot:
                 return ProjectNodes(scope.Id, placement);
+            case MovementScopeKind.OrderedProjectPrefix:
+                var prefixProjects = placement.ProjectPlacement.StableProjectOrder;
+                var prefixProjectIndex = prefixProjects.ToList().IndexOf(scope.Id);
+                if (prefixProjectIndex < 0) throw new InvalidOperationException($"Unknown project {scope.Id}.");
+                return prefixProjects.Take(prefixProjectIndex + 1).SelectMany(id => ProjectNodes(id, placement)).ToArray();
             case MovementScopeKind.OrderedProjectSuffix:
                 var projects = placement.ProjectPlacement.StableProjectOrder;
                 var projectIndex = projects.ToList().IndexOf(scope.Id);

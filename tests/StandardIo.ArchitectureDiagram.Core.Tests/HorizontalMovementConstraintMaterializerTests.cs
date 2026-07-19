@@ -62,6 +62,35 @@ public sealed class HorizontalMovementConstraintMaterializerTests
         Assert.Equal(basis.Revision.Next(), second.Placement.Revision);
     }
 
+    [Fact]
+    public void Maximum_x_moves_a_complete_subtree_left_from_the_immutable_base()
+    {
+        var basis = Placement();
+        var scope = new MovementScopeIdentity(MovementScopeKind.LayoutSubtree, "child");
+        var result = HorizontalMovementConstraintMaterializer.Materialize(basis,
+            new[] { new GenerationConstraint(new GenerationConstraintKey(scope, GenerationConstraintKind.MaximumX), 50, "fixture") },
+            Settings(), Routes(basis));
+
+        Assert.Equal(50, result.Placement.Nodes["child"].Rect.X);
+        Assert.Equal(70, result.Placement.Nodes["leaf"].Rect.X);
+        Assert.Equal(200, result.Placement.Nodes["sibling"].Rect.X);
+    }
+
+    [Fact]
+    public void Ordered_sibling_prefix_moves_complete_left_hand_groups()
+    {
+        var basis = Placement();
+        var scope = new MovementScopeIdentity(MovementScopeKind.OrderedSiblingPrefix, "sibling");
+        var result = HorizontalMovementConstraintMaterializer.Materialize(basis,
+            new[] { new GenerationConstraint(new GenerationConstraintKey(scope, GenerationConstraintKind.MaximumX), -50, "fixture") },
+            Settings(), Routes(basis));
+
+        Assert.Equal(-50, result.Placement.Nodes["child"].Rect.X);
+        Assert.Equal(-30, result.Placement.Nodes["leaf"].Rect.X);
+        Assert.Equal(50, result.Placement.Nodes["sibling"].Rect.X);
+        Assert.Equal(70, result.Placement.Nodes["sibling-leaf"].Rect.X);
+    }
+
     private static HorizontalMovementIteration Move(
         PlacedGraph basis,
         MovementScopeKind kind,

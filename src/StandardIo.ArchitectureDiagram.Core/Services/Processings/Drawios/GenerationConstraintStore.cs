@@ -37,11 +37,21 @@ internal sealed class GenerationConstraintStore
         {
             var basis = immutableBasePlacement[scope];
             result[scope] = new Rect(
-                Math.Max(basis.X, Minimum(new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumX), basis.X)),
+                MaterializeX(scope, basis),
                 Math.Max(basis.Y, Minimum(new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumY), basis.Y)),
                 Math.Max(basis.Width, Minimum(new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumWidth), basis.Width)),
                 Math.Max(basis.Height, Minimum(new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumHeight), basis.Height)));
         }
         return new ReadOnlyDictionary<MovementScopeIdentity, Rect>(result);
+    }
+
+    private int MaterializeX(MovementScopeIdentity scope, Rect basis)
+    {
+        var minimum = Minimum(new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumX), basis.X);
+        var maximum = constraints.TryGetValue(
+            new GenerationConstraintKey(scope, GenerationConstraintKind.MaximumX), out var value)
+            ? value.Minimum
+            : basis.X;
+        return minimum != basis.X ? Math.Max(basis.X, minimum) : Math.Min(basis.X, maximum);
     }
 }
