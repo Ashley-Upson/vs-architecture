@@ -276,7 +276,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_0310a86d670b97b1",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  true,
                       "topologyOwner":  "CommonDownward",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -303,7 +303,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_20dc7e44d45439fc",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  false,
                       "topologyOwner":  "Legacy",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -331,7 +331,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_21ce4f75e822eb0d",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  true,
                       "topologyOwner":  "CommonDownward",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -358,7 +358,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_24b70aa00b774117",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  true,
                       "topologyOwner":  "CommonDownward",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -386,7 +386,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_f3008dcabdfd3712",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  false,
                       "topologyOwner":  "Legacy",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -1359,7 +1359,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_2_type_339de39d7e3cd8fa_0_type_0bb969f8ffe41ccf__edge_381730d45d1135b4",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  true,
                       "topologyOwner":  "CommonDownward",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -1388,7 +1388,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_2_type_339de39d7e3cd8fa_0_type_0bb969f8ffe41ccf__edge_aa329c6853185638",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  true,
                       "topologyOwner":  "CommonDownward",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -1854,7 +1854,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea__edge_fc6e0c789b19d0e7",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  false,
                       "topologyOwner":  "Legacy",
                       "connectionTopology":  "exitY:1;entryY:0",
@@ -1942,7 +1942,7 @@
                   },
                   {
                       "logicalLinkId":  "tree_type_ba93b02d23f6f55b__type_ba93b02d23f6f55b_0_type_7807d93e606fabf9_0_type_85f265cff318e6d5__edge_0b57e04b3f2ed308",
-                      "semanticFamily":  "MultiBandDownward",
+                      "semanticFamily":  "MultiLayerDownward",
                       "commonSupported":  true,
                       "topologyOwner":  "CommonDownward",
                       "connectionTopology":  "exitY:1;entryY:0",

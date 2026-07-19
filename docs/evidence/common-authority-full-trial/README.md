@@ -13,17 +13,19 @@ dotnet run --project src\StandardIo.ArchitectureDiagram.Cli\StandardIo.Architect
 
 ## Result
 
-- 250 links were locally eligible across downward, same-layer, and upward topology production.
+- 255 links were locally eligible across downward, same-layer, and upward topology production.
 - 28 interaction-closed components were eligible; 26 components containing 27 links passed mixed validation.
 - One component was rolled back after node-collision, shared-segment, crossing, and spacing findings.
 - One mixed interaction boundary and the only proposed depth-2 movement were rejected before execution.
 - Same-layer/upward observation found 32 same-layer and 42 upward links; 49 assignments were obstacle-safe.
 - Strict traceability findings decreased from 1,658 to 1,657. Immediate reversals decreased from 34 to 33.
 - No higher-priority strict finding count increased. Clean perpendicular crossovers increased by one.
+- The remaining depth-2 movement closure contains 249 invalidated links: 218 supported and 31 unsupported
+  (20 `UnsupportedObstacleMovement`, 11 `UnsupportedLinkPathCompilation`).
 
 ## Movement closure
 
-The depth-2 proposal requires a 60px lower-layer suffix movement, but it invalidates routes outside the supported
+The depth-2 proposal requires a 60px lower-layer suffix movement, but it invalidates links outside the supported
 common-authority set. Its closure is therefore incomplete and persistent movement is forbidden. This is evidence
 against applying that real proposal, rather than a reason to weaken the movement boundary. InterLayer 0->1 and
 InterLayer 4->5 likewise remain mixed-family whole-band deficits; neither is an eligible common-only movement.
@@ -31,6 +33,9 @@ InterLayer 4->5 likewise remain mixed-family whole-band deficits; neither is an 
 ## Production isolation and performance
 
 One warm-up and five fresh Release CLI processes all retained the exact production hash. The measured runs were
-14,640-14,810ms with a 14,704ms median. Normal production authority and serialized output are unchanged.
+14,311-14,674ms with a 14,663ms median. The previously reported 14,704ms median was primarily run-to-run host
+variance. Positional hierarchy/envelope analysis was nevertheless found to be eagerly constructed and unused on
+the normal path; it is now lazy and absent from an enabled normal performance profile. Normal production authority
+and serialized output are unchanged.
 
 No VSIX was packaged.
