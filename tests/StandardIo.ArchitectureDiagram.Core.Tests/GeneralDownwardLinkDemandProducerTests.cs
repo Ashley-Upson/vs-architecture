@@ -11,25 +11,11 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
     {
         var context = Context("route", 1);
         var general = Assert.Single(GeneralDownwardLinkSegmentDemandProducer.Observe(new[] { context }).Routes);
-        var adjacent = Assert.Single(AdjacentDownwardLinkDemandDiscovery.Observe(new[]
-        {
-            context with
-            {
-                InterLayerMemberships = new[]
-                {
-                    new InterLayerLinkMembership("m", "route", new RouteRevision(0), context.InterLayerAxisRanges.Keys.Single(),
-                        0, 2, InterLayerMembershipRole.Through)
-                },
-                InterLayerDemands = new[]
-                {
-                    new InterLayerLinkDemand("d", "route", new RouteRevision(0), context.InterLayerAxisRanges.Keys.Single(),
-                        1, InterLayerMembershipRole.Through, 20, 120, 0, InterLayerLinkDirection.Right, 0)
-                }
-            }
-        }).Routes);
+        var adjacent = DownwardLinkSegmentDemandFactory.Create(
+            context, new[] { context.InterLayerAxisRanges.Keys.Single() });
 
-        Assert.Equal(adjacent.Demands.Select(item => item.Id), general.Observation.Demands.Select(item => item.Id));
-        Assert.Single(general.Observation.Demands, item => item.Role == LinkSegmentRole.Through);
+        Assert.Equal(adjacent.SegmentDemands.Select(item => item.Id), general.Demands.Select(item => item.Id));
+        Assert.Single(general.Demands, item => item.Role == LinkSegmentRole.Through);
     }
 
     [Fact]
@@ -40,10 +26,10 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
         var reverse = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts.AsEnumerable().Reverse());
 
         Assert.Equal(
-            forward.Routes.SelectMany(item => item.Observation.Demands).Select(item => item.Id),
-            reverse.Routes.SelectMany(item => item.Observation.Demands).Select(item => item.Id));
-        var route = Assert.Single(forward.Routes, item => item.Observation.LogicalRouteId == "b");
-        Assert.Single(route.Observation.Demands, item => item.Role == LinkSegmentRole.Through);
+            forward.Routes.SelectMany(item => item.Demands).Select(item => item.Id),
+            reverse.Routes.SelectMany(item => item.Demands).Select(item => item.Id));
+        var route = Assert.Single(forward.Routes, item => item.LogicalRouteId == "b");
+        Assert.Single(route.Demands, item => item.Role == LinkSegmentRole.Through);
         var column = Assert.Single(route.VerticalColumnDemands);
         Assert.Equal(120, column.PreferredX);
         Assert.Equal(new AxisInterval(120, 120), column.AllowedXInterval);
@@ -86,8 +72,7 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
             depth => new InterLayerId(depth, depth + 1, new LayoutRevision(1)),
             depth => new AxisInterval(depth * 100 + 60, depth * 100 + 120));
         return new AdjacentDownwardLinkContext(route, source, target, new LayoutRevision(1), new RouteRevision(0),
-            Array.Empty<InterLayerLinkMembership>(), Array.Empty<InterLayerLinkDemand>(), ranges,
-            EmptyCorridors(), EmptyLanes(), null, false);
+            Array.Empty<InterLayerLinkDemand>(), ranges, false);
     }
 
     private static Dictionary<string, NodeLayout> Nodes() => new(StringComparer.Ordinal)
@@ -99,9 +84,4 @@ public sealed class GeneralDownwardLinkSegmentDemandProducerTests
     private static RenderNode Node(string id, int order) =>
         new(id, "project", id, id, "Class", false, "", order,
             Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
-    private static CorridorObservation EmptyCorridors() => new(
-        new Dictionary<string, RoutingCorridor>(), new Dictionary<string, CorridorJunction>(),
-        Array.Empty<CorridorSegmentMapping>(), new Dictionary<string, CorridorUsage>());
-    private static CorridorLaneAllocation EmptyLanes() => new(
-        new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>(), Array.Empty<string>());
 }

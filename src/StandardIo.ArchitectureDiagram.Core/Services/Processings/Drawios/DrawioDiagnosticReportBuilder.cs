@@ -15,14 +15,6 @@ internal static class DrawioDiagnosticReportBuilder
         string SecondRouteId,
         CanonicalContact Contact);
 
-    private sealed record FoundationCostObservation(
-        long ConstraintMergeAndMaterializationMicroseconds,
-        long InvalidationMicroseconds,
-        long ConnectionComponentConstructionMicroseconds,
-        int InvalidationCount,
-        int UnresolvedConnectionComponents,
-        int ResolvedConnectionComponents);
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -156,8 +148,6 @@ internal static class DrawioDiagnosticReportBuilder
         var contactTimer = Stopwatch.StartNew();
         var contactObservation = ObserveCanonicalContacts(layout, requiredSpacing);
         contactTimer.Stop();
-        var foundationCosts = ObserveFoundationCosts(layout, layoutSettings);
-        var adjacentDownward = ObserveAdjacentDownward(layout, bandReport, requiredSpacing, layoutSettings.LinkPadding);
 
         return JsonSerializer.Serialize(new
         {
@@ -194,17 +184,10 @@ internal static class DrawioDiagnosticReportBuilder
             {
                 nodeWidths = nodeWidthObservation,
                 contacts = contactObservation,
-                directInvalidationCount = foundationCosts.InvalidationCount,
-                terminalUnresolvedComponents = foundationCosts.UnresolvedConnectionComponents,
-                terminalResolvedComponents = foundationCosts.ResolvedConnectionComponents,
-                adjacentDownward,
                 timings = new
                 {
                     nodeAndTerminalDemandMicroseconds = ToMicroseconds(nodeTimer),
-                    canonicalContactClassificationMicroseconds = ToMicroseconds(contactTimer),
-                    foundationCosts.ConstraintMergeAndMaterializationMicroseconds,
-                    foundationCosts.InvalidationMicroseconds,
-                    foundationCosts.ConnectionComponentConstructionMicroseconds
+                    canonicalContactClassificationMicroseconds = ToMicroseconds(contactTimer)
                 }
             },
             stageTimings,
@@ -266,261 +249,6 @@ internal static class DrawioDiagnosticReportBuilder
                 layout.RepairRunReason
             }
         }, JsonOptions);
-    }
-
-    private static FoundationCostObservation ObserveFoundationCosts(RenderLayout layout, LayoutSettings settings)
-    {
-        var incoming = layout.Graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        var outgoing = layout.Graph.Links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        var separation = LinkConnectionDemandCalculator.AttachmentSeparation(
-            settings.EdgePortSpacing, settings.ParallelLaneSpacing);
-        var changedNodeIds = new HashSet<string>(StringComparer.Ordinal);
-        var constraintTimer = Stopwatch.StartNew();
-        var constraints = new GenerationConstraintStore();
-        var basis = new Dictionary<MovementScopeIdentity, Rect>();
-        foreach (var node in layout.Graph.Nodes.OrderBy(node => node.Id, StringComparer.Ordinal))
-        {
-            var incomingCount = incoming.TryGetValue(node.Id, out var inc) ? inc : 0;
-            var outgoingCount = outgoing.TryGetValue(node.Id, out var outgoingValue) ? outgoingValue : 0;
-            var textWidth = LinkConnectionDemandCalculator.EstimatedTextWidth(node.Name, node.FullName);
-            var demand = LinkConnectionDemandCalculator.Measure(
-                node.Id, settings.NodeWidth, textWidth, incomingCount, outgoingCount,
-                separation, settings.LinkNodeWidthPadding);
-            var legacyWidth = Math.Max(settings.NodeWidth, Math.Max(
-                textWidth + settings.LinkNodeWidthPadding,
-                Math.Max(0, incomingCount + outgoingCount - 1) * settings.EdgePortSpacing +
-                settings.LinkNodeWidthPadding));
-            if (legacyWidth != demand.RequiredWidth) changedNodeIds.Add(node.Id);
-            var scope = new MovementScopeIdentity(MovementScopeKind.Node, node.Id);
-            basis[scope] = layout.Nodes[node.Id].Rect with { Width = settings.NodeWidth };
-            constraints.Merge(new GenerationConstraint(
-                new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumWidth),
-                demand.RequiredWidth,
-                "terminal demand"));
-        }
-        _ = constraints.Materialize(basis);
-        constraintTimer.Stop();
-
-        var invalidationTimer = Stopwatch.StartNew();
-        var routeReferences = layout.Links.Values.Select(link => new SemanticLinkReference(
-            link.Link.Id, link.Link.SourceId, link.Link.TargetId, new RouteRevision(link.RouteState.Revision)));
-        var invalidations = changedNodeIds.Count == 0
-            ? Array.Empty<LinkInvalidation>()
-            : LinkInvalidationCalculator.ForChangedNodes(
-                routeReferences, changedNodeIds, LinkInvalidationCause.EndpointResized,
-                layout.LayoutRevision, layout.LayoutRevision.Next()).ToArray();
-        invalidationTimer.Stop();
-
-        var componentTimer = Stopwatch.StartNew();
-        var claims = layout.Links.Values.SelectMany(link => new[]
-        {
-            new LinkConnectionClaim(link.Link.Id, link.Link.SourceId,
-                LinkConnectionSide.OutgoingBottom, "bottom", link.SourcePoint.X),
-            new LinkConnectionClaim(link.Link.Id, link.Link.TargetId,
-                LinkConnectionSide.IncomingTop, "top", link.TargetPoint.X)
-        }).ToArray();
-        var ids = layout.Links.Keys.OrderBy(id => id, StringComparer.Ordinal).ToArray();
-        var unresolved = ConflictComponentBuilder.Build(ids, id => id, LinkConnectionInteractions.BeforeAllocation(claims));
-        var resolved = ConflictComponentBuilder.Build(ids, id => id, LinkConnectionInteractions.AfterAllocation(claims));
-        componentTimer.Stop();
-
-        return new FoundationCostObservation(
-            ToMicroseconds(constraintTimer),
-            ToMicroseconds(invalidationTimer),
-            ToMicroseconds(componentTimer),
-            invalidations.Length,
-            unresolved.Count,
-            resolved.Count);
-    }
-
-    private static object? ObserveAdjacentDownward(
-        RenderLayout layout,
-        InterLayerReport? bandReport,
-        int requiredSpacing,
-        int padding)
-    {
-        if (bandReport is null) return null;
-        var memberships = bandReport.InterLayers.SelectMany(item => item.Memberships)
-            .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkMembership>)group.ToArray(), StringComparer.Ordinal);
-        var demands = bandReport.InterLayers.SelectMany(item => item.Demands)
-            .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkDemand>)group.ToArray(), StringComparer.Ordinal);
-        var ranges = bandReport.InterLayers.ToDictionary(
-            item => item.Id, item => new AxisInterval(item.UpperBoundary, item.LowerBoundary));
-        var routeRevision = bandReport.Telemetry.RouteRevision;
-        var duplicatedExposureTree = layout.Graph.PlacementParentByNode.Count == 0 &&
-            layout.Graph.Nodes.Any(item => item.Id.StartsWith("tree_", StringComparison.Ordinal));
-        var contexts = layout.Links.Values.OrderBy(item => item.Link.Id, StringComparer.Ordinal).Select(route =>
-            new AdjacentDownwardLinkContext(
-                route,
-                layout.Nodes[route.Link.SourceId],
-                layout.Nodes[route.Link.TargetId],
-                layout.LayoutRevision,
-                routeRevision,
-                memberships.TryGetValue(route.Link.Id, out var routeMemberships)
-                    ? routeMemberships : Array.Empty<InterLayerLinkMembership>(),
-                demands.TryGetValue(route.Link.Id, out var routeDemands)
-                    ? routeDemands : Array.Empty<InterLayerLinkDemand>(),
-                ranges,
-                layout.Corridors,
-                layout.Lanes,
-                layout.GroupedSpacingPlan,
-                duplicatedExposureTree)).ToArray();
-        var observation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
-        var projection = AdjacentDownwardComponentProjector.Project(observation, requiredSpacing);
-        var common = AdjacentDownwardCommonAuthorityObserver.Observe(observation, requiredSpacing, padding);
-        var eligible = observation.Routes.Where(item => item.Eligible).ToArray();
-        var assignedPairs = new HashSet<string>(projection.AssignedEdges.Select(EdgePair), StringComparer.Ordinal);
-        var removedEdges = projection.UnassignedEdges
-            .Where(item => !assignedPairs.Contains(EdgePair(item)))
-            .ToArray();
-        var routesInRemovedEdges = removedEdges.SelectMany(item => new[] { item.FirstId, item.SecondId })
-            .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
-        var assignedSources = eligible.SelectMany(item => item.ExistingSegmentMappings).GroupBy(item => item.Source)
-            .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count());
-        return new
-        {
-            eligibleRoutes = eligible.Length,
-            rejectedRoutes = observation.Routes.Count - eligible.Length,
-            rejections = observation.Routes.Where(item => !item.Eligible).GroupBy(item => item.RejectionReason)
-                .OrderBy(item => item.Key).ToDictionary(item => item.Key?.ToString() ?? "Unknown", item => item.Count()),
-            demandsByRole = eligible.SelectMany(item => item.Demands).GroupBy(item => item.Role)
-                .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count()),
-            transitions = eligible.Sum(item => item.Transitions.Count),
-            assignedSources,
-            parity = eligible.GroupBy(item => item.Parity).OrderBy(item => item.Key)
-                .ToDictionary(item => item.Key.ToString(), item => item.Count()),
-            unassignedComponents = projection.UnassignedComponents.Count,
-            assignedComponents = projection.AssignedComponents.Count,
-            largestAssignedComponent = projection.AssignedComponents.Select(item => item.Members.Count).DefaultIfEmpty(0).Max(),
-            edgesRemovedAfterAssignment = removedEdges.Length,
-            routesInRemovedEdges,
-            unassignedEdges = projection.UnassignedEdges.GroupBy(item => item.Cause).OrderBy(item => item.Key)
-                .ToDictionary(item => item.Key, item => item.Count()),
-            assignedEdges = projection.AssignedEdges.GroupBy(item => item.Cause).OrderBy(item => item.Key)
-                .ToDictionary(item => item.Key, item => item.Count()),
-            retainedAssignedConflictDetails = projection.AssignedEdges.Select(edge => new
-            {
-                edge.FirstId,
-                edge.SecondId,
-                edge.Cause,
-                first = RetainedRouteEvidence(edge.FirstId),
-                second = RetainedRouteEvidence(edge.SecondId)
-            }),
-            timings = new
-            {
-                observation.DemandProductionMicroseconds,
-                observation.ExistingLaneAdaptationMicroseconds,
-                observation.ReconstructionMicroseconds,
-                observation.ParityComparisonMicroseconds,
-                componentProjectionMicroseconds = projection.ElapsedMicroseconds
-            },
-            commonAssignment = new
-            {
-                regions = common.Regions.Count,
-                components = common.Regions.Sum(item => item.Assignment.Components.Count),
-                demandsAssigned = common.Regions.Sum(item => item.Assignment.SegmentsByDemandId.Count),
-                largestComponent = common.Regions.SelectMany(item => item.Assignment.Components)
-                    .Select(item => item.Demands.Count).DefaultIfEmpty(0).Max(),
-                existingParity = common.Routes.SelectMany(item => item.ExistingParity)
-                    .GroupBy(item => $"{item.Key}:{item.Value}").OrderBy(item => item.Key)
-                    .ToDictionary(item => item.Key, item => item.Count()),
-                reconstructionParity = common.Routes.GroupBy(item => item.ReconstructionParity)
-                    .OrderBy(item => item.Key).ToDictionary(item => item.Key.ToString(), item => item.Count()),
-                constraintProposals = common.Regions.Count(item => item.ConstraintProposal is not null),
-                requiredExtents = common.Regions.Select(item => new
-                {
-                    item.Region.EnvelopeIdentity,
-                    currentExtent = item.Region.AllowedAxisRange.Length,
-                    item.Assignment.RequiredExtent,
-                    missingExtent = Math.Max(0, item.Assignment.RequiredExtent - item.Region.AllowedAxisRange.Length),
-                    movementScope = item.Region.MovementScope?.ToString(),
-                    proposal = item.ConstraintProposal
-                }),
-                timings = new
-                {
-                    common.AssignmentMicroseconds,
-                    conflictDiscoveryMicroseconds = common.Regions.Sum(item => item.Assignment.ConflictDiscoveryMicroseconds),
-                    componentConstructionMicroseconds = common.Regions.Sum(item => item.Assignment.ComponentConstructionMicroseconds),
-                    laneAssignmentMicroseconds = common.Regions.Sum(item => item.Assignment.SlotAssignmentMicroseconds),
-                    extentCalculationMicroseconds = common.Regions.Sum(item => item.Assignment.ExtentCalculationMicroseconds),
-                    common.ConstraintProjectionMicroseconds,
-                    common.ReconstructionMicroseconds,
-                    common.ParityComparisonMicroseconds
-                },
-                routes = common.Routes
-            },
-            routes = observation.Routes.Select(item => new
-            {
-                item.LogicalRouteId,
-                item.Eligible,
-                rejectionReason = item.RejectionReason?.ToString(),
-                demands = item.Demands.Select(demand => new
-                {
-                    demand.Id,
-                    role = demand.Role.ToString(),
-                    orientation = demand.Orientation.ToString(),
-                    occupiedMinimum = demand.OccupiedInterval.Minimum,
-                    occupiedMaximum = demand.OccupiedInterval.Maximum,
-                    allowedAxisMinimum = demand.AllowedAxisRange.Minimum,
-                    allowedAxisMaximum = demand.AllowedAxisRange.Maximum,
-                    demand.PreferredAxis,
-                    demand.ConnectionOrder,
-                    demand.TurnOrder,
-                    movementScope = demand.MovementScope?.ToString(),
-                    placementRevision = demand.PlacementRevision.Value,
-                    routeRevision = demand.RouteRevision.Value
-                }),
-                laneMappings = item.ExistingSegmentMappings.Select(mapping => new
-                {
-                    source = mapping.Source.ToString(),
-                    mapping.Segment.SlotIndex,
-                    mapping.Segment.AxisCoordinate,
-                    mapping.SpecializedMetadata
-                }),
-                transitions = item.Transitions.Select(transition => new
-                {
-                    transition.Id,
-                    transition.Order,
-                    transition.Turn
-                }),
-                parity = item.Parity.ToString(),
-                item.CanonicalAuthoritativePoints,
-                item.ReconstructedPoints,
-                item.Diagnostics
-            })
-        };
-
-        object? RetainedRouteEvidence(string routeId)
-        {
-            var route = observation.Routes.FirstOrDefault(item => item.LogicalRouteId == routeId);
-            if (route is null) return null;
-            var logical = layout.Links[routeId];
-            var sourceNode = layout.Nodes[logical.Link.SourceId];
-            var targetNode = layout.Nodes[logical.Link.TargetId];
-            return new
-            {
-                route.LogicalRouteId,
-                source = new { sourceNode.Node.Id, sourceNode.Node.Name, sourceNode.Node.FullName, sourceNode.Rect },
-                target = new { targetNode.Node.Id, targetNode.Node.Name, targetNode.Node.FullName, targetNode.Rect },
-                assignedRails = route.SelectedAssignedLinkSegments.Select(item => new
-                {
-                    role = item.Role.ToString(),
-                    item.AxisCoordinate,
-                    item.SlotIndex,
-                    item.OccupiedInterval
-                }),
-                turns = route.Transitions.Select(item => item.Turn),
-                route.CanonicalAuthoritativePoints
-            };
-        }
-
-        string EdgePair(ConflictEdge edge) => string.CompareOrdinal(edge.FirstId, edge.SecondId) <= 0
-            ? $"{edge.FirstId}\u001f{edge.SecondId}"
-            : $"{edge.SecondId}\u001f{edge.FirstId}";
     }
 
     private static long ToMicroseconds(Stopwatch timer) =>

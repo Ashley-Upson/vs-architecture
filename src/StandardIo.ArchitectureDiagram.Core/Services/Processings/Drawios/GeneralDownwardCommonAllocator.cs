@@ -13,9 +13,9 @@ internal static class GeneralDownwardCommonAllocator
         int separation,
         int padding)
     {
-        var eligible = report.Routes.Where(item => item.Observation.Eligible).ToArray();
+        var eligible = report.Routes.Where(item => item.Eligible).ToArray();
         var timer = Stopwatch.StartNew();
-        var regions = eligible.SelectMany(item => item.Observation.Demands)
+        var regions = eligible.SelectMany(item => item.Demands)
             .Where(item => item.Role == LinkSegmentRole.Through)
             .GroupBy(RegionKey).OrderBy(item => item.Key, StringComparer.Ordinal).Select(group =>
             {
@@ -33,7 +33,7 @@ internal static class GeneralDownwardCommonAllocator
                     proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(
                         region, assignment.RequiredExtent, currentLowerY);
                 }
-                return new CommonAuthorityRegionObservation(region, assignment,
+                return new SlotRegionAssignment(region, assignment,
                     proposal);
             }).ToArray();
         timer.Stop();
@@ -53,7 +53,7 @@ internal static class GeneralDownwardCommonAllocator
         var assignedByDemand = regions.SelectMany(item => item.Assignment.SegmentsByDemandId)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var transitionTimer = Stopwatch.StartNew();
-        var routes = eligible.OrderBy(item => item.Observation.LogicalRouteId, StringComparer.Ordinal)
+        var routes = eligible.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .Select(plan => Reconstruct(plan, assignedByDemand, verticalColumns.ColumnsByDemandId, nodes)).ToArray();
         transitionTimer.Stop();
         return new GeneralDownwardAssignmentReport(regions, verticalColumns, routes,
@@ -67,19 +67,18 @@ internal static class GeneralDownwardCommonAllocator
         IReadOnlyDictionary<string, AssignedVerticalLinkColumn> columnsByDemand,
         IReadOnlyDictionary<string, NodeLayout> nodes)
     {
-        var observation = plan.Observation;
-        var throughDemands = observation.Demands.Where(item => item.Role == LinkSegmentRole.Through)
+        var throughDemands = plan.Demands.Where(item => item.Role == LinkSegmentRole.Through)
             .OrderBy(item => item.TurnOrder).ToArray();
         if (throughDemands.Any(item => !assignedByDemand.ContainsKey(item.Id)))
-            return Invalid(observation.LogicalRouteId, "A crossed-interLayer segment was not assigned.");
+            return Invalid(plan.LogicalRouteId, "A crossed-interLayer segment was not assigned.");
         var through = throughDemands.Select(item => assignedByDemand[item.Id]).ToArray();
-        var source = observation.CanonicalAuthoritativePoints[0];
-        var target = observation.CanonicalAuthoritativePoints[observation.CanonicalAuthoritativePoints.Count - 1];
+        var source = plan.CanonicalAuthoritativePoints[0];
+        var target = plan.CanonicalAuthoritativePoints[plan.CanonicalAuthoritativePoints.Count - 1];
         if (plan.VerticalColumnDemands.Count > 0)
             return ReconstructVerticalColumn(plan, through, columnsByDemand, nodes, source, target);
-        var departure = ConnectionSegment(observation, LinkSegmentRole.ConnectionDeparture, source.X,
+        var departure = ConnectionSegment(plan, LinkSegmentRole.ConnectionDeparture, source.X,
             new AxisInterval(source.Y, through[0].AxisCoordinate));
-        var arrival = ConnectionSegment(observation, LinkSegmentRole.ConnectionArrival, target.X,
+        var arrival = ConnectionSegment(plan, LinkSegmentRole.ConnectionArrival, target.X,
             new AxisInterval(through[through.Length - 1].AxisCoordinate, target.Y));
         var segments = new[] { departure }.Concat(through).Concat(new[] { arrival }).ToArray();
         var points = new List<Point> { source };
@@ -93,8 +92,8 @@ internal static class GeneralDownwardCommonAllocator
             var secondTurn = new Point(nextX, segment.AxisCoordinate);
             Add(points, firstTurn);
             Add(points, secondTurn);
-            transitions.Add(new LinkTransition($"{observation.LogicalRouteId}:turn:{index}:entry",
-                observation.LogicalRouteId, index == 0 ? departure.Id : through[index - 1].Id,
+            transitions.Add(new LinkTransition($"{plan.LogicalRouteId}:turn:{index}:entry",
+                plan.LogicalRouteId, index == 0 ? departure.Id : through[index - 1].Id,
                 segment.Id, firstTurn, transitions.Count, segment.PlacementRevision, segment.RouteRevision));
             if (index + 1 < through.Length)
             {
@@ -102,16 +101,16 @@ internal static class GeneralDownwardCommonAllocator
                 var obstacle = nodes.Values.FirstOrDefault(node =>
                     node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId && vertical.Intersects(node.Rect));
                 if (obstacle is not null)
-                    return Invalid(observation.LogicalRouteId, $"ObstacleBypassRequired:{obstacle.Node.Id}");
+                    return Invalid(plan.LogicalRouteId, $"ObstacleBypassRequired:{obstacle.Node.Id}");
             }
             currentX = nextX;
         }
         Add(points, target);
-        var normalized = AdjacentDownwardLinkDemandDiscovery.Normalize(points);
+        var normalized = LogicalRouteNormalizer.NormalizePoints(points);
         if (normalized.Zip(normalized.Skip(1), (a, b) => new Segment(a, b)).Any(item => !item.IsOrthogonal) ||
             HasImmediateReversal(normalized))
-            return Invalid(observation.LogicalRouteId, "ReconstructionInvariantFailure");
-        return new GeneralDownwardLinkAssignment(observation.LogicalRouteId, segments, transitions,
+            return Invalid(plan.LogicalRouteId, "ReconstructionInvariantFailure");
+        return new GeneralDownwardLinkAssignment(plan.LogicalRouteId, segments, transitions,
             normalized, Array.Empty<string>(), true);
     }
 
@@ -123,41 +122,40 @@ internal static class GeneralDownwardCommonAllocator
         Point source,
         Point target)
     {
-        var observation = plan.Observation;
         if (through.Count != 1 || plan.VerticalColumnDemands.Count != 1)
-            return Invalid(observation.LogicalRouteId, "VerticalColumnTopologyCardinality");
+            return Invalid(plan.LogicalRouteId, "VerticalColumnTopologyCardinality");
         var demand = plan.VerticalColumnDemands[0];
         if (!columnsByDemand.TryGetValue(demand.Id, out var column))
-            return Invalid(observation.LogicalRouteId, "VerticalColumnUnassigned");
+            return Invalid(plan.LogicalRouteId, "VerticalColumnUnassigned");
         if (column.X != target.X)
-            return Invalid(observation.LogicalRouteId, "DestinationColumnMovementRequired");
+            return Invalid(plan.LogicalRouteId, "DestinationColumnMovementRequired");
         var horizontal = through[0];
-        var departure = ConnectionSegment(observation, LinkSegmentRole.ConnectionDeparture, source.X,
+        var departure = ConnectionSegment(plan, LinkSegmentRole.ConnectionDeparture, source.X,
             new AxisInterval(source.Y, horizontal.AxisCoordinate));
         var vertical = new Segment(new Point(column.X, horizontal.AxisCoordinate), target);
         var blocker = nodes.Values.FirstOrDefault(node =>
             node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
             vertical.Intersects(Inflate(node.Rect, demand.RequiredClearance)));
         if (blocker is not null)
-            return Invalid(observation.LogicalRouteId, $"VerticalColumnBlocked:{blocker.Node.Id}");
+            return Invalid(plan.LogicalRouteId, $"VerticalColumnBlocked:{blocker.Node.Id}");
         var assignedColumn = new AssignedLinkSegment(
             $"{demand.Id}:assigned", demand.Id, demand.LinkId, LinkSegmentOrientation.Vertical,
             column.X, column.ColumnIndex, new AxisInterval(horizontal.AxisCoordinate, target.Y),
             LinkSegmentRole.ConnectionArrival, column.PlacementRevision, column.LinkRevision);
-        var points = AdjacentDownwardLinkDemandDiscovery.Normalize(new[]
+        var points = LogicalRouteNormalizer.NormalizePoints(new[]
         {
             source,
             new Point(source.X, horizontal.AxisCoordinate),
             new Point(column.X, horizontal.AxisCoordinate),
             target
         });
-        return new GeneralDownwardLinkAssignment(observation.LogicalRouteId,
+        return new GeneralDownwardLinkAssignment(plan.LogicalRouteId,
             new[] { departure, horizontal, assignedColumn },
             new[]
             {
-                new LinkTransition($"{observation.LogicalRouteId}:transition:departure", observation.LogicalRouteId,
+                new LinkTransition($"{plan.LogicalRouteId}:transition:departure", plan.LogicalRouteId,
                     departure.Id, horizontal.Id, points[1], 0, column.PlacementRevision, column.LinkRevision),
-                new LinkTransition($"{observation.LogicalRouteId}:transition:column", observation.LogicalRouteId,
+                new LinkTransition($"{plan.LogicalRouteId}:transition:column", plan.LogicalRouteId,
                     horizontal.Id, assignedColumn.Id, points[2], 1, column.PlacementRevision, column.LinkRevision)
             }, points, Array.Empty<string>(), true);
     }
@@ -167,7 +165,7 @@ internal static class GeneralDownwardCommonAllocator
         rect.Width + clearance * 2, rect.Height + clearance * 2);
 
     private static AssignedLinkSegment ConnectionSegment(
-        AdjacentDownwardLinkObservation route,
+        GeneralDownwardLinkPlan route,
         LinkSegmentRole role,
         int axis,
         AxisInterval occupied)

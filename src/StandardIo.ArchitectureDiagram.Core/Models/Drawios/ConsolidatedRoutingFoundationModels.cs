@@ -52,6 +52,18 @@ internal sealed record LinkTransition(
     LayoutRevision PlacementRevision,
     RouteRevision RouteRevision);
 
+internal sealed record SharedTurnAllocation(
+    IReadOnlyDictionary<string, IReadOnlyList<LinkTransition>> TransitionsByRouteId,
+    IReadOnlyList<string> RejectedRouteIds);
+
+internal sealed record LayerSuffixConstraintIteration(
+    PlacedGraph Placement,
+    IReadOnlyList<int> LayersMoved,
+    IReadOnlyList<string> NodesMoved,
+    IReadOnlyList<string> InvalidatedRouteIds,
+    int MaximumDelta,
+    bool Changed);
+
 internal enum MovementScopeKind
 {
     Node,
@@ -76,33 +88,6 @@ internal sealed record GenerationConstraint(
     GenerationConstraintKey Key,
     int Minimum,
     string Reason);
-
-internal enum LinkInvalidationCause
-{
-    EndpointMoved,
-    EndpointResized,
-    ConnectionAllocationChanged,
-    CrossedBoundaryMoved,
-    AssignedLinkSegmentChanged,
-    ObstacleRelationshipChanged,
-    ProjectBoundsChanged,
-    SharedTurnAllocationChanged
-}
-
-internal sealed record LinkInvalidation(
-    string LogicalRouteId,
-    LinkInvalidationCause Cause,
-    RouteRevision SourceRouteRevision,
-    LayoutRevision SourcePlacementRevision,
-    LayoutRevision TargetPlacementRevision,
-    MovementScopeIdentity? Scope = null,
-    string? LinkSegmentId = null);
-
-internal sealed record SemanticLinkReference(
-    string LogicalRouteId,
-    string SourceNodeId,
-    string TargetNodeId,
-    RouteRevision RouteRevision);
 
 internal enum HardGeometryDefectKind
 {

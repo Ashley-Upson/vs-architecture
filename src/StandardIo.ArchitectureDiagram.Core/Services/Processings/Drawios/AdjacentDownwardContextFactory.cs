@@ -10,9 +10,6 @@ internal static class AdjacentDownwardContextFactory
         RenderLayout layout,
         InterLayerReport bandReport)
     {
-        var memberships = bandReport.InterLayers.SelectMany(item => item.Memberships)
-            .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkMembership>)group.ToArray(), StringComparer.Ordinal);
         var demands = bandReport.InterLayers.SelectMany(item => item.Demands)
             .GroupBy(item => item.LogicalEdgeIdentity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<InterLayerLinkDemand>)group.ToArray(), StringComparer.Ordinal);
@@ -39,14 +36,9 @@ internal static class AdjacentDownwardContextFactory
                 layout.Nodes[route.Link.TargetId],
                 layout.LayoutRevision,
                 bandReport.Telemetry.RouteRevision,
-                memberships.TryGetValue(route.Link.Id, out var routeMemberships)
-                    ? routeMemberships : Array.Empty<InterLayerLinkMembership>(),
                 demands.TryGetValue(route.Link.Id, out var routeDemands)
                     ? routeDemands : Array.Empty<InterLayerLinkDemand>(),
                 ranges,
-                layout.Corridors,
-                layout.Lanes,
-                layout.GroupedSpacingPlan,
                 duplicatedExposureTree)).ToArray();
     }
 }

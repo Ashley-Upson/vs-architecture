@@ -34,5 +34,5 @@ internal sealed record ReturnLinkAssignmentReport(
     IReadOnlyList<ReturnLinkPlan> Plans,
     VerticalLinkColumnAssignment VerticalColumns,
     IReadOnlyList<AssignedReturnLinkColumn> OwnedColumns,
-    IReadOnlyList<CommonAuthorityRegionObservation> SlotRegions,
+    IReadOnlyList<SlotRegionAssignment> SlotRegions,
     IReadOnlyList<GeneralDownwardLinkAssignment> Assignments);

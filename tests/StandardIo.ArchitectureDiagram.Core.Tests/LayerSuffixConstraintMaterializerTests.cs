@@ -11,11 +11,10 @@ public sealed class LayerSuffixConstraintMaterializerTests
     {
         var basis = Placement();
         var scope = new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1");
-        var store = new GenerationConstraintStore();
-        Assert.True(store.Merge(new GenerationConstraint(
-            new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumY), 230, "first")));
+        var constraints = new List<GenerationConstraint> { new(
+            new GenerationConstraintKey(scope, GenerationConstraintKind.MinimumY), 230, "first") };
 
-        var first = LayerSuffixConstraintMaterializer.Materialize(basis, store.Snapshot(), Settings(), Routes(basis));
+        var first = LayerSuffixConstraintMaterializer.Materialize(basis, constraints, Settings(), Routes(basis));
         Assert.Equal(0, first.Placement.Nodes["upper"].Rect.Y);
         Assert.Equal(230, first.Placement.Nodes["lower"].Rect.Y);
         Assert.Equal(330, first.Placement.Nodes["deeper"].Rect.Y);
@@ -24,14 +23,14 @@ public sealed class LayerSuffixConstraintMaterializerTests
         Assert.Equal(new[] { 1, 2 }, first.LayersMoved);
         Assert.Equal(new[] { "crossed", "incident" }, first.InvalidatedRouteIds);
 
-        Assert.True(store.Merge(new GenerationConstraint(
+        constraints.Add(new GenerationConstraint(
             new GenerationConstraintKey(new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:2"),
-                GenerationConstraintKind.MinimumY), 350, "second")));
-        var second = LayerSuffixConstraintMaterializer.Materialize(basis, store.Snapshot(), Settings(), Routes(basis));
+                GenerationConstraintKind.MinimumY), 350, "second"));
+        var second = LayerSuffixConstraintMaterializer.Materialize(basis, constraints, Settings(), Routes(basis));
         Assert.Equal(230, second.Placement.Nodes["lower"].Rect.Y);
         Assert.Equal(350, second.Placement.Nodes["deeper"].Rect.Y);
 
-        var repeated = LayerSuffixConstraintMaterializer.Materialize(basis, store.Snapshot(), Settings(), Routes(basis));
+        var repeated = LayerSuffixConstraintMaterializer.Materialize(basis, constraints, Settings(), Routes(basis));
         Assert.Equal(second.Placement.Nodes.Select(item => item.Value.Rect),
             repeated.Placement.Nodes.Select(item => item.Value.Rect));
     }

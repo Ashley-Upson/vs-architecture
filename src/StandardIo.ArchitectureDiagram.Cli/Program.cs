@@ -80,7 +80,7 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-common-authority-trial <directory>] [--development-project-region <directory>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
     }
 
     private static async Task<int> GenerateDrawioAsync(
@@ -131,24 +131,6 @@ public static class Program
             Console.WriteLine($"Project region evidence: {directory}");
             Console.WriteLine(region.Eligible ? "Project region eligible." :
                 $"Project region fallback: {string.Join(",", region.FallbackReasons)}");
-            return 0;
-        }
-        if (!string.IsNullOrWhiteSpace(options.CommonAuthorityTrialDirectory))
-        {
-            var trial = ((DeterministicDrawioExporter)exporter)
-                .GenerateDevelopmentCommonAuthorityTrial(diagram, settings);
-            var trialDirectory = Path.GetFullPath(options.CommonAuthorityTrialDirectory);
-            Directory.CreateDirectory(trialDirectory);
-            var beforePath = Path.Combine(trialDirectory, "before.drawio");
-            var afterPath = Path.Combine(trialDirectory, "after.drawio");
-            var trialReportPath = Path.Combine(trialDirectory, "trial-report.json");
-            var trialBroker = provider.GetRequiredService<IDiagramFileBroker>();
-            await trialBroker.WriteTextAsync(beforePath, trial.BeforeDocument).ConfigureAwait(false);
-            await trialBroker.WriteTextAsync(afterPath, trial.AfterDocument).ConfigureAwait(false);
-            await trialBroker.WriteTextAsync(trialReportPath, trial.ReportJson).ConfigureAwait(false);
-            Console.WriteLine($"Development common-authority before: {beforePath}");
-            Console.WriteLine($"Development common-authority after: {afterPath}");
-            Console.WriteLine($"Development common-authority report: {trialReportPath}");
             return 0;
         }
         var generation = exporter.GenerateResult(diagram, settings, new[]
@@ -246,8 +228,6 @@ public static class Program
 
         public string? PerformanceOutputPath { get; private set; }
 
-        public string? CommonAuthorityTrialDirectory { get; private set; }
-
         public string? ProjectRegionDirectory { get; private set; }
 
         public string? DiagramManifestPath { get; private set; }
@@ -302,9 +282,6 @@ public static class Program
                         }
 
                         options.SerializationRepeatCount = repeatCount;
-                        break;
-                    case "--development-common-authority-trial":
-                        options.CommonAuthorityTrialDirectory = ReadValue(args, ref index, arg);
                         break;
                     case "--development-project-region":
                         options.ProjectRegionDirectory = ReadValue(args, ref index, arg);

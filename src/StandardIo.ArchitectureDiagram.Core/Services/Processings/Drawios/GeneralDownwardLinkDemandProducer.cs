@@ -14,31 +14,26 @@ internal static class GeneralDownwardLinkSegmentDemandProducer
         var timer = Stopwatch.StartNew();
         var routes = source.OrderBy(item => item.Route.Link.Id, StringComparer.Ordinal).Select(context =>
         {
-            var canonical = AdjacentDownwardLinkDemandDiscovery.Normalize(
+            var canonical = LogicalRouteNormalizer.NormalizePoints(
                 new[] { context.Route.SourcePoint }.Concat(context.Route.Points).Concat(new[] { context.Route.TargetPoint }));
             var rejection = Rejection(context);
             if (rejection is not null)
-                return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
-                    context.Route.Link.Id, false, rejection, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingSegmentMapping>(),
-                    Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
-                    ObservationalLinkPathParity.UnableToMap, canonical, new[] { rejection.Value.ToString() }), Array.Empty<VerticalLinkColumnDemand>(),
-                    context.Route.Link.SourceId, context.Route.Link.TargetId);
+                return new GeneralDownwardLinkPlan(
+                    context.Route.Link.Id, false, rejection, Array.Empty<LinkSegmentDemand>(), Array.Empty<VerticalLinkColumnDemand>(),
+                    context.Route.Link.SourceId, context.Route.Link.TargetId, canonical, new[] { rejection.Value.ToString() });
             var crossed = context.InterLayerAxisRanges.Keys.Where(id =>
                     id.UpperLayer >= context.Source.Depth && id.LowerLayer <= context.Target.Depth)
                 .OrderBy(id => id.UpperLayer).ThenBy(id => id.LowerLayer).ToArray();
             if (crossed.Length != context.Target.Depth - context.Source.Depth)
-                return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
+                return new GeneralDownwardLinkPlan(
                     context.Route.Link.Id, false, AdjacentDownwardRejectionReason.MultipleInterLayer,
-                    Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingSegmentMapping>(), Array.Empty<AssignedLinkSegment>(),
-                    Array.Empty<LinkTransition>(), Array.Empty<Point>(), ObservationalLinkPathParity.UnableToMap,
-                    canonical, new[] { "A semantic crossed inter-layer is unavailable in the current placement revision." }), Array.Empty<VerticalLinkColumnDemand>(),
-                    context.Route.Link.SourceId, context.Route.Link.TargetId);
+                    Array.Empty<LinkSegmentDemand>(), Array.Empty<VerticalLinkColumnDemand>(),
+                    context.Route.Link.SourceId, context.Route.Link.TargetId, canonical,
+                    new[] { "A semantic crossed inter-layer is unavailable in the current placement revision." });
             var produced = DownwardLinkSegmentDemandFactory.Create(context, crossed, requiredClearance);
-            return new GeneralDownwardLinkPlan(new AdjacentDownwardLinkObservation(
-                context.Route.Link.Id, true, null, produced.SegmentDemands, Array.Empty<ExistingSegmentMapping>(),
-                Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
-                ObservationalLinkPathParity.UnableToMap, canonical, Array.Empty<string>()), produced.VerticalColumnDemands,
-                context.Route.Link.SourceId, context.Route.Link.TargetId);
+            return new GeneralDownwardLinkPlan(
+                context.Route.Link.Id, true, null, produced.SegmentDemands, produced.VerticalColumnDemands,
+                context.Route.Link.SourceId, context.Route.Link.TargetId, canonical, Array.Empty<string>());
         }).ToArray();
         timer.Stop();
         return new GeneralDownwardObservationReport(routes,

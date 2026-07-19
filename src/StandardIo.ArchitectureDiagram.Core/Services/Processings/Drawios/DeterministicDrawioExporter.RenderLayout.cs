@@ -120,26 +120,6 @@ internal sealed partial class RenderLayout
                 RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount,
                 LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
 
-        internal RenderLayout WithTrialLinks(
-            IReadOnlyDictionary<string, LinkLayout> links,
-            TraceabilityValidationResult traceability) =>
-            new(Graph, Nodes, Projects, links, PathSelection, RegionalPathSelection, Traversals, traceability, Corridors, Lanes,
-                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, "DevelopmentCommonAuthorityTrial",
-                StageTimings, RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount,
-                CapacityExpansionCount, LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
-
-        internal RenderLayout WithTrialGeometry(
-            RenderGraph graph,
-            IReadOnlyDictionary<string, NodeLayout> nodes,
-            IReadOnlyDictionary<string, ProjectLayout> projects,
-            IReadOnlyDictionary<string, LinkLayout> links,
-            TraceabilityValidationResult traceability,
-            LayoutRevision? layoutRevision = null) =>
-            new(graph, nodes, projects, links, PathSelection, RegionalPathSelection, Traversals, traceability, Corridors, Lanes,
-                PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, "DevelopmentCommonAuthorityTrial",
-                StageTimings, RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount,
-                CapacityExpansionCount, layoutRevision ?? LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
-
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
             var timings = new List<PipelineStageMetric>();

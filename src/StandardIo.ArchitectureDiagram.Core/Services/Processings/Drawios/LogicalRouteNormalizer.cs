@@ -7,6 +7,21 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class LogicalRouteNormalizer
 {
+    internal static IReadOnlyList<Point> NormalizePoints(IEnumerable<Point> points)
+    {
+        var result = new List<Point>();
+        foreach (var point in points)
+        {
+            if (result.Count > 0 && result[result.Count - 1] == point) continue;
+            while (result.Count >= 2 &&
+                (result[result.Count - 2].X == result[result.Count - 1].X && result[result.Count - 1].X == point.X ||
+                 result[result.Count - 2].Y == result[result.Count - 1].Y && result[result.Count - 1].Y == point.Y))
+                result.RemoveAt(result.Count - 1);
+            result.Add(point);
+        }
+        return result;
+    }
+
     public static IReadOnlyDictionary<string, LinkLayout> Normalize(
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, LinkLayout> links,

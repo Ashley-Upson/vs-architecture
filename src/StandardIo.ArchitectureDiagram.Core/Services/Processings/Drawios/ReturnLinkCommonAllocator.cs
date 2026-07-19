@@ -26,7 +26,7 @@ internal static class ReturnLinkCommonAllocator
             return new ReturnLinkAssignmentReport(Array.Empty<ReturnLinkPlan>(),
                 VerticalLinkColumnAllocator.Assign(Array.Empty<VerticalLinkColumnDemand>(), separation),
                 Array.Empty<AssignedReturnLinkColumn>(),
-                Array.Empty<CommonAuthorityRegionObservation>(),
+                Array.Empty<SlotRegionAssignment>(),
                 Array.Empty<GeneralDownwardLinkAssignment>());
 
         var owned = contexts.Select(context => new { Context = context, Ownership = Ownership(context, placement, padding) })
@@ -82,7 +82,7 @@ internal static class ReturnLinkCommonAllocator
                         .Select(item => item.Rect.Y).DefaultIfEmpty(region.AllowedAxisRange.Maximum).Min();
                     proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(region, assignment.RequiredExtent, lowerY);
                 }
-                return new CommonAuthorityRegionObservation(region, assignment, proposal);
+                return new SlotRegionAssignment(region, assignment, proposal);
             }).ToArray();
         var assignedSlots = regions.SelectMany(item => item.Assignment.SegmentsByDemandId)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -219,7 +219,7 @@ internal static class ReturnLinkCommonAllocator
         var target = context.Route.TargetPoint;
         var departureY = assignedSlots[plan.DepartureDemand.Id].AxisCoordinate;
         var arrivalY = assignedSlots[plan.ArrivalDemand.Id].AxisCoordinate;
-        var points = AdjacentDownwardLinkDemandDiscovery.Normalize(new[]
+        var points = LogicalRouteNormalizer.NormalizePoints(new[]
         {
             source, new Point(source.X, departureY), new Point(column.X, departureY),
             new Point(column.X, arrivalY), new Point(target.X, arrivalY), target

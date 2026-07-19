@@ -168,8 +168,8 @@ public sealed class ReturnLinkCommonAllocatorTests
             new Point(sourceNode.Rect.CenterX, sourceNode.Rect.Bottom),
             new Point(targetNode.Rect.CenterX, targetNode.Rect.Y), Array.Empty<Point>(), .5, .5);
         var context = new AdjacentDownwardLinkContext(route, sourceNode, targetNode, placement.Revision,
-            new RouteRevision(0), Array.Empty<InterLayerLinkMembership>(), Array.Empty<InterLayerLinkDemand>(),
-            new Dictionary<InterLayerId, AxisInterval>(), EmptyCorridors(), EmptyLanes(), null, false);
+            new RouteRevision(0), Array.Empty<InterLayerLinkDemand>(),
+            new Dictionary<InterLayerId, AxisInterval>(), false);
         return (placement, context);
     }
 
@@ -181,16 +181,10 @@ public sealed class ReturnLinkCommonAllocatorTests
         var link = new LinkLayout(new RenderLink(id, "source", "target", "Dependency", 0),
             new Point(120, source.Rect.Bottom), new Point(240, target.Rect.Y), Array.Empty<Point>(), 0.5, 0.5);
         return new AdjacentDownwardLinkContext(link, source, target, new LayoutRevision(1), new RouteRevision(0),
-            Array.Empty<InterLayerLinkMembership>(), Array.Empty<InterLayerLinkDemand>(),
-            new Dictionary<InterLayerId, AxisInterval>(), EmptyCorridors(), EmptyLanes(), null, false);
+            Array.Empty<InterLayerLinkDemand>(), new Dictionary<InterLayerId, AxisInterval>(), false);
     }
 
     private static RenderNode Node(string id, int order) =>
         new(id, "project", id, id, "Class", false, "", order,
             Array.Empty<string>(), Array.Empty<TypeProperty>(), 0);
-    private static CorridorObservation EmptyCorridors() => new(
-        new Dictionary<string, RoutingCorridor>(), new Dictionary<string, CorridorJunction>(),
-        Array.Empty<CorridorSegmentMapping>(), new Dictionary<string, CorridorUsage>());
-    private static CorridorLaneAllocation EmptyLanes() => new(
-        new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>(), Array.Empty<string>());
 }
