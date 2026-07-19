@@ -5,20 +5,20 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class DeterministicRailAllocatorTests
+public sealed class DeterministicSlotAllocatorTests
 {
     [Fact]
     public void Disjoint_intervals_share_a_lane()
     {
         var result = Assign(Demand("a", 0, 10), Demand("b", 30, 40));
-        Assert.All(result.RailsByDemandId.Values, rail => Assert.Equal(0, rail.LaneIndex));
+        Assert.All(result.SegmentsByDemandId.Values, rail => Assert.Equal(0, rail.SlotIndex));
     }
 
     [Fact]
     public void Positive_overlap_receives_distinct_lanes()
     {
         var result = Assign(Demand("a", 0, 20), Demand("b", 10, 30));
-        Assert.Equal(new[] { 0, 1 }, result.RailsByDemandId.Values.Select(item => item.LaneIndex).OrderBy(item => item));
+        Assert.Equal(new[] { 0, 1 }, result.SegmentsByDemandId.Values.Select(item => item.SlotIndex).OrderBy(item => item));
     }
 
     [Fact]
@@ -26,17 +26,17 @@ public sealed class DeterministicRailAllocatorTests
     {
         var result = Assign(Demand("a", 0, 10), Demand("b", 15, 25));
         Assert.Single(result.Components);
-        Assert.Equal(2, result.Components[0].Rails.Select(item => item.LaneIndex).Distinct().Count());
+        Assert.Equal(2, result.Components[0].Segments.Select(item => item.SlotIndex).Distinct().Count());
     }
 
     [Fact]
     public void Endpoint_contact_is_policy_controlled()
     {
-        var shared = Assign(new RailAssignmentOptions(0, 4), Demand("a", 0, 10), Demand("b", 10, 20));
-        var separated = Assign(new RailAssignmentOptions(0, 4, true, true), Demand("a", 0, 10), Demand("b", 10, 20));
+        var shared = Assign(new LinkSegmentAssignmentOptions(0, 4), Demand("a", 0, 10), Demand("b", 10, 20));
+        var separated = Assign(new LinkSegmentAssignmentOptions(0, 4, true, true), Demand("a", 0, 10), Demand("b", 10, 20));
         Assert.Equal(2, shared.Components.Count);
         Assert.Single(separated.Components);
-        Assert.Equal(2, separated.RailsByDemandId.Values.Select(item => item.LaneIndex).Distinct().Count());
+        Assert.Equal(2, separated.SegmentsByDemandId.Values.Select(item => item.SlotIndex).Distinct().Count());
     }
 
     [Fact]
@@ -53,9 +53,9 @@ public sealed class DeterministicRailAllocatorTests
         var demands = new[] { Demand("b", 0, 20), Demand("a", 0, 20), Demand("c", 0, 20) };
         var forward = Assign(demands);
         var reverse = Assign(demands.AsEnumerable().Reverse().ToArray());
-        Assert.Equal(forward.RailsByDemandId.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.LaneIndex)),
-            reverse.RailsByDemandId.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.LaneIndex)));
-        Assert.Equal(0, forward.RailsByDemandId["a"].LaneIndex);
+        Assert.Equal(forward.SegmentsByDemandId.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.SlotIndex)),
+            reverse.SegmentsByDemandId.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.SlotIndex)));
+        Assert.Equal(0, forward.SegmentsByDemandId["a"].SlotIndex);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class DeterministicRailAllocatorTests
     {
         var demands = Enumerable.Range(0, 128).Select(index => Demand(index.ToString("D3"), 0, 100)).ToArray();
         var result = Assign(demands);
-        Assert.Equal(128, result.RailsByDemandId.Values.Select(item => item.LaneIndex).Distinct().Count());
+        Assert.Equal(128, result.SegmentsByDemandId.Values.Select(item => item.SlotIndex).Distinct().Count());
         Assert.Equal(8 + 128 * 12, result.RequiredExtent);
     }
 
@@ -71,23 +71,23 @@ public sealed class DeterministicRailAllocatorTests
     public void Different_regions_are_rejected_instead_of_silently_interacting()
     {
         var demand = Demand("a", 0, 10) with { AllowedAxisRange = new AxisInterval(0, 80) };
-        Assert.Throws<ArgumentException>(() => DeterministicRailAllocator.Assign(
-            Region(), new[] { demand }, new RailAssignmentOptions(12, 4)));
+        Assert.Throws<ArgumentException>(() => DeterministicSlotAllocator.Assign(
+            Region(), new[] { demand }, new LinkSegmentAssignmentOptions(12, 4)));
     }
 
-    private static DeterministicRailAssignment Assign(params RailDemand[] demands) =>
-        Assign(new RailAssignmentOptions(12, 4), demands);
+    private static DeterministicSlotAssignment Assign(params LinkSegmentDemand[] demands) =>
+        Assign(new LinkSegmentAssignmentOptions(12, 4), demands);
 
-    private static DeterministicRailAssignment Assign(RailAssignmentOptions options, params RailDemand[] demands) =>
-        DeterministicRailAllocator.Assign(Region(), demands, options);
+    private static DeterministicSlotAssignment Assign(LinkSegmentAssignmentOptions options, params LinkSegmentDemand[] demands) =>
+        DeterministicSlotAllocator.Assign(Region(), demands, options);
 
-    private static RailAllocationRegionIdentity Region() => new(
-        RailOrientation.Horizontal, new AxisInterval(100, 200), "band:0:1",
+    private static LinkSegmentAllocationRegionIdentity Region() => new(
+        LinkSegmentOrientation.Horizontal, new AxisInterval(100, 200), "band:0:1",
         new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"), new LayoutRevision(1));
 
-    private static RailDemand Demand(string id, int start, int end) => new(
-        id, id, RailOrientation.Horizontal, new AxisInterval(start, end), new AxisInterval(100, 200),
-        null, RailSemanticRole.Through, null, null,
+    private static LinkSegmentDemand Demand(string id, int start, int end) => new(
+        id, id, LinkSegmentOrientation.Horizontal, new AxisInterval(start, end), new AxisInterval(100, 200),
+        null, LinkSegmentRole.Through, null, null,
         new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"),
         new LayoutRevision(1), new RouteRevision(1));
 }

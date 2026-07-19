@@ -16,14 +16,14 @@ internal static class GeneralDownwardCommonAllocator
         var eligible = report.Routes.Where(item => item.Observation.Eligible).ToArray();
         var timer = Stopwatch.StartNew();
         var regions = eligible.SelectMany(item => item.Observation.Demands)
-            .Where(item => item.Role == RailSemanticRole.Through)
+            .Where(item => item.Role == LinkSegmentRole.Through)
             .GroupBy(RegionKey).OrderBy(item => item.Key, StringComparer.Ordinal).Select(group =>
             {
                 var sample = group.First();
-                var region = new RailAllocationRegionIdentity(sample.Orientation, sample.AllowedAxisRange,
+                var region = new LinkSegmentAllocationRegionIdentity(sample.Orientation, sample.AllowedAxisRange,
                     group.Key, sample.MovementScope, sample.PlacementRevision);
-                var assignment = DeterministicRailAllocator.Assign(region, group,
-                    new RailAssignmentOptions(separation, padding));
+                var assignment = DeterministicSlotAllocator.Assign(region, group,
+                    new LinkSegmentAssignmentOptions(separation, padding));
                 GenerationConstraint? proposal = null;
                 if (assignment.RequiredExtent > region.AllowedAxisRange.Length)
                 {
@@ -37,7 +37,7 @@ internal static class GeneralDownwardCommonAllocator
                     proposal);
             }).ToArray();
         timer.Stop();
-        var assignedByDemand = regions.SelectMany(item => item.Assignment.RailsByDemandId)
+        var assignedByDemand = regions.SelectMany(item => item.Assignment.SegmentsByDemandId)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var transitionTimer = Stopwatch.StartNew();
         var routes = eligible.OrderBy(item => item.Observation.LogicalRouteId, StringComparer.Ordinal)
@@ -50,24 +50,24 @@ internal static class GeneralDownwardCommonAllocator
 
     private static GeneralDownwardRouteAssignment Reconstruct(
         GeneralDownwardRoutePlan plan,
-        IReadOnlyDictionary<string, AssignedRail> assignedByDemand,
+        IReadOnlyDictionary<string, AssignedLinkSegment> assignedByDemand,
         IReadOnlyDictionary<string, NodeLayout> nodes)
     {
         var observation = plan.Observation;
-        var throughDemands = observation.Demands.Where(item => item.Role == RailSemanticRole.Through)
+        var throughDemands = observation.Demands.Where(item => item.Role == LinkSegmentRole.Through)
             .OrderBy(item => item.TurnOrder).ToArray();
         if (throughDemands.Any(item => !assignedByDemand.ContainsKey(item.Id)))
             return Invalid(observation.LogicalRouteId, "A crossed-band rail was not assigned.");
         var through = throughDemands.Select(item => assignedByDemand[item.Id]).ToArray();
         var source = observation.CanonicalAuthoritativePoints[0];
         var target = observation.CanonicalAuthoritativePoints[observation.CanonicalAuthoritativePoints.Count - 1];
-        var departure = TerminalRail(observation, RailSemanticRole.TerminalDeparture, source.X,
+        var departure = TerminalRail(observation, LinkSegmentRole.ConnectionDeparture, source.X,
             new AxisInterval(source.Y, through[0].AxisCoordinate));
-        var arrival = TerminalRail(observation, RailSemanticRole.TerminalArrival, target.X,
+        var arrival = TerminalRail(observation, LinkSegmentRole.ConnectionArrival, target.X,
             new AxisInterval(through[through.Length - 1].AxisCoordinate, target.Y));
         var rails = new[] { departure }.Concat(through).Concat(new[] { arrival }).ToArray();
         var points = new List<Point> { source };
-        var transitions = new List<RailTransition>();
+        var transitions = new List<LinkTransition>();
         var currentX = source.X;
         for (var index = 0; index < through.Length; index++)
         {
@@ -77,7 +77,7 @@ internal static class GeneralDownwardCommonAllocator
             var secondTurn = new Point(nextX, rail.AxisCoordinate);
             Add(points, firstTurn);
             Add(points, secondTurn);
-            transitions.Add(new RailTransition($"{observation.LogicalRouteId}:turn:{index}:entry",
+            transitions.Add(new LinkTransition($"{observation.LogicalRouteId}:turn:{index}:entry",
                 observation.LogicalRouteId, index == 0 ? departure.Id : through[index - 1].Id,
                 rail.Id, firstTurn, transitions.Count, rail.PlacementRevision, rail.RouteRevision));
             if (index + 1 < through.Length)
@@ -91,7 +91,7 @@ internal static class GeneralDownwardCommonAllocator
             currentX = nextX;
         }
         Add(points, target);
-        var normalized = AdjacentDownwardRailDemandObserver.Normalize(points);
+        var normalized = AdjacentDownwardLinkSegmentDemandObserver.Normalize(points);
         if (normalized.Zip(normalized.Skip(1), (a, b) => new Segment(a, b)).Any(item => !item.IsOrthogonal) ||
             HasImmediateReversal(normalized))
             return Invalid(observation.LogicalRouteId, "ReconstructionInvariantFailure");
@@ -99,22 +99,22 @@ internal static class GeneralDownwardCommonAllocator
             normalized, Array.Empty<string>(), true);
     }
 
-    private static AssignedRail TerminalRail(
+    private static AssignedLinkSegment TerminalRail(
         AdjacentDownwardRouteObservation route,
-        RailSemanticRole role,
+        LinkSegmentRole role,
         int axis,
         AxisInterval occupied)
     {
         var demand = route.Demands.Single(item => item.Role == role);
-        return new AssignedRail($"{demand.Id}:assigned", demand.Id, route.LogicalRouteId,
-            RailOrientation.Vertical, axis, 0, occupied, role, demand.PlacementRevision, demand.RouteRevision);
+        return new AssignedLinkSegment($"{demand.Id}:assigned", demand.Id, route.LogicalRouteId,
+            LinkSegmentOrientation.Vertical, axis, 0, occupied, role, demand.PlacementRevision, demand.RouteRevision);
     }
 
-    private static string RegionKey(RailDemand demand) =>
+    private static string RegionKey(LinkSegmentDemand demand) =>
         $"{demand.Orientation}:{demand.AllowedAxisRange.Minimum}:{demand.AllowedAxisRange.Maximum}:" +
         $"{demand.MovementScope?.Kind}:{demand.MovementScope?.Id}:{demand.PlacementRevision.Value}";
     private static GeneralDownwardRouteAssignment Invalid(string routeId, string reason) =>
-        new(routeId, Array.Empty<AssignedRail>(), Array.Empty<RailTransition>(), Array.Empty<Point>(), new[] { reason }, false);
+        new(routeId, Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(), new[] { reason }, false);
     private static void Add(ICollection<Point> points, Point point)
     {
         if (!points.Contains(point)) points.Add(point);

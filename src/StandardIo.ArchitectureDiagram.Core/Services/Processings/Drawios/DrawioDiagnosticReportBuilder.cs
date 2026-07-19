@@ -304,12 +304,12 @@ internal static class DrawioDiagnosticReportBuilder
         constraintTimer.Stop();
 
         var invalidationTimer = Stopwatch.StartNew();
-        var routeReferences = layout.Links.Values.Select(link => new SemanticRouteReference(
+        var routeReferences = layout.Links.Values.Select(link => new SemanticLinkReference(
             link.Link.Id, link.Link.SourceId, link.Link.TargetId, new RouteRevision(link.RouteState.Revision)));
         var invalidations = changedNodeIds.Count == 0
-            ? Array.Empty<RouteInvalidation>()
-            : RouteInvalidationCalculator.ForChangedNodes(
-                routeReferences, changedNodeIds, RouteInvalidationCause.EndpointResized,
+            ? Array.Empty<LinkInvalidation>()
+            : LinkInvalidationCalculator.ForChangedNodes(
+                routeReferences, changedNodeIds, LinkInvalidationCause.EndpointResized,
                 layout.LayoutRevision, layout.LayoutRevision.Next()).ToArray();
         invalidationTimer.Stop();
 
@@ -369,7 +369,7 @@ internal static class DrawioDiagnosticReportBuilder
                 layout.Lanes,
                 layout.GroupedSpacingPlan,
                 duplicatedExposureTree)).ToArray();
-        var observation = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var observation = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
         var projection = AdjacentDownwardComponentProjector.Project(observation, requiredSpacing);
         var common = AdjacentDownwardCommonRailObserver.Observe(observation, requiredSpacing, padding);
         var eligible = observation.Routes.Where(item => item.Eligible).ToArray();
@@ -422,7 +422,7 @@ internal static class DrawioDiagnosticReportBuilder
             {
                 regions = common.Regions.Count,
                 components = common.Regions.Sum(item => item.Assignment.Components.Count),
-                demandsAssigned = common.Regions.Sum(item => item.Assignment.RailsByDemandId.Count),
+                demandsAssigned = common.Regions.Sum(item => item.Assignment.SegmentsByDemandId.Count),
                 largestComponent = common.Regions.SelectMany(item => item.Assignment.Components)
                     .Select(item => item.Demands.Count).DefaultIfEmpty(0).Max(),
                 existingParity = common.Routes.SelectMany(item => item.ExistingParity)
@@ -445,7 +445,7 @@ internal static class DrawioDiagnosticReportBuilder
                     common.AssignmentMicroseconds,
                     conflictDiscoveryMicroseconds = common.Regions.Sum(item => item.Assignment.ConflictDiscoveryMicroseconds),
                     componentConstructionMicroseconds = common.Regions.Sum(item => item.Assignment.ComponentConstructionMicroseconds),
-                    laneAssignmentMicroseconds = common.Regions.Sum(item => item.Assignment.LaneAssignmentMicroseconds),
+                    laneAssignmentMicroseconds = common.Regions.Sum(item => item.Assignment.SlotAssignmentMicroseconds),
                     extentCalculationMicroseconds = common.Regions.Sum(item => item.Assignment.ExtentCalculationMicroseconds),
                     common.ConstraintProjectionMicroseconds,
                     common.ReconstructionMicroseconds,
@@ -468,7 +468,7 @@ internal static class DrawioDiagnosticReportBuilder
                     allowedAxisMinimum = demand.AllowedAxisRange.Minimum,
                     allowedAxisMaximum = demand.AllowedAxisRange.Maximum,
                     demand.PreferredAxis,
-                    demand.TerminalOrder,
+                    demand.ConnectionOrder,
                     demand.TurnOrder,
                     movementScope = demand.MovementScope?.ToString(),
                     placementRevision = demand.PlacementRevision.Value,
@@ -477,7 +477,7 @@ internal static class DrawioDiagnosticReportBuilder
                 laneMappings = item.ExistingLaneMappings.Select(mapping => new
                 {
                     source = mapping.Source.ToString(),
-                    mapping.Rail.LaneIndex,
+                    mapping.Rail.SlotIndex,
                     mapping.Rail.AxisCoordinate,
                     mapping.SpecializedMetadata
                 }),
@@ -506,11 +506,11 @@ internal static class DrawioDiagnosticReportBuilder
                 route.LogicalRouteId,
                 source = new { sourceNode.Node.Id, sourceNode.Node.Name, sourceNode.Node.FullName, sourceNode.Rect },
                 target = new { targetNode.Node.Id, targetNode.Node.Name, targetNode.Node.FullName, targetNode.Rect },
-                assignedRails = route.SelectedAssignedRails.Select(item => new
+                assignedRails = route.SelectedAssignedLinkSegments.Select(item => new
                 {
                     role = item.Role.ToString(),
                     item.AxisCoordinate,
-                    item.LaneIndex,
+                    item.SlotIndex,
                     item.OccupiedInterval
                 }),
                 turns = route.Transitions.Select(item => item.Turn),
@@ -591,7 +591,7 @@ internal static class DrawioDiagnosticReportBuilder
             expandedByOutgoingAttachments = nodes.Count(node => node.expandedFromConfiguredWidth && node.reason == "OutgoingAttachments"),
             changedFromPreviousFormula = resizedIds.Count,
             maximumAbsoluteChangeFromPreviousFormula = nodes.Select(node => Math.Abs(node.requiredWidth - node.previousWidth)).DefaultIfEmpty(0).Max(),
-            observationalIncidentRouteInvalidations = layout.Graph.Links.Count(link =>
+            observationalIncidentLinkInvalidations = layout.Graph.Links.Count(link =>
                 resizedIds.Contains(link.SourceId) || resizedIds.Contains(link.TargetId)),
             nodes
         };

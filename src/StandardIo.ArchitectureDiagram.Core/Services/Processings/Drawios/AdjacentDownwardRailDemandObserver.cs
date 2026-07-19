@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class AdjacentDownwardRailDemandObserver
+internal static class AdjacentDownwardLinkSegmentDemandObserver
 {
     public static AdjacentDownwardObservationReport Observe(IEnumerable<AdjacentDownwardRouteContext> contexts)
     {
@@ -38,7 +38,7 @@ internal static class AdjacentDownwardRailDemandObserver
 
             var adaptationStarted = Stopwatch.GetTimestamp();
             var mappings = ExistingMappings(context, bandMembership, throughSegment, demands[1]);
-            var selected = SelectAssignedRails(context, demands, mappings, authoritative);
+            var selected = SelectAssignedLinkSegments(context, demands, mappings, authoritative);
             adaptationTicks += Stopwatch.GetTimestamp() - adaptationStarted;
 
             var reconstructionStarted = Stopwatch.GetTimestamp();
@@ -102,19 +102,19 @@ internal static class AdjacentDownwardRailDemandObserver
         return null;
     }
 
-    private static IReadOnlyList<RailDemand> Demands(
+    private static IReadOnlyList<LinkSegmentDemand> Demands(
         AdjacentDownwardRouteContext context,
         BandRouteMembership membership,
         IReadOnlyList<Point> points)
     {
-        return DownwardRailDemandFactory.Create(context, new[] { membership.BandId }).Demands;
+        return DownwardLinkSegmentDemandFactory.Create(context, new[] { membership.BandId }).Demands;
     }
 
     private static IReadOnlyList<ExistingLaneMapping> ExistingMappings(
         AdjacentDownwardRouteContext context,
         BandRouteMembership membership,
         Segment through,
-        RailDemand demand)
+        LinkSegmentDemand demand)
     {
         var result = new List<ExistingLaneMapping>();
         foreach (var mapping in context.Corridors.SegmentMappings.Where(item =>
@@ -129,7 +129,7 @@ internal static class AdjacentDownwardRailDemandObserver
         }
 
         foreach (var bandDemand in context.BandDemands.Where(item => item.BandId == membership.BandId))
-            result.Add(Mapping(ExistingLaneMappingSource.StageBHypothetical, demand, bandDemand.LaneIndex, through.Start.Y,
+            result.Add(Mapping(ExistingLaneMappingSource.StageBHypothetical, demand, bandDemand.SlotIndex, through.Start.Y,
                 ("bandId", bandDemand.BandId.ToString()), ("direction", bandDemand.Direction.ToString()),
                 ("membershipRole", bandDemand.Role.ToString())));
 
@@ -143,30 +143,30 @@ internal static class AdjacentDownwardRailDemandObserver
                     ("currentExtent", group.CurrentExtent.ToString()), ("requiredExtent", group.RequiredExtent.ToString())));
         }
 
-        return result.OrderBy(item => item.Source).ThenBy(item => item.Rail.LaneIndex)
+        return result.OrderBy(item => item.Source).ThenBy(item => item.Rail.SlotIndex)
             .ThenBy(item => item.Rail.Id, StringComparer.Ordinal).ToArray();
     }
 
     private static ExistingLaneMapping Mapping(
         ExistingLaneMappingSource source,
-        RailDemand demand,
+        LinkSegmentDemand demand,
         int laneIndex,
         int axis,
         params (string Key, string Value)[] metadata) =>
-        new(source, new AssignedRail(
+        new(source, new AssignedLinkSegment(
             $"{demand.LogicalRouteId}:assigned:through:{source}", demand.Id, demand.LogicalRouteId,
             demand.Orientation, axis, laneIndex, demand.OccupiedInterval, demand.Role,
             demand.PlacementRevision, demand.RouteRevision),
             metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
 
-    private static IReadOnlyList<AssignedRail> SelectAssignedRails(
+    private static IReadOnlyList<AssignedLinkSegment> SelectAssignedLinkSegments(
         AdjacentDownwardRouteContext context,
-        IReadOnlyList<RailDemand> demands,
+        IReadOnlyList<LinkSegmentDemand> demands,
         IReadOnlyList<ExistingLaneMapping> mappings,
         IReadOnlyList<Point> points)
     {
         var through = mappings.OrderBy(item => item.Source).Select(item => item.Rail).FirstOrDefault();
-        if (through is null) return Array.Empty<AssignedRail>();
+        if (through is null) return Array.Empty<AssignedLinkSegment>();
         return new[]
         {
             AssignedTerminal(context, demands[0], points[0].X, 0),
@@ -175,22 +175,22 @@ internal static class AdjacentDownwardRailDemandObserver
         };
     }
 
-    private static AssignedRail AssignedTerminal(AdjacentDownwardRouteContext context, RailDemand demand, int axis, int lane) =>
+    private static AssignedLinkSegment AssignedTerminal(AdjacentDownwardRouteContext context, LinkSegmentDemand demand, int axis, int lane) =>
         new($"{context.Route.Link.Id}:assigned:{demand.Role}", demand.Id, context.Route.Link.Id,
             demand.Orientation, axis, lane, demand.OccupiedInterval, demand.Role,
             context.LayoutRevision, context.RouteRevision);
 
-    private static IReadOnlyList<RailTransition> Transitions(
+    private static IReadOnlyList<LinkTransition> Transitions(
         AdjacentDownwardRouteContext context,
-        IReadOnlyList<AssignedRail> rails,
+        IReadOnlyList<AssignedLinkSegment> rails,
         IReadOnlyList<Point> points)
     {
-        if (rails.Count != 3) return Array.Empty<RailTransition>();
+        if (rails.Count != 3) return Array.Empty<LinkTransition>();
         return new[]
         {
-            new RailTransition($"{context.Route.Link.Id}:transition:0", context.Route.Link.Id,
+            new LinkTransition($"{context.Route.Link.Id}:transition:0", context.Route.Link.Id,
                 rails[0].Id, rails[1].Id, points[1], 0, context.LayoutRevision, context.RouteRevision),
-            new RailTransition($"{context.Route.Link.Id}:transition:1", context.Route.Link.Id,
+            new LinkTransition($"{context.Route.Link.Id}:transition:1", context.Route.Link.Id,
                 rails[1].Id, rails[2].Id, points[2], 1, context.LayoutRevision, context.RouteRevision)
         };
     }
@@ -198,22 +198,22 @@ internal static class AdjacentDownwardRailDemandObserver
     internal static IReadOnlyList<Point> Reconstruct(
         Point source,
         Point target,
-        IReadOnlyList<AssignedRail> rails,
-        IReadOnlyList<RailTransition> transitions)
+        IReadOnlyList<AssignedLinkSegment> rails,
+        IReadOnlyList<LinkTransition> transitions)
     {
         if (rails.Count != 3 || transitions.Count != 2) return Array.Empty<Point>();
         var byId = rails.ToDictionary(item => item.Id, StringComparer.Ordinal);
         foreach (var transition in transitions.OrderBy(item => item.Order))
         {
-            if (!byId.TryGetValue(transition.FromAssignedRailId, out var from) ||
-                !byId.TryGetValue(transition.ToAssignedRailId, out var to) ||
+            if (!byId.TryGetValue(transition.FromAssignedLinkSegmentId, out var from) ||
+                !byId.TryGetValue(transition.ToAssignedLinkSegmentId, out var to) ||
                 !OnRail(transition.Turn, from) || !OnRail(transition.Turn, to))
                 return Array.Empty<Point>();
         }
         return Normalize(new[] { source }.Concat(transitions.OrderBy(item => item.Order).Select(item => item.Turn)).Concat(new[] { target }));
     }
 
-    private static bool OnRail(Point point, AssignedRail rail) => rail.Orientation == RailOrientation.Horizontal
+    private static bool OnRail(Point point, AssignedLinkSegment rail) => rail.Orientation == LinkSegmentOrientation.Horizontal
         ? point.Y == rail.AxisCoordinate && rail.OccupiedInterval.ContainsClosed(point.X)
         : point.X == rail.AxisCoordinate && rail.OccupiedInterval.ContainsClosed(point.Y);
 
@@ -221,8 +221,8 @@ internal static class AdjacentDownwardRailDemandObserver
         string routeId,
         AdjacentDownwardRejectionReason reason,
         IReadOnlyList<Point> authoritative) =>
-        new(routeId, false, reason, Array.Empty<RailDemand>(), Array.Empty<ExistingLaneMapping>(),
-            Array.Empty<AssignedRail>(), Array.Empty<RailTransition>(), Array.Empty<Point>(),
+        new(routeId, false, reason, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingLaneMapping>(),
+            Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
             ObservationalRouteParity.UnableToMap, authoritative, new[] { reason.ToString() });
 
     private static IReadOnlyList<Point> CompletePoints(LinkLayout route) =>
@@ -244,8 +244,8 @@ internal static class AdjacentDownwardRailDemandObserver
     private static bool SameTopology(IReadOnlyList<Point> first, IReadOnlyList<Point> second) =>
         Directions(first).SequenceEqual(Directions(second));
 
-    private static IEnumerable<RailOrientation> Directions(IReadOnlyList<Point> points) =>
-        points.Zip(points.Skip(1), (a, b) => a.Y == b.Y ? RailOrientation.Horizontal : RailOrientation.Vertical);
+    private static IEnumerable<LinkSegmentOrientation> Directions(IReadOnlyList<Point> points) =>
+        points.Zip(points.Skip(1), (a, b) => a.Y == b.Y ? LinkSegmentOrientation.Horizontal : LinkSegmentOrientation.Vertical);
 
     private static bool Collinear(Point a, Point b, Point c) =>
         a.X == b.X && b.X == c.X || a.Y == b.Y && b.Y == c.Y;

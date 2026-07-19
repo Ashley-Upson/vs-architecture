@@ -45,17 +45,17 @@ internal sealed record AdjacentDownwardRouteContext(
 
 internal sealed record ExistingLaneMapping(
     ExistingLaneMappingSource Source,
-    AssignedRail Rail,
+    AssignedLinkSegment Rail,
     IReadOnlyDictionary<string, string> SpecializedMetadata);
 
 internal sealed record AdjacentDownwardRouteObservation(
     string LogicalRouteId,
     bool Eligible,
     AdjacentDownwardRejectionReason? RejectionReason,
-    IReadOnlyList<RailDemand> Demands,
+    IReadOnlyList<LinkSegmentDemand> Demands,
     IReadOnlyList<ExistingLaneMapping> ExistingLaneMappings,
-    IReadOnlyList<AssignedRail> SelectedAssignedRails,
-    IReadOnlyList<RailTransition> Transitions,
+    IReadOnlyList<AssignedLinkSegment> SelectedAssignedLinkSegments,
+    IReadOnlyList<LinkTransition> Transitions,
     IReadOnlyList<Point> ReconstructedPoints,
     ObservationalRouteParity Parity,
     IReadOnlyList<Point> CanonicalAuthoritativePoints,

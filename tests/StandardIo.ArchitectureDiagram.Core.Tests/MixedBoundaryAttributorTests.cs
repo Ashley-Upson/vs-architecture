@@ -9,7 +9,7 @@ public sealed class MixedBoundaryAttributorTests
     public void Multiple_band_rejection_does_not_obscure_semantic_downward_family()
     {
         var contexts = new[] { Context("route", sourceDepth: 0, targetDepth: 2) };
-        var observation = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var observation = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
         var result = MixedBoundaryAttributor.Attribute(contexts, observation,
             Array.Empty<CommonAuthorityInteraction>(), Bands(contexts[0]));
 

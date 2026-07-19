@@ -6,15 +6,15 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class AdjacentDownwardRailDemandObserverTests
+public sealed class AdjacentDownwardLinkSegmentDemandObserverTests
 {
     [Fact]
     public void Adjacent_downward_route_emits_complete_demands_and_exact_reconstruction()
     {
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[] { Context("route") }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route") }).Routes);
 
         Assert.True(result.Eligible);
-        Assert.Equal(new[] { RailSemanticRole.TerminalDeparture, RailSemanticRole.Through, RailSemanticRole.TerminalArrival },
+        Assert.Equal(new[] { LinkSegmentRole.ConnectionDeparture, LinkSegmentRole.Through, LinkSegmentRole.ConnectionArrival },
             result.Demands.Select(item => item.Role));
         Assert.Equal(2, result.Transitions.Count);
         Assert.Equal(ObservationalRouteParity.ExactPointParity, result.Parity);
@@ -25,20 +25,20 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     public void Existing_terminal_coordinates_are_preserved()
     {
         var context = Context("route");
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[] { context }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { context }).Routes);
 
         Assert.Equal(context.Route.SourcePoint, result.ReconstructedPoints[0]);
         Assert.Equal(context.Route.TargetPoint, result.ReconstructedPoints[^1]);
-        Assert.Equal(context.Route.SourcePoint.X, result.SelectedAssignedRails[0].AxisCoordinate);
-        Assert.Equal(context.Route.TargetPoint.X, result.SelectedAssignedRails[^1].AxisCoordinate);
+        Assert.Equal(context.Route.SourcePoint.X, result.SelectedAssignedLinkSegments[0].AxisCoordinate);
+        Assert.Equal(context.Route.TargetPoint.X, result.SelectedAssignedLinkSegments[^1].AxisCoordinate);
     }
 
     [Fact]
     public void Multiple_routes_and_reversed_enumeration_have_stable_demand_identities()
     {
         var contexts = new[] { Context("b", lane: 1), Context("a", lane: 0) };
-        var forward = AdjacentDownwardRailDemandObserver.Observe(contexts).Routes;
-        var reverse = AdjacentDownwardRailDemandObserver.Observe(contexts.AsEnumerable().Reverse()).Routes;
+        var forward = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts).Routes;
+        var reverse = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts.AsEnumerable().Reverse()).Routes;
 
         Assert.Equal(new[] { "a", "b" }, forward.Select(item => item.LogicalRouteId));
         Assert.Equal(forward.SelectMany(item => item.Demands).Select(item => item.Id),
@@ -48,7 +48,7 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     [Fact]
     public void Existing_lane_sources_map_deterministically_to_assigned_rail()
     {
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[] { Context("route", includeAllLaneSources: true) }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route", includeAllLaneSources: true) }).Routes);
 
         Assert.Equal(new[]
         {
@@ -67,32 +67,32 @@ public sealed class AdjacentDownwardRailDemandObserverTests
         var separate = ThroughRail("b", 144);
         var shared = ThroughRail("c", 120);
 
-        Assert.False(ContactInteractionPolicy.CreatesAssignedRailEdge(first, separate, 12));
-        Assert.True(ContactInteractionPolicy.CreatesAssignedRailEdge(first, shared, 12));
+        Assert.False(ContactInteractionPolicy.CreatesAssignedLinkSegmentEdge(first, separate, 12));
+        Assert.True(ContactInteractionPolicy.CreatesAssignedLinkSegmentEdge(first, shared, 12));
     }
 
     [Fact]
     public void Component_projection_removes_competition_after_existing_lane_separation()
     {
-        var report = AdjacentDownwardRailDemandObserver.Observe(new[] { Context("a", lane: 0), Context("b", lane: 1) });
+        var report = AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("a", lane: 0), Context("b", lane: 1) });
 
         var projection = AdjacentDownwardComponentProjector.Project(report, 12);
 
         Assert.Single(projection.UnassignedComponents);
         Assert.Equal(2, projection.AssignedComponents.Count);
-        Assert.Contains(projection.UnassignedEdges, item => item.Cause == "UnassignedRailDemand");
+        Assert.Contains(projection.UnassignedEdges, item => item.Cause == "UnassignedLinkSegmentDemand");
         Assert.Empty(projection.AssignedEdges);
     }
 
     [Fact]
     public void Turn_transitions_are_orthogonal_and_owned_by_both_rails()
     {
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[] { Context("route") }).Routes);
-        var rails = result.SelectedAssignedRails.ToDictionary(item => item.Id);
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route") }).Routes);
+        var rails = result.SelectedAssignedLinkSegments.ToDictionary(item => item.Id);
 
         Assert.All(result.Transitions, transition =>
         {
-            Assert.NotEqual(rails[transition.FromAssignedRailId].Orientation, rails[transition.ToAssignedRailId].Orientation);
+            Assert.NotEqual(rails[transition.FromAssignedLinkSegmentId].Orientation, rails[transition.ToAssignedLinkSegmentId].Orientation);
             Assert.Contains(transition.Turn, result.ReconstructedPoints);
         });
     }
@@ -105,7 +105,7 @@ public sealed class AdjacentDownwardRailDemandObserverTests
         {
             Route = Link("diagonal", new Point(20, 80), new Point(80, 200), new[] { new Point(50, 120) })
         };
-        var report = AdjacentDownwardRailDemandObserver.Observe(new[] { skipped, Context("eligible"), diagonalRoute });
+        var report = AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { skipped, Context("eligible"), diagonalRoute });
 
         Assert.True(report.Routes.Single(item => item.LogicalRouteId == "eligible").Eligible);
         Assert.Equal(AdjacentDownwardRejectionReason.SkippedLayer,
@@ -119,7 +119,7 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     {
         var context = Context("route") with { RouteRevision = new RouteRevision(2) };
 
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[] { context }).Routes);
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { context }).Routes);
 
         Assert.Equal(AdjacentDownwardRejectionReason.RevisionMismatch, result.RejectionReason);
     }
@@ -127,7 +127,7 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     [Fact]
     public void Observation_revision_is_independent_of_logical_route_history_revision()
     {
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[]
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[]
         {
             Context("route", observationRevision: 2)
         }).Routes);
@@ -147,7 +147,7 @@ public sealed class AdjacentDownwardRailDemandObserverTests
             LastSegmentIndex = 2
         };
 
-        var result = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[]
+        var result = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[]
         {
             context with { BandMemberships = context.BandMemberships.Concat(new[] { second }).ToArray() }
         }).Routes);
@@ -159,8 +159,8 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     [Fact]
     public void Reconstruction_never_uses_original_points_as_fallback()
     {
-        var reconstructed = AdjacentDownwardRailDemandObserver.Reconstruct(
-            new Point(20, 80), new Point(80, 200), Array.Empty<AssignedRail>(), Array.Empty<RailTransition>());
+        var reconstructed = AdjacentDownwardLinkSegmentDemandObserver.Reconstruct(
+            new Point(20, 80), new Point(80, 200), Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>());
 
         Assert.Empty(reconstructed);
     }
@@ -168,13 +168,13 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     [Fact]
     public void Common_allocator_reconstructs_without_reusing_existing_through_rail()
     {
-        var observed = AdjacentDownwardRailDemandObserver.Observe(new[] { Context("route", lane: 3) });
+        var observed = AdjacentDownwardLinkSegmentDemandObserver.Observe(new[] { Context("route", lane: 3) });
 
         var common = AdjacentDownwardCommonRailObserver.Observe(observed, 12, 4);
 
         var route = Assert.Single(common.Routes);
         Assert.NotNull(route.CommonThroughRail);
-        Assert.Equal(0, route.CommonThroughRail!.LaneIndex);
+        Assert.Equal(0, route.CommonThroughRail!.SlotIndex);
         Assert.Equal(CommonRouteReconstructionParity.ValidDifferentGeometry, route.ReconstructionParity);
         Assert.Equal(84, route.ReconstructedPoints[1].Y);
     }
@@ -184,21 +184,21 @@ public sealed class AdjacentDownwardRailDemandObserverTests
     {
         var contexts = new[] { Context("b", lane: 1), Context("a", lane: 0) };
         var forward = AdjacentDownwardCommonRailObserver.Observe(
-            AdjacentDownwardRailDemandObserver.Observe(contexts), 12, 4);
+            AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts), 12, 4);
         var reverse = AdjacentDownwardCommonRailObserver.Observe(
-            AdjacentDownwardRailDemandObserver.Observe(contexts.AsEnumerable().Reverse()), 12, 4);
+            AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts.AsEnumerable().Reverse()), 12, 4);
 
         Assert.Single(forward.Regions);
-        Assert.Equal(2, forward.Regions[0].Assignment.RailsByDemandId.Count);
-        Assert.Equal(forward.Routes.Select(item => (item.LogicalRouteId, item.CommonThroughRail!.LaneIndex)),
-            reverse.Routes.Select(item => (item.LogicalRouteId, item.CommonThroughRail!.LaneIndex)));
+        Assert.Equal(2, forward.Regions[0].Assignment.SegmentsByDemandId.Count);
+        Assert.Equal(forward.Routes.Select(item => (item.LogicalRouteId, item.CommonThroughRail!.SlotIndex)),
+            reverse.Routes.Select(item => (item.LogicalRouteId, item.CommonThroughRail!.SlotIndex)));
     }
 
     [Fact]
     public void Common_required_extent_projects_a_persistent_constraint_without_moving_live_layout()
     {
         var contexts = Enumerable.Range(0, 12).Select(index => Context($"route-{index:D2}", lane: index)).ToArray();
-        var observed = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var observed = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
         var before = observed.Routes.Select(item => item.CanonicalAuthoritativePoints.ToArray()).ToArray();
 
         var common = AdjacentDownwardCommonRailObserver.Observe(observed, 12, 4);
@@ -267,8 +267,8 @@ public sealed class AdjacentDownwardRailDemandObserverTests
             Array.Empty<string>(), Array.Empty<StandardIo.ArchitectureDiagram.Core.Models.TypeProperty>(), 0),
         rect, depth, false);
 
-    private static AssignedRail ThroughRail(string id, int axis) => new(
-        id, id, id, RailOrientation.Horizontal, axis, 0, new AxisInterval(20, 80), RailSemanticRole.Through,
+    private static AssignedLinkSegment ThroughRail(string id, int axis) => new(
+        id, id, id, LinkSegmentOrientation.Horizontal, axis, 0, new AxisInterval(20, 80), LinkSegmentRole.Through,
         new LayoutRevision(1), new RouteRevision(0));
 
     private static CorridorObservation EmptyCorridors() => new(

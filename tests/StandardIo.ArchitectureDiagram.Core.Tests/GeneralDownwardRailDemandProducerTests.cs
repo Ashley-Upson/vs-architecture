@@ -4,14 +4,14 @@ using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
-public sealed class GeneralDownwardRailDemandProducerTests
+public sealed class GeneralDownwardLinkSegmentDemandProducerTests
 {
     [Fact]
     public void Adjacent_downward_is_the_one_band_case_of_shared_demand_factory()
     {
         var context = Context("route", 1);
-        var general = Assert.Single(GeneralDownwardRailDemandProducer.Observe(new[] { context }).Routes);
-        var adjacent = Assert.Single(AdjacentDownwardRailDemandObserver.Observe(new[]
+        var general = Assert.Single(GeneralDownwardLinkSegmentDemandProducer.Observe(new[] { context }).Routes);
+        var adjacent = Assert.Single(AdjacentDownwardLinkSegmentDemandObserver.Observe(new[]
         {
             context with
             {
@@ -29,22 +29,22 @@ public sealed class GeneralDownwardRailDemandProducerTests
         }).Routes);
 
         Assert.Equal(adjacent.Demands.Select(item => item.Id), general.Observation.Demands.Select(item => item.Id));
-        Assert.Single(general.Observation.Demands, item => item.Role == RailSemanticRole.Through);
+        Assert.Single(general.Observation.Demands, item => item.Role == LinkSegmentRole.Through);
     }
 
     [Fact]
     public void Multi_band_route_emits_ordered_demands_and_orthogonal_deterministic_transitions()
     {
         var contexts = new[] { Context("b", 3), Context("a", 2) };
-        var forward = GeneralDownwardRailDemandProducer.Observe(contexts);
-        var reverse = GeneralDownwardRailDemandProducer.Observe(contexts.AsEnumerable().Reverse());
+        var forward = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts);
+        var reverse = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts.AsEnumerable().Reverse());
 
         Assert.Equal(
             forward.Routes.SelectMany(item => item.Observation.Demands).Select(item => item.Id),
             reverse.Routes.SelectMany(item => item.Observation.Demands).Select(item => item.Id));
         var route = Assert.Single(forward.Routes, item => item.Observation.LogicalRouteId == "b");
-        Assert.Equal(3, route.Observation.Demands.Count(item => item.Role == RailSemanticRole.Through));
-        Assert.Equal(new int?[] { 1, 2, 3 }, route.Observation.Demands.Where(item => item.Role == RailSemanticRole.Through)
+        Assert.Equal(3, route.Observation.Demands.Count(item => item.Role == LinkSegmentRole.Through));
+        Assert.Equal(new int?[] { 1, 2, 3 }, route.Observation.Demands.Where(item => item.Role == LinkSegmentRole.Through)
             .Select(item => item.TurnOrder));
 
         var assigned = GeneralDownwardCommonAllocator.Assign(forward, Nodes(), 12, 4);
@@ -59,7 +59,7 @@ public sealed class GeneralDownwardRailDemandProducerTests
     [Fact]
     public void Intermediate_obstacle_produces_explicit_bypass_requirement()
     {
-        var report = GeneralDownwardRailDemandProducer.Observe(new[] { Context("route", 2) });
+        var report = GeneralDownwardLinkSegmentDemandProducer.Observe(new[] { Context("route", 2) });
         var nodes = Nodes();
         nodes["obstacle"] = new NodeLayout(Node("obstacle", 3), new Rect(60, 100, 20, 80), 1, false);
 

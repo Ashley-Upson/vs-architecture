@@ -72,7 +72,7 @@ public sealed class InterLayerBandObserverTests
             Link("one", "a", "x", 0, (0, 20), (0, 50), (40, 50), (40, 100)),
             Link("two", "b", "y", 1, (60, 20), (60, 50), (100, 50), (100, 100)));
 
-        Assert.All(Assert.Single(Observe(fixture).Bands).Demands, demand => Assert.Equal(0, demand.LaneIndex));
+        Assert.All(Assert.Single(Observe(fixture).Bands).Demands, demand => Assert.Equal(0, demand.SlotIndex));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class InterLayerBandObserverTests
         var band = Assert.Single(Observe(fixture).Bands);
 
         Assert.Equal(3, band.HypotheticalLaneCount);
-        Assert.Equal(new[] { 0, 1, 2 }, band.Demands.OrderBy(d => d.TerminalOrder).Select(d => d.LaneIndex));
+        Assert.Equal(new[] { 0, 1, 2 }, band.Demands.OrderBy(d => d.ConnectionOrder).Select(d => d.SlotIndex));
     }
 
     [Fact]

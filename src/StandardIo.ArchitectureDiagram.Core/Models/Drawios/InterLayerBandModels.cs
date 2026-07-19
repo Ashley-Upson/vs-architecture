@@ -29,9 +29,9 @@ internal sealed record BandRouteDemand(
     BandMembershipRole Role,
     int XStart,
     int XEnd,
-    int TerminalOrder,
+    int ConnectionOrder,
     BandRouteDirection Direction,
-    int LaneIndex);
+    int SlotIndex);
 
 internal sealed record InterLayerBandObservation(
     InterLayerBandId Id,

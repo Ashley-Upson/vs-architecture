@@ -12,33 +12,33 @@ internal static class BandConflictGrouper
         int padding,
         out long comparisons)
     {
-        var commonDemands = band.Demands.Select(item => new RailDemand(
-            item.Id, item.LogicalEdgeIdentity, RailOrientation.Horizontal,
+        var commonDemands = band.Demands.Select(item => new LinkSegmentDemand(
+            item.Id, item.LogicalEdgeIdentity, LinkSegmentOrientation.Horizontal,
             new AxisInterval(item.XStart, item.XEnd), new AxisInterval(band.UpperBoundary, band.LowerBoundary),
-            null, item.Role == BandMembershipRole.Return ? RailSemanticRole.Return : RailSemanticRole.Through,
-            item.TerminalOrder, item.SegmentIndex,
+            null, item.Role == BandMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
+            item.ConnectionOrder, item.SegmentIndex,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
             band.Id.LayoutRevision, item.RouteRevision)).ToArray();
-        var region = new RailAllocationRegionIdentity(
-            RailOrientation.Horizontal, new AxisInterval(band.UpperBoundary, band.LowerBoundary),
+        var region = new LinkSegmentAllocationRegionIdentity(
+            LinkSegmentOrientation.Horizontal, new AxisInterval(band.UpperBoundary, band.LowerBoundary),
             band.Id.ToString(), new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.Id.LowerLayer}"),
             band.Id.LayoutRevision);
-        var common = DeterministicRailAllocator.Assign(region, commonDemands,
-            new RailAssignmentOptions(clearance, padding, EndpointContactCreatesComponent: true));
+        var common = DeterministicSlotAllocator.Assign(region, commonDemands,
+            new LinkSegmentAssignmentOptions(clearance, padding, EndpointContactCreatesComponent: true));
         comparisons = common.ConflictComparisons;
         var byId = band.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var groups = new List<BandConflictGroup>();
         foreach (var commonComponent in common.Components)
         {
             var component = commonComponent.Demands.Select(item => byId[item.Id]).ToArray();
-            var assigned = commonComponent.Rails.ToDictionary(item => item.DemandId, item => item.LaneIndex, StringComparer.Ordinal);
-            var laneCount = commonComponent.Rails.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1;
+            var assigned = commonComponent.Segments.ToDictionary(item => item.DemandId, item => item.SlotIndex, StringComparer.Ordinal);
+            var laneCount = commonComponent.Segments.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1;
             var identity = string.Join("+", component.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
             groups.Add(new BandConflictGroup(
                 $"group:{band.Id}:{identity}", band.Id,
                 component.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 assigned,
-                component.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1,
+                component.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1,
                 laneCount, band.CurrentExtent, commonComponent.RequiredExtent, commonComponent.MissingExtent,
                 SpacingConstraintScope.LayerBoundary));
         }

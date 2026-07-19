@@ -2,48 +2,48 @@ using System.Collections.Generic;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal enum RailOrientation { Horizontal, Vertical }
-internal enum RailSemanticRole
+internal enum LinkSegmentOrientation { Horizontal, Vertical }
+internal enum LinkSegmentRole
 {
-    TerminalDeparture,
-    TerminalArrival,
+    ConnectionDeparture,
+    ConnectionArrival,
     Through,
     Return,
     ObstacleBypass,
     TurnTransition
 }
 
-internal sealed record RailDemand(
+internal sealed record LinkSegmentDemand(
     string Id,
     string LogicalRouteId,
-    RailOrientation Orientation,
+    LinkSegmentOrientation Orientation,
     AxisInterval OccupiedInterval,
     AxisInterval AllowedAxisRange,
     int? PreferredAxis,
-    RailSemanticRole Role,
-    int? TerminalOrder,
+    LinkSegmentRole Role,
+    int? ConnectionOrder,
     int? TurnOrder,
     MovementScopeIdentity? MovementScope,
     LayoutRevision PlacementRevision,
     RouteRevision RouteRevision);
 
-internal sealed record AssignedRail(
+internal sealed record AssignedLinkSegment(
     string Id,
     string DemandId,
     string LogicalRouteId,
-    RailOrientation Orientation,
+    LinkSegmentOrientation Orientation,
     int AxisCoordinate,
-    int LaneIndex,
+    int SlotIndex,
     AxisInterval OccupiedInterval,
-    RailSemanticRole Role,
+    LinkSegmentRole Role,
     LayoutRevision PlacementRevision,
     RouteRevision RouteRevision);
 
-internal sealed record RailTransition(
+internal sealed record LinkTransition(
     string Id,
     string LogicalRouteId,
-    string FromAssignedRailId,
-    string ToAssignedRailId,
+    string FromAssignedLinkSegmentId,
+    string ToAssignedLinkSegmentId,
     Point Turn,
     int Order,
     LayoutRevision PlacementRevision,
@@ -77,28 +77,28 @@ internal sealed record GenerationConstraint(
     int Minimum,
     string Reason);
 
-internal enum RouteInvalidationCause
+internal enum LinkInvalidationCause
 {
     EndpointMoved,
     EndpointResized,
-    TerminalAllocationChanged,
+    ConnectionAllocationChanged,
     CrossedBoundaryMoved,
-    AssignedRailChanged,
+    AssignedLinkSegmentChanged,
     ObstacleRelationshipChanged,
     ProjectBoundsChanged,
     SharedTurnAllocationChanged
 }
 
-internal sealed record RouteInvalidation(
+internal sealed record LinkInvalidation(
     string LogicalRouteId,
-    RouteInvalidationCause Cause,
+    LinkInvalidationCause Cause,
     RouteRevision SourceRouteRevision,
     LayoutRevision SourcePlacementRevision,
     LayoutRevision TargetPlacementRevision,
     MovementScopeIdentity? Scope = null,
-    string? RailId = null);
+    string? LinkSegmentId = null);
 
-internal sealed record SemanticRouteReference(
+internal sealed record SemanticLinkReference(
     string LogicalRouteId,
     string SourceNodeId,
     string TargetNodeId,
@@ -116,7 +116,7 @@ internal enum HardGeometryDefectKind
 
 internal enum DefectResolutionKind
 {
-    RailDemandAlternatives,
+    LinkSegmentDemandAlternatives,
     IncreasedExtentDemand,
     RejectTopologyAndRegenerate
 }
@@ -124,6 +124,6 @@ internal enum DefectResolutionKind
 internal sealed record DefectDemandContract(
     HardGeometryDefectKind Defect,
     DefectResolutionKind Resolution,
-    IReadOnlyList<RailSemanticRole> RailRoles,
+    IReadOnlyList<LinkSegmentRole> LinkSegmentRoles,
     bool IsSpacingDemand,
     string Requirement);

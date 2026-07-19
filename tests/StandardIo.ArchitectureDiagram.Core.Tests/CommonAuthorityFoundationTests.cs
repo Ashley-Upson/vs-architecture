@@ -49,12 +49,12 @@ public sealed class CommonAuthorityFoundationTests
     {
         var rails = new[]
         {
-            Rail("b", "departure", RailOrientation.Vertical, 40, RailSemanticRole.TerminalDeparture),
-            Rail("b", "through", RailOrientation.Horizontal, 120, RailSemanticRole.Through),
-            Rail("b", "arrival", RailOrientation.Vertical, 180, RailSemanticRole.TerminalArrival),
-            Rail("a", "departure", RailOrientation.Vertical, 20, RailSemanticRole.TerminalDeparture),
-            Rail("a", "through", RailOrientation.Horizontal, 100, RailSemanticRole.Through),
-            Rail("a", "arrival", RailOrientation.Vertical, 160, RailSemanticRole.TerminalArrival)
+            Rail("b", "departure", LinkSegmentOrientation.Vertical, 40, LinkSegmentRole.ConnectionDeparture),
+            Rail("b", "through", LinkSegmentOrientation.Horizontal, 120, LinkSegmentRole.Through),
+            Rail("b", "arrival", LinkSegmentOrientation.Vertical, 180, LinkSegmentRole.ConnectionArrival),
+            Rail("a", "departure", LinkSegmentOrientation.Vertical, 20, LinkSegmentRole.ConnectionDeparture),
+            Rail("a", "through", LinkSegmentOrientation.Horizontal, 100, LinkSegmentRole.Through),
+            Rail("a", "arrival", LinkSegmentOrientation.Vertical, 160, LinkSegmentRole.ConnectionArrival)
         };
 
         var forward = DeterministicSharedTurnAllocator.Assign(rails);
@@ -67,7 +67,7 @@ public sealed class CommonAuthorityFoundationTests
         Assert.All(forward.TransitionsByRouteId, pair =>
         {
             var routeRails = rails.Where(item => item.LogicalRouteId == pair.Key).ToArray();
-            var reconstructed = AdjacentDownwardRailDemandObserver.Reconstruct(
+            var reconstructed = AdjacentDownwardLinkSegmentDemandObserver.Reconstruct(
                 new Point(routeRails[0].AxisCoordinate, 0), new Point(routeRails[2].AxisCoordinate, 200),
                 routeRails, pair.Value);
             Assert.All(reconstructed.Zip(reconstructed.Skip(1)), pair =>
@@ -81,7 +81,7 @@ public sealed class CommonAuthorityFoundationTests
     private static CommonAuthorityInteraction Interaction(string a, string b, string kind, bool couples) =>
         new(a, b, kind, couples);
 
-    private static AssignedRail Rail(string route, string id, RailOrientation orientation, int axis, RailSemanticRole role) =>
+    private static AssignedLinkSegment Rail(string route, string id, LinkSegmentOrientation orientation, int axis, LinkSegmentRole role) =>
         new($"{route}:{id}", $"{route}:{id}:demand", route, orientation, axis, 0,
             new AxisInterval(0, 200), role, new LayoutRevision(1), new RouteRevision(2));
 }

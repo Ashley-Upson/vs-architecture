@@ -21,15 +21,15 @@ internal enum CommonRouteReconstructionParity
 
 internal sealed record CommonRailRouteComparison(
     string LogicalRouteId,
-    AssignedRail? CommonThroughRail,
+    AssignedLinkSegment? CommonThroughRail,
     IReadOnlyDictionary<ExistingLaneMappingSource, CommonAssignmentParity> ExistingParity,
     IReadOnlyList<Point> ReconstructedPoints,
     CommonRouteReconstructionParity ReconstructionParity,
     IReadOnlyList<string> Diagnostics);
 
 internal sealed record CommonRailRegionObservation(
-    RailAllocationRegionIdentity Region,
-    DeterministicRailAssignment Assignment,
+    LinkSegmentAllocationRegionIdentity Region,
+    DeterministicSlotAssignment Assignment,
     GenerationConstraint? ConstraintProposal);
 
 internal sealed record CommonRailParityReport(

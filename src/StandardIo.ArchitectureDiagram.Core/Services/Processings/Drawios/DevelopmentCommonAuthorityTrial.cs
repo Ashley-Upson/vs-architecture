@@ -29,8 +29,8 @@ internal static class DevelopmentCommonAuthorityTrial
         var generated = new GeneratedLogicalRoutes(placement, production.Links, routeRevision);
         var bands = InterLayerBandObserver.Observe(placement, generated, settings, production.Traceability);
         var contexts = AdjacentDownwardContextFactory.Create(production, bands);
-        var adjacentObservation = AdjacentDownwardRailDemandObserver.Observe(contexts);
-        var generalObservation = GeneralDownwardRailDemandProducer.Observe(contexts);
+        var adjacentObservation = AdjacentDownwardLinkSegmentDemandObserver.Observe(contexts);
+        var generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts);
         phase["eligibility and rail-demand production"] = Elapsed(timer);
 
         timer.Restart();
@@ -188,7 +188,7 @@ internal static class DevelopmentCommonAuthorityTrial
                 availableExtent = item.Region.AllowedAxisRange.Length,
                 item.Assignment.RequiredExtent,
                 missingExtent = Math.Max(0, item.Assignment.RequiredExtent - item.Region.AllowedAxisRange.Length),
-                demandCount = item.Assignment.RailsByDemandId.Count,
+                demandCount = item.Assignment.SegmentsByDemandId.Count,
                 movementScope = item.Region.MovementScope?.ToString()
             }).ToArray(),
             mixedBoundaryAttribution = attribution,

@@ -12,12 +12,12 @@ internal static class ContactInteractionPolicy
         _ => false
     };
 
-    public static bool CreatesUnassignedRailEdge(RailDemand first, RailDemand second) =>
+    public static bool CreatesUnassignedRailEdge(LinkSegmentDemand first, LinkSegmentDemand second) =>
         first.Orientation == second.Orientation &&
         first.OccupiedInterval.PositiveLengthOverlap(second.OccupiedInterval) > 0 &&
         first.AllowedAxisRange.ClosedIntersects(second.AllowedAxisRange);
 
-    public static bool CreatesAssignedRailEdge(AssignedRail first, AssignedRail second, int requiredSpacing)
+    public static bool CreatesAssignedLinkSegmentEdge(AssignedLinkSegment first, AssignedLinkSegment second, int requiredSpacing)
     {
         if (first.Orientation != second.Orientation ||
             first.OccupiedInterval.PositiveLengthOverlap(second.OccupiedInterval) <= 0)

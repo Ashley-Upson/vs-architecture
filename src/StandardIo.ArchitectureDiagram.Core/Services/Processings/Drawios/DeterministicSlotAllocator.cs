@@ -5,17 +5,17 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class DeterministicRailAllocator
+internal static class DeterministicSlotAllocator
 {
-    public static DeterministicRailAssignment Assign(
-        RailAllocationRegionIdentity region,
-        IEnumerable<RailDemand> source,
-        RailAssignmentOptions options)
+    public static DeterministicSlotAssignment Assign(
+        LinkSegmentAllocationRegionIdentity region,
+        IEnumerable<LinkSegmentDemand> source,
+        LinkSegmentAssignmentOptions options)
     {
         if (options.Separation < 0) throw new ArgumentOutOfRangeException(nameof(options));
         var demands = source.OrderBy(item => item.OccupiedInterval.Minimum)
             .ThenBy(item => item.OccupiedInterval.Maximum)
-            .ThenBy(item => item.TerminalOrder)
+            .ThenBy(item => item.ConnectionOrder)
             .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .ThenBy(item => item.TurnOrder)
             .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
@@ -48,12 +48,12 @@ internal static class DeterministicRailAllocator
         var componentTimer = Stopwatch.StartNew();
         var byId = demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        var demandComponents = new List<IReadOnlyList<RailDemand>>();
+        var demandComponents = new List<IReadOnlyList<LinkSegmentDemand>>();
         foreach (var seed in demands.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal))
         {
             if (!visited.Add(seed)) continue;
             var pending = new SortedSet<string>(StringComparer.Ordinal) { seed };
-            var component = new List<RailDemand>();
+            var component = new List<LinkSegmentDemand>();
             while (pending.Count > 0)
             {
                 var id = pending.Min!;
@@ -71,65 +71,65 @@ internal static class DeterministicRailAllocator
         assignmentTimer.Stop();
         var extentTimer = Stopwatch.StartNew();
         var currentExtent = Math.Max(0, region.AllowedAxisRange.Length);
-        var components = pendingComponents.Select(item => new RailAssignmentComponent(
-            item.Id, region, item.Demands, item.Rails, item.RequiredExtent,
+        var components = pendingComponents.Select(item => new LinkSegmentConflictComponent(
+            item.Id, region, item.Demands, item.Segments, item.RequiredExtent,
             Math.Max(0, item.RequiredExtent - currentExtent))).ToArray();
         var requiredExtent = components.Select(item => item.RequiredExtent).DefaultIfEmpty(currentExtent).Max();
         extentTimer.Stop();
-        return new DeterministicRailAssignment(
+        return new DeterministicSlotAssignment(
             components,
-            components.SelectMany(item => item.Rails).ToDictionary(item => item.DemandId, StringComparer.Ordinal),
+            components.SelectMany(item => item.Segments).ToDictionary(item => item.DemandId, StringComparer.Ordinal),
             requiredExtent, comparisons,
             Microseconds(conflictTimer), Microseconds(componentTimer), Microseconds(assignmentTimer), Microseconds(extentTimer));
     }
 
-    private static (string Id, IReadOnlyList<RailDemand> Demands, IReadOnlyList<AssignedRail> Rails, int RequiredExtent)
-        AssignComponent(RailAllocationRegionIdentity region, IReadOnlyList<RailDemand> demands, RailAssignmentOptions options)
+    private static (string Id, IReadOnlyList<LinkSegmentDemand> Demands, IReadOnlyList<AssignedLinkSegment> Segments, int RequiredExtent)
+        AssignComponent(LinkSegmentAllocationRegionIdentity region, IReadOnlyList<LinkSegmentDemand> demands, LinkSegmentAssignmentOptions options)
     {
-        var laneEnds = new List<int>();
-        var assigned = new List<(RailDemand Demand, int Lane)>();
+        var slotEnds = new List<int>();
+        var assigned = new List<(LinkSegmentDemand Demand, int Slot)>();
         foreach (var demand in demands.OrderBy(item => item.OccupiedInterval.Minimum)
-                     .ThenBy(item => item.OccupiedInterval.Maximum).ThenBy(item => item.TerminalOrder)
+                     .ThenBy(item => item.OccupiedInterval.Maximum).ThenBy(item => item.ConnectionOrder)
                      .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal).ThenBy(item => item.TurnOrder)
                      .ThenBy(item => item.Id, StringComparer.Ordinal))
         {
-            var lane = laneEnds.FindIndex(end => CanReuse(end, demand.OccupiedInterval.Minimum, options));
-            if (lane < 0) { lane = laneEnds.Count; laneEnds.Add(demand.OccupiedInterval.Maximum); }
-            else laneEnds[lane] = demand.OccupiedInterval.Maximum;
-            assigned.Add((demand, lane));
+            var slot = slotEnds.FindIndex(end => CanReuse(end, demand.OccupiedInterval.Minimum, options));
+            if (slot < 0) { slot = slotEnds.Count; slotEnds.Add(demand.OccupiedInterval.Maximum); }
+            else slotEnds[slot] = demand.OccupiedInterval.Maximum;
+            assigned.Add((demand, slot));
         }
-        var required = options.Padding * 2 + Math.Max(1, laneEnds.Count) * options.Separation;
+        var required = options.Padding * 2 + Math.Max(1, slotEnds.Count) * options.Separation;
         var origin = region.AllowedAxisRange.Minimum + options.Padding;
-        var rails = assigned.Select(item => new AssignedRail(
+        var segments = assigned.Select(item => new AssignedLinkSegment(
             $"{item.Demand.Id}:assigned", item.Demand.Id, item.Demand.LogicalRouteId,
-            item.Demand.Orientation, origin + item.Lane * options.Separation, item.Lane,
+            item.Demand.Orientation, origin + item.Slot * options.Separation, item.Slot,
             item.Demand.OccupiedInterval, item.Demand.Role, item.Demand.PlacementRevision,
             item.Demand.RouteRevision)).ToArray();
         var identity = string.Join("+", demands.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
-        return ($"rail-component:{region.EnvelopeIdentity}:{identity}", demands, rails, required);
+        return ($"segment-component:{region.EnvelopeIdentity}:{identity}", demands, segments, required);
     }
 
-    private static DeterministicRailAssignment AssignCompleteOverlap(
-        RailAllocationRegionIdentity region,
-        IReadOnlyList<RailDemand> demands,
-        RailAssignmentOptions options)
+    private static DeterministicSlotAssignment AssignCompleteOverlap(
+        LinkSegmentAllocationRegionIdentity region,
+        IReadOnlyList<LinkSegmentDemand> demands,
+        LinkSegmentAssignmentOptions options)
     {
         var assignmentTimer = Stopwatch.StartNew();
         var assigned = AssignComponent(region, demands, options);
         assignmentTimer.Stop();
         var extentTimer = Stopwatch.StartNew();
         var currentExtent = Math.Max(0, region.AllowedAxisRange.Length);
-        var component = new RailAssignmentComponent(
-            assigned.Id, region, assigned.Demands, assigned.Rails, assigned.RequiredExtent,
+        var component = new LinkSegmentConflictComponent(
+            assigned.Id, region, assigned.Demands, assigned.Segments, assigned.RequiredExtent,
             Math.Max(0, assigned.RequiredExtent - currentExtent));
-        var byDemand = assigned.Rails.ToDictionary(item => item.DemandId, StringComparer.Ordinal);
+        var byDemand = assigned.Segments.ToDictionary(item => item.DemandId, StringComparer.Ordinal);
         extentTimer.Stop();
-        return new DeterministicRailAssignment(
+        return new DeterministicSlotAssignment(
             new[] { component }, byDemand, assigned.RequiredExtent, Math.Max(0, demands.Count - 1),
             0, 0, Microseconds(assignmentTimer), Microseconds(extentTimer));
     }
 
-    private static bool Conflicts(AxisInterval left, AxisInterval right, RailAssignmentOptions options)
+    private static bool Conflicts(AxisInterval left, AxisInterval right, LinkSegmentAssignmentOptions options)
     {
         var overlap = Math.Min(left.Maximum, right.Maximum) - Math.Max(left.Minimum, right.Minimum);
         if (overlap > 0) return true;
@@ -137,8 +137,8 @@ internal static class DeterministicRailAllocator
         return -overlap < options.Separation;
     }
 
-    private static bool CanReuse(int end, int start, RailAssignmentOptions options) =>
-        options.EndpointContactRequiresSeparateLane
+    private static bool CanReuse(int end, int start, LinkSegmentAssignmentOptions options) =>
+        options.EndpointContactRequiresSeparateSlot
             ? end + options.Separation < start
             : end + options.Separation <= start;
 

@@ -5,20 +5,20 @@ using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal static class GeneralDownwardRailDemandProducer
+internal static class GeneralDownwardLinkSegmentDemandProducer
 {
     public static GeneralDownwardObservationReport Observe(IEnumerable<AdjacentDownwardRouteContext> source)
     {
         var timer = Stopwatch.StartNew();
         var routes = source.OrderBy(item => item.Route.Link.Id, StringComparer.Ordinal).Select(context =>
         {
-            var canonical = AdjacentDownwardRailDemandObserver.Normalize(
+            var canonical = AdjacentDownwardLinkSegmentDemandObserver.Normalize(
                 new[] { context.Route.SourcePoint }.Concat(context.Route.Points).Concat(new[] { context.Route.TargetPoint }));
             var rejection = Rejection(context);
             if (rejection is not null)
                 return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
-                    context.Route.Link.Id, false, rejection, Array.Empty<RailDemand>(), Array.Empty<ExistingLaneMapping>(),
-                    Array.Empty<AssignedRail>(), Array.Empty<RailTransition>(), Array.Empty<Point>(),
+                    context.Route.Link.Id, false, rejection, Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingLaneMapping>(),
+                    Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
                     ObservationalRouteParity.UnableToMap, canonical, new[] { rejection.Value.ToString() }), Array.Empty<int>(),
                     context.Route.Link.SourceId, context.Route.Link.TargetId);
             var crossed = context.BandAxisRanges.Keys.Where(id =>
@@ -27,14 +27,14 @@ internal static class GeneralDownwardRailDemandProducer
             if (crossed.Length != context.Target.Depth - context.Source.Depth)
                 return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
                     context.Route.Link.Id, false, AdjacentDownwardRejectionReason.MultipleBand,
-                    Array.Empty<RailDemand>(), Array.Empty<ExistingLaneMapping>(), Array.Empty<AssignedRail>(),
-                    Array.Empty<RailTransition>(), Array.Empty<Point>(), ObservationalRouteParity.UnableToMap,
+                    Array.Empty<LinkSegmentDemand>(), Array.Empty<ExistingLaneMapping>(), Array.Empty<AssignedLinkSegment>(),
+                    Array.Empty<LinkTransition>(), Array.Empty<Point>(), ObservationalRouteParity.UnableToMap,
                     canonical, new[] { "A semantic crossed band is unavailable in the current placement revision." }), Array.Empty<int>(),
                     context.Route.Link.SourceId, context.Route.Link.TargetId);
-            var produced = DownwardRailDemandFactory.Create(context, crossed);
+            var produced = DownwardLinkSegmentDemandFactory.Create(context, crossed);
             return new GeneralDownwardRoutePlan(new AdjacentDownwardRouteObservation(
                 context.Route.Link.Id, true, null, produced.Demands, Array.Empty<ExistingLaneMapping>(),
-                Array.Empty<AssignedRail>(), Array.Empty<RailTransition>(), Array.Empty<Point>(),
+                Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(),
                 ObservationalRouteParity.UnableToMap, canonical, Array.Empty<string>()), produced.TransitionXs,
                 context.Route.Link.SourceId, context.Route.Link.TargetId);
         }).ToArray();

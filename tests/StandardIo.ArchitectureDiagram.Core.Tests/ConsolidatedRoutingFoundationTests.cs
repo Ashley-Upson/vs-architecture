@@ -95,17 +95,17 @@ public sealed class ConsolidatedRoutingFoundationTests
     {
         var routes = new[]
         {
-            new SemanticRouteReference("incoming", "other", "changed", new RouteRevision(1)),
-            new SemanticRouteReference("outgoing", "changed", "linked", new RouteRevision(2)),
-            new SemanticRouteReference("unrelated", "x", "y", new RouteRevision(3))
+            new SemanticLinkReference("incoming", "other", "changed", new RouteRevision(1)),
+            new SemanticLinkReference("outgoing", "changed", "linked", new RouteRevision(2)),
+            new SemanticLinkReference("unrelated", "x", "y", new RouteRevision(3))
         };
 
-        var invalidations = RouteInvalidationCalculator.ForChangedNodes(
-            routes, new[] { "changed" }, RouteInvalidationCause.EndpointResized,
+        var invalidations = LinkInvalidationCalculator.ForChangedNodes(
+            routes, new[] { "changed" }, LinkInvalidationCause.EndpointResized,
             new LayoutRevision(4), new LayoutRevision(5));
 
         Assert.Equal(new[] { "incoming", "outgoing" }, invalidations.Select(item => item.LogicalRouteId));
-        Assert.All(invalidations, item => Assert.Equal(RouteInvalidationCause.EndpointResized, item.Cause));
+        Assert.All(invalidations, item => Assert.Equal(LinkInvalidationCause.EndpointResized, item.Cause));
         Assert.DoesNotContain(invalidations, item => item.LogicalRouteId == "unrelated");
     }
 
@@ -138,7 +138,7 @@ public sealed class ConsolidatedRoutingFoundationTests
             var contract = DefectDemandContracts.For(defect);
             Assert.Equal(DefectResolutionKind.RejectTopologyAndRegenerate, contract.Resolution);
             Assert.False(contract.IsSpacingDemand);
-            Assert.Empty(contract.RailRoles);
+            Assert.Empty(contract.LinkSegmentRoles);
         }
     }
 }

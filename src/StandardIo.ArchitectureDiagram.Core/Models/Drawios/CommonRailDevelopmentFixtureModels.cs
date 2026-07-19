@@ -23,7 +23,7 @@ internal sealed record CommonRailDevelopmentFixtureResult(
     int RoutesRegenerated,
     int RailsAssigned,
     int TurnsAssigned,
-    IReadOnlyList<RouteInvalidation> Invalidations,
+    IReadOnlyList<LinkInvalidation> Invalidations,
     long ConvergenceMicroseconds,
     bool RouteRepairCoordinatorRan,
     bool SeparateOverlappingCornersRan,

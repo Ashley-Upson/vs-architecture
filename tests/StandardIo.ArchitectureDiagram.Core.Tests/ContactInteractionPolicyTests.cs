@@ -32,7 +32,7 @@ public sealed class ContactInteractionPolicyTests
         var first = Assigned("first", 20, 0, 100);
         var second = Assigned("second", 50, 20, 80);
 
-        Assert.False(ContactInteractionPolicy.CreatesAssignedRailEdge(first, second, 12));
+        Assert.False(ContactInteractionPolicy.CreatesAssignedLinkSegmentEdge(first, second, 12));
     }
 
     [Fact]
@@ -71,12 +71,12 @@ public sealed class ContactInteractionPolicyTests
             second.Select(item => (item.Code, item.EdgeId, item.OtherEdgeId, item.Magnitude, item.Description)));
     }
 
-    private static RailDemand Demand(string id, int start, int end, int allowedStart, int allowedEnd) => new(
-        id, id, RailOrientation.Horizontal, new AxisInterval(start, end), new AxisInterval(allowedStart, allowedEnd),
-        null, RailSemanticRole.Through, null, null, null, new LayoutRevision(1), new RouteRevision(1));
+    private static LinkSegmentDemand Demand(string id, int start, int end, int allowedStart, int allowedEnd) => new(
+        id, id, LinkSegmentOrientation.Horizontal, new AxisInterval(start, end), new AxisInterval(allowedStart, allowedEnd),
+        null, LinkSegmentRole.Through, null, null, null, new LayoutRevision(1), new RouteRevision(1));
 
-    private static AssignedRail Assigned(string id, int axis, int start, int end) => new(
-        id, id, id, RailOrientation.Horizontal, axis, 0, new AxisInterval(start, end), RailSemanticRole.Through,
+    private static AssignedLinkSegment Assigned(string id, int axis, int start, int end) => new(
+        id, id, id, LinkSegmentOrientation.Horizontal, axis, 0, new AxisInterval(start, end), LinkSegmentRole.Through,
         new LayoutRevision(1), new RouteRevision(1));
 
     private static LinkLayout Link(string id, int order, Point source, Point target, params Point[] points) => new(

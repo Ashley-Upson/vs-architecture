@@ -17,19 +17,19 @@ internal static class CommonRailDevelopmentFixture
         var timer = Stopwatch.StartNew();
         var nodes = Nodes();
         var before = Routes();
-        var demands = before.Select(route => new RailDemand(
-            $"{route.Id}:through", route.Id, RailOrientation.Horizontal,
+        var demands = before.Select(route => new LinkSegmentDemand(
+            $"{route.Id}:through", route.Id, LinkSegmentOrientation.Horizontal,
             new AxisInterval(route.Points[1].X, route.Points[2].X), new AxisInterval(130, 270),
-            route.Points[1].Y, RailSemanticRole.Through, route.Order, 1,
+            route.Points[1].Y, LinkSegmentRole.Through, route.Order, 1,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"),
             PlacementRevision, RouteRevision)).ToArray();
-        var region = new RailAllocationRegionIdentity(
-            RailOrientation.Horizontal, new AxisInterval(130, 270), "ccoder:band:0:1:retained-component",
+        var region = new LinkSegmentAllocationRegionIdentity(
+            LinkSegmentOrientation.Horizontal, new AxisInterval(130, 270), "ccoder:band:0:1:retained-component",
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"), PlacementRevision);
-        var assignment = DeterministicRailAllocator.Assign(region, demands, new RailAssignmentOptions(Separation, 10));
+        var assignment = DeterministicSlotAllocator.Assign(region, demands, new LinkSegmentAssignmentOptions(Separation, 10));
         var after = before.Select(route =>
         {
-            var rail = assignment.RailsByDemandId[$"{route.Id}:through"];
+            var rail = assignment.SegmentsByDemandId[$"{route.Id}:through"];
             return route with
             {
                 Points = new[]
@@ -39,11 +39,11 @@ internal static class CommonRailDevelopmentFixture
                 }
             };
         }).ToArray();
-        var invalidations = after.Select(route => new RouteInvalidation(
-            route.Id, RouteInvalidationCause.AssignedRailChanged, RouteRevision,
+        var invalidations = after.Select(route => new LinkInvalidation(
+            route.Id, LinkInvalidationCause.AssignedLinkSegmentChanged, RouteRevision,
             PlacementRevision, PlacementRevision,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"),
-            assignment.RailsByDemandId[$"{route.Id}:through"].Id)).ToArray();
+            assignment.SegmentsByDemandId[$"{route.Id}:through"].Id)).ToArray();
         var beforeDefects = Validate(nodes, before);
         var afterDefects = Validate(nodes, after);
         timer.Stop();
@@ -52,7 +52,7 @@ internal static class CommonRailDevelopmentFixture
             Drawio(nodes, after, "After: common deterministic rails"),
             beforeDefects, afterDefects, 0, 0,
             Math.Max(0, assignment.RequiredExtent - region.AllowedAxisRange.Length),
-            after.Length, assignment.RailsByDemandId.Count, after.Length * 2, invalidations,
+            after.Length, assignment.SegmentsByDemandId.Count, after.Length * 2, invalidations,
             timer.ElapsedTicks * 1000000 / Stopwatch.Frequency,
             false, false, false);
     }

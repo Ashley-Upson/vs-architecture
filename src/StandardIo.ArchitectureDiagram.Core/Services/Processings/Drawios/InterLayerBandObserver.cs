@@ -178,21 +178,21 @@ internal static class InterLayerBandObserver
             foreach (var roleGroup in PendingDemands.GroupBy(item => item.Role).OrderBy(group => group.Key))
             {
                 var pending = roleGroup.ToArray();
-                var commonDemands = pending.Select(item => item.ToRailDemand(UpperBoundary, LowerBoundary)).ToArray();
+                var commonDemands = pending.Select(item => item.ToLinkSegmentDemand(UpperBoundary, LowerBoundary)).ToArray();
                 var movement = new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{Id.LowerLayer}");
-                var common = DeterministicRailAllocator.Assign(
-                    new RailAllocationRegionIdentity(RailOrientation.Horizontal,
+                var common = DeterministicSlotAllocator.Assign(
+                    new LinkSegmentAllocationRegionIdentity(LinkSegmentOrientation.Horizontal,
                         new AxisInterval(UpperBoundary, LowerBoundary), $"{Id}:{roleGroup.Key}", movement, Id.LayoutRevision),
-                    commonDemands, new RailAssignmentOptions(clearance, padding));
+                    commonDemands, new LinkSegmentAssignmentOptions(clearance, padding));
                 comparisons += common.ConflictComparisons;
                 overlapGroups += common.Components.Count;
-                var createdLanes = common.RailsByDemandId.Values.Select(item => item.LaneIndex).DefaultIfEmpty(-1).Max() + 1;
-                maximumOverlap = Math.Max(maximumOverlap, createdLanes);
+                var createdSlots = common.SegmentsByDemandId.Values.Select(item => item.SlotIndex).DefaultIfEmpty(-1).Max() + 1;
+                maximumOverlap = Math.Max(maximumOverlap, createdSlots);
                 foreach (var demand in pending)
-                    demands.Add(demand.ToDemand(common.RailsByDemandId[demand.Id].LaneIndex));
-                laneCount = Math.Max(laneCount, createdLanes);
-                if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = createdLanes;
-                else ordinaryLaneCount = Math.Max(ordinaryLaneCount, createdLanes);
+                    demands.Add(demand.ToDemand(common.SegmentsByDemandId[demand.Id].SlotIndex));
+                laneCount = Math.Max(laneCount, createdSlots);
+                if (roleGroup.Key == BandMembershipRole.Return) returnLaneCount = createdSlots;
+                else ordinaryLaneCount = Math.Max(ordinaryLaneCount, createdSlots);
             }
             var current = Math.Max(0, LowerBoundary - UpperBoundary);
             var ordinary = demands.Where(item => item.Role != BandMembershipRole.Return).ToArray();
@@ -219,10 +219,10 @@ internal static class InterLayerBandObserver
         public BandRouteDemand ToDemand(int lane) => new(Id, EdgeId, Revision, BandId, SegmentIndex, Role,
             XStart, XEnd, TerminalOrder, Direction, lane);
 
-        public RailDemand ToRailDemand(int upperBoundary, int lowerBoundary) => new(
-            Id, EdgeId, RailOrientation.Horizontal, new AxisInterval(XStart, XEnd),
+        public LinkSegmentDemand ToLinkSegmentDemand(int upperBoundary, int lowerBoundary) => new(
+            Id, EdgeId, LinkSegmentOrientation.Horizontal, new AxisInterval(XStart, XEnd),
             new AxisInterval(upperBoundary, lowerBoundary), null,
-            Role == BandMembershipRole.Return ? RailSemanticRole.Return : RailSemanticRole.Through,
+            Role == BandMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
             TerminalOrder, SegmentIndex,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{BandId.LowerLayer}"),
             BandId.LayoutRevision, Revision);

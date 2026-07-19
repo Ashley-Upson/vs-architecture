@@ -14,8 +14,8 @@ internal sealed record GeneralDownwardObservationReport(
 
 internal sealed record GeneralDownwardRouteAssignment(
     string LogicalRouteId,
-    IReadOnlyList<AssignedRail> AssignedRails,
-    IReadOnlyList<RailTransition> Transitions,
+    IReadOnlyList<AssignedLinkSegment> AssignedLinkSegments,
+    IReadOnlyList<LinkTransition> Transitions,
     IReadOnlyList<Point> ReconstructedPoints,
     IReadOnlyList<string> Diagnostics,
     bool IsValid);

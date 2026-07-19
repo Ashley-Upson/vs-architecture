@@ -8,7 +8,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 internal static class LayerSuffixConstraintMaterializer
 {
     public static GenerationConstraint ProposeMinimumY(
-        RailAllocationRegionIdentity region,
+        LinkSegmentAllocationRegionIdentity region,
         int requiredExtent,
         int currentLowerLayerY)
     {

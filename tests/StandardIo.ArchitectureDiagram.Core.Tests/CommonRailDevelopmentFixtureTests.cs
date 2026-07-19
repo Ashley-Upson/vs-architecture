@@ -38,7 +38,7 @@ public sealed class CommonRailDevelopmentFixtureTests
         Assert.Equal(3, first.RailsAssigned);
         Assert.Equal(6, first.TurnsAssigned);
         Assert.Equal(3, first.Invalidations.Count);
-        Assert.All(first.Invalidations, item => Assert.Equal(RouteInvalidationCause.AssignedRailChanged, item.Cause));
+        Assert.All(first.Invalidations, item => Assert.Equal(LinkInvalidationCause.AssignedLinkSegmentChanged, item.Cause));
         Assert.Equal(0, first.NodesMoved);
         Assert.Equal(0, first.LayersMoved);
         Assert.Equal(0, first.SpaceAdded);

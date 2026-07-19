@@ -38,8 +38,8 @@ public sealed class LayerSuffixConstraintMaterializerTests
     [Fact]
     public void Minimum_y_proposal_uses_only_missing_extent()
     {
-        var region = new RailAllocationRegionIdentity(
-            RailOrientation.Horizontal, new AxisInterval(100, 140), "band",
+        var region = new LinkSegmentAllocationRegionIdentity(
+            LinkSegmentOrientation.Horizontal, new AxisInterval(100, 140), "band",
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"), new LayoutRevision(1));
 
         var proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(region, 64, 200);

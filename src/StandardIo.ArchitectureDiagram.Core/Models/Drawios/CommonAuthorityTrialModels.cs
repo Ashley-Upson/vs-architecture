@@ -32,7 +32,7 @@ internal sealed record CommonAuthorityClosure(
     IReadOnlyList<CommonAuthorityInteraction> AdvisoryCrossovers);
 
 internal sealed record SharedTurnAllocation(
-    IReadOnlyDictionary<string, IReadOnlyList<RailTransition>> TransitionsByRouteId,
+    IReadOnlyDictionary<string, IReadOnlyList<LinkTransition>> TransitionsByRouteId,
     IReadOnlyList<string> RejectedRouteIds);
 
 internal sealed record LayerSuffixConstraintIteration(

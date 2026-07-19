@@ -6,22 +6,22 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class DeterministicSharedTurnAllocator
 {
-    public static SharedTurnAllocation Assign(IEnumerable<AssignedRail> sourceRails)
+    public static SharedTurnAllocation Assign(IEnumerable<AssignedLinkSegment> sourceRails)
     {
         var byRoute = sourceRails.GroupBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal);
-        var transitions = new Dictionary<string, IReadOnlyList<RailTransition>>(StringComparer.Ordinal);
+        var transitions = new Dictionary<string, IReadOnlyList<LinkTransition>>(StringComparer.Ordinal);
         var rejected = new List<string>();
         var occupiedTurns = new HashSet<Point>();
         foreach (var route in byRoute)
         {
-            var departure = route.SingleOrDefault(item => item.Role == RailSemanticRole.TerminalDeparture);
-            var through = route.SingleOrDefault(item => item.Role == RailSemanticRole.Through);
-            var arrival = route.SingleOrDefault(item => item.Role == RailSemanticRole.TerminalArrival);
+            var departure = route.SingleOrDefault(item => item.Role == LinkSegmentRole.ConnectionDeparture);
+            var through = route.SingleOrDefault(item => item.Role == LinkSegmentRole.Through);
+            var arrival = route.SingleOrDefault(item => item.Role == LinkSegmentRole.ConnectionArrival);
             if (departure is null || through is null || arrival is null ||
-                departure.Orientation != RailOrientation.Vertical ||
-                through.Orientation != RailOrientation.Horizontal ||
-                arrival.Orientation != RailOrientation.Vertical ||
+                departure.Orientation != LinkSegmentOrientation.Vertical ||
+                through.Orientation != LinkSegmentOrientation.Horizontal ||
+                arrival.Orientation != LinkSegmentOrientation.Vertical ||
                 departure.PlacementRevision != through.PlacementRevision ||
                 arrival.PlacementRevision != through.PlacementRevision ||
                 departure.RouteRevision != through.RouteRevision ||
@@ -43,9 +43,9 @@ internal static class DeterministicSharedTurnAllocator
             occupiedTurns.Add(second);
             transitions[route.Key] = new[]
             {
-                new RailTransition($"{route.Key}:common-turn:0", route.Key, departure.Id, through.Id,
+                new LinkTransition($"{route.Key}:common-turn:0", route.Key, departure.Id, through.Id,
                     first, 0, through.PlacementRevision, through.RouteRevision),
-                new RailTransition($"{route.Key}:common-turn:1", route.Key, through.Id, arrival.Id,
+                new LinkTransition($"{route.Key}:common-turn:1", route.Key, through.Id, arrival.Id,
                     second, 1, through.PlacementRevision, through.RouteRevision)
             };
         }

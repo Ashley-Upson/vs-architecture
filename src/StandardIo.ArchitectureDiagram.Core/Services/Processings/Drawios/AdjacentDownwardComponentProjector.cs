@@ -23,20 +23,20 @@ internal static class AdjacentDownwardComponentProjector
             foreach (var leftDemand in left.Demands)
             foreach (var rightDemand in right.Demands.Where(item => item.Role == leftDemand.Role))
             {
-                if (leftDemand.Role is RailSemanticRole.TerminalDeparture or RailSemanticRole.TerminalArrival)
+                if (leftDemand.Role is LinkSegmentRole.ConnectionDeparture or LinkSegmentRole.ConnectionArrival)
                 {
                     if (leftDemand.MovementScope == rightDemand.MovementScope)
                         unassigned.Add(Edge(left, right, "UnresolvedTerminalCompetition"));
                 }
                 else if (ContactInteractionPolicy.CreatesUnassignedRailEdge(leftDemand, rightDemand))
-                    unassigned.Add(Edge(left, right, "UnassignedRailDemand"));
+                    unassigned.Add(Edge(left, right, "UnassignedLinkSegmentDemand"));
             }
 
-            foreach (var leftRail in left.SelectedAssignedRails)
-            foreach (var rightRail in right.SelectedAssignedRails.Where(item => item.Role == leftRail.Role))
+            foreach (var leftRail in left.SelectedAssignedLinkSegments)
+            foreach (var rightRail in right.SelectedAssignedLinkSegments.Where(item => item.Role == leftRail.Role))
             {
-                if (!ContactInteractionPolicy.CreatesAssignedRailEdge(leftRail, rightRail, requiredSpacing)) continue;
-                if (leftRail.Role is RailSemanticRole.TerminalDeparture or RailSemanticRole.TerminalArrival)
+                if (!ContactInteractionPolicy.CreatesAssignedLinkSegmentEdge(leftRail, rightRail, requiredSpacing)) continue;
+                if (leftRail.Role is LinkSegmentRole.ConnectionDeparture or LinkSegmentRole.ConnectionArrival)
                 {
                     var leftScope = left.Demands.Single(item => item.Id == leftRail.DemandId).MovementScope;
                     var rightScope = right.Demands.Single(item => item.Id == rightRail.DemandId).MovementScope;
@@ -44,7 +44,7 @@ internal static class AdjacentDownwardComponentProjector
                         assigned.Add(Edge(left, right, "ConflictingAssignedTerminal"));
                 }
                 else
-                    assigned.Add(Edge(left, right, "AssignedRailConflict"));
+                    assigned.Add(Edge(left, right, "AssignedLinkSegmentConflict"));
             }
 
             if (left.Transitions.Select(item => item.Turn).Intersect(right.Transitions.Select(item => item.Turn)).Any())
