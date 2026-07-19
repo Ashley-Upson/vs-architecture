@@ -40,6 +40,15 @@ public sealed class DeterministicSlotAllocatorTests
     }
 
     [Fact]
+    public void Endpoint_contact_orders_right_departure_above_left_arrival()
+    {
+        var result = Assign(Demand("left-arrival", 0, 10), Demand("right-departure", 10, 20));
+
+        Assert.Equal(0, result.SegmentsByDemandId["right-departure"].SlotIndex);
+        Assert.Equal(1, result.SegmentsByDemandId["left-arrival"].SlotIndex);
+    }
+
+    [Fact]
     public void Transitive_overlap_forms_one_complete_component()
     {
         var result = Assign(Demand("a", 0, 10), Demand("b", 8, 18), Demand("c", 16, 26));

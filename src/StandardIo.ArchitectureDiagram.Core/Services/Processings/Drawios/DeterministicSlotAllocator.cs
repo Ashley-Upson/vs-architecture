@@ -88,10 +88,7 @@ internal static class DeterministicSlotAllocator
     {
         var slotEnds = new List<int>();
         var assigned = new List<(LinkSegmentDemand Demand, int Slot)>();
-        foreach (var demand in demands.OrderBy(item => item.OccupiedInterval.Minimum)
-                     .ThenBy(item => item.OccupiedInterval.Maximum).ThenBy(item => item.ConnectionOrder)
-                     .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal).ThenBy(item => item.TurnOrder)
-                     .ThenBy(item => item.Id, StringComparer.Ordinal))
+        foreach (var demand in OrderComponent(demands))
         {
             var slot = slotEnds.FindIndex(end => CanReuse(end, demand.OccupiedInterval.Minimum, options));
             if (slot < 0) { slot = slotEnds.Count; slotEnds.Add(demand.OccupiedInterval.Maximum); }
@@ -108,6 +105,36 @@ internal static class DeterministicSlotAllocator
         var identity = string.Join("+", demands.Select(item => item.Id).OrderBy(item => item, StringComparer.Ordinal));
         return ($"segment-component:{region.EnvelopeIdentity}:{identity}", demands, segments, required);
     }
+
+    private static IReadOnlyList<LinkSegmentDemand> OrderComponent(IReadOnlyList<LinkSegmentDemand> demands)
+    {
+        var predecessors = demands.ToDictionary(item => item.Id,
+            _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
+        foreach (var left in demands)
+        foreach (var right in demands)
+            if (left.Id != right.Id && left.OccupiedInterval.Maximum == right.OccupiedInterval.Minimum)
+                predecessors[left.Id].Add(right.Id);
+
+        var remaining = demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var ordered = new List<LinkSegmentDemand>(demands.Count);
+        while (remaining.Count > 0)
+        {
+            var next = DefaultOrder(remaining.Values.Where(item =>
+                predecessors[item.Id].All(predecessor => !remaining.ContainsKey(predecessor)))).FirstOrDefault()
+                ?? DefaultOrder(remaining.Values).First();
+            ordered.Add(next);
+            remaining.Remove(next.Id);
+        }
+        return ordered;
+    }
+
+    private static IOrderedEnumerable<LinkSegmentDemand> DefaultOrder(IEnumerable<LinkSegmentDemand> demands) =>
+        demands.OrderBy(item => item.OccupiedInterval.Minimum)
+            .ThenBy(item => item.OccupiedInterval.Maximum)
+            .ThenBy(item => item.ConnectionOrder)
+            .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
+            .ThenBy(item => item.TurnOrder)
+            .ThenBy(item => item.Id, StringComparer.Ordinal);
 
     private static DeterministicSlotAssignment AssignCompleteOverlap(
         LinkSegmentAllocationRegionIdentity region,
