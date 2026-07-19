@@ -314,6 +314,19 @@ internal static class DevelopmentCommonAuthorityTrial
                 orderingInvariantReturnBlockers = positionalDemands.ReturnColumnConstraints.Count(item =>
                     ReturnColumnSolvabilityAnalyzer.Analyze(item) ==
                     ReturnColumnHorizontalSolvability.OrderingInvariantInteriorBlocker),
+                returnColumnConstraintDetails = positionalDemands.ReturnColumnConstraints.Select(item => new
+                {
+                    item.LinkId,
+                    ownership = item.Ownership.Id,
+                    item.Ownership.FirstProjectOrder,
+                    item.Ownership.LastProjectOrder,
+                    item.Ownership.OwnershipBounds,
+                    item.LeftCandidateX,
+                    item.RightCandidateX,
+                    item.LeftBlockingSubtreeIds,
+                    item.RightBlockingSubtreeIds,
+                    solvability = ReturnColumnSolvabilityAnalyzer.Analyze(item).ToString()
+                }),
                 differenceConstraints = differenceConstraintStore.Snapshot().Select(item => new
                 {
                     scope = item.Key.Scope.ToString(), kind = item.Key.Kind.ToString(), item.Minimum, item.Reason
