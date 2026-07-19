@@ -1291,15 +1291,38 @@ internal sealed partial class RenderLayout
             var timings = new List<PipelineStageMetric>();
             var placed = MeasureStage(timings, "project-region positional placement", () =>
                 PlacementPipeline.Place(graph, settings, new LayoutRevision(0)));
-            var activePlacement = placed;
-            var topology = MeasureStage(timings, "project-region canonical topology selection", () =>
-                CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
-            var positioned = MeasureStage(timings, "project-region topology production", () =>
-                PositionLinks(graph, settings, activePlacement.Nodes));
-            var slotCompilation = MeasureStage(timings, "project-region InterLayer slot allocation", () =>
-                ProjectInterLayerSlotCompiler.Compile(
-                    topology.Plans, activePlacement.Nodes, positioned.Links, activePlacement.Revision,
-                    settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding));
+            var activePlacement = MeasureStage(timings, "project-region layer-band placement", () =>
+                ProjectLayerBandPlacement.Align(placed, settings));
+            var immutableBandPlacement = activePlacement;
+            var accumulatedExpansions = new Dictionary<int, int>();
+            CanonicalTopologySelection topology = null!;
+            PositionedLinkLayouts positioned = null!;
+            ProjectSlotCompilation slotCompilation = null!;
+            for (var iteration = 0; iteration < 8; iteration++)
+            {
+                topology = MeasureStage(timings, "project-region canonical topology selection", () =>
+                    CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
+                positioned = MeasureStage(timings, "project-region topology production", () =>
+                    PositionLinks(graph, settings, activePlacement.Nodes));
+                slotCompilation = MeasureStage(timings, "project-region InterLayer slot allocation", () =>
+                    ProjectInterLayerSlotCompiler.Compile(
+                        topology.Plans, activePlacement.Nodes, positioned.Links, activePlacement.Revision,
+                        settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding));
+                if (slotCompilation.RequiredLayerExpansionByLowerDepth.Count == 0) break;
+                foreach (var expansion in slotCompilation.RequiredLayerExpansionByLowerDepth)
+                    accumulatedExpansions[expansion.Key] =
+                        (accumulatedExpansions.TryGetValue(expansion.Key, out var existing) ? existing : 0) +
+                        expansion.Value;
+                activePlacement = MeasureStage(timings, "project-region InterLayer expansion", () =>
+                    ProjectLayerBandPlacement.Expand(immutableBandPlacement, settings, accumulatedExpansions));
+                if (iteration == 7)
+                    throw new InvalidOperationException("Project InterLayer expansion did not converge: " +
+                        string.Join(",", slotCompilation.RequiredLayerExpansionByLowerDepth
+                            .OrderBy(item => item.Key).Select(item => $"depth-{item.Key}:{item.Value}:" +
+                                $"upper={activePlacement.Nodes.Values.Where(node => node.Depth == item.Key - 1).Select(node => node.Rect.Bottom).DefaultIfEmpty(-1).Max()}:" +
+                                $"lower={activePlacement.Nodes.Values.Where(node => node.Depth == item.Key).Select(node => node.Rect.Y).DefaultIfEmpty(-1).Min()}")));
+            }
+            slotCompilation = slotCompilation with { ExpandedInterLayerCount = accumulatedExpansions.Count };
             var links = MeasureStage(timings, "project-region canonical normalization", () =>
                 LogicalRouteNormalizer.Normalize(activePlacement.Nodes, slotCompilation.Links, settings.Layout.LinkPadding));
             var validation = MeasureStage(timings, "project-region logical validation", () =>

@@ -50,7 +50,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             legacyCoordinatesUsed = false,
             legacyPathsUsed = false,
             horizontalSegmentYAuthority = "DeterministicSlotAllocator",
-            verticalColumnXAuthority = "CorridorLaneAllocator",
+            verticalColumnXAuthority = "VerticalLinkColumnAllocator / ReturnColumnAllocator",
             topologySelectionAuthority = "CanonicalTopologyFamilySelector",
             topologyFamilies = layout.CanonicalTopologyPlans.Values
                 .GroupBy(plan => plan.Family).OrderBy(group => group.Key)
@@ -61,6 +61,19 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             interLayersExpanded = layout.ProjectSlotCompilation?.ExpandedInterLayerCount ?? 0,
             corridorLaneYAssignmentsRemaining = 0,
             repairBasedHorizontalOffsetsRemaining = 0,
+            destinationColumnsAssigned = layout.ProjectSlotCompilation?.VerticalColumns.ColumnsByDemandId.Count(item =>
+                !layout.ProjectSlotCompilation.ReturnSideByRouteId.ContainsKey(item.Value.LinkId)) ?? 0,
+            returnColumnsAssigned = layout.ProjectSlotCompilation?.ReturnSideByRouteId.Count ?? 0,
+            returnSideSelections = layout.ProjectSlotCompilation?.ReturnSideByRouteId,
+            corridorLaneXAssignmentsRemaining = 0,
+            repairBasedVerticalOffsetsRemaining = 0,
+            logicalRoutes = layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal).Select(link => new
+            {
+                logicalEdgeId = link.Link.Id,
+                family = layout.CanonicalTopologyPlans.TryGetValue(link.Link.Id, out var plan)
+                    ? plan.Family.ToString() : null,
+                points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint })
+            }),
             obstacleCompilationAuthority = "EdgeTraversalCompiler",
             boundedTopologyRecompileAuthority = (string?)null,
             interLayerSlotAllocationUsed = true,

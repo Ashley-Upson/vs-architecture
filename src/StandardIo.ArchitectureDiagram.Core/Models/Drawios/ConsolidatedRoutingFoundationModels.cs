@@ -15,6 +15,7 @@ internal enum LinkSegmentRole
     TurnTransition,
     AdjacentDeparture,
     LongDeparture,
+    LongArrival,
     BoundaryHorizontal
 }
 

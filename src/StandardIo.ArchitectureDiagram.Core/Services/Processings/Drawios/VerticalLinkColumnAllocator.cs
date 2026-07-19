@@ -28,7 +28,8 @@ internal static class VerticalLinkColumnAllocator
             if (conflicting.Length > 0) components++;
             var candidates = Coordinates(demand, separation);
             var selected = candidates.Cast<int?>().FirstOrDefault(x =>
-                conflicting.All(column => Math.Abs(column.X - x!.Value) >= separation));
+                conflicting.All(column => Math.Abs(column.X - x!.Value) >= separation) &&
+                !(demand.ForbiddenXIntervals ?? Array.Empty<AxisInterval>()).Any(interval => interval.ContainsClosed(x!.Value)));
             if (selected is null)
                 throw new InvalidOperationException($"No valid vertical link column is available for demand {demand.Id}.");
             assigned.Add(new AssignedVerticalLinkColumn(

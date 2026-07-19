@@ -20,7 +20,8 @@ internal sealed record VerticalLinkColumnDemand(
     string? ProjectId,
     MovementScopeIdentity? MovementScope,
     LayoutRevision PlacementRevision,
-    RouteRevision LinkRevision);
+    RouteRevision LinkRevision,
+    IReadOnlyList<AxisInterval>? ForbiddenXIntervals = null);
 
 internal sealed record AssignedVerticalLinkColumn(
     string DemandId,
