@@ -43,3 +43,11 @@ internal sealed record PositionalHierarchy(
     IReadOnlyDictionary<string, PositionalParentSelection> ParentSelections,
     IReadOnlyDictionary<string, PositionalSubtreeEnvelope> EnvelopesByRootNode,
     LayoutRevision Revision);
+
+internal sealed record HorizontalMovementIteration(
+    PlacedGraph Placement,
+    IReadOnlyList<MovementScopeIdentity> AppliedScopes,
+    IReadOnlyList<string> MovedNodeIds,
+    IReadOnlyList<string> InvalidatedLinkIds,
+    int MaximumDelta,
+    bool Changed);
