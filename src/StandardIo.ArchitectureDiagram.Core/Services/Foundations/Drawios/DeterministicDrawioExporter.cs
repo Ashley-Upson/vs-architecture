@@ -49,6 +49,14 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             legacyRenderLayoutUsed = false,
             legacyCoordinatesUsed = false,
             legacyPathsUsed = false,
+            horizontalSegmentYAuthority = "CorridorLaneAllocator",
+            verticalColumnXAuthority = "CorridorLaneAllocator",
+            topologySelectionAuthority = "RenderLayout.PositionLinks",
+            obstacleCompilationAuthority = "EdgeTraversalCompiler",
+            boundedTopologyRecompileAuthority = "RouteRepairCoordinator",
+            interLayerSlotAllocationUsed = false,
+            developmentTrialUsed = false,
+            fallbackOccursOutsideRenderer = true,
             findings = layout.Traceability.Violations.Select(violation => new
             {
                 code = violation.Code.ToString(),

@@ -12,6 +12,14 @@
   "legacyRenderLayoutUsed": false,
   "legacyCoordinatesUsed": false,
   "legacyPathsUsed": false,
+  "horizontalSegmentYAuthority": "CorridorLaneAllocator",
+  "verticalColumnXAuthority": "CorridorLaneAllocator",
+  "topologySelectionAuthority": "RenderLayout.PositionLinks",
+  "obstacleCompilationAuthority": "EdgeTraversalCompiler",
+  "boundedTopologyRecompileAuthority": "RouteRepairCoordinator",
+  "interLayerSlotAllocationUsed": false,
+  "developmentTrialUsed": false,
+  "fallbackOccursOutsideRenderer": true,
   "findings": [
     {
       "code": "ImmediateReversal",
@@ -71,7 +79,7 @@
     },
     {
       "Stage": "project-region generation",
-      "ElapsedMilliseconds": 99,
+      "ElapsedMilliseconds": 97,
       "Invocation": 1
     },
     {
@@ -111,12 +119,12 @@
     },
     {
       "Stage": "project-region topology regeneration",
-      "ElapsedMilliseconds": 19,
+      "ElapsedMilliseconds": 17,
       "Invocation": 1
     },
     {
       "Stage": "project-region regenerated route compilation and repair",
-      "ElapsedMilliseconds": 30,
+      "ElapsedMilliseconds": 29,
       "Invocation": 1
     }
   ]

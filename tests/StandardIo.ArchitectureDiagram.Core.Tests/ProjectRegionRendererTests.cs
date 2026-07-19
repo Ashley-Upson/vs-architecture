@@ -20,6 +20,13 @@ public sealed class ProjectRegionRendererTests
         Assert.False(report.GetProperty("legacyRenderLayoutUsed").GetBoolean());
         Assert.False(report.GetProperty("legacyCoordinatesUsed").GetBoolean());
         Assert.False(report.GetProperty("legacyPathsUsed").GetBoolean());
+        Assert.False(report.GetProperty("interLayerSlotAllocationUsed").GetBoolean());
+        Assert.False(report.GetProperty("developmentTrialUsed").GetBoolean());
+        Assert.True(report.GetProperty("fallbackOccursOutsideRenderer").GetBoolean());
+        Assert.Equal("CorridorLaneAllocator", report.GetProperty("horizontalSegmentYAuthority").GetString());
+        Assert.Equal("CorridorLaneAllocator", report.GetProperty("verticalColumnXAuthority").GetString());
+        Assert.Equal("RenderLayout.PositionLinks", report.GetProperty("topologySelectionAuthority").GetString());
+        Assert.Equal("EdgeTraversalCompiler", report.GetProperty("obstacleCompilationAuthority").GetString());
         Assert.Equal(12, report.GetProperty("semanticNodeCount").GetInt32());
         Assert.Equal(15, report.GetProperty("semanticLinkCount").GetInt32());
         Assert.Equal(15, xml.Descendants("mxCell")
