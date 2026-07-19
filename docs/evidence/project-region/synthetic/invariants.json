@@ -1,0 +1,165 @@
+{
+  "mode": "IndependentProjectRegion",
+  "semanticProjectCount": 1,
+  "semanticNodeCount": 12,
+  "semanticLinkCount": 15,
+  "renderNodeCount": 12,
+  "renderLinkCount": 15,
+  "eligible": false,
+  "fallbackReasons": [
+    "HardValidationFindings:8"
+  ],
+  "legacyRenderLayoutUsed": false,
+  "legacyCoordinatesUsed": false,
+  "legacyPathsUsed": false,
+  "findings": [
+    {
+      "code": "ImmediateReversal",
+      "edgeId": "e07",
+      "OtherEdgeId": null,
+      "OtherNodeId": null,
+      "Description": "Edge e07 immediately reverses at (1184,848)."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "e01",
+      "OtherEdgeId": "e03",
+      "OtherNodeId": null,
+      "Description": "Edges e01 and e03 violate parallel spacing by up to 6px."
+    },
+    {
+      "code": "SharedSegment",
+      "edgeId": "e01",
+      "OtherEdgeId": "e11",
+      "OtherNodeId": null,
+      "Description": "Edges e01 and e11 share 12px of route."
+    },
+    {
+      "code": "PerpendicularCrossing",
+      "edgeId": "e01",
+      "OtherEdgeId": "e11",
+      "OtherNodeId": null,
+      "Description": "Edges e01 and e11 cross perpendicularly at 2 point(s)."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "e02",
+      "OtherEdgeId": "e12",
+      "OtherNodeId": null,
+      "Description": "Edges e02 and e12 violate parallel spacing by up to 6px."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "e05",
+      "OtherEdgeId": "e06",
+      "OtherNodeId": null,
+      "Description": "Edges e05 and e06 violate parallel spacing by up to 2px."
+    },
+    {
+      "code": "PerpendicularCrossing",
+      "edgeId": "e05",
+      "OtherEdgeId": "e06",
+      "OtherNodeId": null,
+      "Description": "Edges e05 and e06 cross perpendicularly at 1 point(s)."
+    },
+    {
+      "code": "PerpendicularCrossing",
+      "edgeId": "e06",
+      "OtherEdgeId": "e10",
+      "OtherNodeId": null,
+      "Description": "Edges e06 and e10 cross perpendicularly at 1 point(s)."
+    },
+    {
+      "code": "SharedSegment",
+      "edgeId": "e09",
+      "OtherEdgeId": "e13",
+      "OtherNodeId": null,
+      "Description": "Edges e09 and e13 share 21px of route."
+    },
+    {
+      "code": "PerpendicularCrossing",
+      "edgeId": "e09",
+      "OtherEdgeId": "e13",
+      "OtherNodeId": null,
+      "Description": "Edges e09 and e13 cross perpendicularly at 2 point(s)."
+    },
+    {
+      "code": "SharedSegment",
+      "edgeId": "e12",
+      "OtherEdgeId": "e13",
+      "OtherNodeId": null,
+      "Description": "Edges e12 and e13 share 627px of route."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "e12",
+      "OtherEdgeId": "e13",
+      "OtherNodeId": null,
+      "Description": "Edges e12 and e13 violate parallel spacing by up to 6px."
+    },
+    {
+      "code": "PerpendicularCrossing",
+      "edgeId": "e12",
+      "OtherEdgeId": "e13",
+      "OtherNodeId": null,
+      "Description": "Edges e12 and e13 cross perpendicularly at 2 point(s)."
+    }
+  ],
+  "timings": [
+    {
+      "Stage": "project-region semantic preparation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region generation",
+      "ElapsedMilliseconds": 241,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region ownership compilation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region bounds",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region ownership rebase",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region serialization",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region positional placement",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region topology production",
+      "ElapsedMilliseconds": 35,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region route compilation and repair",
+      "ElapsedMilliseconds": 85,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region topology regeneration",
+      "ElapsedMilliseconds": 24,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region regenerated route compilation and repair",
+      "ElapsedMilliseconds": 95,
+      "Invocation": 1
+    }
+  ]
+}

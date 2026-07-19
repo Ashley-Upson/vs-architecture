@@ -1,0 +1,31 @@
+{
+  "projects": [{
+    "id": "core",
+    "name": "StandardIo.ArchitectureDiagram.Core",
+    "types": [
+      { "id": "exposure", "projectId": "core", "name": "DiagramGenerationExposure", "fullName": "StandardIo.ArchitectureDiagram.Core.Exposures.DiagramGenerationExposure", "kind": "Class" },
+      { "id": "coordination", "projectId": "core", "name": "DiagramPathGenerationCoordinationService", "fullName": "StandardIo.ArchitectureDiagram.Core.Services.Coordinations.DiagramPathGenerationCoordinationService", "kind": "Class" },
+      { "id": "orchestration", "projectId": "core", "name": "DiagramGenerationOrchestrationService", "fullName": "StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.DiagramGenerationOrchestrationService", "kind": "Class" },
+      { "id": "processing", "projectId": "core", "name": "DiagramRenderingProcessingService", "fullName": "StandardIo.ArchitectureDiagram.Core.Services.Processings.DiagramRenderingProcessingService", "kind": "Class" },
+      { "id": "registry", "projectId": "core", "name": "DiagramRendererRegistry", "fullName": "StandardIo.ArchitectureDiagram.Core.Services.Foundations.DiagramRendererRegistry", "kind": "Class" },
+      { "id": "drawio", "projectId": "core", "name": "DrawioDiagramRenderer", "fullName": "StandardIo.ArchitectureDiagram.Core.Services.Foundations.DrawioDiagramRenderer", "kind": "Class" },
+      { "id": "roslyn", "projectId": "core", "name": "RoslynBroker", "fullName": "StandardIo.ArchitectureDiagram.Core.Brokers.RoslynBroker", "kind": "Class" },
+      { "id": "exporter", "projectId": "core", "name": "DeterministicDrawioExporter", "fullName": "StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios.DeterministicDrawioExporter", "kind": "Class" },
+      { "id": "workspace", "projectId": "core", "name": "WorkspacePathBroker", "fullName": "StandardIo.ArchitectureDiagram.Core.Brokers.WorkspacePathBroker", "kind": "Class" }
+    ]
+  }],
+  "externalDependencies": [],
+  "edges": [
+    { "id": "r01", "sourceId": "exposure", "targetId": "coordination", "kind": "Dependency" },
+    { "id": "r02", "sourceId": "coordination", "targetId": "orchestration", "kind": "Dependency" },
+    { "id": "r03", "sourceId": "coordination", "targetId": "processing", "kind": "Dependency" },
+    { "id": "r04", "sourceId": "coordination", "targetId": "workspace", "kind": "Dependency" },
+    { "id": "r05", "sourceId": "orchestration", "targetId": "processing", "kind": "Dependency" },
+    { "id": "r06", "sourceId": "processing", "targetId": "registry", "kind": "Dependency" },
+    { "id": "r07", "sourceId": "processing", "targetId": "roslyn", "kind": "Dependency" },
+    { "id": "r08", "sourceId": "registry", "targetId": "drawio", "kind": "Dependency" },
+    { "id": "r09", "sourceId": "drawio", "targetId": "exporter", "kind": "Dependency" },
+    { "id": "r10", "sourceId": "orchestration", "targetId": "exporter", "kind": "Dependency" },
+    { "id": "r11", "sourceId": "exporter", "targetId": "registry", "kind": "Dependency" }
+  ]
+}

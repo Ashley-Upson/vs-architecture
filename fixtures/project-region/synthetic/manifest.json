@@ -1,0 +1,39 @@
+{
+  "projects": [{
+    "id": "p",
+    "name": "Project Region",
+    "types": [
+      { "id": "root", "projectId": "p", "name": "root", "fullName": "Fixture.root", "kind": "Class" },
+      { "id": "a", "projectId": "p", "name": "a", "fullName": "Fixture.a", "kind": "Class" },
+      { "id": "b", "projectId": "p", "name": "b", "fullName": "Fixture.b", "kind": "Class" },
+      { "id": "c", "projectId": "p", "name": "c", "fullName": "Fixture.c", "kind": "Class" },
+      { "id": "a1", "projectId": "p", "name": "a1", "fullName": "Fixture.a1", "kind": "Class" },
+      { "id": "a2", "projectId": "p", "name": "a2", "fullName": "Fixture.a2", "kind": "Class" },
+      { "id": "b1", "projectId": "p", "name": "b1", "fullName": "Fixture.b1", "kind": "Class" },
+      { "id": "b2", "projectId": "p", "name": "b2", "fullName": "Fixture.b2", "kind": "Class" },
+      { "id": "c1", "projectId": "p", "name": "c1", "fullName": "Fixture.c1", "kind": "Class" },
+      { "id": "c2", "projectId": "p", "name": "c2", "fullName": "Fixture.c2", "kind": "Class" },
+      { "id": "shared", "projectId": "p", "name": "shared", "fullName": "Fixture.shared", "kind": "Class" }
+    ]
+  }],
+  "externalDependencies": [
+    { "id": "outside", "name": "External", "assemblyName": "External", "fullName": "External.Outside", "tag": "[External]" }
+  ],
+  "edges": [
+    { "id": "e01", "sourceId": "root", "targetId": "a", "kind": "Dependency" },
+    { "id": "e02", "sourceId": "root", "targetId": "b", "kind": "Dependency" },
+    { "id": "e03", "sourceId": "root", "targetId": "c", "kind": "Dependency" },
+    { "id": "e04", "sourceId": "a", "targetId": "a1", "kind": "Dependency" },
+    { "id": "e05", "sourceId": "a1", "targetId": "a2", "kind": "Dependency" },
+    { "id": "e06", "sourceId": "b", "targetId": "b1", "kind": "Dependency" },
+    { "id": "e07", "sourceId": "b", "targetId": "b2", "kind": "Dependency" },
+    { "id": "e08", "sourceId": "c", "targetId": "c1", "kind": "Dependency" },
+    { "id": "e09", "sourceId": "c1", "targetId": "c2", "kind": "Dependency" },
+    { "id": "e10", "sourceId": "a1", "targetId": "b1", "kind": "Dependency" },
+    { "id": "e11", "sourceId": "c2", "targetId": "a", "kind": "Dependency" },
+    { "id": "e12", "sourceId": "root", "targetId": "shared", "kind": "Dependency" },
+    { "id": "e13", "sourceId": "c1", "targetId": "shared", "kind": "Dependency" },
+    { "id": "e14", "sourceId": "a2", "targetId": "shared", "kind": "Dependency" },
+    { "id": "e15", "sourceId": "b2", "targetId": "outside", "kind": "Dependency" }
+  ]
+}

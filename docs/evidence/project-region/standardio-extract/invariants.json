@@ -1,0 +1,123 @@
+{
+  "mode": "IndependentProjectRegion",
+  "semanticProjectCount": 1,
+  "semanticNodeCount": 9,
+  "semanticLinkCount": 11,
+  "renderNodeCount": 9,
+  "renderLinkCount": 11,
+  "eligible": false,
+  "fallbackReasons": [
+    "HardValidationFindings:7"
+  ],
+  "legacyRenderLayoutUsed": false,
+  "legacyCoordinatesUsed": false,
+  "legacyPathsUsed": false,
+  "findings": [
+    {
+      "code": "ImmediateReversal",
+      "edgeId": "r02",
+      "OtherEdgeId": null,
+      "OtherNodeId": null,
+      "Description": "Edge r02 immediately reverses at (1262,160)."
+    },
+    {
+      "code": "ImmediateReversal",
+      "edgeId": "r08",
+      "OtherEdgeId": null,
+      "OtherNodeId": null,
+      "Description": "Edge r08 immediately reverses at (340,704)."
+    },
+    {
+      "code": "ImmediateReversal",
+      "edgeId": "r09",
+      "OtherEdgeId": null,
+      "OtherNodeId": null,
+      "Description": "Edge r09 immediately reverses at (1782,604)."
+    },
+    {
+      "code": "ImmediateReversal",
+      "edgeId": "r11",
+      "OtherEdgeId": null,
+      "OtherNodeId": null,
+      "Description": "Edge r11 immediately reverses at (352,604)."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "r02",
+      "OtherEdgeId": "r04",
+      "OtherNodeId": null,
+      "Description": "Edges r02 and r04 violate parallel spacing by up to 3px."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "r03",
+      "OtherEdgeId": "r05",
+      "OtherNodeId": null,
+      "Description": "Edges r03 and r05 violate parallel spacing by up to 6px."
+    },
+    {
+      "code": "ParallelSpacing",
+      "edgeId": "r04",
+      "OtherEdgeId": "r10",
+      "OtherNodeId": null,
+      "Description": "Edges r04 and r10 violate parallel spacing by up to 11px."
+    }
+  ],
+  "timings": [
+    {
+      "Stage": "project-region semantic preparation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region generation",
+      "ElapsedMilliseconds": 99,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region ownership compilation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region bounds",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region ownership rebase",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region serialization",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region positional placement",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region topology production",
+      "ElapsedMilliseconds": 18,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region route compilation and repair",
+      "ElapsedMilliseconds": 29,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region topology regeneration",
+      "ElapsedMilliseconds": 19,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region regenerated route compilation and repair",
+      "ElapsedMilliseconds": 30,
+      "Invocation": 1
+    }
+  ]
+}
