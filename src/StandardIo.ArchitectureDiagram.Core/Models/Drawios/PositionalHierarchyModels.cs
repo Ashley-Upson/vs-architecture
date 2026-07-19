@@ -51,3 +51,15 @@ internal sealed record HorizontalMovementIteration(
     IReadOnlyList<string> InvalidatedLinkIds,
     int MaximumDelta,
     bool Changed);
+
+internal sealed record HorizontalCompactionMove(
+    string SubtreeRootNodeId,
+    int DeltaX,
+    int GapBefore,
+    int GapAfter);
+
+internal sealed record HorizontalCompactionResult(
+    PlacedGraph Placement,
+    IReadOnlyList<HorizontalCompactionMove> Moves,
+    int MaximumUnownedGapBefore,
+    int MaximumUnownedGapAfter);
