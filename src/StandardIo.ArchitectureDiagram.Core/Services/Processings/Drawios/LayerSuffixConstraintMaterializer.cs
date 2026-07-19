@@ -9,7 +9,8 @@ internal static class LayerSuffixConstraintMaterializer
 {
     public static GenerationConstraint ProposeMinimumY(
         RailAllocationRegionIdentity region,
-        int requiredExtent)
+        int requiredExtent,
+        int currentLowerLayerY)
     {
         if (region.MovementScope is null ||
             region.MovementScope.Value.Kind != MovementScopeKind.LayerAndLowerSuffix)
@@ -17,7 +18,7 @@ internal static class LayerSuffixConstraintMaterializer
         var missing = Math.Max(0, requiredExtent - region.AllowedAxisRange.Length);
         return new GenerationConstraint(
             new GenerationConstraintKey(region.MovementScope.Value, GenerationConstraintKind.MinimumY),
-            region.AllowedAxisRange.Maximum + missing,
+            currentLowerLayerY + missing,
             $"Common rail extent {region.EnvelopeIdentity}");
     }
 

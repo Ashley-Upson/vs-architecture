@@ -29,23 +29,56 @@ internal static class DevelopmentCommonAuthorityTrial
         var generated = new GeneratedLogicalRoutes(placement, production.Links, routeRevision);
         var bands = InterLayerBandObserver.Observe(placement, generated, settings, production.Traceability);
         var contexts = AdjacentDownwardContextFactory.Create(production, bands);
-        var observation = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var adjacentObservation = AdjacentDownwardRailDemandObserver.Observe(contexts);
+        var generalObservation = GeneralDownwardRailDemandProducer.Observe(contexts);
         phase["eligibility and rail-demand production"] = Elapsed(timer);
 
         timer.Restart();
-        var common = AdjacentDownwardCommonRailObserver.Observe(
-            observation, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
-        var interactions = DiscoverInteractions(production.Links, settings.Layout.ParallelLaneSpacing);
-        var attribution = MixedBoundaryAttributor.Attribute(contexts, observation, interactions, bands);
-        var capabilities = observation.Routes.Select(item => new CommonAuthorityRouteCapability(
-            item.LogicalRouteId,
-            item.Eligible,
-            item.Eligible ? "Eligible" : item.RejectionReason?.ToString() ?? "Unsupported"));
-        var closure = CommonAuthorityComponentClassifier.Classify(capabilities, interactions);
+        var common = GeneralDownwardCommonAllocator.Assign(
+            generalObservation, production.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        var interactions = DiscoverInteractions(production.Links, settings.Layout.ParallelLaneSpacing).ToList();
+        var movementClosures = new List<object>();
+        var blockedByUnclosedMovement = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var region in common.Regions.Where(item => item.ConstraintProposal is not null))
+        {
+            var movement = LayerSuffixConstraintMaterializer.Materialize(
+                placement, new[] { region.ConstraintProposal! }, settings, production.Links);
+            var invalidated = movement.InvalidatedRouteIds.OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var supportedByRoute = generalObservation.Routes.ToDictionary(
+                item => item.Observation.LogicalRouteId, item => item.Observation.Eligible, StringComparer.Ordinal);
+            var fullySupported = invalidated.All(routeId =>
+                supportedByRoute.TryGetValue(routeId, out var supported) && supported);
+            if (!fullySupported)
+                foreach (var routeId in region.Assignment.Components.SelectMany(item => item.Demands)
+                             .Select(item => item.LogicalRouteId))
+                    blockedByUnclosedMovement.Add(routeId);
+            movementClosures.Add(new
+            {
+                region.Region.EnvelopeIdentity,
+                movementScope = region.Region.MovementScope?.ToString(),
+                proposedMinimum = region.ConstraintProposal!.Minimum,
+                movement.MaximumDelta,
+                movement.LayersMoved,
+                movement.NodesMoved,
+                invalidatedRouteIds = invalidated,
+                fullySupported,
+                disposition = fullySupported
+                    ? "EligibleForConstraintExecution"
+                    : "MixedMovementBoundaryRejected"
+            });
+        }
+        var stableInteractions = interactions.Distinct().OrderBy(item => item.FirstRouteId, StringComparer.Ordinal)
+            .ThenBy(item => item.SecondRouteId, StringComparer.Ordinal).ThenBy(item => item.Kind, StringComparer.Ordinal).ToArray();
+        var attribution = MixedBoundaryAttributor.Attribute(contexts, adjacentObservation, stableInteractions, bands);
+        var capabilities = generalObservation.Routes.Select(item => new CommonAuthorityRouteCapability(
+            item.Observation.LogicalRouteId,
+            item.Observation.Eligible,
+            item.Observation.Eligible ? "Eligible" : item.Observation.RejectionReason?.ToString() ?? "Unsupported"));
+        var closure = CommonAuthorityComponentClassifier.Classify(capabilities, stableInteractions);
         phase["conflict grouping and rail assignment"] = Elapsed(timer);
 
         timer.Restart();
-        var comparisonByRoute = common.Routes.ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
+        var assignmentByRoute = common.Routes.ToDictionary(item => item.LogicalRouteId, StringComparer.Ordinal);
         var current = production.Links.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var attempts = new List<DevelopmentTrialComponentAttempt>();
         var acceptedRouteIds = new HashSet<string>(StringComparer.Ordinal);
@@ -58,12 +91,19 @@ internal static class DevelopmentCommonAuthorityTrial
             }
 
             var routeIds = component.Routes.Select(item => item.LogicalRouteId).OrderBy(item => item, StringComparer.Ordinal).ToArray();
-            var rails = routeIds.SelectMany(routeId => Rails(observation, comparisonByRoute, routeId)).ToArray();
-            var turnAllocation = DeterministicSharedTurnAllocator.Assign(rails);
-            if (turnAllocation.RejectedRouteIds.Count > 0)
+            var movementBlocked = routeIds.Where(blockedByUnclosedMovement.Contains).ToArray();
+            if (movementBlocked.Length > 0)
             {
-                attempts.Add(Attempt(component, "rejected before execution", "SharedTurnAllocationFailed",
-                    turnAllocation.RejectedRouteIds));
+                attempts.Add(Attempt(component, "rejected before execution", "MixedMovementBoundaryRejected", movementBlocked));
+                continue;
+            }
+            var rejectedAssignments = routeIds.Where(routeId =>
+                !assignmentByRoute.TryGetValue(routeId, out var assignment) || !assignment.IsValid).ToArray();
+            if (rejectedAssignments.Length > 0)
+            {
+                attempts.Add(Attempt(component, "rejected before execution", "GeneralDownwardAssignmentFailed",
+                    rejectedAssignments.SelectMany(routeId => assignmentByRoute.TryGetValue(routeId, out var assignment)
+                        ? assignment.Diagnostics : new[] { $"MissingAssignment:{routeId}" }).ToArray()));
                 continue;
             }
 
@@ -71,13 +111,7 @@ internal static class DevelopmentCommonAuthorityTrial
             var unable = new List<string>();
             foreach (var routeId in routeIds)
             {
-                var observed = observation.Routes.Single(item => item.LogicalRouteId == routeId);
-                var assigned = Rails(observation, comparisonByRoute, routeId).ToArray();
-                var points = AdjacentDownwardRailDemandObserver.Reconstruct(
-                    observed.CanonicalAuthoritativePoints[0],
-                    observed.CanonicalAuthoritativePoints[observed.CanonicalAuthoritativePoints.Count - 1],
-                    assigned,
-                    turnAllocation.TransitionsByRouteId[routeId]);
+                var points = assignmentByRoute[routeId].ReconstructedPoints;
                 if (points.Count == 0)
                 {
                     unable.Add(routeId);
@@ -132,13 +166,13 @@ internal static class DevelopmentCommonAuthorityTrial
                 envelopeExpansion = afterRoute.Envelope - beforeRoute.Envelope
             };
         }).OrderByDescending(item => item.lengthIncrease).ThenBy(item => item.routeId, StringComparer.Ordinal).Take(10).ToArray();
-        var boundaryInteractions = interactions.Where(item =>
+        var boundaryInteractions = stableInteractions.Where(item =>
             acceptedRouteIds.Contains(item.FirstRouteId) != acceptedRouteIds.Contains(item.SecondRouteId)).ToArray();
         var report = new
         {
             mode = "DevelopmentOnlyCommonAuthorityTrial",
             normalProductionExposure = false,
-            eligibleRoutes = observation.Routes.Count(item => item.Eligible),
+            eligibleRoutes = generalObservation.Routes.Count(item => item.Observation.Eligible),
             eligibleClosedComponents = closure.Components.Count(item => item.Disposition == CommonAuthorityComponentDisposition.Eligible),
             rejectedPreExecutionComponents = attempts.Count(item => item.Status == "rejected before execution"),
             acceptedComponents = attempts.Count(item => item.Status == "accepted"),
@@ -158,6 +192,7 @@ internal static class DevelopmentCommonAuthorityTrial
                 movementScope = item.Region.MovementScope?.ToString()
             }).ToArray(),
             mixedBoundaryAttribution = attribution,
+            movementClosures,
             advisoryCleanCrossovers = closure.AdvisoryCrossovers.Count,
             beforeFindings = FullCounts(production.Nodes, production.Links, production.Traceability, settings.Layout.ParallelLaneSpacing),
             afterFindings = FullCounts(production.Nodes, current, finalValidation, settings.Layout.ParallelLaneSpacing),
@@ -181,28 +216,6 @@ internal static class DevelopmentCommonAuthorityTrial
         };
         return new DevelopmentCommonAuthorityApplication(layout,
             JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
-    }
-
-    private static IReadOnlyList<AssignedRail> Rails(
-        AdjacentDownwardObservationReport observation,
-        IReadOnlyDictionary<string, CommonRailRouteComparison> comparisons,
-        string routeId)
-    {
-        var route = observation.Routes.Single(item => item.LogicalRouteId == routeId);
-        var common = comparisons[routeId].CommonThroughRail;
-        if (common is null) return Array.Empty<AssignedRail>();
-        var departure = route.SelectedAssignedRails.Single(item => item.Role == RailSemanticRole.TerminalDeparture) with
-        {
-            Id = $"{routeId}:common-departure:assigned",
-            OccupiedInterval = new AxisInterval(route.CanonicalAuthoritativePoints[0].Y, common.AxisCoordinate)
-        };
-        var arrival = route.SelectedAssignedRails.Single(item => item.Role == RailSemanticRole.TerminalArrival) with
-        {
-            Id = $"{routeId}:common-arrival:assigned",
-            OccupiedInterval = new AxisInterval(common.AxisCoordinate,
-                route.CanonicalAuthoritativePoints[route.CanonicalAuthoritativePoints.Count - 1].Y)
-        };
-        return new[] { departure, common, arrival };
     }
 
     private static IReadOnlyList<CommonAuthorityInteraction> DiscoverInteractions(

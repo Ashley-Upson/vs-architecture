@@ -42,9 +42,9 @@ public sealed class LayerSuffixConstraintMaterializerTests
             RailOrientation.Horizontal, new AxisInterval(100, 140), "band",
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"), new LayoutRevision(1));
 
-        var proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(region, 64);
+        var proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(region, 64, 200);
 
-        Assert.Equal(164, proposal.Minimum);
+        Assert.Equal(224, proposal.Minimum);
         Assert.Equal(GenerationConstraintKind.MinimumY, proposal.Key.Kind);
     }
 

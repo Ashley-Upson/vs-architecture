@@ -24,10 +24,17 @@ internal static class GeneralDownwardCommonAllocator
                     group.Key, sample.MovementScope, sample.PlacementRevision);
                 var assignment = DeterministicRailAllocator.Assign(region, group,
                     new RailAssignmentOptions(separation, padding));
+                GenerationConstraint? proposal = null;
+                if (assignment.RequiredExtent > region.AllowedAxisRange.Length)
+                {
+                    var lowerDepth = int.Parse(region.MovementScope!.Value.Id.Substring("depth:".Length));
+                    var currentLowerY = nodes.Values.Where(item => !item.IsStandalone && item.Depth == lowerDepth)
+                        .Select(item => item.Rect.Y).DefaultIfEmpty(region.AllowedAxisRange.Maximum).Min();
+                    proposal = LayerSuffixConstraintMaterializer.ProposeMinimumY(
+                        region, assignment.RequiredExtent, currentLowerY);
+                }
                 return new CommonRailRegionObservation(region, assignment,
-                    assignment.RequiredExtent > region.AllowedAxisRange.Length
-                        ? LayerSuffixConstraintMaterializer.ProposeMinimumY(region, assignment.RequiredExtent)
-                        : null);
+                    proposal);
             }).ToArray();
         timer.Stop();
         var assignedByDemand = regions.SelectMany(item => item.Assignment.RailsByDemandId)
