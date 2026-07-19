@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -15,6 +17,8 @@ internal static class ProjectInterLayerSlotCompiler
         int separation,
         int padding)
     {
+        var timings = new List<PipelineStageMetric>();
+        var timer = Stopwatch.StartNew();
         var bands = Bands(nodes, revision, padding, separation, terminalLayouts.Count);
         var projectHorizontalSpan = new AxisInterval(
             nodes.Values.Min(item => item.Rect.X) - padding,
@@ -36,6 +40,10 @@ internal static class ProjectInterLayerSlotCompiler
             }
         }
 
+        timer.Stop();
+        timings.Add(new PipelineStageMetric("project-region InterLayer discovery", timer.ElapsedMilliseconds));
+
+        timer.Restart();
         var assignments = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
         var requiredExpansion = new Dictionary<int, int>();
         foreach (var group in demands.GroupBy(item =>
@@ -60,6 +68,10 @@ internal static class ProjectInterLayerSlotCompiler
             }
         }
 
+        timer.Stop();
+        timings.Add(new PipelineStageMetric("project-region horizontal slot allocation", timer.ElapsedMilliseconds));
+
+        timer.Restart();
         var returnOrder = plans.Values.Where(item => item.RequiresReturnColumn)
             .OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .Select((plan, index) => (plan.LogicalRouteId, index))
@@ -114,13 +126,20 @@ internal static class ProjectInterLayerSlotCompiler
                     revision, new RouteRevision(0), forbidden);
             }).ToArray();
         var verticalColumns = VerticalLinkColumnAllocator.Assign(verticalDemands, separation);
+        timer.Stop();
+        timings.Add(new PipelineStageMetric(
+            "project-region vertical and return column allocation", timer.ElapsedMilliseconds));
+
+        timer.Restart();
         var links = plans.Values.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal).ToDictionary(
             plan => plan.LogicalRouteId,
             plan => Materialize(plan, terminalLayouts[plan.LogicalRouteId], demands, assignments, verticalColumns),
             StringComparer.Ordinal);
+        timer.Stop();
+        timings.Add(new PipelineStageMetric("project-region constrained materialisation", timer.ElapsedMilliseconds));
         return new ProjectSlotCompilation(
             links, demands, assignments, verticalColumns, returnSides, requiredExpansion,
-            bands.Count, requiredExpansion.Count);
+            bands.Count, requiredExpansion.Count, timings);
     }
 
     private static LinkLayout Materialize(

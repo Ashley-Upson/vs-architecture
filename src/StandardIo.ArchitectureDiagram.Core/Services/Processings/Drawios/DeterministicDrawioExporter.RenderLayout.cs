@@ -1307,10 +1307,10 @@ internal sealed partial class RenderLayout
                 var projectLabels = MeasureStage(timings, "project-region project-label measurement", () =>
                     ProjectLabelGeometryMeasurer.Measure(
                         activePlacement.Projects, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding));
-                slotCompilation = MeasureStage(timings, "project-region InterLayer slot allocation", () =>
-                    ProjectInterLayerSlotCompiler.Compile(
-                        topology.Plans, activePlacement.Nodes, terminalLayouts, projectLabels, activePlacement.Revision,
-                        settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding));
+                slotCompilation = ProjectInterLayerSlotCompiler.Compile(
+                    topology.Plans, activePlacement.Nodes, terminalLayouts, projectLabels, activePlacement.Revision,
+                    settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+                timings.AddRange(slotCompilation.Timings);
                 if (slotCompilation.RequiredLayerExpansionByLowerDepth.Count == 0) break;
                 foreach (var expansion in slotCompilation.RequiredLayerExpansionByLowerDepth)
                     accumulatedExpansions[expansion.Key] =

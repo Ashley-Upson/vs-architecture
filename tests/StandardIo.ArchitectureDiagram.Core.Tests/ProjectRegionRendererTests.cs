@@ -39,6 +39,13 @@ public sealed class ProjectRegionRendererTests
         Assert.Equal(0, report.GetProperty("repairTopologyMutationRemaining").GetInt32());
         Assert.Empty(report.GetProperty("physicalFindings").EnumerateArray());
         Assert.Equal("ProjectInterLayerSlotCompiler", report.GetProperty("obstacleCompilationAuthority").GetString());
+        var timingStages = report.GetProperty("timings").EnumerateArray()
+            .Select(item => item.GetProperty("Stage").GetString()).ToArray();
+        Assert.Contains("project-region InterLayer discovery", timingStages);
+        Assert.Contains("project-region horizontal slot allocation", timingStages);
+        Assert.Contains("project-region vertical and return column allocation", timingStages);
+        Assert.Contains("project-region constrained materialisation", timingStages);
+        Assert.DoesNotContain("project-region InterLayer slot allocation", timingStages);
         Assert.Equal(12, report.GetProperty("semanticNodeCount").GetInt32());
         Assert.Equal(15, report.GetProperty("semanticLinkCount").GetInt32());
         Assert.Equal(15, xml.Descendants("mxCell")
