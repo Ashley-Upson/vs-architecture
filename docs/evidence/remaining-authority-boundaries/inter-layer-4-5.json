@@ -1,0 +1,2114 @@
+﻿{
+    "boundary":  "inter-layer:4:5:layout-3",
+    "metadata":  {
+                     "availableExtent":  140,
+                     "requiredExtent":  308,
+                     "missingExtent":  168
+                 },
+    "links":  [
+                  {
+                      "logicalLinkId":  "tree_type_29f334e76182145a__type_29f334e76182145a_1_type_e81a9d3d86a8ffe8_0_type_bbe6cb7efd45c5cb_0_type_184a008c436b949a_1_type_82ff4c2400240a88__edge_56b2d35c9e48a699",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_29f334e76182145a__type_29f334e76182145a__type_29f334e76182145a",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing"
+                                             ],
+                      "renderSourceId":  "tree_type_29f334e76182145a__type_29f334e76182145a_1_type_e81a9d3d86a8ffe8_0_type_bbe6cb7efd45c5cb_0_type_184a008c436b949a_1_type_82ff4c2400240a88__type_82ff4c2400240a88",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_82ff4c2400240a88",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_29f334e76182145a__type_29f334e76182145a_1_type_e81a9d3d86a8ffe8_1_type_b5247f8743e5e46d_0_type_3475636f9be7973b__edge_08cbb6ff9b57884b",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_29f334e76182145a__type_29f334e76182145a__type_29f334e76182145a",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedObstacleMovement",
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn",
+                                               "ReturnTopologyBlocked:tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_29f334e76182145a__type_29f334e76182145a_1_type_e81a9d3d86a8ffe8_1_type_b5247f8743e5e46d_0_type_3475636f9be7973b__type_3475636f9be7973b",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_3475636f9be7973b",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a__edge_5866e9037f9bc281",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing"
+                                             ],
+                      "renderSourceId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a__type_82ffcd209cc4199a",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_82ffcd209cc4199a",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_1_type_b719aae9d9197d62__edge_88016b7dc9d11c86",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_1_type_b719aae9d9197d62__type_b719aae9d9197d62",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_b719aae9d9197d62",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_2_type_02e44e840d347a89__edge_c44122b6ce843781",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_2_type_02e44e840d347a89__type_02e44e840d347a89",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_02e44e840d347a89",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_6_type_c8cef57bd8497a24_1_type_17bbca13e5da06b1__edge_aa5c200e19d33c56",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_6_type_c8cef57bd8497a24_1_type_17bbca13e5da06b1__type_17bbca13e5da06b1",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_17bbca13e5da06b1",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_6_type_c8cef57bd8497a24_2_type_fdbdc3d9a9824704__edge_b9e3a332ccb25c5f",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_6_type_c8cef57bd8497a24_2_type_fdbdc3d9a9824704__type_fdbdc3d9a9824704",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_fdbdc3d9a9824704",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_0116ec7a54a56f34",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7__type_413b3b1daad1afe7",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_413b3b1daad1afe7"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_01a2ab4d98917332",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4__type_3f26b3480aadc0e4",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_3f26b3480aadc0e4"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_0310a86d670b97b1",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_7aef8d0195c7d2e7__type_7aef8d0195c7d2e7_0_type_dc6bc4acaeb3a7dc_1_type_0142b617a7411bfd_0_type_5c7d0aaa9ab2f7c0_5_type_a9f0314fe13737ef__type_a9f0314fe13737ef",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_a9f0314fe13737ef"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_20dc7e44d45439fc",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedLinkPathCompilation",
+                      "secondaryReasons":  [
+                                               "MultipleInterLayer",
+                                               "A semantic crossed inter-layer is unavailable in the current placement revision."
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_2b60d27781384bef__type_2b60d27781384bef__type_2b60d27781384bef",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_2b60d27781384bef"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_21ce4f75e822eb0d",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_7aef8d0195c7d2e7__type_7aef8d0195c7d2e7_0_type_dc6bc4acaeb3a7dc_1_type_0142b617a7411bfd_0_type_5c7d0aaa9ab2f7c0_6_type_a0340b84793f24e2__type_a0340b84793f24e2",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_a0340b84793f24e2"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_24b70aa00b774117",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_7aef8d0195c7d2e7__type_7aef8d0195c7d2e7_0_type_dc6bc4acaeb3a7dc_1_type_0142b617a7411bfd_0_type_5c7d0aaa9ab2f7c0_4_type_9a3beb03b547925c__type_9a3beb03b547925c",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_9a3beb03b547925c"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__edge_f3008dcabdfd3712",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedLinkPathCompilation",
+                      "secondaryReasons":  [
+                                               "MultipleInterLayer",
+                                               "A semantic crossed inter-layer is unavailable in the current placement revision."
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_4cf34ced23f2fb3b__type_4cf34ced23f2fb3b_1_type_58a08280c9106628_0_type_96ff9a68bddc88ae_1_type_63f8548290a5109b_1_type_e708a1760572c7e6__type_e708a1760572c7e6",
+                      "renderTargetId":  "tree_type_7aef8d0195c7d2e7__type_7aef8d0195c7d2e7_0_type_dc6bc4acaeb3a7dc_1_type_0142b617a7411bfd_0_type_5c7d0aaa9ab2f7c0_0_type_7ba836d8acf07338__type_7ba836d8acf07338",
+                      "semanticSourceId":  "type_e708a1760572c7e6",
+                      "semanticTargetId":  "type_7ba836d8acf07338"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3_1_type_4aafb07c0f26641d_0_type_c60e9861e5e7e607_0_type_c0d00a6d8d008121_1_type_28a571d2111abec3__edge_159cc45363cd4101",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3_1_type_4aafb07c0f26641d_0_type_c60e9861e5e7e607_0_type_c0d00a6d8d008121_1_type_28a571d2111abec3__type_28a571d2111abec3",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_28a571d2111abec3",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3_1_type_4aafb07c0f26641d_1_type_f3b96566a88ee463_0_type_5b31f1c6c955f0ef_1_type_6ed999907ed2cd9b__edge_39c2cc12a5fe1d97",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_575ff68aa3a0d8a3__type_575ff68aa3a0d8a3_1_type_4aafb07c0f26641d_1_type_f3b96566a88ee463_0_type_5b31f1c6c955f0ef_1_type_6ed999907ed2cd9b__type_6ed999907ed2cd9b",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_6ed999907ed2cd9b",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401__edge_05cfc4073f9e6092",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401__type_60a1ac3e31506401",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401_1_type_a8306c991c1c4f4d__type_a8306c991c1c4f4d",
+                      "semanticSourceId":  "type_60a1ac3e31506401",
+                      "semanticTargetId":  "type_a8306c991c1c4f4d"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401__edge_cd7033e4a662cfdd",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401__type_60a1ac3e31506401",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_60a1ac3e31506401",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401_1_type_a8306c991c1c4f4d__edge_af1e603c84f7ff94",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_1_type_0f945d5fc50832bd_0_type_82c0546a9992d47c_0_type_60a1ac3e31506401_1_type_a8306c991c1c4f4d__type_a8306c991c1c4f4d",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_a8306c991c1c4f4d",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1__edge_a869a7f1c90280f7",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1__type_56906233b0ca5cd1",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1_1_type_42ad477fd721fa5f__type_42ad477fd721fa5f",
+                      "semanticSourceId":  "type_56906233b0ca5cd1",
+                      "semanticTargetId":  "type_42ad477fd721fa5f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1__edge_c836f727ca2c74f5",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1__type_56906233b0ca5cd1",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_56906233b0ca5cd1",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1_1_type_42ad477fd721fa5f__edge_b98814837fc00f81",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_0_type_51aff08eda14a583_0_type_56906233b0ca5cd1_1_type_42ad477fd721fa5f__type_42ad477fd721fa5f",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_42ad477fd721fa5f",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726__edge_33701dd3b2ef7f07",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726__type_c14163baee42c726",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726_1_type_5b5da23f39c86a51__type_5b5da23f39c86a51",
+                      "semanticSourceId":  "type_c14163baee42c726",
+                      "semanticTargetId":  "type_5b5da23f39c86a51"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726__edge_e88c88571b63af55",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726__type_c14163baee42c726",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_c14163baee42c726",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726_1_type_5b5da23f39c86a51__edge_fb86906697b197d2",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedObstacleMovement",
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn",
+                                               "ReturnTopologyBlocked:tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726_1_type_5b5da23f39c86a51__type_5b5da23f39c86a51",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_5b5da23f39c86a51",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_1_type_4ec7a836d4ead919_0_type_c72fe8a22c04d8c5__edge_17f2ee2565dbebbc",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_1_type_4ec7a836d4ead919_0_type_c72fe8a22c04d8c5__type_c72fe8a22c04d8c5",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_c72fe8a22c04d8c5",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_1_type_4ec7a836d4ead919_0_type_c72fe8a22c04d8c5__edge_eaa365e49d56a4a3",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_1_type_4ec7a836d4ead919_0_type_c72fe8a22c04d8c5__type_c72fe8a22c04d8c5",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_1_type_4ec7a836d4ead919_0_type_c72fe8a22c04d8c5_1_type_7c6d2793642da089__type_7c6d2793642da089",
+                      "semanticSourceId":  "type_c72fe8a22c04d8c5",
+                      "semanticTargetId":  "type_7c6d2793642da089"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_2_type_659f3a7f5415b0cc_1_type_3d52819ad16e6dd9__edge_121ef0d1522ecfbe",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_2_type_659f3a7f5415b0cc_1_type_3d52819ad16e6dd9__type_3d52819ad16e6dd9",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_3d52819ad16e6dd9",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_2_type_659f3a7f5415b0cc_1_type_3d52819ad16e6dd9__edge_1e10f5be876a8b27",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_3_type_bf1db97212a04d12_2_type_659f3a7f5415b0cc_1_type_3d52819ad16e6dd9__type_3d52819ad16e6dd9",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_2_type_02e44e840d347a89__type_02e44e840d347a89",
+                      "semanticSourceId":  "type_3d52819ad16e6dd9",
+                      "semanticTargetId":  "type_02e44e840d347a89"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_0_type_edfbf548f4406559_0_type_a8179a8ff294fe8d__edge_215920e94039bca7",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_0_type_edfbf548f4406559_0_type_a8179a8ff294fe8d__type_a8179a8ff294fe8d",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_0_type_edfbf548f4406559_0_type_a8179a8ff294fe8d_1_type_d4e80bc07ec80b7d__type_d4e80bc07ec80b7d",
+                      "semanticSourceId":  "type_a8179a8ff294fe8d",
+                      "semanticTargetId":  "type_d4e80bc07ec80b7d"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_0_type_edfbf548f4406559_0_type_a8179a8ff294fe8d__edge_9c60e0099c7a23fd",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_0_type_edfbf548f4406559_0_type_a8179a8ff294fe8d__type_a8179a8ff294fe8d",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_a8179a8ff294fe8d",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_2_type_88019b3836c43f64__edge_ca599763b7c678ce",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_2_type_88019b3836c43f64__type_88019b3836c43f64",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_88019b3836c43f64",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_3_type_22da47643d7ab442__edge_46f896dfa97c303c",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_3_type_22da47643d7ab442__type_22da47643d7ab442",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_2_type_02e44e840d347a89__type_02e44e840d347a89",
+                      "semanticSourceId":  "type_22da47643d7ab442",
+                      "semanticTargetId":  "type_02e44e840d347a89"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_3_type_22da47643d7ab442__edge_d825cca370aebc9f",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_3_type_22da47643d7ab442__type_22da47643d7ab442",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_2_type_88019b3836c43f64__type_88019b3836c43f64",
+                      "semanticSourceId":  "type_22da47643d7ab442",
+                      "semanticTargetId":  "type_88019b3836c43f64"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_3_type_22da47643d7ab442__edge_f7883e214d86ef2d",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_4_type_f6d4bb6a83e9f3a9_1_type_96ee3c4ded7ba83d_3_type_22da47643d7ab442__type_22da47643d7ab442",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_22da47643d7ab442",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5__edge_98eda0e76c2c712c",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5__type_b5be5bacc5d0c9a5",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5_1_type_8bbe11e768ed20d0__type_8bbe11e768ed20d0",
+                      "semanticSourceId":  "type_b5be5bacc5d0c9a5",
+                      "semanticTargetId":  "type_8bbe11e768ed20d0"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5__edge_c5c2c9887b73b365",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5__type_b5be5bacc5d0c9a5",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_b5be5bacc5d0c9a5",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5_1_type_8bbe11e768ed20d0__edge_28b5d12acaf599fe",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_5_type_80626d0332de005b_0_type_d453317ef7914299_0_type_b5be5bacc5d0c9a5_1_type_8bbe11e768ed20d0__type_8bbe11e768ed20d0",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_8bbe11e768ed20d0",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_6_type_a369268e8abf2bdc_0_type_ce83690dadca4a58_0_type_150993a842bc210f__edge_34d38c573d98676f",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_6_type_a369268e8abf2bdc_0_type_ce83690dadca4a58_0_type_150993a842bc210f__type_150993a842bc210f",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_150993a842bc210f",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_6_type_a369268e8abf2bdc_0_type_ce83690dadca4a58_0_type_150993a842bc210f__edge_6d4a3d534cb05a45",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_6_type_a369268e8abf2bdc_0_type_ce83690dadca4a58_0_type_150993a842bc210f__type_150993a842bc210f",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_6_type_a369268e8abf2bdc_0_type_ce83690dadca4a58_0_type_150993a842bc210f_1_type_e5105e1c2e80fe1f__type_e5105e1c2e80fe1f",
+                      "semanticSourceId":  "type_150993a842bc210f",
+                      "semanticTargetId":  "type_e5105e1c2e80fe1f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_0_type_9da2c70a9b56feea_0_type_05df1ff6dd8acfd9__edge_023f248a81586480",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_0_type_9da2c70a9b56feea_0_type_05df1ff6dd8acfd9__type_05df1ff6dd8acfd9",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_0_type_9da2c70a9b56feea_0_type_05df1ff6dd8acfd9_1_type_d19f58fef5017f16__type_d19f58fef5017f16",
+                      "semanticSourceId":  "type_05df1ff6dd8acfd9",
+                      "semanticTargetId":  "type_d19f58fef5017f16"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_0_type_9da2c70a9b56feea_0_type_05df1ff6dd8acfd9__edge_9416bdcc77f6e9d0",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_0_type_9da2c70a9b56feea_0_type_05df1ff6dd8acfd9__type_05df1ff6dd8acfd9",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_05df1ff6dd8acfd9",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7__edge_0f1be96019d7045c",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7__type_413b3b1daad1afe7",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_413b3b1daad1afe7",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7__edge_a480c433f9e1f4e2",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7__type_413b3b1daad1afe7",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7_1_type_cb8892b00efdbbe3__type_cb8892b00efdbbe3",
+                      "semanticSourceId":  "type_413b3b1daad1afe7",
+                      "semanticTargetId":  "type_cb8892b00efdbbe3"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7_1_type_cb8892b00efdbbe3__edge_7417dd23897207dc",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedObstacleMovement",
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn",
+                                               "ReturnTopologyBlocked:tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7_1_type_cb8892b00efdbbe3__type_cb8892b00efdbbe3",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_cb8892b00efdbbe3",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_1_type_b5024e729f7c79ae_0_type_564dc4160073f6ec_1_type_cb305632d772f996__edge_2b641ef027f5ff40",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_1_type_b5024e729f7c79ae_0_type_564dc4160073f6ec_1_type_cb305632d772f996__type_cb305632d772f996",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_cb305632d772f996",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_2_type_339de39d7e3cd8fa_0_type_0bb969f8ffe41ccf__edge_381730d45d1135b4",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_2_type_339de39d7e3cd8fa_0_type_0bb969f8ffe41ccf__type_0bb969f8ffe41ccf",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_7_type_91540477772fd27a_1_type_26f07c90d07cb007_0_type_413b3b1daad1afe7_1_type_cb8892b00efdbbe3__type_cb8892b00efdbbe3",
+                      "semanticSourceId":  "type_0bb969f8ffe41ccf",
+                      "semanticTargetId":  "type_cb8892b00efdbbe3"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_2_type_339de39d7e3cd8fa_0_type_0bb969f8ffe41ccf__edge_aa329c6853185638",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_2_type_339de39d7e3cd8fa_0_type_0bb969f8ffe41ccf__type_0bb969f8ffe41ccf",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_0_type_3a79d62527eb94ba_2_type_bf446fdab79e9b14_1_type_a6891cf29dbcd016_0_type_c14163baee42c726_1_type_5b5da23f39c86a51__type_5b5da23f39c86a51",
+                      "semanticSourceId":  "type_0bb969f8ffe41ccf",
+                      "semanticTargetId":  "type_5b5da23f39c86a51"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_1_type_c6872a8c4c9aecec_1_type_3142721cf6d670be__edge_196deb6b5587b3a3",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_1_type_c6872a8c4c9aecec_1_type_3142721cf6d670be__type_3142721cf6d670be",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_3142721cf6d670be",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf__edge_07819b002d0a5006",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf__type_1eb987866f15f8bf",
+                      "renderTargetId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf_1_type_08a47e551101f3e8__type_08a47e551101f3e8",
+                      "semanticSourceId":  "type_1eb987866f15f8bf",
+                      "semanticTargetId":  "type_08a47e551101f3e8"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf__edge_7ba4ee679412eb90",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf__type_1eb987866f15f8bf",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_1eb987866f15f8bf",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf_1_type_08a47e551101f3e8__edge_99ff8cee9cdbced4",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529__type_63a43a0df7db1529",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedObstacleMovement",
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn",
+                                               "ReturnTopologyBlocked:tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_63a43a0df7db1529__type_63a43a0df7db1529_1_type_ef186f61137ab332_3_type_1150440b0a03d30e_2_type_403ae378ea0a7ff2_0_type_1eb987866f15f8bf_1_type_08a47e551101f3e8__type_08a47e551101f3e8",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_08a47e551101f3e8",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_0_type_24ed00f326e0c1c7_0_type_523ac86b6e371eb1__edge_176af4289078cb17",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_0_type_24ed00f326e0c1c7_0_type_523ac86b6e371eb1__type_523ac86b6e371eb1",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_0_external_384594ffb4b54910__external_384594ffb4b54910",
+                      "semanticSourceId":  "type_523ac86b6e371eb1",
+                      "semanticTargetId":  "external_384594ffb4b54910"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_0_type_24ed00f326e0c1c7_0_type_523ac86b6e371eb1__edge_903c232f43717f6a",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_0_type_24ed00f326e0c1c7_0_type_523ac86b6e371eb1__type_523ac86b6e371eb1",
+                      "renderTargetId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_0_type_24ed00f326e0c1c7_0_type_523ac86b6e371eb1_1_type_e136bdfe5989af66__type_e136bdfe5989af66",
+                      "semanticSourceId":  "type_523ac86b6e371eb1",
+                      "semanticTargetId":  "type_e136bdfe5989af66"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750__edge_d03b049f907cf489",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750__type_d8a72d9dbf1ef750",
+                      "renderTargetId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750_2_type_7254b95c3e886c5b__type_7254b95c3e886c5b",
+                      "semanticSourceId":  "type_d8a72d9dbf1ef750",
+                      "semanticTargetId":  "type_7254b95c3e886c5b"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750__edge_d764dc800da4e0f2",
+                      "semanticFamily":  "SameLayer",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "SameLayer",
+                                               "SameLayer"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750__type_d8a72d9dbf1ef750",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_2_type_ef08b379008d2a43_5_type_3f26b3480aadc0e4_2_type_02e44e840d347a89__type_02e44e840d347a89",
+                      "semanticSourceId":  "type_d8a72d9dbf1ef750",
+                      "semanticTargetId":  "type_02e44e840d347a89"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750__edge_e4196033da35d638",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750__type_d8a72d9dbf1ef750",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302__type_6b53280d60f7b302",
+                      "semanticSourceId":  "type_d8a72d9dbf1ef750",
+                      "semanticTargetId":  "type_6b53280d60f7b302"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750_2_type_7254b95c3e886c5b__edge_423e6997023ffdd8",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedObstacleMovement",
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn",
+                                               "ReturnTopologyBlocked:tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_5_type_65fe25231fb2da14_1_type_fb0b43facba63e59_0_type_d8a72d9dbf1ef750_2_type_7254b95c3e886c5b__type_7254b95c3e886c5b",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_7254b95c3e886c5b",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590__edge_001abe4808756364",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "ReusedBend",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590__type_c5c2c886b8a87590",
+                      "renderTargetId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea__type_b0b5f7090b1cf5ea",
+                      "semanticSourceId":  "type_c5c2c886b8a87590",
+                      "semanticTargetId":  "type_b0b5f7090b1cf5ea"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590__edge_dfed9800be1d3919",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  true,
+                      "legacyHardFindings":  [
+
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590__type_c5c2c886b8a87590",
+                      "renderTargetId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_0_type_4a8c1c4ff260eed9__type_4a8c1c4ff260eed9",
+                      "semanticSourceId":  "type_c5c2c886b8a87590",
+                      "semanticTargetId":  "type_4a8c1c4ff260eed9"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590__edge_f00864f3a40fe861",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  true,
+                      "legacyHardFindings":  [
+
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590__type_c5c2c886b8a87590",
+                      "renderTargetId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_2_type_7ca59828f226fde3__type_7ca59828f226fde3",
+                      "semanticSourceId":  "type_c5c2c886b8a87590",
+                      "semanticTargetId":  "type_7ca59828f226fde3"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_0_type_4a8c1c4ff260eed9_0_type_5537cbdb0304ed69__edge_5378e1df8aa1038f",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedLinkPathCompilation",
+                      "secondaryReasons":  [
+                                               "MultipleInterLayer",
+                                               "A semantic crossed inter-layer is unavailable in the current placement revision."
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_0_type_4a8c1c4ff260eed9_0_type_5537cbdb0304ed69__type_5537cbdb0304ed69",
+                      "renderTargetId":  "tree_type_2b60d27781384bef__type_2b60d27781384bef__type_2b60d27781384bef",
+                      "semanticSourceId":  "type_5537cbdb0304ed69",
+                      "semanticTargetId":  "type_2b60d27781384bef"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea__edge_b1dcd79684c7501d",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea__type_b0b5f7090b1cf5ea",
+                      "renderTargetId":  "tree_type_7aef8d0195c7d2e7__type_7aef8d0195c7d2e7_0_type_dc6bc4acaeb3a7dc_1_type_0142b617a7411bfd_0_type_5c7d0aaa9ab2f7c0_2_type_2d3e49e37f303fe3__type_2d3e49e37f303fe3",
+                      "semanticSourceId":  "type_b0b5f7090b1cf5ea",
+                      "semanticTargetId":  "type_2d3e49e37f303fe3"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea__edge_fc6e0c789b19d0e7",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  false,
+                      "topologyOwner":  "Legacy",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_a3ae98eb54fa0011__type_a3ae98eb54fa0011__type_a3ae98eb54fa0011",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  "UnsupportedLinkPathCompilation",
+                      "secondaryReasons":  [
+                                               "MultipleInterLayer",
+                                               "A semantic crossed inter-layer is unavailable in the current placement revision."
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea__type_b0b5f7090b1cf5ea",
+                      "renderTargetId":  "tree_type_7aef8d0195c7d2e7__type_7aef8d0195c7d2e7_0_type_dc6bc4acaeb3a7dc_1_type_0142b617a7411bfd_0_type_5c7d0aaa9ab2f7c0_0_type_7ba836d8acf07338__type_7ba836d8acf07338",
+                      "semanticSourceId":  "type_b0b5f7090b1cf5ea",
+                      "semanticTargetId":  "type_7ba836d8acf07338"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea_1_type_cccc32658fc76f98__edge_762e1b0702fe340a",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea_1_type_cccc32658fc76f98__type_cccc32658fc76f98",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_cccc32658fc76f98",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea_2_type_d26a3350d1720df5__edge_0aece0ca1ea477f8",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3__type_760dc66fb5adeff3",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_760dc66fb5adeff3__type_760dc66fb5adeff3_1_type_e016a29efa782b00_7_type_9db61a001a63638a_0_type_a2224d05cadaf5df_0_type_c5c2c886b8a87590_1_type_b0b5f7090b1cf5ea_2_type_d26a3350d1720df5__type_d26a3350d1720df5",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_d26a3350d1720df5",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_ba93b02d23f6f55b__type_ba93b02d23f6f55b_0_type_7807d93e606fabf9_0_type_85f265cff318e6d5__edge_0b57e04b3f2ed308",
+                      "semanticFamily":  "MultiBandDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_ba93b02d23f6f55b__type_ba93b02d23f6f55b__type_ba93b02d23f6f55b",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing"
+                                             ],
+                      "renderSourceId":  "tree_type_ba93b02d23f6f55b__type_ba93b02d23f6f55b_0_type_7807d93e606fabf9_0_type_85f265cff318e6d5__type_85f265cff318e6d5",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_85f265cff318e6d5",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_d84c3a7662914109__type_d84c3a7662914109_0_type_0951472ee8784231_0_type_7558cde49d079976_0_type_b6a2d84639580646_1_type_afbade3595f2cd44__edge_f446143ddb2de45b",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_d84c3a7662914109__type_d84c3a7662914109__type_d84c3a7662914109",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_d84c3a7662914109__type_d84c3a7662914109_0_type_0951472ee8784231_0_type_7558cde49d079976_0_type_b6a2d84639580646_1_type_afbade3595f2cd44__type_afbade3595f2cd44",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_afbade3595f2cd44",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_d84c3a7662914109__type_d84c3a7662914109_0_type_0951472ee8784231_1_type_f88dc5b52efc60b6_3_type_f76109a7baa26c20_1_type_b00e358f775cd4b3__edge_1aeb28744787a03b",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_d84c3a7662914109__type_d84c3a7662914109__type_d84c3a7662914109",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_d84c3a7662914109__type_d84c3a7662914109_0_type_0951472ee8784231_1_type_f88dc5b52efc60b6_3_type_f76109a7baa26c20_1_type_b00e358f775cd4b3__type_b00e358f775cd4b3",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_b00e358f775cd4b3",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_f457312a6e0ef507__type_f457312a6e0ef507_1_type_ddddc60d5a32755c_0_type_243a3f9f3041107b_0_type_cdd5bdcaa8698c2e_1_type_8cf77add4151f8ba__edge_1062b1f468edd106",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_f457312a6e0ef507__type_f457312a6e0ef507__type_f457312a6e0ef507",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "PerpendicularCrossing",
+                                                 "SharedSegment"
+                                             ],
+                      "renderSourceId":  "tree_type_f457312a6e0ef507__type_f457312a6e0ef507_1_type_ddddc60d5a32755c_0_type_243a3f9f3041107b_0_type_cdd5bdcaa8698c2e_1_type_8cf77add4151f8ba__type_8cf77add4151f8ba",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_8cf77add4151f8ba",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_f6cf485a3f79171a__type_f6cf485a3f79171a_1_type_dbfee3a22b43dc05_0_type_64d29c8583cb24f6_0_type_2b5655fe73b91d85_1_type_8c9908b9f051f772__edge_6db9b9fc6432b3c5",
+                      "semanticFamily":  "AdjacentDownward",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonDownward",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_f6cf485a3f79171a__type_f6cf485a3f79171a__type_f6cf485a3f79171a",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  {
+
+                                           },
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  true,
+                      "legacyHardFindings":  [
+
+                                             ],
+                      "renderSourceId":  "tree_type_f6cf485a3f79171a__type_f6cf485a3f79171a_1_type_dbfee3a22b43dc05_0_type_64d29c8583cb24f6_0_type_2b5655fe73b91d85_1_type_8c9908b9f051f772__type_8c9908b9f051f772",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_1_type_aac7492f77545f0a_0_type_67e62ce042331df2_1_type_82ffcd209cc4199a_0_external_1d9865dc23352050__external_1d9865dc23352050",
+                      "semanticSourceId":  "type_8c9908b9f051f772",
+                      "semanticTargetId":  "external_1d9865dc23352050"
+                  },
+                  {
+                      "logicalLinkId":  "tree_type_f6cf485a3f79171a__type_f6cf485a3f79171a_1_type_dbfee3a22b43dc05_1_type_e68b48883984d25d_0_type_08e5fccaeaf31356_1_type_f1f0eab2f4def499__edge_1469a47c560124d3",
+                      "semanticFamily":  "UpwardOrReturn",
+                      "commonSupported":  true,
+                      "topologyOwner":  "CommonReturn",
+                      "connectionTopology":  "exitY:1;entryY:0",
+                      "projectRelationship":  "SameProject",
+                      "sourceProjectId":  "project_bf2e7e4ee09d4785",
+                      "targetProjectId":  "project_bf2e7e4ee09d4785",
+                      "sourcePositionalSubtree":  "tree_type_f6cf485a3f79171a__type_f6cf485a3f79171a__type_f6cf485a3f79171a",
+                      "targetPositionalSubtree":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6__type_2ee97195d9023df6",
+                      "invalidationReason":  "InterLayerExtentChanged",
+                      "primaryUnsupportedReason":  null,
+                      "secondaryReasons":  [
+                                               "UpwardOrReturn",
+                                               "UpwardOrReturn"
+                                           ],
+                      "contributesGeometryDemand":  true,
+                      "closureOnly":  false,
+                      "legacyValid":  false,
+                      "legacyHardFindings":  [
+                                                 "ImmediateReversal",
+                                                 "ParallelSpacing",
+                                                 "PerpendicularCrossing"
+                                             ],
+                      "renderSourceId":  "tree_type_f6cf485a3f79171a__type_f6cf485a3f79171a_1_type_dbfee3a22b43dc05_1_type_e68b48883984d25d_0_type_08e5fccaeaf31356_1_type_f1f0eab2f4def499__type_f1f0eab2f4def499",
+                      "renderTargetId":  "tree_type_2ee97195d9023df6__type_2ee97195d9023df6_0_type_3ae822c1703b7031_0_type_6b53280d60f7b302_0_external_c010407ec827a44f__external_c010407ec827a44f",
+                      "semanticSourceId":  "type_f1f0eab2f4def499",
+                      "semanticTargetId":  "external_c010407ec827a44f"
+                  }
+              ]
+}

@@ -32,13 +32,22 @@ internal static class DevelopmentCommonAuthorityTrial
         var adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
         var generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(
             contexts, settings.Layout.LinkPadding);
-        phase["eligibility and rail-demand production"] = Elapsed(timer);
+        phase["eligibility and link-segment demand production"] = Elapsed(timer);
 
         timer.Restart();
         var common = GeneralDownwardCommonAllocator.Assign(
             generalObservation, production.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var returns = ReturnLinkCommonAllocator.Assign(
             contexts, production.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        var returnIds = new HashSet<string>(returns.Plans.Select(item => item.LogicalRouteId), StringComparer.Ordinal);
+        var capabilities = generalObservation.Routes.Where(item => !returnIds.Contains(item.Observation.LogicalRouteId))
+            .Select(item => new CommonAuthorityRouteCapability(
+                item.Observation.LogicalRouteId, item.Observation.Eligible, CapabilityReason(item)))
+            .Concat(returns.Assignments.Select(item => new CommonAuthorityRouteCapability(
+                item.LogicalRouteId, item.IsValid, ReturnCapabilityReason(item))))
+            .OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal).ToArray();
+        var supportedByRoute = capabilities.ToDictionary(
+            item => item.LogicalRouteId, item => item.Eligible, StringComparer.Ordinal);
         var interactions = DiscoverInteractions(production.Links, settings.Layout.ParallelLaneSpacing).ToList();
         var movementClosures = new List<object>();
         var blockedByUnclosedMovement = new HashSet<string>(StringComparer.Ordinal);
@@ -47,8 +56,6 @@ internal static class DevelopmentCommonAuthorityTrial
             var movement = LayerSuffixConstraintMaterializer.Materialize(
                 placement, new[] { region.ConstraintProposal! }, settings, production.Links);
             var invalidated = movement.InvalidatedRouteIds.OrderBy(item => item, StringComparer.Ordinal).ToArray();
-            var supportedByRoute = generalObservation.Routes.ToDictionary(
-                item => item.Observation.LogicalRouteId, item => item.Observation.Eligible, StringComparer.Ordinal);
             var fullySupported = invalidated.All(routeId =>
                 supportedByRoute.TryGetValue(routeId, out var supported) && supported);
             if (!fullySupported)
@@ -73,16 +80,8 @@ internal static class DevelopmentCommonAuthorityTrial
         var stableInteractions = interactions.Distinct().OrderBy(item => item.FirstRouteId, StringComparer.Ordinal)
             .ThenBy(item => item.SecondRouteId, StringComparer.Ordinal).ThenBy(item => item.Kind, StringComparer.Ordinal).ToArray();
         var attribution = MixedBoundaryAttributor.Attribute(contexts, adjacentObservation, stableInteractions, bands);
-        var returnIds = new HashSet<string>(returns.Plans.Select(item => item.LogicalRouteId), StringComparer.Ordinal);
-        var capabilities = generalObservation.Routes.Where(item => !returnIds.Contains(item.Observation.LogicalRouteId))
-            .Select(item => new CommonAuthorityRouteCapability(
-            item.Observation.LogicalRouteId,
-            item.Observation.Eligible,
-            item.Observation.Eligible ? "Eligible" : item.Observation.RejectionReason?.ToString() ?? "Unsupported"))
-            .Concat(returns.Assignments.Select(item => new CommonAuthorityRouteCapability(
-                item.LogicalRouteId, item.IsValid, item.IsValid ? "EligibleReturnTopology" : "ReturnAssignmentFailed")));
         var closure = CommonAuthorityComponentClassifier.Classify(capabilities, stableInteractions);
-        phase["conflict grouping and rail assignment"] = Elapsed(timer);
+        phase["conflict grouping and link-segment assignment"] = Elapsed(timer);
 
         timer.Restart();
         var assignmentByRoute = common.Routes.Concat(returns.Assignments)
@@ -190,6 +189,40 @@ internal static class DevelopmentCommonAuthorityTrial
         {
             mode = "DevelopmentOnlyCommonAuthorityTrial",
             normalProductionExposure = false,
+            routeCapabilities = capabilities,
+            routeCapabilityDetails = contexts.OrderBy(item => item.Route.Link.Id, StringComparer.Ordinal).Select(context =>
+            {
+                var generalPlan = generalObservation.Routes.Single(item =>
+                    item.Observation.LogicalRouteId == context.Route.Link.Id);
+                var returnAssignment = returns.Assignments.FirstOrDefault(item =>
+                    item.LogicalRouteId == context.Route.Link.Id);
+                var capability = capabilities.Single(item => item.LogicalRouteId == context.Route.Link.Id);
+                return new
+                {
+                    capability.LogicalRouteId,
+                    capability.Eligible,
+                    capability.Reason,
+                    sourceDepth = context.Source.Depth,
+                    targetDepth = context.Target.Depth,
+                    semanticSourceId = context.Route.Link.SemanticSourceId ?? context.Route.Link.SourceId,
+                    semanticTargetId = context.Route.Link.SemanticTargetId ?? context.Route.Link.TargetId,
+                    renderSourceId = context.Route.Link.SourceId,
+                    renderTargetId = context.Route.Link.TargetId,
+                    sourceProjectId = context.Source.Node.ProjectId,
+                    targetProjectId = context.Target.Node.ProjectId,
+                    sourcePositionalRoot = PositionalRoot(context.Source.Node.Id, placement.PositionalHierarchy),
+                    targetPositionalRoot = PositionalRoot(context.Target.Node.Id, placement.PositionalHierarchy),
+                    projectRelationship = string.Equals(context.Source.Node.ProjectId, context.Target.Node.ProjectId,
+                        StringComparison.Ordinal) ? "SameProject" : "CrossProject",
+                    connectionTopology = $"exitY:{context.Route.ExitY};entryY:{context.Route.EntryY}",
+                    generalRejection = generalPlan.Observation.RejectionReason?.ToString(),
+                    generalDiagnostics = generalPlan.Observation.Diagnostics,
+                    assignmentDiagnostics = returnAssignment?.Diagnostics ?? Array.Empty<string>(),
+                    legacyHardFindings = production.Traceability.Violations
+                        .Where(item => item.EdgeId == context.Route.Link.Id || item.OtherEdgeId == context.Route.Link.Id)
+                        .Select(item => item.Code.ToString()).Distinct().OrderBy(item => item, StringComparer.Ordinal).ToArray()
+                };
+            }).ToArray(),
             eligibleRoutes = generalObservation.Routes.Count(item => item.Observation.Eligible) +
                 returns.Assignments.Count(item => item.IsValid),
             returnTopologies = new
@@ -282,6 +315,47 @@ internal static class DevelopmentCommonAuthorityTrial
         IReadOnlyList<string> details) =>
         new(component.Id, status, reason,
             component.Routes.Select(item => item.LogicalRouteId).ToArray(), details);
+
+    private static string CapabilityReason(GeneralDownwardLinkPlan plan)
+    {
+        if (plan.Observation.Eligible) return "CommonDownwardTopology";
+        switch (plan.Observation.RejectionReason)
+        {
+            case AdjacentDownwardRejectionReason.CrossProject:
+                return "UnsupportedCrossProjectOwnership";
+            case AdjacentDownwardRejectionReason.ExposureTreeSpecific:
+                return "UnsupportedExposureTreeInteraction";
+            case AdjacentDownwardRejectionReason.UnsupportedConnectionTopology:
+                return "UnsupportedConnectionAllocation";
+            case AdjacentDownwardRejectionReason.RevisionMismatch:
+                return "StaleRevisionDependency";
+            case AdjacentDownwardRejectionReason.MultipleInterLayer:
+            case AdjacentDownwardRejectionReason.SkippedLayer:
+                return "UnsupportedLinkPathCompilation";
+            case AdjacentDownwardRejectionReason.SameLayer:
+            case AdjacentDownwardRejectionReason.UpwardOrReturn:
+                return "UnsupportedTopology";
+            default:
+                return "LegacyOnlyGeometry";
+        }
+    }
+
+    private static string ReturnCapabilityReason(GeneralDownwardLinkAssignment assignment)
+    {
+        if (assignment.IsValid) return "CommonReturnTopology";
+        if (assignment.Diagnostics.Any(item => item.StartsWith("ReturnTopologyBlocked:", StringComparison.Ordinal)))
+            return "UnsupportedObstacleMovement";
+        if (assignment.Diagnostics.Any(item => item.Contains("ConnectionInvariant", StringComparison.Ordinal)))
+            return "UnsupportedConnectionAllocation";
+        return "UnsupportedLinkPathCompilation";
+    }
+
+    private static string PositionalRoot(string nodeId, PositionalHierarchy hierarchy)
+    {
+        var current = nodeId;
+        while (hierarchy.ParentByNode.TryGetValue(current, out var parent)) current = parent;
+        return current;
+    }
 
     private static object Quality(IEnumerable<LinkLayout> routes)
     {

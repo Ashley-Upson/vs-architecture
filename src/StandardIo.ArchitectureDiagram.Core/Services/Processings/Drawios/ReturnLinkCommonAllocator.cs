@@ -27,14 +27,28 @@ internal static class ReturnLinkCommonAllocator
                 Array.Empty<GeneralDownwardLinkAssignment>());
 
         var left = nodes.Values.Min(item => item.Rect.X) - padding - separation * contexts.Length;
-        var plans = contexts.Select((context, index) => Plan(context, left, left + separation * index, padding)).ToArray();
+        var right = nodes.Values.Max(item => item.Rect.Right) + padding + separation * contexts.Length;
+        var plans = contexts.Select((context, index) =>
+        {
+            var leftPlan = Plan(context, left, left + separation * index, padding);
+            var rightX = right - separation * index;
+            var rightPlan = Plan(context, rightX, rightX, padding);
+            return new[] { leftPlan, rightPlan }.OrderBy(plan => CollisionCount(plan, context, nodes))
+                .ThenBy(plan => Math.Abs(plan.ColumnDemand.PreferredX - context.Route.SourcePoint.X) +
+                    Math.Abs(plan.ColumnDemand.PreferredX - context.Route.TargetPoint.X))
+                .ThenBy(plan => plan.ColumnDemand.PreferredX).First();
+        }).ToArray();
         var columns = VerticalLinkColumnAllocator.Assign(plans.Select(item => item.ColumnDemand), separation);
         var assignments = plans.Select(plan => Compile(plan, contexts.Single(item => item.Route.Link.Id == plan.LogicalRouteId),
             columns.ColumnsByDemandId[plan.ColumnDemand.Id], nodes, padding)).ToArray();
         return new ReturnLinkAssignmentReport(plans, columns, assignments);
     }
 
-    private static ReturnLinkPlan Plan(AdjacentDownwardLinkContext context, int minimumX, int preferredX, int padding)
+    private static ReturnLinkPlan Plan(
+        AdjacentDownwardLinkContext context,
+        int minimumX,
+        int preferredX,
+        int padding)
     {
         var departureY = context.Source.Rect.Bottom + padding;
         var arrivalY = context.Target.Rect.Y - padding;
@@ -66,7 +80,7 @@ internal static class ReturnLinkCommonAllocator
         });
         var collision = points.Zip(points.Skip(1), (a, b) => new Segment(a, b)).SelectMany(segment =>
                 nodes.Values.Where(node => node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
-                    segment.Intersects(Inflate(node.Rect, padding))).Select(node => node.Node.Id))
+                    segment.Intersects(node.Rect)).Select(node => node.Node.Id))
             .OrderBy(id => id, StringComparer.Ordinal).FirstOrDefault();
         if (collision is not null)
             return Invalid(plan.LogicalRouteId, $"ReturnTopologyBlocked:{collision}");
@@ -87,8 +101,25 @@ internal static class ReturnLinkCommonAllocator
         return new GeneralDownwardLinkAssignment(plan.LogicalRouteId, assigned, transitions, points, Array.Empty<string>(), true);
     }
 
-    private static Rect Inflate(Rect rect, int padding) => new(
-        rect.X - padding, rect.Y - padding, rect.Width + padding * 2, rect.Height + padding * 2);
+    private static int CollisionCount(
+        ReturnLinkPlan plan,
+        AdjacentDownwardLinkContext context,
+        IReadOnlyDictionary<string, NodeLayout> nodes)
+    {
+        var points = new[]
+        {
+            context.Route.SourcePoint,
+            new Point(context.Route.SourcePoint.X, plan.DepartureY),
+            new Point(plan.ColumnDemand.PreferredX, plan.DepartureY),
+            new Point(plan.ColumnDemand.PreferredX, plan.ArrivalY),
+            new Point(context.Route.TargetPoint.X, plan.ArrivalY),
+            context.Route.TargetPoint
+        };
+        return points.Zip(points.Skip(1), (a, b) => new Segment(a, b)).Sum(segment =>
+            nodes.Values.Count(node => node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
+                segment.Intersects(node.Rect)));
+    }
+
     private static GeneralDownwardLinkAssignment Invalid(string id, string reason) =>
         new(id, Array.Empty<AssignedLinkSegment>(), Array.Empty<LinkTransition>(), Array.Empty<Point>(), new[] { reason }, false);
 }
