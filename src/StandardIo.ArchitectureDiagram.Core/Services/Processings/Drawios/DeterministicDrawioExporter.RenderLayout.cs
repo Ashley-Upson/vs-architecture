@@ -133,11 +133,12 @@ internal sealed partial class RenderLayout
             IReadOnlyDictionary<string, NodeLayout> nodes,
             IReadOnlyDictionary<string, ProjectLayout> projects,
             IReadOnlyDictionary<string, LinkLayout> links,
-            TraceabilityValidationResult traceability) =>
+            TraceabilityValidationResult traceability,
+            LayoutRevision? layoutRevision = null) =>
             new(graph, nodes, projects, links, PathSelection, RegionalPathSelection, Traversals, traceability, Corridors, Lanes,
                 PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, "DevelopmentCommonAuthorityTrial",
                 StageTimings, RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount,
-                CapacityExpansionCount, LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
+                CapacityExpansionCount, layoutRevision ?? LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
