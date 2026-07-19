@@ -13,14 +13,6 @@ internal enum PositionalConstraintReason
 
 internal enum HorizontalMovementDirection { Left, Right }
 
-internal enum HorizontalDifferenceConstraintKind
-{
-    ColumnToEnvelope,
-    ColumnToColumn,
-    ReturnColumnToOwnershipEnvelope,
-    ProjectEnvelopeToProjectEnvelope
-}
-
 internal sealed record HorizontalDifferenceAlternative(
     HorizontalMovementDirection Direction,
     int RequiredCoordinate,
