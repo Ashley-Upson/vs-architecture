@@ -905,7 +905,7 @@ internal static class DrawioDiagnosticReportBuilder
         nodeCollisionOrInvalidGeometryCount = score.InvalidGeometry,
         sharedSegmentLength = score.SharedSegmentLength,
         spacingDeficit = score.SpacingDeficit,
-        terminalFanoutViolations = score.LinkConnectionFanoutViolations,
+        terminalFanoutViolations = score.TerminalFanoutViolations,
         ambiguousTransitions = score.AmbiguousTransitions,
         capacityFailure = score.CapacityFailure,
         perpendicularCrossingsAndCongestion = score.CrossingsAndCongestion,

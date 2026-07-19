@@ -68,7 +68,7 @@ public sealed class RegionalCorridorPathOptimizerTests
 
         var score = GlobalCorridorPathSelector.Score(selection, Capacities(), 10);
 
-        Assert.Equal(0, score.LinkConnectionFanoutViolations);
+        Assert.Equal(0, score.TerminalFanoutViolations);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class RegionalCorridorPathOptimizerTests
         var result = GlobalCorridorPathSelector.Select(candidates, Capacities(), 10, 4);
 
         Assert.Equal("accepted", result.Selected["a"].Signature.Value);
-        Assert.Equal(0, result.FinalScore.LinkConnectionFanoutViolations);
+        Assert.Equal(0, result.FinalScore.TerminalFanoutViolations);
     }
     [Fact]
     public void Optimise_changes_only_local_conflict_in_one_hundred_edge_diagram()
