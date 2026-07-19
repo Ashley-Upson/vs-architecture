@@ -1290,7 +1290,8 @@ internal sealed partial class RenderLayout
         {
             var timings = new List<PipelineStageMetric>();
             var placed = MeasureStage(timings, "project-region positional placement", () =>
-                PlacementPipeline.Place(graph, settings, new LayoutRevision(0)));
+                PlacementPipeline.Place(graph, settings, new LayoutRevision(0),
+                    disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow));
             var activePlacement = MeasureStage(timings, "project-region layer-band placement", () =>
                 ProjectLayerBandPlacement.Align(placed, settings));
             var immutableBandPlacement = activePlacement;

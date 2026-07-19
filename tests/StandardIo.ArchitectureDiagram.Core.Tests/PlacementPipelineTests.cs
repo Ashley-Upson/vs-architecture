@@ -102,10 +102,51 @@ public sealed class PlacementPipelineTests
             graph, DiagramSettings.CreateDefault(), new LayoutRevision(0), cancellation.Token));
     }
 
+    [Fact]
+    public void Project_region_places_disconnected_nodes_below_the_routed_forest()
+    {
+        var placed = PlaceProjectRegion(
+            Nodes("root", "child", "detached-a", "detached-b"), Edges(("root", "child")));
+
+        Assert.True(placed.Nodes["detached-a"].Rect.Y > placed.Nodes["child"].Rect.Bottom);
+        Assert.Equal(placed.Nodes["detached-a"].Rect.Y, placed.Nodes["detached-b"].Rect.Y);
+    }
+
+    [Fact]
+    public void Project_region_centres_incomplete_disconnected_row()
+    {
+        var placed = PlaceProjectRegion(Nodes("a", "b", "c", "d", "e"), Array.Empty<DependencyEdge>());
+
+        var top = placed.Nodes.Values.Min(node => node.Rect.Y);
+        var firstRow = placed.Nodes.Values.Where(node => node.Rect.Y == top).ToArray();
+        var secondRow = placed.Nodes.Values.Where(node => node.Rect.Y > top).ToArray();
+        Assert.Equal(3, firstRow.Length);
+        Assert.Equal(2, secondRow.Length);
+        Assert.True(secondRow.Min(node => node.Rect.X) > firstRow.Min(node => node.Rect.X));
+    }
+
+    [Fact]
+    public void Project_region_disconnected_grid_is_stable_under_enumeration_reversal()
+    {
+        var nodes = Nodes("a", "much-wider-node-name", "c", "d", "e");
+        var forward = PlaceProjectRegion(nodes, Array.Empty<DependencyEdge>());
+        var reverse = PlaceProjectRegion(nodes.AsEnumerable().Reverse().ToArray(), Array.Empty<DependencyEdge>());
+
+        Assert.Equal(forward.Nodes.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.Rect)),
+            reverse.Nodes.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.Rect)));
+    }
+
     private static PlacedGraph Place(TypeNode[] nodes, DependencyEdge[] edges)
     {
         var settings = DiagramSettings.CreateDefault();
         return PlacementPipeline.Place(RenderGraph.From(Diagram(nodes, edges), settings), settings, new LayoutRevision(0));
+    }
+
+    private static PlacedGraph PlaceProjectRegion(TypeNode[] nodes, DependencyEdge[] edges)
+    {
+        var settings = DiagramSettings.CreateDefault();
+        return PlacementPipeline.Place(RenderGraph.From(Diagram(nodes, edges), settings), settings, new LayoutRevision(0),
+            disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
     }
 
     private static DiagramModel Diagram(TypeNode[] nodes, DependencyEdge[] edges) =>

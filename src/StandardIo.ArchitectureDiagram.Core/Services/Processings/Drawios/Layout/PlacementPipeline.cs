@@ -9,13 +9,15 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class PlacementPipeline
 {
+    internal enum DisconnectedPlacementPolicy { LegacyRight, DedicatedRegionBelow }
     private const string ExposureTreeIdPrefix = "tree_";
 
     public static PlacedGraph Place(
         RenderGraph graph,
         DiagramSettings settings,
         LayoutRevision revision,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DisconnectedPlacementPolicy disconnectedPlacement = DisconnectedPlacementPolicy.LegacyRight)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var hierarchy = HierarchyAnalyzer.Analyze(graph, revision, cancellationToken);
@@ -23,7 +25,8 @@ internal static class PlacementPipeline
         var widths = CalculateWidths(graph, settings);
         var basePlacements = new Dictionary<string, NodeBasePlacement>(StringComparer.Ordinal);
         var nodes = PositionNodes(
-            graph, settings, hierarchy.VisualLayerByNode, depthOffsets, widths, basePlacements, cancellationToken);
+            graph, settings, hierarchy.VisualLayerByNode, depthOffsets, widths, basePlacements,
+            disconnectedPlacement, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var projects = PositionProjects(graph, settings, nodes);
         cancellationToken.ThrowIfCancellationRequested();
@@ -109,6 +112,7 @@ internal static class PlacementPipeline
             IReadOnlyDictionary<int, int> depthOffsets,
             IReadOnlyDictionary<string, int> widths,
             Dictionary<string, NodeBasePlacement> basePlacements,
+            DisconnectedPlacementPolicy disconnectedPlacement,
             CancellationToken cancellationToken)
         {
             if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)) &&
@@ -161,9 +165,9 @@ internal static class PlacementPipeline
                     .Select(node => node.Rect.Right)
                     .DefaultIfEmpty(result.Values.Max(node => node.Rect.Right))
                     .Max() + settings.Layout.StandaloneGroupSpacing + graph.Links.Count * settings.Layout.ParallelLaneSpacing;
-            var standaloneNodes = standalone
-                .OrderBy(node => depths[node.Id])
-                .ThenBy(node => node.Order)
+            var standaloneNodes = (disconnectedPlacement == DisconnectedPlacementPolicy.DedicatedRegionBelow
+                    ? standalone.OrderBy(node => node.Id, StringComparer.Ordinal)
+                    : standalone.OrderBy(node => depths[node.Id]).ThenBy(node => node.Order))
                 .ToArray();
             var standaloneNodesPerRow = standaloneNodes.Length == 0
                 ? 1
@@ -172,19 +176,37 @@ internal static class PlacementPipeline
                 .Select(node => widths[node.Id])
                 .DefaultIfEmpty(settings.Layout.NodeWidth)
                 .Max() + settings.Layout.HorizontalSpacing;
+            var standaloneRows = standaloneNodes.Select((node, index) => new { node, index, row = index / standaloneNodesPerRow })
+                .GroupBy(item => item.row).ToDictionary(group => group.Key, group => group.ToArray());
+            var rowWidths = standaloneRows.ToDictionary(item => item.Key, item => item.Value.Sum(entry => widths[entry.node.Id]) +
+                Math.Max(0, item.Value.Length - 1) * settings.Layout.HorizontalSpacing);
+            var connectedLeft = result.Values.Select(node => node.Rect.X).DefaultIfEmpty(settings.Layout.ContainerPadding * 2).Min();
+            var connectedRight = result.Values.Select(node => node.Rect.Right).DefaultIfEmpty(connectedLeft).Max();
+            var dedicatedRegionWidth = Math.Max(connectedRight - connectedLeft, rowWidths.Values.DefaultIfEmpty(0).Max());
+            var disconnectedBaseDepth = result.Values.Select(node => node.Depth).DefaultIfEmpty(-1).Max() + 1;
+            var disconnectedTop = result.Values.Select(node => node.Rect.Bottom).DefaultIfEmpty(
+                settings.Layout.ContainerPadding * 2).Max() + settings.Layout.StandaloneGroupSpacing;
             for (var index = 0; index < standaloneNodes.Length; index++)
             {
                 var node = standaloneNodes[index];
                 var column = index % standaloneNodesPerRow;
                 var row = index / standaloneNodesPerRow;
+                var rowEntries = standaloneRows[row];
+                var precedingWidth = rowEntries.TakeWhile(entry => entry.index != index)
+                    .Sum(entry => widths[entry.node.Id] + settings.Layout.HorizontalSpacing);
+                var dedicatedX = connectedLeft + (dedicatedRegionWidth - rowWidths[row]) / 2 + precedingWidth;
                 result[node.Id] = new NodeLayout(
                     node,
                     new Rect(
-                        standaloneX + column * standaloneColumnWidth,
-                        settings.Layout.ContainerPadding * 2 + row * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing),
+                        disconnectedPlacement == DisconnectedPlacementPolicy.DedicatedRegionBelow
+                            ? dedicatedX : standaloneX + column * standaloneColumnWidth,
+                        disconnectedPlacement == DisconnectedPlacementPolicy.DedicatedRegionBelow
+                            ? disconnectedTop + row * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing)
+                            : settings.Layout.ContainerPadding * 2 + row * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing),
                         widths[node.Id],
                         settings.Layout.NodeHeight),
-                    depths[node.Id],
+                    disconnectedPlacement == DisconnectedPlacementPolicy.DedicatedRegionBelow
+                        ? disconnectedBaseDepth + row : depths[node.Id],
                     true);
                 RecordBasePlacement(basePlacements, result[node.Id]);
             }
