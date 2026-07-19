@@ -1,8 +1,8 @@
-# Independent project-region evidence
+# Canonical project-region evidence
 
-This directory contains the first diagrams generated from semantic fixture manifests without constructing or adapting a legacy `RenderLayout`. The normal renderer remains unchanged and the new entry point is reachable only through the explicit `--development-project-region` option or the concrete exporter API.
+This directory contains whole-project output from the independent canonical project-region renderer. The renderer is available only through the explicit `--development-project-region` CLI option. Normal production remains on the legacy renderer and does not execute project-region planning or diagnostics.
 
-## Commands
+## Reproduction
 
 ```powershell
 dotnet build src\StandardIo.ArchitectureDiagram.Cli\StandardIo.ArchitectureDiagram.Cli.csproj -c Release
@@ -12,51 +12,30 @@ dotnet run --project src\StandardIo.ArchitectureDiagram.Cli\StandardIo.Architect
 dotnet run --project src\StandardIo.ArchitectureDiagram.Cli\StandardIo.ArchitectureDiagram.Cli.csproj -c Release --no-build -- . --diagram-manifest fixtures\project-region\standardio-extract\manifest.json --settings artifacts\node-duplication\real-project-deduplicated-settings.json --renderer drawio --development-project-region docs\evidence\project-region\standardio-extract
 ```
 
-Each run writes `legacy-before.drawio`, `common-after.drawio`, and `invariants.json`. The legacy document is visual context only.
+Each run writes the legacy visual reference, canonical `common-after.drawio`, combined and split logical/physical invariant reports, and an authority trace. Acceptance is whole-project: an ineligible project falls back outside the renderer; common and legacy routes are never mixed inside it.
 
-## Synthetic region
+## Final results
 
-- Stable manifest: 1 project, 11 internal nodes, 1 external node, 15 semantic links.
-- Families: adjacent and long downward, same-layer, upward, multi-parent canonical target, and internal-to-external boundary link.
-- First independent output: 2 node collisions, 2 immediate reversals, and 1 spacing deficit (perpendicular crossings reported separately).
-- Correction cycle 1: bounded canonical compilation/repair removed both node collisions.
-- Correction cycle 2: one bounded lane-demand expansion reduced immediate reversals from 2 to 1 but left 3 shared-segment and 4 spacing findings.
-- Legacy/common project dimensions: 1191x1142 / 1190x1138.
-- Legacy/common physical waypoint counts: 55 / 53.
-- Current disposition: whole-project fallback (`HardValidationFindings:8`). No internal route is selectively accepted.
+| Fixture | Nodes | Links | InterLayers | Slot demands | Destination columns | Return columns | Hard logical | Hard physical | Canvas extent | Waypoints |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Synthetic | 12 | 15 | 8 | 21 | 6 | 0 | 0 | 0 | 1359 x 1091 | 37 |
+| StandardIo extract | 9 | 11 | 5 | 17 | 3 | 3 | 0 | 0 | 2326 x 744 | 32 |
 
-## StandardIo extract
+Both fixtures are hard-green and byte-deterministic. The earlier project-region baselines had 8 hard findings for the synthetic fixture and 7 for the StandardIo extract. The canonical outputs contain no node or measured-label intersection, shared non-zero segment, spacing deficit, immediate reversal, ownership reconstruction failure, or serialization-created diagonal.
 
-- Source: the renderer/analysis branch visible in the generated StandardIo.Core diagram.
-- Stable manifest: 1 project, 9 real named types, 11 representative dependencies.
-- Preserved legacy defect: shared route geometry around the processing/registry/exporter branch.
-- First independent output: 2 shared segments and 4 immediate reversals.
-- Correction cycle: canonical compilation/repair removed both shared segments; 3 spacing deficits remain.
-- Legacy/common project dimensions: 2156x764 / 2156x750.
-- Legacy/common physical waypoint counts: 37 / 38.
-- Current disposition: whole-project fallback (`HardValidationFindings:7`, including four logical immediate-reversal findings which ownership serialization may normalize but are retained conservatively).
+## Authority boundary
 
-## Architectural disposition
+- Terminals: `ProjectTerminalAllocator`.
+- Topology: `CanonicalTopologyFamilySelector`.
+- Horizontal Y: `DeterministicSlotAllocator` over InterLayer demands.
+- Vertical X and return side: `VerticalLinkColumnAllocator` plus ownership-local return selection.
+- Constrained materialisation: `ProjectInterLayerSlotCompiler`.
+- Normalization: `LogicalRouteNormalizer`.
+- Physical geometry: `CoordinateOwnershipCompiler`.
+- Acceptance: logical traceability followed by physical geometry validation.
 
-The project renderer reuses permanent placement, topology candidate, corridor, traversal, repair, ownership, and serialization primitives. It bypasses:
+The target path does not invoke generic candidate selection, corridor lane coordinate assignment, corridor lane geometry rewriting, traversal topology replacement, or topology-changing repair.
 
-- `LegacyRoutingPipeline` orchestration;
-- legacy node/project coordinates;
-- legacy selected paths and repairs;
-- common reconstruction of legacy points;
-- link-level component projection/classification;
-- mixed common/legacy movement and rollback;
-- component alternative search and revision-heavy coexistence.
+## Historical comparison
 
-The universal mixed-authority path remains development-only historical migration evidence. Its deletion gate is successful production approval of complete project-region fallback for all topology families it diagnoses.
-
-## Known incomplete acceptance items
-
-The output is intentionally checked in even though neither project is eligible yet. This prevents another architecture-only cycle and makes the remaining work concrete:
-
-1. eliminate project-region spacing/shared-geometry findings without expanding the universal solver;
-2. model rendered project-label text as an explicit measured obstacle while leaving unused title-bar space routable;
-3. validate physical ownership-segment geometry separately from logical pre-serialization redundancy;
-4. add a production selector only after one region passes every hard invariant.
-
-No project-region output is enabled by default.
+`legacy-before.drawio` remains a visual reference, not an authority input. The previous independent artifacts and their findings remain recoverable from Git history before this consolidation; the checked-in `common-after.drawio` files are now the canonical hard-green evidence.

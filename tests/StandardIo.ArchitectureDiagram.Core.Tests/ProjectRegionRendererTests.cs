@@ -38,7 +38,7 @@ public sealed class ProjectRegionRendererTests
         Assert.Equal(0, report.GetProperty("traversalTopologyReplacementRemaining").GetInt32());
         Assert.Equal(0, report.GetProperty("repairTopologyMutationRemaining").GetInt32());
         Assert.Empty(report.GetProperty("physicalFindings").EnumerateArray());
-        Assert.Equal("EdgeTraversalCompiler", report.GetProperty("obstacleCompilationAuthority").GetString());
+        Assert.Equal("ProjectInterLayerSlotCompiler", report.GetProperty("obstacleCompilationAuthority").GetString());
         Assert.Equal(12, report.GetProperty("semanticNodeCount").GetInt32());
         Assert.Equal(15, report.GetProperty("semanticLinkCount").GetInt32());
         Assert.Equal(15, xml.Descendants("mxCell")

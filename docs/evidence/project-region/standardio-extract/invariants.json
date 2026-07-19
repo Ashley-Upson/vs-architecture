@@ -5,72 +5,364 @@
   "semanticLinkCount": 11,
   "renderNodeCount": 9,
   "renderLinkCount": 11,
-  "eligible": false,
-  "fallbackReasons": [
-    "HardValidationFindings:7"
-  ],
+  "eligible": true,
+  "fallbackReasons": [],
   "legacyRenderLayoutUsed": false,
   "legacyCoordinatesUsed": false,
   "legacyPathsUsed": false,
-  "horizontalSegmentYAuthority": "CorridorLaneAllocator",
-  "verticalColumnXAuthority": "CorridorLaneAllocator",
-  "topologySelectionAuthority": "RenderLayout.PositionLinks",
-  "obstacleCompilationAuthority": "EdgeTraversalCompiler",
-  "boundedTopologyRecompileAuthority": "RouteRepairCoordinator",
-  "interLayerSlotAllocationUsed": false,
-  "developmentTrialUsed": false,
-  "fallbackOccursOutsideRenderer": true,
-  "findings": [
+  "horizontalSegmentYAuthority": "DeterministicSlotAllocator",
+  "verticalColumnXAuthority": "VerticalLinkColumnAllocator / ReturnColumnAllocator",
+  "topologySelectionAuthority": "CanonicalTopologyFamilySelector",
+  "topologyFamilies": {
+    "AdjacentDownward": 5,
+    "LongDownward": 3,
+    "SameLayerReturn": 3
+  },
+  "interLayersDiscovered": 5,
+  "slotDemands": 17,
+  "slotsAssigned": 17,
+  "interLayersExpanded": 3,
+  "corridorLaneYAssignmentsRemaining": 0,
+  "repairBasedHorizontalOffsetsRemaining": 0,
+  "destinationColumnsAssigned": 3,
+  "returnColumnsAssigned": 3,
+  "returnSideSelections": {
+    "r08": "Left",
+    "r09": "Right",
+    "r11": "Left"
+  },
+  "corridorLaneXAssignmentsRemaining": 0,
+  "repairBasedVerticalOffsetsRemaining": 0,
+  "legacyCandidateSelectionInvoked": false,
+  "traversalTopologyReplacementRemaining": 0,
+  "repairTopologyMutationRemaining": 0,
+  "projectLabelGeometry": [
     {
-      "code": "ImmediateReversal",
-      "edgeId": "r02",
-      "OtherEdgeId": null,
-      "OtherNodeId": null,
-      "Description": "Edge r02 immediately reverses at (1262,160)."
-    },
-    {
-      "code": "ImmediateReversal",
-      "edgeId": "r08",
-      "OtherEdgeId": null,
-      "OtherNodeId": null,
-      "Description": "Edge r08 immediately reverses at (340,704)."
-    },
-    {
-      "code": "ImmediateReversal",
-      "edgeId": "r09",
-      "OtherEdgeId": null,
-      "OtherNodeId": null,
-      "Description": "Edge r09 immediately reverses at (1782,604)."
-    },
-    {
-      "code": "ImmediateReversal",
-      "edgeId": "r11",
-      "OtherEdgeId": null,
-      "OtherNodeId": null,
-      "Description": "Edge r11 immediately reverses at (352,604)."
-    },
-    {
-      "code": "ParallelSpacing",
-      "edgeId": "r02",
-      "OtherEdgeId": "r04",
-      "OtherNodeId": null,
-      "Description": "Edges r02 and r04 violate parallel spacing by up to 3px."
-    },
-    {
-      "code": "ParallelSpacing",
-      "edgeId": "r03",
-      "OtherEdgeId": "r05",
-      "OtherNodeId": null,
-      "Description": "Edges r03 and r05 violate parallel spacing by up to 6px."
-    },
-    {
-      "code": "ParallelSpacing",
-      "edgeId": "r04",
-      "OtherEdgeId": "r10",
-      "OtherNodeId": null,
-      "Description": "Edges r04 and r10 violate parallel spacing by up to 11px."
+      "ProjectId": "core",
+      "ProjectBounds": {
+        "X": 120,
+        "Y": -9,
+        "Width": 2206,
+        "Height": 753,
+        "Right": 2326,
+        "Bottom": 744,
+        "CenterX": 1223,
+        "CenterY": 367
+      },
+      "ProjectLabelTextBounds": {
+        "X": 1083,
+        "Y": -9,
+        "Width": 280,
+        "Height": 34,
+        "Right": 1363,
+        "Bottom": 25,
+        "CenterX": 1223,
+        "CenterY": 8
+      },
+      "ProjectLabelObstacleBounds": {
+        "X": 1073,
+        "Y": -19,
+        "Width": 300,
+        "Height": 54,
+        "Right": 1373,
+        "Bottom": 35,
+        "CenterX": 1223,
+        "CenterY": 8
+      }
     }
   ],
+  "logicalRoutes": [
+    {
+      "logicalEdgeId": "r01",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1202,
+          "Y": 130
+        },
+        {
+          "X": 1202,
+          "Y": 140
+        },
+        {
+          "X": 1460,
+          "Y": 140
+        },
+        {
+          "X": 1460,
+          "Y": 170
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r02",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1460,
+          "Y": 250
+        },
+        {
+          "X": 1460,
+          "Y": 284
+        },
+        {
+          "X": 1262,
+          "Y": 284
+        },
+        {
+          "X": 1262,
+          "Y": 306
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r03",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1436,
+          "Y": 250
+        },
+        {
+          "X": 1436,
+          "Y": 260
+        },
+        {
+          "X": 1042,
+          "Y": 260
+        },
+        {
+          "X": 1042,
+          "Y": 396
+        },
+        {
+          "X": 1186,
+          "Y": 396
+        },
+        {
+          "X": 1186,
+          "Y": 442
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r04",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1484,
+          "Y": 250
+        },
+        {
+          "X": 1484,
+          "Y": 272
+        },
+        {
+          "X": 2142,
+          "Y": 272
+        },
+        {
+          "X": 2142,
+          "Y": 532
+        },
+        {
+          "X": 2142,
+          "Y": 614
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r05",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1250,
+          "Y": 386
+        },
+        {
+          "X": 1250,
+          "Y": 420
+        },
+        {
+          "X": 1162,
+          "Y": 420
+        },
+        {
+          "X": 1162,
+          "Y": 442
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r06",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1162,
+          "Y": 522
+        },
+        {
+          "X": 1162,
+          "Y": 592
+        },
+        {
+          "X": 328,
+          "Y": 592
+        },
+        {
+          "X": 328,
+          "Y": 614
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r07",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 1186,
+          "Y": 522
+        },
+        {
+          "X": 1186,
+          "Y": 592
+        },
+        {
+          "X": 1306,
+          "Y": 592
+        },
+        {
+          "X": 1306,
+          "Y": 614
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r08",
+      "family": "SameLayerReturn",
+      "points": [
+        {
+          "X": 340,
+          "Y": 694
+        },
+        {
+          "X": 340,
+          "Y": 704
+        },
+        {
+          "X": 148,
+          "Y": 704
+        },
+        {
+          "X": 148,
+          "Y": 544
+        },
+        {
+          "X": 998,
+          "Y": 544
+        },
+        {
+          "X": 998,
+          "Y": 614
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r09",
+      "family": "SameLayerReturn",
+      "points": [
+        {
+          "X": 998,
+          "Y": 694
+        },
+        {
+          "X": 998,
+          "Y": 716
+        },
+        {
+          "X": 2310,
+          "Y": 716
+        },
+        {
+          "X": 2310,
+          "Y": 556
+        },
+        {
+          "X": 1782,
+          "Y": 556
+        },
+        {
+          "X": 1782,
+          "Y": 614
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r10",
+      "family": "LongDownward",
+      "points": [
+        {
+          "X": 1274,
+          "Y": 386
+        },
+        {
+          "X": 1274,
+          "Y": 408
+        },
+        {
+          "X": 1806,
+          "Y": 408
+        },
+        {
+          "X": 1806,
+          "Y": 568
+        },
+        {
+          "X": 1806,
+          "Y": 614
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "r11",
+      "family": "SameLayerReturn",
+      "points": [
+        {
+          "X": 1794,
+          "Y": 694
+        },
+        {
+          "X": 1794,
+          "Y": 728
+        },
+        {
+          "X": 124,
+          "Y": 728
+        },
+        {
+          "X": 124,
+          "Y": 580
+        },
+        {
+          "X": 352,
+          "Y": 580
+        },
+        {
+          "X": 352,
+          "Y": 614
+        }
+      ]
+    }
+  ],
+  "obstacleCompilationAuthority": "ProjectInterLayerSlotCompiler",
+  "boundedTopologyRecompileAuthority": null,
+  "interLayerSlotAllocationUsed": true,
+  "developmentTrialUsed": false,
+  "fallbackOccursOutsideRenderer": true,
+  "findings": [],
+  "logicalFindings": [],
+  "physicalFindings": [],
   "timings": [
     {
       "Stage": "project-region semantic preparation",
@@ -79,12 +371,12 @@
     },
     {
       "Stage": "project-region generation",
-      "ElapsedMilliseconds": 97,
+      "ElapsedMilliseconds": 38,
       "Invocation": 1
     },
     {
       "Stage": "project-region ownership compilation",
-      "ElapsedMilliseconds": 0,
+      "ElapsedMilliseconds": 2,
       "Invocation": 1
     },
     {
@@ -98,8 +390,18 @@
       "Invocation": 1
     },
     {
-      "Stage": "project-region serialization",
+      "Stage": "project-region project-label bounds",
       "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region physical validation",
+      "ElapsedMilliseconds": 2,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region serialization",
+      "ElapsedMilliseconds": 1,
       "Invocation": 1
     },
     {
@@ -108,23 +410,63 @@
       "Invocation": 1
     },
     {
-      "Stage": "project-region topology production",
-      "ElapsedMilliseconds": 18,
+      "Stage": "project-region layer-band placement",
+      "ElapsedMilliseconds": 1,
       "Invocation": 1
     },
     {
-      "Stage": "project-region route compilation and repair",
-      "ElapsedMilliseconds": 29,
+      "Stage": "project-region canonical topology selection",
+      "ElapsedMilliseconds": 3,
       "Invocation": 1
     },
     {
-      "Stage": "project-region topology regeneration",
-      "ElapsedMilliseconds": 17,
+      "Stage": "project-region terminal allocation",
+      "ElapsedMilliseconds": 2,
       "Invocation": 1
     },
     {
-      "Stage": "project-region regenerated route compilation and repair",
-      "ElapsedMilliseconds": 29,
+      "Stage": "project-region project-label measurement",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region InterLayer slot allocation",
+      "ElapsedMilliseconds": 25,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region InterLayer expansion",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region canonical topology selection",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region terminal allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region project-label measurement",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region InterLayer slot allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region canonical normalization",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region logical validation",
+      "ElapsedMilliseconds": 0,
       "Invocation": 1
     }
   ]

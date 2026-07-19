@@ -128,6 +128,33 @@ public static class Program
             await evidenceBroker.WriteTextAsync(Path.Combine(directory, "legacy-before.drawio"), legacy).ConfigureAwait(false);
             await evidenceBroker.WriteTextAsync(Path.Combine(directory, "common-after.drawio"), region.Document).ConfigureAwait(false);
             await evidenceBroker.WriteTextAsync(Path.Combine(directory, "invariants.json"), region.InvariantJson).ConfigureAwait(false);
+            using var invariantDocument = JsonDocument.Parse(region.InvariantJson);
+            var invariantRoot = invariantDocument.RootElement;
+            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "logical-invariants.json"), JsonSerializer.Serialize(new
+            {
+                eligible = invariantRoot.GetProperty("eligible"),
+                fallbackReasons = invariantRoot.GetProperty("fallbackReasons"),
+                logicalRoutes = invariantRoot.GetProperty("logicalRoutes"),
+                findings = invariantRoot.GetProperty("logicalFindings")
+            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "physical-invariants.json"), JsonSerializer.Serialize(new
+            {
+                eligible = invariantRoot.GetProperty("eligible"),
+                physicalGeometryAuthority = "CoordinateOwnershipCompiler",
+                findings = invariantRoot.GetProperty("physicalFindings")
+            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "authority-trace.json"), JsonSerializer.Serialize(new
+            {
+                terminalAuthority = "ProjectTerminalAllocator",
+                topologyAuthority = invariantRoot.GetProperty("topologySelectionAuthority"),
+                horizontalYAuthority = invariantRoot.GetProperty("horizontalSegmentYAuthority"),
+                verticalXAuthority = invariantRoot.GetProperty("verticalColumnXAuthority"),
+                obstacleCompilationAuthority = invariantRoot.GetProperty("obstacleCompilationAuthority"),
+                physicalGeometryAuthority = "CoordinateOwnershipCompiler",
+                legacyCandidateSelectionInvoked = invariantRoot.GetProperty("legacyCandidateSelectionInvoked"),
+                traversalTopologyReplacementRemaining = invariantRoot.GetProperty("traversalTopologyReplacementRemaining"),
+                repairTopologyMutationRemaining = invariantRoot.GetProperty("repairTopologyMutationRemaining")
+            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             Console.WriteLine($"Project region evidence: {directory}");
             Console.WriteLine(region.Eligible ? "Project region eligible." :
                 $"Project region fallback: {string.Join(",", region.FallbackReasons)}");

@@ -87,7 +87,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                     ? plan.Family.ToString() : null,
                 points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint })
             }),
-            obstacleCompilationAuthority = "EdgeTraversalCompiler",
+            obstacleCompilationAuthority = "ProjectInterLayerSlotCompiler",
             boundedTopologyRecompileAuthority = (string?)null,
             interLayerSlotAllocationUsed = true,
             developmentTrialUsed = false,
