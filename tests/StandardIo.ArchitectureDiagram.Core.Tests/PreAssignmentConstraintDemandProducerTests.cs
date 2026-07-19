@@ -50,7 +50,7 @@ public sealed class PreAssignmentConstraintDemandProducerTests
     }
 
     [Fact]
-    public void Column_to_envelope_materialisation_moves_destination_to_the_nearest_valid_side()
+    public void Column_to_envelope_materialisation_selects_the_least_movement_coherent_side()
     {
         var placement = Placement();
         var report = Detect(placement, new[]
@@ -63,11 +63,12 @@ public sealed class PreAssignmentConstraintDemandProducerTests
             report.ColumnToEnvelopeConstraints, report.ColumnToColumnConstraints, routes,
             new HashSet<string>(routes.Keys, StringComparer.Ordinal));
         Assert.Single(constraints);
-        Assert.StartsWith("ColumnToEnvelope:", constraints[0].Reason);
+        Assert.True(constraints[0].Reason.StartsWith("ColumnToEnvelope:", StringComparison.Ordinal) ||
+                    constraints[0].Reason.StartsWith("BlockingEnvelopeToColumn:", StringComparison.Ordinal));
         var moved = HorizontalMovementConstraintMaterializer.Materialize(placement, constraints, Settings(), routes);
 
-        Assert.True(moved.Placement.Nodes["target-a"].Rect.CenterX < placement.Nodes["blocker"].Rect.X);
-        Assert.True(moved.Placement.Nodes["target-a"].Rect.CenterX < moved.Placement.Nodes["blocker"].Rect.X);
+        Assert.True(moved.Placement.Nodes["target-a"].Rect.CenterX < moved.Placement.Nodes["blocker"].Rect.X,
+            $"constraint={constraints[0]}; target={moved.Placement.Nodes["target-a"].Rect}; blocker={moved.Placement.Nodes["blocker"].Rect}");
     }
 
     private static PreAssignmentConstraintDemandReport Detect(PlacedGraph placement, IReadOnlyList<GeneralDownwardLinkPlan> plans) =>

@@ -54,7 +54,9 @@ internal static class DevelopmentCommonAuthorityTrial
         var persistentIterations = 0;
         var horizontalConstraintConverged = true;
         var differenceConstraintStore = new GenerationConstraintStore();
-        var lockedColumnDirections = new Dictionary<string, HorizontalMovementDirection>(StringComparer.Ordinal);
+        var alternativeSelection = new DifferenceAlternativeSelection(Array.Empty<DifferenceAlternativeChoice>(),
+            Array.Empty<DifferenceAlternativeChoice>(),
+            Array.Empty<PositiveDifferenceCycle>(), 0, 0, 0, true);
         while (true)
         {
             if (persistentIterations >= 16)
@@ -62,13 +64,17 @@ internal static class DevelopmentCommonAuthorityTrial
                 horizontalConstraintConverged = false;
                 break;
             }
-            var differenceConstraints = ColumnDifferenceConstraintMaterializer.Propose(
+            alternativeSelection = ColumnDifferenceConstraintMaterializer.Select(
                 placement, positionalDemands.ColumnToEnvelopeConstraints,
-                positionalDemands.ColumnToColumnConstraints, production.Links, potentiallySupportedRoutes,
-                lockedColumnDirections);
-            var differenceIncreased = false;
-            foreach (var constraint in differenceConstraints)
-                differenceIncreased |= differenceConstraintStore.Merge(constraint);
+                positionalDemands.ColumnToColumnConstraints, production.Links, potentiallySupportedRoutes);
+            if (!alternativeSelection.IsSatisfiable)
+            {
+                horizontalConstraintConverged = false;
+                break;
+            }
+            var previousDifferenceSignature = ConstraintSignature(differenceConstraintStore.Snapshot());
+            differenceConstraintStore = Store(alternativeSelection.Selected.Select(item => item.Constraint));
+            var differenceIncreased = previousDifferenceSignature != ConstraintSignature(differenceConstraintStore.Snapshot());
             movement = PreAssignmentMovementPlanner.Solve(
                 placement, persistentDemands.Values, settings, production.Links, potentiallySupportedRoutes,
                 differenceConstraintStore.Snapshot());
@@ -154,18 +160,25 @@ internal static class DevelopmentCommonAuthorityTrial
                 potentiallySupportedRoutes.Add(route.Observation.LogicalRouteId);
             foreach (var assignment in returns.Assignments.Where(item => item.IsValid))
                 potentiallySupportedRoutes.Add(assignment.LogicalRouteId);
-            var changedConstraints = ColumnDifferenceConstraintMaterializer.Propose(
+            alternativeSelection = ColumnDifferenceConstraintMaterializer.Select(
                 placement, postVerticalDemands.ColumnToEnvelopeConstraints,
                 postVerticalDemands.ColumnToColumnConstraints, production.Links,
-                potentiallySupportedRoutes, lockedColumnDirections);
-            var raised = false;
-            foreach (var constraint in changedConstraints)
-                if (differenceConstraintStore.Merge(constraint))
-                {
-                    raised = true;
+                potentiallySupportedRoutes);
+            if (!alternativeSelection.IsSatisfiable)
+            {
+                changedIntervalConverged = false;
+                break;
+            }
+            var changedStore = Store(alternativeSelection.Selected.Select(item => item.Constraint));
+            var raised = ConstraintSignature(changedStore.Snapshot()) !=
+                         ConstraintSignature(differenceConstraintStore.Snapshot());
+            if (raised)
+            {
+                differenceConstraintStore = changedStore;
+                foreach (var constraint in differenceConstraintStore.Snapshot())
                     changedConstraintProgression.Add(
                         $"pass-{changedIntervalPasses + 1}:{constraint.Key.Scope}:{constraint.Key.Kind}:{constraint.Minimum}:{constraint.Reason}");
-                }
+            }
             if (!raised) break;
             movement = PreAssignmentMovementPlanner.Solve(
                 placement, persistentDemands.Values, settings, production.Links,
@@ -426,8 +439,35 @@ internal static class DevelopmentCommonAuthorityTrial
                     leftScopes = item.LeftClearance.MovementScopes.Select(scope => scope.ToString()),
                     rightScopes = item.RightClearance.MovementScopes.Select(scope => scope.ToString())
                 }),
-                mutualColumnDifferenceCycles = ColumnDifferenceCycleAnalyzer.FindMutualDestinationCycles(
-                    positionalDemands.ColumnToEnvelopeConstraints),
+                alternativeSelection = new
+                {
+                    alternatives = alternativeSelection.Available.Count,
+                    conflicts = alternativeSelection.Available.Select(item => item.ConflictId)
+                        .Distinct(StringComparer.Ordinal).Count(),
+                    conflictsWithMultipleAlternatives = alternativeSelection.Available.GroupBy(item => item.ConflictId)
+                        .Count(group => group.Select(item => item.AlternativeId).Distinct(StringComparer.Ordinal).Count() > 1),
+                    alternativeSelection.StatesEvaluated,
+                    alternativeSelection.StatesRejected,
+                    alternativeSelection.CompleteSolutions,
+                    alternativeSelection.IsSatisfiable,
+                    positiveCycles = alternativeSelection.PositiveCycles.Select(cycle => new
+                    {
+                        cycle.ScopeIds, cycle.TotalWeight,
+                        alternatives = cycle.Edges.Select(edge => edge.AlternativeId)
+                    }),
+                    selected = alternativeSelection.Selected.Select(item => new
+                    {
+                        item.ConflictId, item.AlternativeId, movingScope = item.MovingScope.ToString(),
+                        item.MovingStructureId, item.OpposingStructureId, direction = item.Direction.ToString(),
+                        item.Weight, item.Movement, item.MovedNodeCount, item.WidthExpansion
+                    }),
+                    available = alternativeSelection.Available.Select(item => new
+                    {
+                        item.ConflictId, item.AlternativeId, movingScope = item.MovingScope.ToString(),
+                        item.MovingStructureId, item.OpposingStructureId, direction = item.Direction.ToString(),
+                        item.Weight, item.Movement, item.MovedNodeCount, item.WidthExpansion
+                    })
+                },
                 columnToColumnDemands = positionalDemands.ColumnToColumnConstraints.Count,
                 differenceConstraints = differenceConstraintStore.Snapshot().Select(item => new
                 {
@@ -700,4 +740,14 @@ internal static class DevelopmentCommonAuthorityTrial
         timer.Stop();
         return timer.ElapsedTicks * 1_000_000 / Stopwatch.Frequency;
     }
+
+    private static GenerationConstraintStore Store(IEnumerable<GenerationConstraint> constraints)
+    {
+        var store = new GenerationConstraintStore();
+        foreach (var constraint in constraints) store.Merge(constraint);
+        return store;
+    }
+
+    private static string ConstraintSignature(IEnumerable<GenerationConstraint> constraints) => string.Join("|",
+        constraints.Select(item => $"{item.Key.Scope.Kind}:{item.Key.Scope.Id}:{item.Key.Kind}:{item.Minimum}"));
 }
