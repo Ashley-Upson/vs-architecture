@@ -157,6 +157,10 @@ internal static class PlacementPipeline
             AlignBaselineNodes(settings, result);
             PlaceExternalDependencyNodes(graph, settings, result);
             AlignBaselineNodes(settings, result);
+            if (disconnectedPlacement == DisconnectedPlacementPolicy.DedicatedRegionBelow)
+            {
+                ResolveLayerOverlaps(settings, result);
+            }
 
             var standaloneX = result.Count == 0
                 ? settings.Layout.ContainerPadding * 2

@@ -136,6 +136,31 @@ public sealed class PlacementPipelineTests
             reverse.Nodes.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.Rect)));
     }
 
+    [Fact]
+    public void Project_region_resolves_external_target_overlap_after_external_placement()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var diagram = new DiagramModel(
+            new[] { Project("project", Nodes("left", "right")) },
+            new[]
+            {
+                new ExternalDependencyNode("external-left", "ExternalLeft", "Fixture.ExternalLeft", "external", "External", "[External]"),
+                new ExternalDependencyNode("external-right", "ExternalRight", "Fixture.ExternalRight", "external", "External", "[External]")
+            },
+            new[]
+            {
+                new DependencyEdge("edge-left", "left", "external-left", "external"),
+                new DependencyEdge("edge-right", "right", "external-right", "external")
+            });
+
+        var placed = PlacementPipeline.Place(RenderGraph.From(diagram, settings), settings, new LayoutRevision(0),
+            disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
+        var targets = new[] { placed.Nodes["external-left"].Rect, placed.Nodes["external-right"].Rect }
+            .OrderBy(rect => rect.X).ToArray();
+
+        Assert.True(targets[1].X - targets[0].Right >= settings.Layout.HorizontalSpacing);
+    }
+
     private static PlacedGraph Place(TypeNode[] nodes, DependencyEdge[] edges)
     {
         var settings = DiagramSettings.CreateDefault();
