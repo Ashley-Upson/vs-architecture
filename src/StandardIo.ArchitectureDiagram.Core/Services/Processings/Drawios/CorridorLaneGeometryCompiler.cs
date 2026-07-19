@@ -55,7 +55,7 @@ internal static class CorridorLaneGeometryCompiler
                     var secondTerminalCoordinate = mapping.Segment.IsHorizontal
                         ? link.TargetPoint.Y
                         : link.TargetPoint.X;
-                    if (!PreservesTerminalRegion(
+                    if (!PreservesConnectionRegion(
                         originalCoordinate,
                         lane.Coordinate,
                         firstTerminalCoordinate,
@@ -100,7 +100,7 @@ internal static class CorridorLaneGeometryCompiler
         points.Zip(points.Skip(1), (start, end) => new Segment(start, end))
             .All(segment => segment.IsHorizontal || segment.IsVertical);
 
-    private static bool PreservesTerminalRegion(int original, int candidate, int firstTerminal, int secondTerminal)
+    private static bool PreservesConnectionRegion(int original, int candidate, int firstTerminal, int secondTerminal)
     {
         var minimum = Math.Min(firstTerminal, secondTerminal);
         var maximum = Math.Max(firstTerminal, secondTerminal);

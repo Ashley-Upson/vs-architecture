@@ -123,7 +123,7 @@ public sealed class CorridorObserverTests
         var observation = CorridorObserver.Observe(nodes, links, 12, 4);
         var sourceTransitions = observation.LinkConnectionTransitions!
             .Where(item => item.Direction == FanoutDirection.Source)
-            .OrderBy(item => item.LaneOrder)
+            .OrderBy(item => item.SlotOrder)
             .ToArray();
 
         Assert.Equal(new[] { "near", "far" }, sourceTransitions.Select(item => item.EdgeId));

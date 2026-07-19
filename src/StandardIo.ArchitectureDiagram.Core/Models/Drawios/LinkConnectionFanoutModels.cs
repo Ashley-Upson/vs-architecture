@@ -9,27 +9,21 @@ internal sealed record LinkConnectionFanoutMembership(
     string GroupId,
     FanoutDirection Direction,
     string SharedNodeId,
-    int TerminalOrder,
-    int LaneOrder,
+    int ConnectionOrder,
+    int SlotOrder,
     int RemoteNodeOrder,
     FanoutSide Side);
-
-internal sealed record LinkConnectionFanoutGroup(
-    string Id,
-    FanoutDirection Direction,
-    string SharedNodeId,
-    IReadOnlyList<LinkConnectionFanoutMembership> Routes);
 
 internal sealed record LinkConnectionTransition(
     string Id,
     string EdgeId,
     int RouteRevision,
     FanoutDirection Direction,
-    string TerminalNodeId,
+    string ConnectionNodeId,
     FanoutSide Side,
     int PortCoordinate,
     Segment ProtectedStub,
     string? FirstOrdinaryCorridorId,
     int RequiredDepth,
     int RequiredSpread,
-    int LaneOrder);
+    int SlotOrder);

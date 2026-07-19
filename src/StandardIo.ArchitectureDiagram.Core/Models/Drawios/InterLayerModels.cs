@@ -120,7 +120,7 @@ internal sealed record NonOrthogonalSegmentDiagnostic(
     LogicalRouteStage RouteStage,
     bool TraversalFallback,
     IReadOnlyList<string> TraversalDiagnostics,
-    bool TerminalRegion,
+    bool ConnectionRegion,
     bool OwnershipBoundary,
     string Classification,
     IReadOnlyList<TraceabilityViolationCode> AssociatedFindings,

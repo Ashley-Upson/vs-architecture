@@ -200,11 +200,11 @@ internal static class GlobalCorridorPathSelector
             .Sum(group =>
             {
                 var ordered = group.OrderBy(item => item.Side).ThenBy(item => item.RemoteNodeOrder).ToArray();
-                var duplicatePorts = ordered.Length - ordered.Select(item => item.TerminalOrder).Distinct().Count();
-                var duplicateLanes = ordered.Length - ordered.Select(item => item.LaneOrder).Distinct().Count();
+                var duplicatePorts = ordered.Length - ordered.Select(item => item.ConnectionOrder).Distinct().Count();
+                var duplicateLanes = ordered.Length - ordered.Select(item => item.SlotOrder).Distinct().Count();
                 var inversions = ordered.SelectMany((left, index) => ordered.Skip(index + 1)
                     .Where(right => left.Side == right.Side &&
-                        (left.TerminalOrder > right.TerminalOrder || left.LaneOrder > right.LaneOrder))).Count();
+                        (left.ConnectionOrder > right.ConnectionOrder || left.SlotOrder > right.SlotOrder))).Count();
                 return duplicatePorts + duplicateLanes + inversions;
             });
 

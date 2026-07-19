@@ -214,16 +214,16 @@ internal static class InterLayerDemandDiscovery
     }
 
     private sealed record PendingDemand(string Id, string EdgeId, RouteRevision Revision, InterLayerId BandId,
-        int SegmentIndex, InterLayerMembershipRole Role, int XStart, int XEnd, int TerminalOrder, InterLayerLinkDirection Direction)
+        int SegmentIndex, InterLayerMembershipRole Role, int XStart, int XEnd, int ConnectionOrder, InterLayerLinkDirection Direction)
     {
         public InterLayerLinkDemand ToDemand(int lane) => new(Id, EdgeId, Revision, BandId, SegmentIndex, Role,
-            XStart, XEnd, TerminalOrder, Direction, lane);
+            XStart, XEnd, ConnectionOrder, Direction, lane);
 
         public LinkSegmentDemand ToLinkSegmentDemand(int upperBoundary, int lowerBoundary) => new(
             Id, EdgeId, LinkSegmentOrientation.Horizontal, new AxisInterval(XStart, XEnd),
             new AxisInterval(upperBoundary, lowerBoundary), null,
             Role == InterLayerMembershipRole.Return ? LinkSegmentRole.Return : LinkSegmentRole.Through,
-            TerminalOrder, SegmentIndex,
+            ConnectionOrder, SegmentIndex,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{BandId.LowerLayer}"),
             BandId.LayoutRevision, Revision);
     }

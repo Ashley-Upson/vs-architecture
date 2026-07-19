@@ -61,11 +61,6 @@ internal enum MovementScopeKind
 
 internal readonly record struct MovementScopeIdentity(MovementScopeKind Kind, string Id);
 
-internal sealed record MovementScopeDefinition(
-    MovementScopeIdentity Identity,
-    IReadOnlyList<string> MemberNodeIds,
-    string OwnerId);
-
 internal enum GenerationConstraintKind { MinimumX, MinimumY, MinimumWidth, MinimumHeight }
 
 internal readonly record struct GenerationConstraintKey(

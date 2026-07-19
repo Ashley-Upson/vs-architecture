@@ -18,10 +18,10 @@ internal static class DrawioDiagnosticReportBuilder
     private sealed record FoundationCostObservation(
         long ConstraintMergeAndMaterializationMicroseconds,
         long InvalidationMicroseconds,
-        long TerminalComponentConstructionMicroseconds,
+        long ConnectionComponentConstructionMicroseconds,
         int InvalidationCount,
-        int UnresolvedTerminalComponents,
-        int ResolvedTerminalComponents);
+        int UnresolvedConnectionComponents,
+        int ResolvedConnectionComponents);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -195,8 +195,8 @@ internal static class DrawioDiagnosticReportBuilder
                 nodeWidths = nodeWidthObservation,
                 contacts = contactObservation,
                 directInvalidationCount = foundationCosts.InvalidationCount,
-                terminalUnresolvedComponents = foundationCosts.UnresolvedTerminalComponents,
-                terminalResolvedComponents = foundationCosts.ResolvedTerminalComponents,
+                terminalUnresolvedComponents = foundationCosts.UnresolvedConnectionComponents,
+                terminalResolvedComponents = foundationCosts.ResolvedConnectionComponents,
                 adjacentDownward,
                 timings = new
                 {
@@ -204,7 +204,7 @@ internal static class DrawioDiagnosticReportBuilder
                     canonicalContactClassificationMicroseconds = ToMicroseconds(contactTimer),
                     foundationCosts.ConstraintMergeAndMaterializationMicroseconds,
                     foundationCosts.InvalidationMicroseconds,
-                    foundationCosts.TerminalComponentConstructionMicroseconds
+                    foundationCosts.ConnectionComponentConstructionMicroseconds
                 }
             },
             stageTimings,
