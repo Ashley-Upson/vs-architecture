@@ -13,6 +13,54 @@ internal enum PositionalConstraintReason
 
 internal enum HorizontalMovementDirection { Left, Right }
 
+internal enum HorizontalDifferenceConstraintKind
+{
+    ColumnToEnvelope,
+    ColumnToColumn,
+    ReturnColumnToOwnershipEnvelope,
+    ProjectEnvelopeToProjectEnvelope
+}
+
+internal sealed record HorizontalDifferenceAlternative(
+    HorizontalMovementDirection Direction,
+    int RequiredCoordinate,
+    IReadOnlyList<MovementScopeIdentity> MovementScopes);
+
+internal sealed record ColumnToEnvelopeDifferenceConstraint(
+    string Id,
+    string LinkId,
+    string ColumnDemandId,
+    string DestinationSubtreeId,
+    string BlockingSubtreeId,
+    Rect BlockingEnvelope,
+    AxisInterval VerticalLayerInterval,
+    int RequiredClearance,
+    HorizontalDifferenceAlternative LeftClearance,
+    HorizontalDifferenceAlternative RightClearance,
+    LayoutRevision PlacementRevision,
+    LayoutRevision EnvelopeRevision);
+
+internal sealed record ColumnToColumnDifferenceConstraint(
+    string Id,
+    string FirstLinkId,
+    string SecondLinkId,
+    string FirstDestinationSubtreeId,
+    string SecondDestinationSubtreeId,
+    AxisInterval SharedVerticalLayerInterval,
+    int RequiredSeparation,
+    IReadOnlyList<MovementScopeIdentity> CandidateMovementScopes,
+    LayoutRevision PlacementRevision);
+
+internal sealed record ReturnColumnEnvelopeConstraint(
+    string Id,
+    string LinkId,
+    ReturnColumnOwnership Ownership,
+    int LeftCandidateX,
+    int RightCandidateX,
+    IReadOnlyList<string> LeftBlockingSubtreeIds,
+    IReadOnlyList<string> RightBlockingSubtreeIds,
+    LayoutRevision PlacementRevision);
+
 internal sealed record PositionalConstraintDemand(
     string Id,
     PositionalConstraintReason Reason,

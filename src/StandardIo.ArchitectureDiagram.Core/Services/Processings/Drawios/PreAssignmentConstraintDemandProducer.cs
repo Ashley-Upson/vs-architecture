@@ -6,6 +6,9 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal sealed record PreAssignmentConstraintDemandReport(
     IReadOnlyList<PositionalConstraintDemand> Demands,
+    IReadOnlyList<ColumnToEnvelopeDifferenceConstraint> ColumnToEnvelopeConstraints,
+    IReadOnlyList<ColumnToColumnDifferenceConstraint> ColumnToColumnConstraints,
+    IReadOnlyList<ReturnColumnEnvelopeConstraint> ReturnColumnConstraints,
     int DestinationColumnConflicts,
     int VerticalColumnObstacles,
     int ReturnStubObstacles);
@@ -20,6 +23,9 @@ internal static class PreAssignmentConstraintDemandProducer
         int padding)
     {
         var demands = new List<PositionalConstraintDemand>();
+        var columnEnvelopeConstraints = new List<ColumnToEnvelopeDifferenceConstraint>();
+        var columnColumnConstraints = new List<ColumnToColumnDifferenceConstraint>();
+        var returnColumnConstraints = new List<ReturnColumnEnvelopeConstraint>();
         var columns = downward.Routes.Where(item => item.Observation.Eligible)
             .SelectMany(item => item.VerticalColumnDemands).OrderBy(item => item.LinkId, StringComparer.Ordinal).ToArray();
         var conflicts = 0;
@@ -31,6 +37,14 @@ internal static class PreAssignmentConstraintDemandProducer
             if (first.VerticalInterval.PositiveLengthOverlap(second.VerticalInterval) == 0 ||
                 Math.Abs(first.PreferredX - second.PreferredX) >= separation) continue;
             conflicts++;
+            columnColumnConstraints.Add(new ColumnToColumnDifferenceConstraint(
+                $"column-column:{first.Id}:{second.Id}", first.LinkId, second.LinkId,
+                first.DestinationSubtreeId, second.DestinationSubtreeId,
+                new AxisInterval(Math.Max(first.SourceLayer, second.SourceLayer),
+                    Math.Min(first.DestinationLayer, second.DestinationLayer)), separation,
+                PreAssignmentMovementPlanner.CandidateScopes(first.DestinationSubtreeId, placement, HorizontalMovementDirection.Left)
+                    .Concat(PreAssignmentMovementPlanner.CandidateScopes(second.DestinationSubtreeId, placement, HorizontalMovementDirection.Right))
+                    .Distinct().ToArray(), placement.Revision));
             AddSeparation(demands, placement, first.DestinationSubtreeId, second.DestinationSubtreeId,
                 separation, PositionalConstraintReason.DestinationColumnSeparation,
                 new AxisInterval(Math.Min(first.SourceLayer, second.SourceLayer), Math.Max(first.DestinationLayer, second.DestinationLayer)),
@@ -56,6 +70,19 @@ internal static class PreAssignmentConstraintDemandProducer
                 var requiredShift = blocker.Rect.CenterX <= target.Rect.CenterX
                     ? Math.Max(0, inflated.Right - column.PreferredX + 1)
                     : Math.Max(0, column.PreferredX - inflated.X + 1);
+                columnEnvelopeConstraints.Add(new ColumnToEnvelopeDifferenceConstraint(
+                    $"column-envelope:{column.Id}:{blocker.Node.Id}", column.LinkId, column.Id,
+                    column.DestinationSubtreeId, blocker.Node.Id, blocker.Rect,
+                    new AxisInterval(column.SourceLayer, column.DestinationLayer), column.RequiredClearance,
+                    new HorizontalDifferenceAlternative(HorizontalMovementDirection.Left,
+                        inflated.X - 1,
+                        PreAssignmentMovementPlanner.CandidateScopes(column.DestinationSubtreeId, placement, HorizontalMovementDirection.Left)
+                            .Concat(PreAssignmentMovementPlanner.CandidateScopes(blocker.Node.Id, placement, HorizontalMovementDirection.Right)).Distinct().ToArray()),
+                    new HorizontalDifferenceAlternative(HorizontalMovementDirection.Right,
+                        inflated.Right + 1,
+                        PreAssignmentMovementPlanner.CandidateScopes(column.DestinationSubtreeId, placement, HorizontalMovementDirection.Right)
+                            .Concat(PreAssignmentMovementPlanner.CandidateScopes(blocker.Node.Id, placement, HorizontalMovementDirection.Left)).Distinct().ToArray()),
+                    placement.Revision, placement.Revision));
                 AddSeparation(demands, placement,
                     blocker.Rect.CenterX <= target.Rect.CenterX ? blocker.Node.Id : target.Node.Id,
                     blocker.Rect.CenterX <= target.Rect.CenterX ? target.Node.Id : blocker.Node.Id,
@@ -69,15 +96,18 @@ internal static class PreAssignmentConstraintDemandProducer
         foreach (var context in contexts.Where(item => item.Target.Depth <= item.Source.Depth &&
                      !item.ExposureTreeSpecific && item.Source.Node.ProjectId is not null))
         {
-            var projectNodes = placement.Nodes.Values.Where(item =>
-                string.Equals(item.Node.ProjectId, context.Source.Node.ProjectId, StringComparison.Ordinal)).ToArray();
-            var leftX = projectNodes.Min(item => item.Rect.X) - padding;
-            var rightX = projectNodes.Max(item => item.Rect.Right) + padding;
+            var ownership = ReturnLinkCommonAllocator.Ownership(context, placement, padding);
+            var leftX = ownership.OwnershipBounds.X - padding;
+            var rightX = ownership.OwnershipBounds.Right + padding;
             var departureY = context.Source.Rect.Bottom + padding;
             var arrivalY = context.Target.Rect.Y - padding;
-            var leftBlockers = StubBlockers(context, leftX, departureY, arrivalY, placement.Nodes).ToArray();
-            var rightBlockers = StubBlockers(context, rightX, departureY, arrivalY, placement.Nodes).ToArray();
+            var leftBlockers = StubBlockers(context, ownership, leftX, departureY, arrivalY, placement.Nodes).ToArray();
+            var rightBlockers = StubBlockers(context, ownership, rightX, departureY, arrivalY, placement.Nodes).ToArray();
             if (leftBlockers.Length == 0 || rightBlockers.Length == 0) continue;
+            returnColumnConstraints.Add(new ReturnColumnEnvelopeConstraint(
+                $"return-envelope:{context.Route.Link.Id}:{ownership.Id}", context.Route.Link.Id, ownership,
+                leftX, rightX, leftBlockers.OrderBy(item => item, StringComparer.Ordinal).ToArray(),
+                rightBlockers.OrderBy(item => item, StringComparer.Ordinal).ToArray(), placement.Revision));
             var selectedBlockers = leftBlockers.Length < rightBlockers.Length
                 ? leftBlockers
                 : rightBlockers.Length < leftBlockers.Length
@@ -96,11 +126,16 @@ internal static class PreAssignmentConstraintDemandProducer
         }
         return new PreAssignmentConstraintDemandReport(
             demands.GroupBy(item => item.Id, StringComparer.Ordinal).Select(item => item.First())
-                .OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(), conflicts, obstacles, returnObstacles);
+                .OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+            columnEnvelopeConstraints.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+            columnColumnConstraints.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+            returnColumnConstraints.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+            conflicts, obstacles, returnObstacles);
     }
 
     private static IEnumerable<string> StubBlockers(
-        AdjacentDownwardLinkContext context, int columnX, int departureY, int arrivalY,
+        AdjacentDownwardLinkContext context, ReturnColumnOwnership ownership,
+        int columnX, int departureY, int arrivalY,
         IReadOnlyDictionary<string, NodeLayout> nodes)
     {
         var segments = new[]
@@ -109,6 +144,7 @@ internal static class PreAssignmentConstraintDemandProducer
             new Segment(new Point(columnX, arrivalY), new Point(context.Route.TargetPoint.X, arrivalY))
         };
         return nodes.Values.Where(node => node.Node.Id != context.Source.Node.Id && node.Node.Id != context.Target.Node.Id &&
+                node.Node.ProjectId is not null && ownership.ProjectIds.Contains(node.Node.ProjectId, StringComparer.Ordinal) &&
                 segments.Any(segment => segment.Intersects(node.Rect)))
             .Select(item => item.Node.Id);
     }

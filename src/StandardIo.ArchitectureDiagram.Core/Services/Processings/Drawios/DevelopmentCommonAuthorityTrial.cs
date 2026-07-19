@@ -78,6 +78,9 @@ internal static class DevelopmentCommonAuthorityTrial
             persistentIterations++;
             positionalDemands = new PreAssignmentConstraintDemandReport(
                 persistentDemands.Values.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
+                next.ColumnToEnvelopeConstraints,
+                next.ColumnToColumnConstraints,
+                next.ReturnColumnConstraints,
                 next.DestinationColumnConflicts, next.VerticalColumnObstacles, next.ReturnStubObstacles);
             if (!increased) break;
         }
@@ -88,7 +91,7 @@ internal static class DevelopmentCommonAuthorityTrial
         var common = GeneralDownwardCommonAllocator.Assign(
             generalObservation, activePlacement.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var returns = ReturnLinkCommonAllocator.Assign(
-            contexts, activePlacement.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+            contexts, activePlacement, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var returnIds = new HashSet<string>(returns.Plans.Select(item => item.LogicalRouteId), StringComparer.Ordinal);
         var capabilities = generalObservation.Routes.Where(item => !returnIds.Contains(item.Observation.LogicalRouteId))
             .Select(item => new CommonAuthorityRouteCapability(

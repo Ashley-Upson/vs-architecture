@@ -8,10 +8,11 @@ internal static class ReturnLinkCommonAllocator
 {
     public static ReturnLinkAssignmentReport Assign(
         IEnumerable<AdjacentDownwardLinkContext> source,
-        IReadOnlyDictionary<string, NodeLayout> nodes,
+        PlacedGraph placement,
         int separation,
         int padding)
     {
+        var nodes = placement.Nodes;
         var contexts = source.Where(item =>
                 !item.ExposureTreeSpecific &&
                 item.Source.Node.ProjectId is not null &&
@@ -23,16 +24,27 @@ internal static class ReturnLinkCommonAllocator
         if (contexts.Length == 0)
             return new ReturnLinkAssignmentReport(Array.Empty<ReturnLinkPlan>(),
                 VerticalLinkColumnAllocator.Assign(Array.Empty<VerticalLinkColumnDemand>(), separation),
+                Array.Empty<AssignedReturnLinkColumn>(),
                 Array.Empty<GeneralDownwardLinkAssignment>());
 
-        var left = nodes.Values.Min(item => item.Rect.X) - padding - separation * contexts.Length;
-        var right = nodes.Values.Max(item => item.Rect.Right) + padding + separation * contexts.Length;
-        var plans = contexts.Select((context, index) =>
+        var owned = contexts.Select(context => new { Context = context, Ownership = Ownership(context, placement, padding) })
+            .OrderBy(item => item.Context.Route.Link.Id, StringComparer.Ordinal).ToArray();
+        var indexByRoute = owned.GroupBy(item => item.Ownership.Id, StringComparer.Ordinal)
+            .SelectMany(group => group.Select((item, index) => new { item.Context.Route.Link.Id, Index = index, Count = group.Count() }))
+            .ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var plans = owned.Select(item =>
         {
+            var context = item.Context;
+            var ownership = item.Ownership;
+            var lane = indexByRoute[context.Route.Link.Id];
+            var left = ownership.OwnershipBounds.X - padding - separation * lane.Count;
+            var right = ownership.OwnershipBounds.Right + padding + separation * lane.Count;
+            var index = lane.Index;
             var leftPlan = Plan(context, left, left + separation * index, padding);
             var rightX = right - separation * index;
             var rightPlan = Plan(context, rightX, rightX, padding);
-            return new[] { leftPlan, rightPlan }.OrderBy(plan => CollisionCount(plan, context, nodes))
+            return new[] { leftPlan, rightPlan }.Select(plan => plan with { Ownership = ownership })
+                .OrderBy(plan => CollisionCount(plan, context, nodes))
                 .ThenBy(plan => Math.Abs(plan.ColumnDemand.PreferredX - context.Route.SourcePoint.X) +
                     Math.Abs(plan.ColumnDemand.PreferredX - context.Route.TargetPoint.X))
                 .ThenBy(plan => plan.ColumnDemand.PreferredX).First();
@@ -40,7 +52,9 @@ internal static class ReturnLinkCommonAllocator
         var columns = VerticalLinkColumnAllocator.Assign(plans.Select(item => item.ColumnDemand), separation);
         var assignments = plans.Select(plan => Compile(plan, contexts.Single(item => item.Route.Link.Id == plan.LogicalRouteId),
             columns.ColumnsByDemandId[plan.ColumnDemand.Id], nodes, padding)).ToArray();
-        return new ReturnLinkAssignmentReport(plans, columns, assignments);
+        var ownedColumns = plans.Select(plan => new AssignedReturnLinkColumn(
+            columns.ColumnsByDemandId[plan.ColumnDemand.Id], plan.Ownership)).ToArray();
+        return new ReturnLinkAssignmentReport(plans, columns, ownedColumns, assignments);
     }
 
     private static ReturnLinkPlan Plan(
@@ -60,7 +74,41 @@ internal static class ReturnLinkCommonAllocator
             context.LayoutRevision, context.RouteRevision);
         return new ReturnLinkPlan(context.Route.Link.Id,
             context.Source.Depth == context.Target.Depth ? ReturnLinkTopologyKind.SameLayer : ReturnLinkTopologyKind.Upward,
-            context.Source.Node.Id, context.Target.Node.Id, demand, departureY, arrivalY);
+            context.Source.Node.Id, context.Target.Node.Id,
+            new ReturnColumnOwnership(0, 0, Array.Empty<string>(), new Rect(0, 0, 0, 0), context.LayoutRevision),
+            demand, departureY, arrivalY);
+    }
+
+    internal static ReturnColumnOwnership Ownership(
+        AdjacentDownwardLinkContext context, PlacedGraph placement, int padding)
+    {
+        var order = placement.ProjectPlacement.StableProjectOrder;
+        var sourceIndex = context.Source.Node.ProjectId is null ? -1 : order.ToList().IndexOf(context.Source.Node.ProjectId);
+        var targetIndex = context.Target.Node.ProjectId is null ? -1 : order.ToList().IndexOf(context.Target.Node.ProjectId);
+        var first = sourceIndex < 0 || targetIndex < 0 ? 0 : Math.Min(sourceIndex, targetIndex);
+        var last = sourceIndex < 0 || targetIndex < 0 ? order.Count - 1 : Math.Max(sourceIndex, targetIndex);
+        var ids = order.Skip(first).Take(last - first + 1).ToArray();
+        var layouts = ids.Where(placement.Projects.ContainsKey).Select(id => placement.Projects[id].Rect).ToArray();
+        Rect bounds;
+        if (layouts.Length == ids.Length && layouts.Length > 0)
+            bounds = Union(layouts);
+        else
+        {
+            var ownedNodes = placement.Nodes.Values.Where(node => node.Node.ProjectId is not null &&
+                ids.Contains(node.Node.ProjectId, StringComparer.Ordinal)).Select(node => node.Rect).ToArray();
+            bounds = Union(ownedNodes).Inflate(padding);
+        }
+        return new ReturnColumnOwnership(first, last, ids, bounds, placement.Revision);
+    }
+
+    private static Rect Union(IReadOnlyList<Rect> rects)
+    {
+        if (rects.Count == 0) return new Rect(0, 0, 0, 0);
+        var left = rects.Min(item => item.X);
+        var top = rects.Min(item => item.Y);
+        var right = rects.Max(item => item.Right);
+        var bottom = rects.Max(item => item.Bottom);
+        return new Rect(left, top, right - left, bottom - top);
     }
 
     private static GeneralDownwardLinkAssignment Compile(
