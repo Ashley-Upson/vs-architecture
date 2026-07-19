@@ -1,0 +1,471 @@
+{
+  "mode": "IndependentProjectRegion",
+  "semanticProjectCount": 1,
+  "semanticNodeCount": 25,
+  "semanticLinkCount": 12,
+  "renderNodeCount": 25,
+  "renderLinkCount": 12,
+  "eligible": true,
+  "fallbackReasons": [],
+  "legacyRenderLayoutUsed": false,
+  "legacyCoordinatesUsed": false,
+  "legacyPathsUsed": false,
+  "horizontalSegmentYAuthority": "DeterministicSlotAllocator",
+  "verticalColumnXAuthority": "VerticalLinkColumnAllocator / ReturnColumnAllocator",
+  "topologySelectionAuthority": "CanonicalTopologyFamilySelector",
+  "topologyFamilies": {
+    "AdjacentDownward": 12
+  },
+  "interLayersDiscovered": 5,
+  "slotDemands": 12,
+  "slotsAssigned": 12,
+  "interLayersExpanded": 1,
+  "corridorLaneYAssignmentsRemaining": 0,
+  "repairBasedHorizontalOffsetsRemaining": 0,
+  "destinationColumnsAssigned": 0,
+  "returnColumnsAssigned": 0,
+  "returnSideSelections": {},
+  "corridorLaneXAssignmentsRemaining": 0,
+  "repairBasedVerticalOffsetsRemaining": 0,
+  "legacyCandidateSelectionInvoked": false,
+  "traversalTopologyReplacementRemaining": 0,
+  "repairTopologyMutationRemaining": 0,
+  "projectLabelGeometry": [
+    {
+      "ProjectId": "project_453ea514a2c15631",
+      "ProjectBounds": {
+        "X": 2909,
+        "Y": -9,
+        "Width": 3670,
+        "Height": 660,
+        "Right": 6579,
+        "Bottom": 651,
+        "CenterX": 4744,
+        "CenterY": 321
+      },
+      "ProjectLabelTextBounds": {
+        "X": 4580,
+        "Y": -9,
+        "Width": 328,
+        "Height": 34,
+        "Right": 4908,
+        "Bottom": 25,
+        "CenterX": 4744,
+        "CenterY": 8
+      },
+      "ProjectLabelObstacleBounds": {
+        "X": 4570,
+        "Y": -19,
+        "Width": 348,
+        "Height": 54,
+        "Right": 4918,
+        "Bottom": 35,
+        "CenterX": 4744,
+        "CenterY": 8
+      }
+    }
+  ],
+  "logicalRoutes": [
+    {
+      "logicalEdgeId": "edge_1689734e429fc8e7",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 3412,
+          "Y": 130
+        },
+        {
+          "X": 3412,
+          "Y": 140
+        },
+        {
+          "X": 3100,
+          "Y": 140
+        },
+        {
+          "X": 3100,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_1a08e8a828c467d5",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 6088,
+          "Y": 130
+        },
+        {
+          "X": 6088,
+          "Y": 152
+        },
+        {
+          "X": 6428,
+          "Y": 152
+        },
+        {
+          "X": 6428,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_1c7096353bffd8a3",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 6040,
+          "Y": 130
+        },
+        {
+          "X": 6040,
+          "Y": 140
+        },
+        {
+          "X": 5748,
+          "Y": 140
+        },
+        {
+          "X": 5748,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_1cb953d5b1ed6e41",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 5636,
+          "Y": 130
+        },
+        {
+          "X": 5636,
+          "Y": 164
+        },
+        {
+          "X": 6088,
+          "Y": 164
+        },
+        {
+          "X": 6088,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_2eab2ccd2be0fcd0",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 5612,
+          "Y": 130
+        },
+        {
+          "X": 5612,
+          "Y": 140
+        },
+        {
+          "X": 5724,
+          "Y": 140
+        },
+        {
+          "X": 5724,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_6eb65fec78d172b5",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 5048,
+          "Y": 130
+        },
+        {
+          "X": 5048,
+          "Y": 140
+        },
+        {
+          "X": 5260,
+          "Y": 140
+        },
+        {
+          "X": 5260,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_8325a970952af828",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 4564,
+          "Y": 130
+        },
+        {
+          "X": 4564,
+          "Y": 140
+        },
+        {
+          "X": 4564,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_ae3a7f8ed0c6aeff",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 3460,
+          "Y": 130
+        },
+        {
+          "X": 3460,
+          "Y": 140
+        },
+        {
+          "X": 3780,
+          "Y": 140
+        },
+        {
+          "X": 3780,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_b56694a917081171",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 5024,
+          "Y": 130
+        },
+        {
+          "X": 5024,
+          "Y": 140
+        },
+        {
+          "X": 4880,
+          "Y": 140
+        },
+        {
+          "X": 4880,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_cb7673743ae943cb",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 4096,
+          "Y": 130
+        },
+        {
+          "X": 4096,
+          "Y": 140
+        },
+        {
+          "X": 4096,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_d171dc761fb4dd58",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 6064,
+          "Y": 130
+        },
+        {
+          "X": 6064,
+          "Y": 140
+        },
+        {
+          "X": 6112,
+          "Y": 140
+        },
+        {
+          "X": 6112,
+          "Y": 186
+        }
+      ]
+    },
+    {
+      "logicalEdgeId": "edge_ef82b1e898e7f0ea",
+      "family": "AdjacentDownward",
+      "points": [
+        {
+          "X": 3436,
+          "Y": 130
+        },
+        {
+          "X": 3436,
+          "Y": 140
+        },
+        {
+          "X": 3444,
+          "Y": 140
+        },
+        {
+          "X": 3444,
+          "Y": 186
+        }
+      ]
+    }
+  ],
+  "obstacleCompilationAuthority": "ProjectInterLayerSlotCompiler",
+  "boundedTopologyRecompileAuthority": null,
+  "interLayerSlotAllocationUsed": true,
+  "developmentTrialUsed": false,
+  "fallbackOccursOutsideRenderer": true,
+  "findings": [],
+  "logicalFindings": [],
+  "physicalFindings": [],
+  "timings": [
+    {
+      "Stage": "project-region semantic preparation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region generation",
+      "ElapsedMilliseconds": 23,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region ownership compilation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region bounds",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region ownership rebase",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region project-label bounds",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region physical validation",
+      "ElapsedMilliseconds": 2,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region serialization",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region positional placement",
+      "ElapsedMilliseconds": 1,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region layer-band placement",
+      "ElapsedMilliseconds": 1,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region canonical topology selection",
+      "ElapsedMilliseconds": 2,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region terminal allocation",
+      "ElapsedMilliseconds": 1,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region project-label measurement",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region InterLayer discovery",
+      "ElapsedMilliseconds": 5,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region horizontal slot allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region vertical and return column allocation",
+      "ElapsedMilliseconds": 2,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region constrained materialisation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region InterLayer expansion",
+      "ElapsedMilliseconds": 2,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region canonical topology selection",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region terminal allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region project-label measurement",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 2
+    },
+    {
+      "Stage": "project-region InterLayer discovery",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region horizontal slot allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region vertical and return column allocation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region constrained materialisation",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region canonical normalization",
+      "ElapsedMilliseconds": 0,
+      "Invocation": 1
+    },
+    {
+      "Stage": "project-region logical validation",
+      "ElapsedMilliseconds": 1,
+      "Invocation": 1
+    }
+  ]
+}
