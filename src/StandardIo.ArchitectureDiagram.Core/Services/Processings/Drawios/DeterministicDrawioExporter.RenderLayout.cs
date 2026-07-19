@@ -1296,17 +1296,20 @@ internal sealed partial class RenderLayout
             var immutableBandPlacement = activePlacement;
             var accumulatedExpansions = new Dictionary<int, int>();
             CanonicalTopologySelection topology = null!;
-            PositionedLinkLayouts positioned = null!;
+            IReadOnlyDictionary<string, LinkLayout> terminalLayouts = null!;
             ProjectSlotCompilation slotCompilation = null!;
             for (var iteration = 0; iteration < 8; iteration++)
             {
                 topology = MeasureStage(timings, "project-region canonical topology selection", () =>
                     CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
-                positioned = MeasureStage(timings, "project-region topology production", () =>
-                    PositionLinks(graph, settings, activePlacement.Nodes));
+                terminalLayouts = MeasureStage(timings, "project-region terminal allocation", () =>
+                    ProjectTerminalAllocator.Allocate(graph, activePlacement.Nodes, settings));
+                var projectLabels = MeasureStage(timings, "project-region project-label measurement", () =>
+                    ProjectLabelGeometryMeasurer.Measure(
+                        activePlacement.Projects, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding));
                 slotCompilation = MeasureStage(timings, "project-region InterLayer slot allocation", () =>
                     ProjectInterLayerSlotCompiler.Compile(
-                        topology.Plans, activePlacement.Nodes, positioned.Links, activePlacement.Revision,
+                        topology.Plans, activePlacement.Nodes, terminalLayouts, projectLabels, activePlacement.Revision,
                         settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding));
                 if (slotCompilation.RequiredLayerExpansionByLowerDepth.Count == 0) break;
                 foreach (var expansion in slotCompilation.RequiredLayerExpansionByLowerDepth)
@@ -1345,8 +1348,8 @@ internal sealed partial class RenderLayout
                 activePlacement.Nodes,
                 activePlacement.Projects,
                 links,
-                positioned.Selection,
-                positioned.RegionalSelection,
+                null,
+                null,
                 traversals,
                 validation,
                 emptyCorridors,

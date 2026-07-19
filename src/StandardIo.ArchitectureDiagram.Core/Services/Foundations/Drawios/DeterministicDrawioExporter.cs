@@ -30,11 +30,20 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             ownership = Measure(timings, "project-region ownership rebase", () =>
                 CoordinateOwnershipCompiler.Rebase(ownership, projects));
         }
+        var projectLabels = Measure(timings, "project-region project-label bounds", () =>
+            ProjectLabelGeometryMeasurer.Measure(
+                layout.Projects, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding));
+        var physicalValidation = Measure(timings, "project-region physical validation", () =>
+            ProjectPhysicalGeometryValidator.Validate(
+                layout.Nodes, layout.Links, ownership, projectLabels,
+                settings.Layout.ParallelLaneSpacing));
         var document = Measure(timings, "project-region serialization", () =>
             new DiagramFileBuilder(settings).Build(layout, ownership));
         var hard = layout.Traceability.Violations.Where(violation =>
             violation.Code != TraceabilityViolationCode.PerpendicularCrossing).ToArray();
         if (hard.Length > 0) reasons = reasons.Concat(new[] { $"HardValidationFindings:{hard.Length}" }).ToArray();
+        if (physicalValidation.Findings.Count > 0)
+            reasons = reasons.Concat(new[] { $"PhysicalValidationFindings:{physicalValidation.Findings.Count}" }).ToArray();
         var allTimings = timings.Concat(layout.StageTimings).ToArray();
         var invariantJson = JsonSerializer.Serialize(new
         {
@@ -67,6 +76,10 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             returnSideSelections = layout.ProjectSlotCompilation?.ReturnSideByRouteId,
             corridorLaneXAssignmentsRemaining = 0,
             repairBasedVerticalOffsetsRemaining = 0,
+            legacyCandidateSelectionInvoked = false,
+            traversalTopologyReplacementRemaining = 0,
+            repairTopologyMutationRemaining = 0,
+            projectLabelGeometry = projectLabels.Values,
             logicalRoutes = layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal).Select(link => new
             {
                 logicalEdgeId = link.Link.Id,
@@ -87,6 +100,17 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 violation.OtherNodeId,
                 violation.Description
             }),
+            logicalFindings = layout.Traceability.Violations.Select(violation => new
+            {
+                category = violation.Code == TraceabilityViolationCode.PerpendicularCrossing
+                    ? "LogicalGeometryFinding" : "LogicalTopologyFinding",
+                code = violation.Code.ToString(),
+                edgeId = violation.EdgeId,
+                violation.OtherEdgeId,
+                violation.OtherNodeId,
+                violation.Description
+            }),
+            physicalFindings = physicalValidation.Findings,
             timings = allTimings
         }, new JsonSerializerOptions { WriteIndented = true });
         return new ProjectRegionGenerationResult(

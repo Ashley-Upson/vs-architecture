@@ -10,6 +10,7 @@ internal static class ProjectInterLayerSlotCompiler
         IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
         IReadOnlyDictionary<string, NodeLayout> nodes,
         IReadOnlyDictionary<string, LinkLayout> terminalLayouts,
+        IReadOnlyDictionary<string, ProjectLabelGeometry> projectLabels,
         LayoutRevision revision,
         int separation,
         int padding)
@@ -99,6 +100,10 @@ internal static class ProjectInterLayerSlotCompiler
                 var forbidden = nodes.Values.Where(node => node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
                         PositiveOverlap(interval, new AxisInterval(node.Rect.Y - padding, node.Rect.Bottom + padding)))
                     .Select(node => new AxisInterval(node.Rect.X - padding, node.Rect.Right + padding))
+                    .Concat(projectLabels.Values.Where(label => PositiveOverlap(interval,
+                            new AxisInterval(label.ProjectLabelObstacleBounds.Y, label.ProjectLabelObstacleBounds.Bottom)))
+                        .Select(label => new AxisInterval(
+                            label.ProjectLabelObstacleBounds.X, label.ProjectLabelObstacleBounds.Right)))
                     .Concat(FixedColumnExclusions(
                         plan, plans, terminalLayouts, demands, assignments, interval, separation))
                     .ToArray();
