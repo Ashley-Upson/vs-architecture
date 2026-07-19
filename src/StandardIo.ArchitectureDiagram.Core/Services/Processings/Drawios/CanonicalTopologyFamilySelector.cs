@@ -54,7 +54,7 @@ internal static class CanonicalTopologyFamilySelector
                 CanonicalTopologySegmentRole.Arrival, LinkSegmentOrientation.Vertical, true, false));
 
             plans.Add(link.Id, new CanonicalTopologyPlan(
-                link.Id, family, CanonicalTerminal.SourceBottom, CanonicalTerminal.TargetTop,
+                link.Id, link.SourceId, link.TargetId, family, CanonicalTerminal.SourceBottom, CanonicalTerminal.TargetTop,
                 segments.Select(item => item.Role).ToArray(), segments, departure, arrival,
                 destinationColumn, isReturn,
                 new[] { source.Node.ProjectId, target.Node.ProjectId }

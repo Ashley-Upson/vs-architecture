@@ -39,7 +39,8 @@ internal sealed partial class RenderLayout
             LayoutRevision layoutRevision = default,
             InterLayerSpacingConstraintPlan? groupedSpacingPlan = null,
             int groupedSpacingIterations = 0,
-            IReadOnlyDictionary<string, CanonicalTopologyPlan>? canonicalTopologyPlans = null)
+            IReadOnlyDictionary<string, CanonicalTopologyPlan>? canonicalTopologyPlans = null,
+            ProjectSlotCompilation? projectSlotCompilation = null)
         {
             Graph = graph;
             Nodes = nodes;
@@ -67,6 +68,7 @@ internal sealed partial class RenderLayout
             GroupedSpacingIterations = groupedSpacingIterations;
             CanonicalTopologyPlans = canonicalTopologyPlans ??
                 new Dictionary<string, CanonicalTopologyPlan>(StringComparer.Ordinal);
+            ProjectSlotCompilation = projectSlotCompilation;
         }
 
         public RenderGraph Graph { get; }
@@ -119,11 +121,13 @@ internal sealed partial class RenderLayout
 
         public IReadOnlyDictionary<string, CanonicalTopologyPlan> CanonicalTopologyPlans { get; }
 
+        public ProjectSlotCompilation? ProjectSlotCompilation { get; }
+
         public RenderLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
             new(Graph, Nodes, projects, Links, PathSelection, RegionalPathSelection, Traversals, Traceability, Corridors, Lanes,
                 PreRepairTraceability, RepairAttempts, RepairWorkUsed, RepairBudgetExhausted, RepairRunReason, StageTimings,
                 RoutesInvalidated, RoutePairsRevalidated, CorridorRebuildCount, CapacityFailureCount, CapacityExpansionCount,
-                LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations, CanonicalTopologyPlans);
+                LayoutRevision, GroupedSpacingPlan, GroupedSpacingIterations, CanonicalTopologyPlans, ProjectSlotCompilation);
 
         public static RenderLayout Build(RenderGraph graph, DiagramSettings settings)
         {
@@ -1292,24 +1296,27 @@ internal sealed partial class RenderLayout
                 CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
             var positioned = MeasureStage(timings, "project-region topology production", () =>
                 PositionLinks(graph, settings, activePlacement.Nodes));
-            var repaired = MeasureStage(timings, "project-region route compilation and repair", () =>
-                RouteRepairCoordinator.Repair(activePlacement.Nodes, positioned.Links, settings, new RouteRepairBudget()));
-            var expansion = ExpandLayersForLaneDemand(
-                activePlacement.Nodes, repaired.Links, repaired.PostRepairValidation, settings);
-            if (expansion.Changed)
-            {
-                activePlacement = activePlacement.Revise(
-                    expansion.Nodes,
-                    PlacementPipeline.PositionProjects(graph, settings, expansion.Nodes));
-                topology = MeasureStage(timings, "project-region canonical topology reselection", () =>
-                    CanonicalTopologyFamilySelector.Select(graph, activePlacement.Nodes, activePlacement.Revision));
-                positioned = MeasureStage(timings, "project-region topology regeneration", () =>
-                    PositionLinks(graph, settings, activePlacement.Nodes));
-                repaired = MeasureStage(timings, "project-region regenerated route compilation and repair", () =>
-                    RouteRepairCoordinator.Repair(activePlacement.Nodes, positioned.Links, settings, new RouteRepairBudget()));
-            }
-            var links = repaired.Links;
-            var validation = repaired.PostRepairValidation;
+            var slotCompilation = MeasureStage(timings, "project-region InterLayer slot allocation", () =>
+                ProjectInterLayerSlotCompiler.Compile(
+                    topology.Plans, activePlacement.Nodes, positioned.Links, activePlacement.Revision,
+                    settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding));
+            var links = MeasureStage(timings, "project-region canonical normalization", () =>
+                LogicalRouteNormalizer.Normalize(activePlacement.Nodes, slotCompilation.Links, settings.Layout.LinkPadding));
+            var validation = MeasureStage(timings, "project-region logical validation", () =>
+                TraceabilityValidator.Validate(activePlacement.Nodes, links, settings.Layout.ParallelLaneSpacing));
+            var emptyCorridors = new CorridorObservation(
+                new Dictionary<string, RoutingCorridor>(StringComparer.Ordinal),
+                new Dictionary<string, CorridorJunction>(StringComparer.Ordinal),
+                Array.Empty<CorridorSegmentMapping>(),
+                new Dictionary<string, CorridorUsage>(StringComparer.Ordinal));
+            var emptyLanes = new CorridorLaneAllocation(
+                new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>(StringComparer.Ordinal),
+                Array.Empty<string>());
+            var geometry = links.ToDictionary(item => item.Key, item => new CompiledEdgeGeometry(
+                item.Key, new[] { item.Value.SourcePoint }.Concat(item.Value.Points)
+                    .Concat(new[] { item.Value.TargetPoint }).ToArray(), false), StringComparer.Ordinal);
+            var traversals = new EdgeTraversalCompilation(
+                new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal), geometry, Array.Empty<TraversalDiagnostic>());
             return new RenderLayout(
                 graph,
                 activePlacement.Nodes,
@@ -1317,17 +1324,15 @@ internal sealed partial class RenderLayout
                 links,
                 positioned.Selection,
                 positioned.RegionalSelection,
-                repaired.Traversals,
+                traversals,
                 validation,
-                repaired.Corridors,
-                repaired.Lanes,
-                repairAttempts: repaired.Attempts,
-                repairWorkUsed: repaired.EstimatedWorkUsed,
-                repairBudgetExhausted: repaired.WorkBudgetExhausted,
-                repairRunReason: repaired.RunReason,
+                emptyCorridors,
+                emptyLanes,
+                repairRunReason: "CanonicalProjectSlotsCompiled",
                 stageTimings: timings,
                 layoutRevision: activePlacement.Revision,
-                canonicalTopologyPlans: topology.Plans);
+                canonicalTopologyPlans: topology.Plans,
+                projectSlotCompilation: slotCompilation);
         }
 
         private static double Ratio(int x, Rect rect)

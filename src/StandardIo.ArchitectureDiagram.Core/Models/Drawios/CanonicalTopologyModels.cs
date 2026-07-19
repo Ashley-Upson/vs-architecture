@@ -33,6 +33,8 @@ internal sealed record CanonicalTopologySegmentRequirement(
 
 internal sealed record CanonicalTopologyPlan(
     string LogicalRouteId,
+    string SourceNodeId,
+    string TargetNodeId,
     CanonicalTopologyFamily Family,
     CanonicalTerminal SourceTerminal,
     CanonicalTerminal TargetTerminal,

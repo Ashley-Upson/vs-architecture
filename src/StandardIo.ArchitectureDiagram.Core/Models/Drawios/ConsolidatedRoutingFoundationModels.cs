@@ -12,7 +12,10 @@ internal enum LinkSegmentRole
     ReturnDeparture,
     ReturnArrival,
     ObstacleBypass,
-    TurnTransition
+    TurnTransition,
+    AdjacentDeparture,
+    LongDeparture,
+    BoundaryHorizontal
 }
 
 internal sealed record LinkSegmentDemand(
