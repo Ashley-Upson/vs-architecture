@@ -1,5 +1,8 @@
 # Pre-assignment positional movement authority
 
+The follow-up implementation and real closure result for the selected ownership-local return and destination-column
+difference semantics is recorded in [selected-semantics-result.md](selected-semantics-result.md).
+
 This evidence records the opt-in development-authority run after introducing explicit bidirectional positional
 constraints, complete project-owned inter-layer observation, immutable placement materialisation, and atomic movement
 closure. Normal production does not execute this path.
