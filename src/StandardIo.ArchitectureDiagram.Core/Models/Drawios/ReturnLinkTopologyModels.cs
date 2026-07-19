@@ -25,11 +25,14 @@ internal sealed record ReturnLinkPlan(
     string TargetNodeId,
     ReturnColumnOwnership Ownership,
     VerticalLinkColumnDemand ColumnDemand,
-    int DepartureY,
-    int ArrivalY);
+    InterLayerId DepartureInterLayer,
+    InterLayerId ArrivalInterLayer,
+    LinkSegmentDemand DepartureDemand,
+    LinkSegmentDemand ArrivalDemand);
 
 internal sealed record ReturnLinkAssignmentReport(
     IReadOnlyList<ReturnLinkPlan> Plans,
     VerticalLinkColumnAssignment VerticalColumns,
     IReadOnlyList<AssignedReturnLinkColumn> OwnedColumns,
+    IReadOnlyList<CommonAuthorityRegionObservation> SlotRegions,
     IReadOnlyList<GeneralDownwardLinkAssignment> Assignments);

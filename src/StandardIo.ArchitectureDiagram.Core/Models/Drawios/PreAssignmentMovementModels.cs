@@ -55,16 +55,6 @@ internal sealed record ColumnToColumnDifferenceConstraint(
     IReadOnlyList<MovementScopeIdentity> CandidateMovementScopes,
     LayoutRevision PlacementRevision);
 
-internal sealed record ReturnColumnEnvelopeConstraint(
-    string Id,
-    string LinkId,
-    ReturnColumnOwnership Ownership,
-    int LeftCandidateX,
-    int RightCandidateX,
-    IReadOnlyList<string> LeftBlockingSubtreeIds,
-    IReadOnlyList<string> RightBlockingSubtreeIds,
-    LayoutRevision PlacementRevision);
-
 internal sealed record PositionalConstraintDemand(
     string Id,
     PositionalConstraintReason Reason,

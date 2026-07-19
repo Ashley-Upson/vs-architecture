@@ -37,12 +37,12 @@ internal static class LayerSuffixConstraintMaterializer
                  .OrderBy(item => Depth(item.Key.Scope)).ThenBy(item => item.Reason, StringComparer.Ordinal))
         {
             var depth = Depth(constraint.Key.Scope);
-            var currentY = nodes.Values.Where(item => !item.IsStandalone && item.Depth == depth)
+            var currentY = nodes.Values.Where(item => item.Node.ProjectId is not null && item.Depth == depth)
                 .Select(item => item.Rect.Y).DefaultIfEmpty(constraint.Minimum).Min();
             var delta = Math.Max(0, constraint.Minimum - currentY);
             if (delta == 0) continue;
             maximumDelta = Math.Max(maximumDelta, delta);
-            foreach (var id in nodes.Where(item => !item.Value.IsStandalone && item.Value.Depth >= depth)
+            foreach (var id in nodes.Where(item => item.Value.Node.ProjectId is not null && item.Value.Depth >= depth)
                          .Select(item => item.Key).ToArray())
             {
                 nodes[id] = nodes[id] with { Rect = nodes[id].Rect.Translate(0, delta) };

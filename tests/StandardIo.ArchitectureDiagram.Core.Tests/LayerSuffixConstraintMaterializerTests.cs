@@ -19,6 +19,7 @@ public sealed class LayerSuffixConstraintMaterializerTests
         Assert.Equal(0, first.Placement.Nodes["upper"].Rect.Y);
         Assert.Equal(230, first.Placement.Nodes["lower"].Rect.Y);
         Assert.Equal(330, first.Placement.Nodes["deeper"].Rect.Y);
+        Assert.Equal(330, first.Placement.Nodes["owned-external"].Rect.Y);
         Assert.Equal(30, first.MaximumDelta);
         Assert.Equal(new[] { 1, 2 }, first.LayersMoved);
         Assert.Equal(new[] { "crossed", "incident" }, first.InvalidatedRouteIds);
@@ -59,7 +60,7 @@ public sealed class LayerSuffixConstraintMaterializerTests
     {
         var types = new[]
         {
-            Type("upper"), Type("lower"), Type("deeper"), Type("other")
+            Type("upper"), Type("lower"), Type("deeper"), Type("other"), Type("owned-external")
         };
         var edges = new[]
         {
@@ -76,6 +77,7 @@ public sealed class LayerSuffixConstraintMaterializerTests
             ["upper"] = Layout(nodes["upper"], 0, 0),
             ["lower"] = Layout(nodes["lower"], 200, 1),
             ["deeper"] = Layout(nodes["deeper"], 300, 2),
+            ["owned-external"] = new NodeLayout(nodes["owned-external"], new Rect(100, 300, 40, 40), 2, true),
             ["other"] = Layout(nodes["other"], 0, 0)
         };
         return new PlacedGraph(graph, layouts, new Dictionary<string, ProjectLayout>(), new LayoutRevision(1));

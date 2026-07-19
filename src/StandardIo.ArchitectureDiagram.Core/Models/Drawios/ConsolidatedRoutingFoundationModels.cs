@@ -9,6 +9,8 @@ internal enum LinkSegmentRole
     ConnectionArrival,
     Through,
     Return,
+    ReturnDeparture,
+    ReturnArrival,
     ObstacleBypass,
     TurnTransition
 }
@@ -25,7 +27,8 @@ internal sealed record LinkSegmentDemand(
     int? TurnOrder,
     MovementScopeIdentity? MovementScope,
     LayoutRevision PlacementRevision,
-    RouteRevision RouteRevision);
+    RouteRevision RouteRevision,
+    string? OwnershipEnvelopeId = null);
 
 internal sealed record AssignedLinkSegment(
     string Id,

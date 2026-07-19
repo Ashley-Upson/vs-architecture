@@ -62,6 +62,8 @@ public sealed class PreAssignmentConstraintDemandProducerTests
         var constraints = ColumnDifferenceConstraintMaterializer.Propose(placement,
             report.ColumnToEnvelopeConstraints, report.ColumnToColumnConstraints, routes,
             new HashSet<string>(routes.Keys, StringComparer.Ordinal));
+        Assert.Single(constraints);
+        Assert.StartsWith("ColumnToEnvelope:", constraints[0].Reason);
         var moved = HorizontalMovementConstraintMaterializer.Materialize(placement, constraints, Settings(), routes);
 
         Assert.True(moved.Placement.Nodes["target-a"].Rect.CenterX < placement.Nodes["blocker"].Rect.X);

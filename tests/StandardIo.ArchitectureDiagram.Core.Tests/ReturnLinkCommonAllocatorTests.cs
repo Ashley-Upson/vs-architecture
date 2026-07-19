@@ -41,6 +41,57 @@ public sealed class ReturnLinkCommonAllocatorTests
             reverse.VerticalColumns.ColumnsByDemandId.OrderBy(item => item.Key));
         var xs = forward.VerticalColumns.ColumnsByDemandId.Values.Select(item => item.X).OrderBy(x => x).ToArray();
         Assert.True(xs[1] - xs[0] >= 12);
+        Assert.Equal(forward.Assignments.Select(item => item.ReconstructedPoints),
+            reverse.Assignments.Select(item => item.ReconstructedPoints));
+    }
+
+    [Fact]
+    public void Same_layer_return_uses_distinct_canonical_departure_and_arrival_interLayers()
+    {
+        var nodes = Nodes(1, 1);
+        var report = ReturnLinkCommonAllocator.Assign(new[] { Context("link", nodes, 1, 1) }, Placement(nodes), 12, 8);
+
+        var plan = Assert.Single(report.Plans);
+        Assert.Equal(new InterLayerId(1, 2, plan.DepartureInterLayer.LayoutRevision), plan.DepartureInterLayer);
+        Assert.Equal(new InterLayerId(0, 1, plan.ArrivalInterLayer.LayoutRevision), plan.ArrivalInterLayer);
+        Assert.Equal(LinkSegmentRole.ReturnDeparture, plan.DepartureDemand.Role);
+        Assert.Equal(LinkSegmentRole.ReturnArrival, plan.ArrivalDemand.Role);
+        Assert.NotEqual(plan.DepartureDemand.AllowedAxisRange, plan.ArrivalDemand.AllowedAxisRange);
+        Assert.Equal(plan.Ownership.Id, plan.DepartureDemand.OwnershipEnvelopeId);
+        Assert.Equal(plan.Ownership.Id, plan.ArrivalDemand.OwnershipEnvelopeId);
+    }
+
+    [Fact]
+    public void Conflicting_return_segments_receive_separate_slots_and_exact_height_proposal()
+    {
+        var nodes = Nodes(1, 1);
+        var contexts = new[] { Context("a", nodes, 1, 1), Context("b", nodes, 1, 1) };
+
+        var report = ReturnLinkCommonAllocator.Assign(contexts, Placement(nodes), 12, 8);
+
+        var departure = report.Plans.Select(plan => report.SlotRegions.SelectMany(region =>
+                region.Assignment.SegmentsByDemandId).Single(item => item.Key == plan.DepartureDemand.Id).Value)
+            .OrderBy(item => item.LogicalRouteId).ToArray();
+        Assert.Equal(2, departure.Select(item => item.SlotIndex).Distinct().Count());
+        Assert.True(departure[1].AxisCoordinate - departure[0].AxisCoordinate >= 12);
+        Assert.Contains(report.SlotRegions, region => region.ConstraintProposal is not null);
+    }
+
+    [Fact]
+    public void Upward_return_preserves_bottom_exit_top_entry_with_allocated_slots()
+    {
+        var nodes = Nodes(2, 0);
+        var context = Context("link", nodes, 2, 0);
+
+        var report = ReturnLinkCommonAllocator.Assign(new[] { context }, Placement(nodes), 12, 8);
+
+        var assignment = Assert.Single(report.Assignments);
+        Assert.True(assignment.IsValid);
+        Assert.Equal(context.Route.SourcePoint.X, assignment.ReconstructedPoints[1].X);
+        Assert.True(assignment.ReconstructedPoints[1].Y > context.Route.SourcePoint.Y);
+        Assert.Equal(context.Route.TargetPoint.X, assignment.ReconstructedPoints[^2].X);
+        Assert.True(assignment.ReconstructedPoints[^2].Y < context.Route.TargetPoint.Y);
+        Assert.Equal(5, assignment.ReconstructedPoints.Count - 1);
     }
 
     [Theory]

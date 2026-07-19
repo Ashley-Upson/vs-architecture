@@ -45,14 +45,23 @@ internal static class DevelopmentCommonAuthorityTrial
 
         timer.Restart();
         var persistentDemands = positionalDemands.Demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
-        PreAssignmentMovementResult movement;
-        PlacedGraph activePlacement;
-        IReadOnlyDictionary<string, LinkLayout> projectedLinks;
+        var movement = new PreAssignmentMovementResult(
+            placement, Array.Empty<PositionalConstraintComponent>(),
+            Array.Empty<PositionalConstraintSolution>(), Array.Empty<GenerationConstraint>(),
+            Array.Empty<string>(), 0);
+        PlacedGraph activePlacement = placement;
+        IReadOnlyDictionary<string, LinkLayout> projectedLinks = production.Links;
         var persistentIterations = 0;
+        var horizontalConstraintConverged = true;
         var differenceConstraintStore = new GenerationConstraintStore();
         var lockedColumnDirections = new Dictionary<string, HorizontalMovementDirection>(StringComparer.Ordinal);
         while (true)
         {
+            if (persistentIterations >= 16)
+            {
+                horizontalConstraintConverged = false;
+                break;
+            }
             var differenceConstraints = ColumnDifferenceConstraintMaterializer.Propose(
                 placement, positionalDemands.ColumnToEnvelopeConstraints,
                 positionalDemands.ColumnToColumnConstraints, production.Links, potentiallySupportedRoutes,
@@ -90,18 +99,116 @@ internal static class DevelopmentCommonAuthorityTrial
                 persistentDemands.Values.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray(),
                 next.ColumnToEnvelopeConstraints,
                 next.ColumnToColumnConstraints,
-                next.ReturnColumnConstraints,
                 next.DestinationColumnConflicts, next.VerticalColumnObstacles, next.ReturnStubObstacles);
             if (!increased && !differenceIncreased) break;
         }
+        var horizontalPlacement = activePlacement;
+        var verticallyInvalidated = new HashSet<string>(StringComparer.Ordinal);
+        var verticalConstraintStore = new GenerationConstraintStore();
+        var verticalIterations = 0;
+        GeneralDownwardAssignmentReport common;
+        ReturnLinkAssignmentReport returns;
+        while (true)
+        {
+            common = GeneralDownwardCommonAllocator.Assign(
+                generalObservation, activePlacement.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+            returns = ReturnLinkCommonAllocator.Assign(
+                contexts, activePlacement, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+            var proposals = common.Regions.Concat(returns.SlotRegions)
+                .Where(item => item.ConstraintProposal is not null)
+                .Select(item => item.ConstraintProposal!).ToArray();
+            var increased = false;
+            foreach (var proposal in proposals) increased |= verticalConstraintStore.Merge(proposal);
+            if (!increased) break;
+            var vertical = LayerSuffixConstraintMaterializer.Materialize(
+                horizontalPlacement, verticalConstraintStore.Snapshot(), settings, projectedLinks);
+            foreach (var routeId in vertical.InvalidatedRouteIds) verticallyInvalidated.Add(routeId);
+            if (!vertical.Changed) break;
+            activePlacement = vertical.Placement;
+            projectedLinks = PreAssignmentRouteProjection.Project(activePlacement, production.Links, settings);
+            var provisionalLayout = production.WithTrialGeometry(
+                production.Graph, activePlacement.Nodes, activePlacement.Projects, projectedLinks,
+                production.Traceability, activePlacement.Revision);
+            generated = new GeneratedLogicalRoutes(activePlacement, projectedLinks, routeRevision.Next());
+            bands = InterLayerDemandDiscovery.Observe(activePlacement, generated, settings, production.Traceability);
+            contexts = AdjacentDownwardContextFactory.Create(provisionalLayout, bands);
+            adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
+            generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts, settings.Layout.LinkPadding);
+            verticalIterations++;
+        }
+        var changedIntervalPasses = 0;
+        var changedConstraintProgression = new List<string>();
+        var changedIntervalConverged = true;
+        var postVerticalDemands = PreAssignmentConstraintDemandProducer.Detect(
+            activePlacement, generalObservation, contexts,
+            settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        while (postVerticalDemands.VerticalColumnObstacles > 0 ||
+               postVerticalDemands.DestinationColumnConflicts > 0)
+        {
+            if (changedIntervalPasses >= 12)
+            {
+                changedIntervalConverged = false;
+                break;
+            }
+            foreach (var route in generalObservation.Routes.Where(item => item.Observation.Eligible))
+                potentiallySupportedRoutes.Add(route.Observation.LogicalRouteId);
+            foreach (var assignment in returns.Assignments.Where(item => item.IsValid))
+                potentiallySupportedRoutes.Add(assignment.LogicalRouteId);
+            var changedConstraints = ColumnDifferenceConstraintMaterializer.Propose(
+                placement, postVerticalDemands.ColumnToEnvelopeConstraints,
+                postVerticalDemands.ColumnToColumnConstraints, production.Links,
+                potentiallySupportedRoutes, lockedColumnDirections);
+            var raised = false;
+            foreach (var constraint in changedConstraints)
+                if (differenceConstraintStore.Merge(constraint))
+                {
+                    raised = true;
+                    changedConstraintProgression.Add(
+                        $"pass-{changedIntervalPasses + 1}:{constraint.Key.Scope}:{constraint.Key.Kind}:{constraint.Minimum}:{constraint.Reason}");
+                }
+            if (!raised) break;
+            movement = PreAssignmentMovementPlanner.Solve(
+                placement, persistentDemands.Values, settings, production.Links,
+                potentiallySupportedRoutes, differenceConstraintStore.Snapshot());
+            horizontalPlacement = movement.Placement.Revision != placement.Revision
+                ? movement.Placement : placement;
+            projectedLinks = horizontalPlacement.Revision != placement.Revision
+                ? PreAssignmentRouteProjection.Project(horizontalPlacement, production.Links, settings)
+                : production.Links;
+            var vertical = LayerSuffixConstraintMaterializer.Materialize(
+                horizontalPlacement, verticalConstraintStore.Snapshot(), settings, projectedLinks);
+            foreach (var routeId in vertical.InvalidatedRouteIds) verticallyInvalidated.Add(routeId);
+            activePlacement = vertical.Changed ? vertical.Placement : horizontalPlacement;
+            projectedLinks = PreAssignmentRouteProjection.Project(activePlacement, production.Links, settings);
+            var provisionalLayout = production.WithTrialGeometry(
+                production.Graph, activePlacement.Nodes, activePlacement.Projects, projectedLinks,
+                production.Traceability, activePlacement.Revision);
+            generated = new GeneratedLogicalRoutes(activePlacement, projectedLinks, routeRevision.Next());
+            bands = InterLayerDemandDiscovery.Observe(activePlacement, generated, settings, production.Traceability);
+            contexts = AdjacentDownwardContextFactory.Create(provisionalLayout, bands);
+            adjacentObservation = AdjacentDownwardLinkDemandDiscovery.Observe(contexts);
+            generalObservation = GeneralDownwardLinkSegmentDemandProducer.Observe(contexts, settings.Layout.LinkPadding);
+            common = GeneralDownwardCommonAllocator.Assign(
+                generalObservation, activePlacement.Nodes,
+                settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+            returns = ReturnLinkCommonAllocator.Assign(
+                contexts, activePlacement, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+            foreach (var proposal in common.Regions.Concat(returns.SlotRegions)
+                         .Where(item => item.ConstraintProposal is not null)
+                         .Select(item => item.ConstraintProposal!))
+                verticalConstraintStore.Merge(proposal);
+            changedIntervalPasses++;
+            postVerticalDemands = PreAssignmentConstraintDemandProducer.Detect(
+                activePlacement, generalObservation, contexts,
+                settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        }
+        positionalDemands = PreAssignmentConstraintDemandProducer.Detect(
+            activePlacement, generalObservation, contexts,
+            settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var movementPlanned = activePlacement.Revision != placement.Revision;
         phase["positional constraint solving and position materialisation"] = Elapsed(timer);
 
         timer.Restart();
-        var common = GeneralDownwardCommonAllocator.Assign(
-            generalObservation, activePlacement.Nodes, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
-        var returns = ReturnLinkCommonAllocator.Assign(
-            contexts, activePlacement, settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var returnIds = new HashSet<string>(returns.Plans.Select(item => item.LogicalRouteId), StringComparer.Ordinal);
         var capabilities = generalObservation.Routes.Where(item => !returnIds.Contains(item.Observation.LogicalRouteId))
             .Select(item => new CommonAuthorityRouteCapability(
@@ -155,7 +262,8 @@ internal static class DevelopmentCommonAuthorityTrial
         var movementComponentAccepted = activePlacement.Revision == placement.Revision;
         if (!movementComponentAccepted)
         {
-            var invalidated = movement.InvalidatedLinkIds.OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var invalidated = movement.InvalidatedLinkIds.Concat(verticallyInvalidated)
+                .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
             var unavailable = invalidated.Where(routeId =>
                 !assignmentByRoute.TryGetValue(routeId, out var assignment) || !assignment.IsValid ||
                 assignment.ReconstructedPoints.Count == 0).ToArray();
@@ -309,24 +417,18 @@ internal static class DevelopmentCommonAuthorityTrial
                 constraintsProposed = positionalDemands.Demands.Count,
                 constraintsAccepted = movement.Solutions.Where(item => item.IsValid).Sum(item => item.AcceptedCandidates.Count),
                 columnToEnvelopeDemands = positionalDemands.ColumnToEnvelopeConstraints.Count,
-                columnToColumnDemands = positionalDemands.ColumnToColumnConstraints.Count,
-                returnColumnEnvelopeDemands = positionalDemands.ReturnColumnConstraints.Count,
-                orderingInvariantReturnBlockers = positionalDemands.ReturnColumnConstraints.Count(item =>
-                    ReturnColumnSolvabilityAnalyzer.Analyze(item) ==
-                    ReturnColumnHorizontalSolvability.OrderingInvariantInteriorBlocker),
-                returnColumnConstraintDetails = positionalDemands.ReturnColumnConstraints.Select(item => new
+                columnToEnvelopeDetails = positionalDemands.ColumnToEnvelopeConstraints.Select(item => new
                 {
-                    item.LinkId,
-                    ownership = item.Ownership.Id,
-                    item.Ownership.FirstProjectOrder,
-                    item.Ownership.LastProjectOrder,
-                    item.Ownership.OwnershipBounds,
-                    item.LeftCandidateX,
-                    item.RightCandidateX,
-                    item.LeftBlockingSubtreeIds,
-                    item.RightBlockingSubtreeIds,
-                    solvability = ReturnColumnSolvabilityAnalyzer.Analyze(item).ToString()
+                    item.Id, item.LinkId, item.ColumnX, item.DestinationSubtreeId, item.DestinationEnvelope,
+                    item.BlockingSubtreeId, item.BlockingEnvelope, item.RequiredClearance,
+                    leftRequired = item.LeftClearance.RequiredCoordinate,
+                    rightRequired = item.RightClearance.RequiredCoordinate,
+                    leftScopes = item.LeftClearance.MovementScopes.Select(scope => scope.ToString()),
+                    rightScopes = item.RightClearance.MovementScopes.Select(scope => scope.ToString())
                 }),
+                mutualColumnDifferenceCycles = ColumnDifferenceCycleAnalyzer.FindMutualDestinationCycles(
+                    positionalDemands.ColumnToEnvelopeConstraints),
+                columnToColumnDemands = positionalDemands.ColumnToColumnConstraints.Count,
                 differenceConstraints = differenceConstraintStore.Snapshot().Select(item => new
                 {
                     scope = item.Key.Scope.ToString(), kind = item.Key.Kind.ToString(), item.Minimum, item.Reason
@@ -336,6 +438,11 @@ internal static class DevelopmentCommonAuthorityTrial
                 nodesMoved = movement.Placement.Nodes.Count(item => item.Value.Rect != placement.Nodes[item.Key].Rect),
                 movement.InvalidatedLinkIds,
                 iterations = persistentIterations,
+                horizontalConstraintConverged,
+                verticalIterations,
+                changedIntervalPasses,
+                changedIntervalConverged,
+                changedConstraintProgression,
                 solutions = movement.Solutions.Select(solution => new
                 {
                     solution.Component.Id,
@@ -397,6 +504,15 @@ internal static class DevelopmentCommonAuthorityTrial
             {
                 sameLayer = returns.Plans.Count(item => item.Kind == ReturnLinkTopologyKind.SameLayer),
                 upward = returns.Plans.Count(item => item.Kind == ReturnLinkTopologyKind.Upward),
+                departureDemands = returns.Plans.Count,
+                arrivalDemands = returns.Plans.Count,
+                departureInterLayers = returns.Plans.Select(item => item.DepartureInterLayer.ToString()).Distinct().OrderBy(item => item).ToArray(),
+                arrivalInterLayers = returns.Plans.Select(item => item.ArrivalInterLayer.ToString()).Distinct().OrderBy(item => item).ToArray(),
+                slotRegions = returns.SlotRegions.Count,
+                slotsAssigned = returns.Plans.Sum(plan =>
+                    returns.SlotRegions.Sum(region => region.Assignment.SegmentsByDemandId.ContainsKey(plan.DepartureDemand.Id) ? 1 : 0) +
+                    returns.SlotRegions.Sum(region => region.Assignment.SegmentsByDemandId.ContainsKey(plan.ArrivalDemand.Id) ? 1 : 0)),
+                interLayerConstraints = verticalConstraintStore.Snapshot(),
                 assignedColumns = returns.VerticalColumns.ColumnsByDemandId.Count,
                 acceptedAssignments = returns.Assignments.Count(item => item.IsValid)
             },

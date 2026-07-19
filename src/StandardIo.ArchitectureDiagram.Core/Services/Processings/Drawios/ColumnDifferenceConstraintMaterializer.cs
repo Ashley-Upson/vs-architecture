@@ -43,12 +43,15 @@ internal static class ColumnDifferenceConstraintMaterializer
                 .OrderBy(item => item.NodeCount).ThenBy(item => item.Distance)
                 .ThenBy(item => item.Scope.Kind).ThenBy(item => item.Scope.Id, StringComparer.Ordinal)
                 .ThenBy(item => item.Kind).ToArray();
-            if (alternatives.Length == 0) continue;
-            var selected = alternatives[0];
-            if (lockedDirections is not null && !lockedDirections.ContainsKey(group.Key))
-                lockedDirections[group.Key] = selected.Direction;
-            result.Add(new GenerationConstraint(new GenerationConstraintKey(selected.Scope, selected.Kind),
-                selected.AbsoluteScopeX, $"ColumnToEnvelope:{string.Join("+", constraints.Select(item => item.Id))}"));
+            if (alternatives.Length > 0)
+            {
+                var selected = alternatives[0];
+                if (lockedDirections is not null && !lockedDirections.ContainsKey(group.Key))
+                    lockedDirections[group.Key] = selected.Direction;
+                result.Add(new GenerationConstraint(new GenerationConstraintKey(selected.Scope, selected.Kind),
+                    selected.AbsoluteScopeX, $"ColumnToEnvelope:{string.Join("+", constraints.Select(item => item.Id))}"));
+                continue;
+            }
 
             foreach (var constraint in constraints)
             {
