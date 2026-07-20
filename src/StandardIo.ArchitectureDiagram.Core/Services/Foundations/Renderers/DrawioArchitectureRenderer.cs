@@ -42,9 +42,7 @@ public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPag
         cancellationToken.ThrowIfCancellationRequested();
         var legacyModel = ToLegacyModel(model);
         var legacySettings = ToLegacySettings(settings);
-        return mode == ArchitectureRenderingMode.DevelopmentProjectRegion
-            ? _exporter.GenerateArchitectureProjectRegionResult(legacyModel, legacySettings)
-            : _exporter.GenerateArchitectureResult(legacyModel, legacySettings);
+        return _exporter.GenerateArchitectureProjectRegionResult(legacyModel, legacySettings);
     }
 
     private static DiagramModel ToLegacyModel(ArchitectureDiagramModel model)

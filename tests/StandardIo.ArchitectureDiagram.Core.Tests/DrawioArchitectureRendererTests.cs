@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 using Xunit;
@@ -26,7 +27,7 @@ public sealed class DrawioArchitectureRendererTests
     }
 
     [Fact]
-    public void Typed_page_geometry_matches_legacy_exporter_architecture_page_for_equivalent_input()
+    public void Production_page_geometry_matches_canonical_project_region_exporter_for_equivalent_input()
     {
         var typed = new DrawioArchitectureRenderer().Render(Model(), Settings());
         var legacySettings = DiagramSettings.CreateDefault();
@@ -36,12 +37,33 @@ public sealed class DrawioArchitectureRendererTests
                 new TypeNode("root", "project", "Root", "Fixture.Root", "Class"),
                 new TypeNode("service", "project", "Service", "Fixture.Service", "Class")])],
             [], [new DependencyEdge("edge", "root", "service", "internal")]);
-        var document = new DeterministicDrawioExporter().GenerateResult(legacyModel, legacySettings).Document;
-        var legacyPage = XDocument.Parse(document).Root!.Elements("diagram").First().Element("mxGraphModel")!;
+        var canonicalPage = new DeterministicDrawioExporter()
+            .GenerateArchitectureProjectRegionResult(legacyModel, legacySettings).Page.GraphModel;
 
-        Assert.Equal(legacyPage.ToString(SaveOptions.DisableFormatting),
+        Assert.Equal(canonicalPage.ToString(SaveOptions.DisableFormatting),
             typed.GraphModel.ToString(SaveOptions.DisableFormatting));
     }
+
+    [Fact]
+    public void Production_and_development_modes_use_the_same_canonical_geometry_authority()
+    {
+        var renderer = new DrawioArchitectureRenderer();
+
+        var production = renderer.RenderWithDiagnostics(Model(), Settings(), ArchitectureRenderingMode.Production);
+        var development = renderer.RenderWithDiagnostics(Model(), Settings(), ArchitectureRenderingMode.DevelopmentProjectRegion);
+
+        Assert.Equal(
+            development.Page.GraphModel.ToString(SaveOptions.DisableFormatting),
+            production.Page.GraphModel.ToString(SaveOptions.DisableFormatting));
+        Assert.Equal(
+            development.Routes.Select(RouteSignature),
+            production.Routes.Select(RouteSignature));
+        Assert.Equal(development.LogicalFindings, production.LogicalFindings);
+        Assert.Equal(development.PhysicalFindings, production.PhysicalFindings);
+    }
+
+    private static string RouteSignature(GeneratedRoute route) =>
+        route.LogicalRouteId + ":" + string.Join(";", route.Points.Select(point => $"{point.X},{point.Y}"));
 
     private static ArchitectureDiagramModel Model() => new(
         [new ArchitectureProject("project", "Fixture", [
