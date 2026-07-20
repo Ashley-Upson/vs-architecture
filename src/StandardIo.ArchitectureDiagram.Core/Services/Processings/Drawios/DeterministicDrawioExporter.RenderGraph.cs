@@ -210,10 +210,6 @@ internal sealed class RenderGraph
                         .ToArray(),
                     StringComparer.Ordinal);
 
-            foreach (var link in graph.Links)
-            {
-            }
-
             var roots = configuredRootIds.Where(nodeById.ContainsKey).Select(id => nodeById[id]).ToArray();
 
             if (roots.Length == 0)
@@ -305,10 +301,6 @@ internal sealed class RenderGraph
                         .ThenBy(link => link.Id, StringComparer.Ordinal)
                         .ToArray(),
                     StringComparer.Ordinal);
-
-            foreach (var link in graph.Links)
-            {
-            }
 
             var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
             var roots = configuredRootIds.Where(nodeById.ContainsKey).Select(id => nodeById[id]).ToArray();
