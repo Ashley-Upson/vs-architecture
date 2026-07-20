@@ -95,5 +95,6 @@ Across the tranche from the accepted audit baseline, 45 files changed with 2,360
 - `dotnet build StandardIo.ArchitectureDiagram.sln -c Release --no-restore` succeeded with 0 errors. Six pre-existing VS SDK assembly/analyser warnings remain (`StreamJsonRpc`, Visual Studio RPC/ServiceHub version resolution, `VSSDK007`, and `VSTHRD010`).
 - `dotnet test StandardIo.ArchitectureDiagram.sln -c Release --no-build` passed 397/397 tests.
 - Repeating the normal combined typed CLI generation produced byte-identical SHA-256 `5f1fcffdece4c512a057c08fbbc4458913c5a5f39b6402c4e9834a3829ad77ef`.
+- The established cCoder ContentManagement source directory generated successfully through the normal typed CLI as a valid two-page document (`Architecture`, `Data Model`), 921 cells, SHA-256 `8f2451ea27abdf0f4f8f533c431f98658c5363af81813b67cec719288a6f48a3`.
 - Core remains `netstandard2.0`.
 - No VSIX was packaged.
