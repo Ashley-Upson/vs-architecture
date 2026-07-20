@@ -55,6 +55,13 @@ internal sealed class DiagramFileBuilder
             }
         }
 
+        public XElement BuildArchitecturePage(RenderLayout layout, CoordinateOwnershipCompilation ownership)
+        {
+            if (layout is null) throw new ArgumentNullException(nameof(layout));
+            if (ownership is null) throw new ArgumentNullException(nameof(ownership));
+            return GraphModel(new ArchitectureGenerator(this).Generate(layout, ownership));
+        }
+
         private XElement ArchitectureRoot(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
             var root = new XElement("root",

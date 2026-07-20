@@ -4,11 +4,26 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
+    public DrawioPage GenerateArchitecturePage(DiagramModel diagram, DiagramSettings settings)
+    {
+        var prepared = Prepare(diagram, settings);
+        var graphModel = Measure(prepared.StageTimings, "architecture page serialization", () =>
+            new DiagramFileBuilder(prepared.Settings).BuildArchitecturePage(prepared.Layout, prepared.Ownership));
+        var diagnostics = prepared.Layout.Traceability.Violations
+            .OrderBy(violation => violation.EdgeId, StringComparer.Ordinal)
+            .ThenBy(violation => violation.Code)
+            .Select(violation => new DiagramDiagnostic(
+                violation.Code.ToString(), violation.Description, violation.EdgeId))
+            .ToArray();
+        return new DrawioPage("Architecture", "architecture", graphModel, diagnostics);
+    }
+
     public ProjectRegionGenerationResult GenerateProjectRegion(
         DiagramModel diagram,
         DiagramSettings settings)
