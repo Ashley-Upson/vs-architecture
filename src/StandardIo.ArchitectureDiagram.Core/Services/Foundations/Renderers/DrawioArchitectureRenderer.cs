@@ -4,12 +4,13 @@ using System.Threading;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 
-public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPage>
+public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPage>, IArchitectureDiagnosticRenderer
 {
     private readonly DeterministicDrawioExporter _exporter;
 
@@ -28,7 +29,20 @@ public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPag
     {
         if (model is null) throw new ArgumentNullException(nameof(model));
         cancellationToken.ThrowIfCancellationRequested();
-        return _exporter.GenerateArchitecturePage(ToLegacyModel(model), ToLegacySettings(settings));
+        return RenderWithDiagnostics(model, settings, ArchitectureRenderingMode.Production, cancellationToken).Page;
+    }
+
+    public ArchitectureRenderResult RenderWithDiagnostics(
+        ArchitectureDiagramModel model,
+        ArchitectureRenderSettings settings,
+        ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production,
+        CancellationToken cancellationToken = default)
+    {
+        if (model is null) throw new ArgumentNullException(nameof(model));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (mode != ArchitectureRenderingMode.Production)
+            throw new NotSupportedException("Development project-region rendering has not yet been migrated to the typed renderer.");
+        return _exporter.GenerateArchitectureResult(ToLegacyModel(model), ToLegacySettings(settings));
     }
 
     private static DiagramModel ToLegacyModel(ArchitectureDiagramModel model)

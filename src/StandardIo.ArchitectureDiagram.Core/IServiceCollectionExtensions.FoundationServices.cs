@@ -15,6 +15,7 @@ public static partial class IServiceCollectionExtensions
         services.AddTransient<IArchitectureAnalyser, RoslynDependencyAnalyzer>();
         services.AddTransient<IDataModelAnalyser, RoslynDataModelAnalyser>();
         services.AddTransient<IArchitectureRenderer<StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioPage>, DrawioArchitectureRenderer>();
+        services.AddTransient<IArchitectureDiagnosticRenderer, DrawioArchitectureRenderer>();
         services.AddTransient<IDataModelRenderer<StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioPage>, DrawioDataModelRenderer>();
         services.AddTransient<IDrawioDocumentComposer, DrawioDocumentComposer>();
         services.AddTransient<IDiagramRenderer, DrawioDiagramRenderer>();

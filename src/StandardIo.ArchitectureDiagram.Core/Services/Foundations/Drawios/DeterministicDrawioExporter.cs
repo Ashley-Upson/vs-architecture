@@ -5,23 +5,42 @@ using System.Linq;
 using System.Text.Json;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
     public DrawioPage GenerateArchitecturePage(DiagramModel diagram, DiagramSettings settings)
+        => GenerateArchitectureResult(diagram, settings).Page;
+
+    public ArchitectureRenderResult GenerateArchitectureResult(DiagramModel diagram, DiagramSettings settings)
     {
         var prepared = Prepare(diagram, settings);
         var graphModel = Measure(prepared.StageTimings, "architecture page serialization", () =>
             new DiagramFileBuilder(prepared.Settings).BuildArchitecturePage(prepared.Layout, prepared.Ownership));
-        var diagnostics = prepared.Layout.Traceability.Violations
+        var pageDiagnostics = prepared.Layout.Traceability.Violations
             .OrderBy(violation => violation.EdgeId, StringComparer.Ordinal)
             .ThenBy(violation => violation.Code)
             .Select(violation => new DiagramDiagnostic(
                 violation.Code.ToString(), violation.Description, violation.EdgeId))
             .ToArray();
-        return new DrawioPage("Architecture", "architecture", graphModel, diagnostics);
+        var page = new DrawioPage("Architecture", "architecture", graphModel, pageDiagnostics);
+        var findings = prepared.Layout.Traceability.Violations
+            .Select(violation => ToFinding(violation, prepared.IsEnforced(violation))).ToArray();
+        var preRepair = prepared.Layout.PreRepairTraceability.Violations
+            .Select(violation => ToFinding(violation, false)).ToArray();
+        var routes = prepared.Layout.Links.Values.OrderBy(link => link.Link.Id, StringComparer.Ordinal)
+            .Select(link => new GeneratedRoute(link.Link.Id,
+                new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint })
+                    .Select(point => new ValidationPoint(point.X, point.Y)).ToArray())).ToArray();
+        var document = new DrawioDocumentComposer().Compose(new[] { page }, new DrawioDocumentSettings()).Content;
+        return new ArchitectureRenderResult(
+            page, preRepair, findings, Array.Empty<ValidationFinding>(),
+            prepared.Layout.RepairAttempts, routes, AllTimings(prepared),
+            new ArchitectureEligibilityResult(findings.All(finding => !finding.IsStrictlyEnforced),
+                findings.Where(finding => finding.IsStrictlyEnforced).Select(finding => finding.Category).Distinct().ToArray()),
+            () => BuildDiagnostic(prepared, document));
     }
 
     public ProjectRegionGenerationResult GenerateProjectRegion(
