@@ -26,6 +26,7 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
             Id(cell), Owner(cell, projectIds), Value(cell), Style(cell).Contains("shape=rhombus", StringComparison.Ordinal),
             AbsoluteBounds(cell, cells))).OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
         var findings = new List<ArchitectureGeometryFinding>();
+        ValidateProjects(projects, findings);
         ValidateNodes(nodes, projects, findings);
         var terminals = LogicalTerminals(cells.Values);
         var routes = generation.Routes.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal)
@@ -52,6 +53,18 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
             routes.Sum(item => item.BendCount), routes.Select(item => item.BendCount).DefaultIfEmpty().Max(),
             routes.Sum(item => item.PointCount), pageBounds, pageSha, analysisSha);
         return new ArchitectureGeometryAnalysis(summary, nodes, projects, routes, orderedFindings);
+    }
+
+    private static void ValidateProjects(
+        IReadOnlyList<ArchitectureProjectGeometry> projects,
+        ICollection<ArchitectureGeometryFinding> findings)
+    {
+        for (var left = 0; left < projects.Count; left++)
+        for (var right = left + 1; right < projects.Count; right++)
+            if (InteriorIntersects(projects[left].Bounds, projects[right].Bounds))
+                findings.Add(Hard("ProjectContainerIntersection",
+                    $"Project containers {projects[left].Id} and {projects[right].Id} overlap.",
+                    node: projects[left].Id, other: projects[right].Id));
     }
 
     public string ToJson(ArchitectureGeometryAnalysis analysis) => JsonSerializer.Serialize(

@@ -53,6 +53,16 @@ public sealed class ArchitectureGeometryAnalyserTests
         Assert.True(analysis.Summary.HardFindingCount >= 4);
     }
 
+    [Fact]
+    public void Detects_overlapping_project_containers()
+    {
+        var analysis = new ArchitectureGeometryAnalyser().Analyse(Result(Page(
+            Project("first", 0, 0, 200, 200),
+            Project("second", 100, 100, 200, 200))));
+
+        Assert.Contains(analysis.Findings, finding => finding.Code == "ProjectContainerIntersection");
+    }
+
     private static TypedArchitectureGenerationResult Result(DrawioPage page, params GeneratedRoute[] routes)
     {
         var diagram = new ArchitectureDiagramModel(
@@ -79,4 +89,10 @@ public sealed class ArchitectureGeometryAnalyserTests
         new XAttribute("id", id), new XAttribute("logicalEdgeId", id), new XAttribute("segmentIndex", "0"),
         new XAttribute("edge", "1"), new XAttribute("parent", "1"), new XAttribute("source", source), new XAttribute("target", target),
         new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry")));
+
+    private static XElement Project(string id, int x, int y, int width, int height) => new("mxCell",
+        new XAttribute("id", id), new XAttribute("value", id), new XAttribute("vertex", "1"),
+        new XAttribute("parent", "1"), new XAttribute("style", "shape=swimlane;"),
+        new XElement("mxGeometry", new XAttribute("x", x), new XAttribute("y", y), new XAttribute("width", width),
+            new XAttribute("height", height), new XAttribute("as", "geometry")));
 }
