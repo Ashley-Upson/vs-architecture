@@ -9,7 +9,10 @@ using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
 using StandardIo.ArchitectureDiagram.Core.Brokers.Workspaces;
 using StandardIo.ArchitectureDiagram.Core.Exposures.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
 
 namespace StandardIo.ArchitectureDiagram.Cli;
@@ -47,6 +50,10 @@ public static class Program
                 .BuildServiceProvider();
             if (string.Equals(settings.OutputRenderer, "drawio", StringComparison.OrdinalIgnoreCase))
             {
+                if (CanUseTypedPipeline(options))
+                {
+                    return await GenerateTypedDrawioAsync(provider, options, settings).ConfigureAwait(false);
+                }
                 var exitCode = await GenerateDrawioAsync(provider, options, settings).ConfigureAwait(false);
                 if (performance is not null)
                 {
@@ -80,7 +87,53 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-types <architecture|data-model|architecture,data-model>] [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
+    }
+
+    private static bool CanUseTypedPipeline(CliOptions options) =>
+        string.IsNullOrWhiteSpace(options.DiagramManifestPath) &&
+        string.IsNullOrWhiteSpace(options.ProjectRegionDirectory) &&
+        string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath) &&
+        string.IsNullOrWhiteSpace(options.PerformanceOutputPath) &&
+        options.SerializationRepeatCount == 0 &&
+        !options.StrictValidation;
+
+    private static async Task<int> GenerateTypedDrawioAsync(
+        ServiceProvider provider,
+        CliOptions options,
+        DiagramSettings settings)
+    {
+        var target = await provider.GetRequiredService<IWorkspacePathBroker>()
+            .LoadAsync(options.InputPath!, new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
+            .ConfigureAwait(false);
+        var jobs = new List<DiagramGenerationJob>();
+        foreach (var diagramType in options.DiagramTypes)
+        {
+            switch (diagramType)
+            {
+                case DiagramType.Architecture:
+                    jobs.Add(new ArchitectureGenerationJob(
+                        LegacyDiagramSettingsAdapter.ToArchitectureAnalysis(settings),
+                        LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings)));
+                    break;
+                case DiagramType.DataModel:
+                    jobs.Add(new DataModelGenerationJob(
+                        LegacyDiagramSettingsAdapter.ToDataModelAnalysis(settings),
+                        LegacyDiagramSettingsAdapter.ToDataModelRendering(settings)));
+                    break;
+            }
+        }
+        var result = await provider.GetRequiredService<ITypedDiagramGenerationOrchestrator>()
+            .GenerateAsync(target.Projects, new DiagramGenerationRequest(jobs, new StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioDocumentSettings()))
+            .ConfigureAwait(false);
+        var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
+            ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
+            : Path.GetFullPath(options.OutputPath);
+        await provider.GetRequiredService<IDiagramFileBroker>()
+            .WriteTextAsync(outputPath, result.Document.Content).ConfigureAwait(false);
+        Console.WriteLine($"Output: {outputPath}");
+        Console.WriteLine($"Pages: {string.Join(", ", result.Document.PageNames)}");
+        return 0;
     }
 
     private static async Task<int> GenerateDrawioAsync(
@@ -265,6 +318,9 @@ public static class Program
 
         public bool ShowHelp { get; private set; }
 
+        public IReadOnlyList<DiagramType> DiagramTypes { get; private set; } =
+            new[] { DiagramType.Architecture, DiagramType.DataModel };
+
         public static CliOptions Parse(string[] args)
         {
             var options = new CliOptions();
@@ -288,6 +344,9 @@ public static class Program
                         break;
                     case "--project":
                         options.ProjectFilter = ReadValue(args, ref index, arg);
+                        break;
+                    case "--diagram-types":
+                        options.DiagramTypes = ParseDiagramTypes(ReadValue(args, ref index, arg));
                         break;
                     case "--emit-on-validation-failure":
                         Console.Error.WriteLine("--emit-on-validation-failure is deprecated; use --strict-validation.");
@@ -338,6 +397,23 @@ public static class Program
             }
 
             return options;
+        }
+
+        private static IReadOnlyList<DiagramType> ParseDiagramTypes(string value)
+        {
+            var result = new List<DiagramType>();
+            foreach (var item in value.Split(',').Select(item => item.Trim()).Where(item => item.Length > 0))
+            {
+                var type = item.ToLowerInvariant() switch
+                {
+                    "architecture" => DiagramType.Architecture,
+                    "data-model" or "datamodel" => DiagramType.DataModel,
+                    _ => throw new ArgumentException($"Unknown diagram type: {item}")
+                };
+                if (!result.Contains(type)) result.Add(type);
+            }
+            if (result.Count == 0) throw new ArgumentException("--diagram-types requires at least one diagram type.");
+            return result;
         }
 
         private static string ReadValue(string[] args, ref int index, string option)
