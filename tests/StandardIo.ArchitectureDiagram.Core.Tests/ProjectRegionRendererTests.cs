@@ -30,6 +30,11 @@ public sealed class ProjectRegionRendererTests
         Assert.True(report.GetProperty("interLayersDiscovered").GetInt32() > 0);
         Assert.True(report.GetProperty("slotDemands").GetInt32() >= 15);
         Assert.Equal(report.GetProperty("slotDemands").GetInt32(), report.GetProperty("slotsAssigned").GetInt32());
+        Assert.Equal(report.GetProperty("slotDemands").GetInt32(),
+            report.GetProperty("slotAllocations").GetArrayLength());
+        Assert.Equal(report.GetProperty("destinationColumnsAssigned").GetInt32() +
+            report.GetProperty("returnColumnsAssigned").GetInt32(),
+            report.GetProperty("columnAllocations").GetArrayLength());
         Assert.Equal(0, report.GetProperty("corridorLaneYAssignmentsRemaining").GetInt32());
         Assert.Equal(0, report.GetProperty("repairBasedHorizontalOffsetsRemaining").GetInt32());
         Assert.Equal(0, report.GetProperty("corridorLaneXAssignmentsRemaining").GetInt32());

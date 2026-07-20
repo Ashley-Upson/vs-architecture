@@ -129,11 +129,29 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             interLayersDiscovered = layout.ProjectSlotCompilation?.InterLayerCount ?? 0,
             slotDemands = layout.ProjectSlotCompilation?.Demands.Count ?? 0,
             slotsAssigned = layout.ProjectSlotCompilation?.Assignments.Count ?? 0,
+            slotAllocations = layout.ProjectSlotCompilation?.Demands
+                .OrderBy(demand => demand.Id, StringComparer.Ordinal).Select(demand => new
+                {
+                    demand.Id,
+                    demand.LogicalRouteId,
+                    role = demand.Role.ToString(),
+                    occupiedMinimum = demand.OccupiedInterval.Minimum,
+                    occupiedMaximum = demand.OccupiedInterval.Maximum,
+                    allowedMinimum = demand.AllowedAxisRange.Minimum,
+                    allowedMaximum = demand.AllowedAxisRange.Maximum,
+                    minimumEndpointRole = demand.MinimumEndpointRole.ToString(),
+                    maximumEndpointRole = demand.MaximumEndpointRole.ToString(),
+                    assignedCoordinate = layout.ProjectSlotCompilation.Assignments[demand.Id].AxisCoordinate,
+                    slotIndex = layout.ProjectSlotCompilation.Assignments[demand.Id].SlotIndex,
+                    movementScope = demand.MovementScope?.Id
+                }),
             interLayersExpanded = layout.ProjectSlotCompilation?.ExpandedInterLayerCount ?? 0,
             corridorLaneYAssignmentsRemaining = 0,
             repairBasedHorizontalOffsetsRemaining = 0,
             destinationColumnsAssigned = layout.ProjectSlotCompilation?.VerticalColumns.ColumnsByDemandId.Count(item =>
                 !layout.ProjectSlotCompilation.ReturnSideByRouteId.ContainsKey(item.Value.LinkId)) ?? 0,
+            columnAllocations = layout.ProjectSlotCompilation?.VerticalColumns.ColumnsByDemandId.Values
+                .OrderBy(column => column.DemandId, StringComparer.Ordinal),
             returnColumnsAssigned = layout.ProjectSlotCompilation?.ReturnSideByRouteId.Count ?? 0,
             returnSideSelections = layout.ProjectSlotCompilation?.ReturnSideByRouteId,
             corridorLaneXAssignmentsRemaining = 0,
