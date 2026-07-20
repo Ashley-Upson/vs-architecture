@@ -15,6 +15,7 @@ using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Settings;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.DataModels;
 using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Drawios;
 
 namespace StandardIo.ArchitectureDiagram.Cli;
 
@@ -84,7 +85,7 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-types <architecture|data-model|architecture,data-model>] [--data-model-snapshot-output <json>] [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-types <architecture|data-model|architecture,data-model>] [--architecture-analysis-output <directory>] [--data-model-snapshot-output <json>] [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
     }
 
     private static async Task<int> GenerateUnifiedDrawioAsync(
@@ -155,6 +156,37 @@ public static class Program
             : Path.GetFullPath(options.OutputPath);
         await provider.GetRequiredService<IDiagramFileBroker>()
             .WriteTextAsync(outputPath, document.Content).ConfigureAwait(false);
+
+        if (architecture is not null && !string.IsNullOrWhiteSpace(options.ArchitectureAnalysisOutputDirectory))
+        {
+            var directory = Path.GetFullPath(options.ArchitectureAnalysisOutputDirectory);
+            Directory.CreateDirectory(directory);
+            var analyser = provider.GetRequiredService<IArchitectureGeometryAnalyser>();
+            var analysis = analyser.Analyse(architecture);
+            var broker = provider.GetRequiredService<IDiagramFileBroker>();
+            await broker.WriteTextAsync(Path.Combine(directory, "architecture-analysis.json"), analyser.ToJson(analysis)).ConfigureAwait(false);
+            await broker.WriteTextAsync(Path.Combine(directory, "architecture-analysis.md"), analyser.ToMarkdown(analysis)).ConfigureAwait(false);
+            await broker.WriteTextAsync(Path.Combine(directory, "logical-findings.json"), JsonSerializer.Serialize(
+                architecture.LogicalFindings, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            await broker.WriteTextAsync(Path.Combine(directory, "physical-findings.json"), JsonSerializer.Serialize(
+                architecture.PhysicalFindings, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            await broker.WriteTextAsync(Path.Combine(directory, "placement-analysis.json"), JsonSerializer.Serialize(new
+            {
+                analysis.Summary.PageBounds,
+                analysis.Projects,
+                analysis.Nodes
+            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            await broker.WriteTextAsync(Path.Combine(directory, "routing-analysis.json"), JsonSerializer.Serialize(new
+            {
+                analysis.Summary.TotalRouteLength,
+                analysis.Summary.MaximumRouteLength,
+                analysis.Summary.MaximumDetourRatio,
+                analysis.Summary.TotalBends,
+                analysis.Summary.MaximumBendsPerRoute,
+                analysis.Routes
+            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            Console.WriteLine($"Architecture analysis: {directory}");
+        }
 
         if (architecture?.SerializationRepeat is { IsDeterministic: false })
             throw new InvalidOperationException("Typed Architecture page serialization was not deterministic.");
@@ -228,6 +260,8 @@ public static class Program
 
         public string? DataModelSnapshotOutputPath { get; private set; }
 
+        public string? ArchitectureAnalysisOutputDirectory { get; private set; }
+
         public int SerializationRepeatCount { get; private set; }
 
         public bool StrictValidation { get; private set; }
@@ -266,6 +300,9 @@ public static class Program
                         break;
                     case "--data-model-snapshot-output":
                         options.DataModelSnapshotOutputPath = ReadValue(args, ref index, arg);
+                        break;
+                    case "--architecture-analysis-output":
+                        options.ArchitectureAnalysisOutputDirectory = ReadValue(args, ref index, arg);
                         break;
                     case "--emit-on-validation-failure":
                         Console.Error.WriteLine("--emit-on-validation-failure is deprecated; use --strict-validation.");
