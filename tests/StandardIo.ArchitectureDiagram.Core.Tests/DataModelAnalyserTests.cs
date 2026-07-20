@@ -49,6 +49,48 @@ public sealed class DataModelAnalyserTests
     }
 
     [Fact]
+    public async Task Selection_policy_settings_can_relax_method_and_property_requirements()
+    {
+        using var workspace = Project("""
+            namespace Fixture;
+            public class MethodOnly { public void Run() { } }
+            public class PropertyAndMethod { public string Name { get; set; } = ""; public void Run() { } }
+            """);
+        var analyser = new RoslynDataModelAnalyser();
+
+        var strict = await analyser.AnalyseAsync(workspace.CurrentSolution.Projects, new DataModelAnalysisSettings());
+        var relaxed = await analyser.AnalyseAsync(workspace.CurrentSolution.Projects, new DataModelAnalysisSettings
+        {
+            RequirePublicInstanceProperty = false,
+            RequireZeroPublicInstanceMethods = false
+        });
+
+        Assert.Empty(strict.Entities);
+        Assert.Equal(new[] { "MethodOnly", "PropertyAndMethod" }, relaxed.Entities.Select(entity => entity.Name));
+    }
+
+    [Fact]
+    public async Task Deterministic_serializer_normalizes_model_enumeration_order()
+    {
+        using var workspace = Project("""
+            namespace Fixture;
+            public class A { public B Target { get; set; } = new(); }
+            public class B { public string Name { get; set; } = ""; }
+            """);
+        var model = await new RoslynDataModelAnalyser().AnalyseAsync(
+            workspace.CurrentSolution.Projects, new DataModelAnalysisSettings());
+        var reversed = model with
+        {
+            Entities = model.Entities.Reverse().ToArray(),
+            Relationships = model.Relationships.Reverse().ToArray()
+        };
+
+        Assert.Equal(DataModelDiagramSerializer.Export(model), DataModelDiagramSerializer.Export(reversed));
+        var json = DataModelDiagramSerializer.Export(model);
+        Assert.Equal(json, DataModelDiagramSerializer.Export(DataModelDiagramSerializer.Import(json)));
+    }
+
+    [Fact]
     public async Task Analyse_is_deterministic_when_project_and_declaration_order_are_reversed()
     {
         using var forward = Project("""

@@ -34,7 +34,7 @@ public sealed class RoslynDataModelAnalyser : IDataModelAnalyser
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fullName = CanonicalName(type);
-                if (IsExcluded(type.Name, fullName, settings) || !DataModelEntitySelectionPolicy.IsEligible(type))
+                if (IsExcluded(type.Name, fullName, settings) || !DataModelEntitySelectionPolicy.IsEligible(type, settings))
                     continue;
                 discovered.Add(new DiscoveredEntity(project, type, fullName,
                     StableId.From("data_model_entity", fullName)));
