@@ -12,6 +12,7 @@ using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.DataModels;
 using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
 
@@ -87,7 +88,7 @@ public static class Program
 
     private static void WriteUsage()
     {
-        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-types <architecture|data-model|architecture,data-model>] [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
+        Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-types <architecture|data-model|architecture,data-model>] [--data-model-snapshot-output <json>] [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
     }
 
     private static bool CanUseTypedPipeline(CliOptions options) =>
@@ -126,6 +127,16 @@ public static class Program
         var result = await provider.GetRequiredService<ITypedDiagramGenerationOrchestrator>()
             .GenerateAsync(target.Projects, new DiagramGenerationRequest(jobs, new StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioDocumentSettings()))
             .ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(options.DataModelSnapshotOutputPath))
+        {
+            var dataModel = await provider.GetRequiredService<IDataModelAnalyser>()
+                .AnalyseAsync(target.Projects, LegacyDiagramSettingsAdapter.ToDataModelAnalysis(settings))
+                .ConfigureAwait(false);
+            var snapshotPath = Path.GetFullPath(options.DataModelSnapshotOutputPath);
+            await provider.GetRequiredService<IDiagramFileBroker>()
+                .WriteTextAsync(snapshotPath, DataModelDiagramSerializer.Export(dataModel)).ConfigureAwait(false);
+            Console.WriteLine($"Data Model snapshot: {snapshotPath}");
+        }
         var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
             ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
             : Path.GetFullPath(options.OutputPath);
@@ -312,6 +323,8 @@ public static class Program
 
         public string? DiagramManifestPath { get; private set; }
 
+        public string? DataModelSnapshotOutputPath { get; private set; }
+
         public int SerializationRepeatCount { get; private set; }
 
         public bool StrictValidation { get; private set; }
@@ -347,6 +360,9 @@ public static class Program
                         break;
                     case "--diagram-types":
                         options.DiagramTypes = ParseDiagramTypes(ReadValue(args, ref index, arg));
+                        break;
+                    case "--data-model-snapshot-output":
+                        options.DataModelSnapshotOutputPath = ReadValue(args, ref index, arg);
                         break;
                     case "--emit-on-validation-failure":
                         Console.Error.WriteLine("--emit-on-validation-failure is deprecated; use --strict-validation.");
