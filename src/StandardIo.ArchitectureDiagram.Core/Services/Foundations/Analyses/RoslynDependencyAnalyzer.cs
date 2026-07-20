@@ -6,23 +6,48 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
+using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
 
-public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
+public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchitectureAnalyser
 {
+    public async Task<ArchitectureDiagramModel> AnalyseAsync(
+        IEnumerable<Project> selectedProjects,
+        ArchitectureAnalysisSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        settings ??= new ArchitectureAnalysisSettings();
+        var legacySettings = new DiagramSettings
+        {
+            ExcludedNamespaces = settings.ExcludedNamespaces.ToList(),
+            ExcludedNames = settings.ExcludedNames.ToList(),
+            RootDiscoveryPatternsText = settings.RootDiscoveryPatternsText,
+            ExternalDependencyTag = settings.ExternalDependencyTag
+        };
+        var model = await AnalyzeCoreAsync(selectedProjects, legacySettings, cancellationToken).ConfigureAwait(false);
+        return ToArchitectureDiagram(model);
+    }
+
     public async Task<DiagramModel> AnalyzeAsync(
         Project selectedProject,
         DiagramSettings settings,
         CancellationToken cancellationToken = default)
     {
-        return await AnalyzeAsync(new[] { selectedProject }, settings, cancellationToken).ConfigureAwait(false);
+        return await AnalyzeCoreAsync(new[] { selectedProject }, settings, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<DiagramModel> AnalyzeAsync(
+    public Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        AnalyzeCoreAsync(selectedProjects, settings, cancellationToken);
+
+    private async Task<DiagramModel> AnalyzeCoreAsync(
+        IEnumerable<Project> selectedProjects,
+        DiagramSettings settings,
+        CancellationToken cancellationToken)
     {
         var projects = selectedProjects?.Where(project => project is not null)
             .OrderBy(StableProjectKey, System.StringComparer.OrdinalIgnoreCase)
@@ -196,6 +221,32 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 new DiagramMetadata());
             return SemanticScopeSelector.Select(discovered, settings);
         }
+    }
+
+    private static ArchitectureDiagramModel ToArchitectureDiagram(DiagramModel model)
+    {
+        var selection = model.Metadata?.SemanticSelection;
+        return new ArchitectureDiagramModel(
+            model.Projects.Select(project => new ArchitectureProject(
+                project.Id,
+                project.Name,
+                project.Types.Select(type => new ArchitectureNode(
+                    type.Id, type.ProjectId, type.Name, type.FullName, type.Kind, type.UniqueId,
+                    type.Interfaces ?? System.Array.Empty<string>())).ToArray(),
+                project.UniqueId)).ToArray(),
+            model.ExternalDependencies.Select(node => new ArchitectureExternalNode(
+                node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
+            model.Edges.Select(edge => new ArchitectureLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind)).ToArray(),
+            selection is null ? null : new ArchitectureSelectionDiagnostic(
+                selection.ScopePolicy,
+                selection.Roots.Select(root => new ArchitectureRoot(
+                    root.SemanticNodeId, root.MatchedCanonicalValue, root.PatternIndex,
+                    root.SourceLine, root.PatternText)).ToArray(),
+                selection.SelectedNodeIds,
+                selection.OmittedNodeIds,
+                selection.SelectedLinkIds,
+                selection.OmittedLinkIds,
+                selection.UnmatchedPatternIndexes));
     }
 
     private static string StableProjectKey(Project project) =>
