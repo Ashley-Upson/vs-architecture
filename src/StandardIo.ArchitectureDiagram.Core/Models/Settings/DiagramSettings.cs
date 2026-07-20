@@ -9,6 +9,7 @@ public sealed class DiagramSettings
     public LayoutSettings Layout { get; set; } = new();
     public List<string> ExcludedNamespaces { get; set; } = new();
     public List<string> ExcludedNames { get; set; } = new();
+    public string RootDiscoveryPatternsText { get; set; } = string.Empty;
     public List<StyleRule> StyleRules { get; set; } = new();
     public List<StyleOverride> Overrides { get; set; } = new();
     public string OutputRenderer { get; set; } = "drawio";

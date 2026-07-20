@@ -143,6 +143,7 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly CheckBox _connectorRounded = new() { Text = "Rounded connectors", AutoSize = true };
     private readonly TextBox _excludedNamespaces = MultilineTextBox();
     private readonly TextBox _excludedNames = MultilineTextBox();
+    private readonly TextBox _rootDiscoveryPatterns = MultilineTextBox();
     private readonly DataGridView _styleRules = StyleGrid(includeMatcher: true);
     private readonly DataGridView _overrides = StyleGrid(includeMatcher: false);
     private readonly StyleEditor _projectStyle = new("Project Container Style");
@@ -211,6 +212,7 @@ internal sealed class DiagramOptionsControl : UserControl
         _connectorRounded.Checked = settings.Connector.Rounded;
         _excludedNamespaces.Text = string.Join(Environment.NewLine, settings.ExcludedNamespaces);
         _excludedNames.Text = string.Join(Environment.NewLine, settings.ExcludedNames);
+        _rootDiscoveryPatterns.Text = settings.RootDiscoveryPatternsText;
         LoadRules(settings.StyleRules);
         LoadOverrides(settings.Overrides);
         _projectStyle.LoadStyle(settings.ProjectContainerStyle);
@@ -272,6 +274,7 @@ internal sealed class DiagramOptionsControl : UserControl
             },
             ExcludedNamespaces = Lines(_excludedNamespaces),
             ExcludedNames = Lines(_excludedNames),
+            RootDiscoveryPatternsText = _rootDiscoveryPatterns.Text,
             StyleRules = ReadRules(),
             Overrides = ReadOverrides(),
             ShowProjectContainers = _showProjectContainers.Checked,
@@ -299,6 +302,7 @@ internal sealed class DiagramOptionsControl : UserControl
             : settings.OutputRenderer.Trim();
         settings.ExcludedNamespaces ??= new();
         settings.ExcludedNames ??= new();
+        settings.RootDiscoveryPatternsText ??= string.Empty;
         settings.StyleRules ??= new();
         settings.Overrides ??= new();
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
@@ -334,6 +338,7 @@ internal sealed class DiagramOptionsControl : UserControl
         AddRow(panel, string.Empty, _connectorRounded);
         AddRow(panel, "Excluded namespaces", _excludedNamespaces, 90);
         AddRow(panel, "Excluded names", _excludedNames, 90);
+        AddRow(panel, "Root discovery regexes", _rootDiscoveryPatterns, 110);
         page.Controls.Add(panel);
         return page;
     }

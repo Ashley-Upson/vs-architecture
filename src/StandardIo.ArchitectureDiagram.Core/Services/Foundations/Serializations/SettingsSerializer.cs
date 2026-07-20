@@ -21,6 +21,8 @@ public static class SettingsSerializer
             throw new ArgumentNullException(nameof(settings));
         }
 
+        _ = StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses.RootDiscoveryPatternParser
+            .Parse(settings.RootDiscoveryPatternsText ?? string.Empty);
         settings.Version = SettingsSchemaVersion.Current;
         return JsonSerializer.Serialize(settings, Options);
     }
@@ -47,6 +49,9 @@ public static class SettingsSerializer
         settings.Layout ??= new LayoutSettings();
         settings.ExcludedNamespaces ??= new();
         settings.ExcludedNames ??= new();
+        settings.RootDiscoveryPatternsText ??= string.Empty;
+        _ = StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses.RootDiscoveryPatternParser
+            .Parse(settings.RootDiscoveryPatternsText);
         settings.StyleRules ??= new();
         settings.Overrides ??= new();
         settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
