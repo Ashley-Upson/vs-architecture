@@ -69,6 +69,19 @@ public sealed class DiagramPipelineDependencyGuardTests
         Assert.Contains("IArchitectureGenerationService", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Vsix_commands_use_typed_orchestration_without_legacy_exporter_or_combined_analysis()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            Root(), "src", "StandardIo.ArchitectureDiagram.Vsix", "DiagramCommands.cs"));
+
+        Assert.Contains("ITypedDiagramGenerationOrchestrator", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDiagramAnalysisProcessingService", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDeterministicDrawioExporter", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDiagramRendererRegistry", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DrawioGenerationResult", source, StringComparison.Ordinal);
+    }
+
     private static IEnumerable<string> Sources(params string[] segments) =>
         Directory.EnumerateFiles(Path.Combine(new[] { Root(), "src", "StandardIo.ArchitectureDiagram.Core" }.Concat(segments).ToArray()), "*.cs");
 
