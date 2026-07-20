@@ -22,6 +22,12 @@ public sealed record ArchitectureNodeGeometry(
 
 public sealed record ArchitectureProjectGeometry(string Id, string Label, ValidationRectangle Bounds);
 
+public enum ArchitectureLinkDisposition { Rendered, ExplicitlyOmitted, CollapsedByApprovedRule, Unsupported }
+
+public sealed record ArchitectureLinkReconciliation(
+    string SemanticLinkId, ArchitectureLinkDisposition Disposition, string Reason,
+    IReadOnlyList<string> RenderedLogicalRouteIds);
+
 public sealed record ArchitectureRouteAnalysis(
     string LogicalRouteId, int Length, int DirectManhattanLength, double DetourRatio,
     int BendCount, int PointCount, int MaximumTerminalStubLength);
@@ -40,4 +46,5 @@ public sealed record ArchitectureGeometryAnalysis(
     IReadOnlyList<ArchitectureNodeGeometry> Nodes,
     IReadOnlyList<ArchitectureProjectGeometry> Projects,
     IReadOnlyList<ArchitectureRouteAnalysis> Routes,
+    IReadOnlyList<ArchitectureLinkReconciliation> Links,
     IReadOnlyList<ArchitectureGeometryFinding> Findings);

@@ -28,6 +28,7 @@ public sealed class ArchitectureGeometryAnalyserTests
         Assert.Equal(180, Assert.Single(first.Routes).Length);
         Assert.Equal(2, Assert.Single(first.Routes).BendCount);
         Assert.Equal(first.Summary.AnalysisSha256, second.Summary.AnalysisSha256);
+        Assert.Equal(ArchitectureLinkDisposition.Rendered, Assert.Single(first.Links).Disposition);
         Assert.Empty(first.Findings);
         Assert.Contains("Hard findings: 0", analyser.ToMarkdown(first));
     }

@@ -31,13 +31,14 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
         var terminals = LogicalTerminals(cells.Values);
         var routes = generation.Routes.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .Select(route => AnalyseRoute(route, nodes, terminals, findings)).ToArray();
+        var links = ReconcileLinks(generation, cells.Values);
         ValidateRoutePairs(generation.Routes, findings);
         IncludeTypedFindings(generation, findings);
         var orderedFindings = findings.OrderBy(item => item.Severity).ThenBy(item => item.Code, StringComparer.Ordinal)
             .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal).ThenBy(item => item.NodeId, StringComparer.Ordinal).ToArray();
         var pageBounds = Bounds(nodes.Select(item => item.Bounds).Concat(projects.Select(item => item.Bounds)));
         var pageSha = Hash(generation.Page.GraphModel.ToString(SaveOptions.DisableFormatting));
-        var analysisSha = Hash(JsonSerializer.Serialize(new { nodes, projects, routes, findings = orderedFindings }));
+        var analysisSha = Hash(JsonSerializer.Serialize(new { nodes, projects, routes, links, findings = orderedFindings }));
         var summary = new ArchitectureGeometrySummary(
             generation.Diagram.Projects.Sum(project => project.Nodes.Count) + generation.Diagram.ExternalNodes.Count,
             generation.Diagram.Links.Count, nodes.Length, generation.Routes.Count,
@@ -52,7 +53,7 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
             routes.Select(item => item.Length).DefaultIfEmpty().Max(), routes.Select(item => item.DetourRatio).DefaultIfEmpty().Max(),
             routes.Sum(item => item.BendCount), routes.Select(item => item.BendCount).DefaultIfEmpty().Max(),
             routes.Sum(item => item.PointCount), pageBounds, pageSha, analysisSha);
-        return new ArchitectureGeometryAnalysis(summary, nodes, projects, routes, orderedFindings);
+        return new ArchitectureGeometryAnalysis(summary, nodes, projects, routes, links, orderedFindings);
     }
 
     private static void ValidateProjects(
@@ -84,6 +85,7 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
             .AppendLine($"- Total/max route length: {s.TotalRouteLength} / {s.MaximumRouteLength}")
             .AppendLine($"- Maximum detour ratio: {s.MaximumDetourRatio:0.00}")
             .AppendLine($"- Total/max bends: {s.TotalBends} / {s.MaximumBendsPerRoute}")
+            .AppendLine($"- Link reconciliation: {string.Join(", ", analysis.Links.GroupBy(link => link.Disposition).OrderBy(group => group.Key).Select(group => $"{group.Key}={group.Count()}"))}")
             .AppendLine($"- Page SHA-256: `{s.PageSha256}`")
             .AppendLine($"- Analysis SHA-256: `{s.AnalysisSha256}`").AppendLine();
         if (analysis.Findings.Count == 0) return result.AppendLine("No findings.").ToString();
@@ -91,6 +93,37 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
         foreach (var finding in analysis.Findings)
             result.AppendLine($"- **{finding.Severity} / {finding.Code}**: {finding.Description}");
         return result.ToString();
+    }
+
+    private static IReadOnlyList<ArchitectureLinkReconciliation> ReconcileLinks(
+        TypedArchitectureGenerationResult generation,
+        IEnumerable<XElement> cells)
+    {
+        var routes = generation.Routes.Select(route => route.LogicalRouteId).ToArray();
+        var physicalPairs = cells.Where(cell => Attr(cell, "edge") == "1" && Attr(cell, "logicalEdgeId") is not null)
+            .Select(cell => (Route: Attr(cell, "logicalEdgeId")!, Source: Attr(cell, "semanticSourceId"), Target: Attr(cell, "semanticTargetId")))
+            .Distinct().ToArray();
+        var nodeKinds = generation.Diagram.Projects.SelectMany(project => project.Nodes)
+            .ToDictionary(node => node.Id, node => node.Kind, StringComparer.Ordinal);
+        return generation.Diagram.Links.OrderBy(link => link.Id, StringComparer.Ordinal).Select(link =>
+        {
+            var matching = routes.Where(route => route == link.Id || route.EndsWith("__" + link.Id, StringComparison.Ordinal))
+                .OrderBy(route => route, StringComparer.Ordinal).ToArray();
+            if (matching.Length > 0)
+                return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.Rendered,
+                    "Logical route emitted.", matching);
+            var collapsed = physicalPairs.Where(pair => pair.Source == link.SourceId && pair.Target == link.TargetId)
+                .Select(pair => pair.Route).Distinct(StringComparer.Ordinal).OrderBy(route => route, StringComparer.Ordinal).ToArray();
+            if (collapsed.Length > 0)
+                return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.CollapsedByApprovedRule,
+                    "Equivalent semantic source/target pair is represented by another physical route.", collapsed);
+            if (nodeKinds.TryGetValue(link.SourceId, out var sourceKind) && sourceKind == "Interface" ||
+                nodeKinds.TryGetValue(link.TargetId, out var targetKind) && targetKind == "Interface")
+                return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.ExplicitlyOmitted,
+                    "Interface endpoints are not rendered as Architecture nodes.", Array.Empty<string>());
+            return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.Unsupported,
+                "No rendered route or approved collapsed semantic pair was found.", Array.Empty<string>());
+        }).ToArray();
     }
 
     private static void ValidateNodes(IReadOnlyList<ArchitectureNodeGeometry> nodes,
