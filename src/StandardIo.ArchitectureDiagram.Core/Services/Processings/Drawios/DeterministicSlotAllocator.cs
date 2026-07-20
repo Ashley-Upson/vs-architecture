@@ -112,8 +112,12 @@ internal static class DeterministicSlotAllocator
             _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
         foreach (var left in demands)
         foreach (var right in demands)
-            if (left.Id != right.Id && left.OccupiedInterval.Maximum == right.OccupiedInterval.Minimum)
-                predecessors[left.Id].Add(right.Id);
+        {
+            if (left.Id == right.Id || left.OccupiedInterval.Maximum != right.OccupiedInterval.Minimum) continue;
+            var first = EndpointOrder(left.MaximumEndpointRole, right.MinimumEndpointRole);
+            if (first < 0) predecessors[right.Id].Add(left.Id);
+            else predecessors[left.Id].Add(right.Id);
+        }
 
         var remaining = demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var ordered = new List<LinkSegmentDemand>(demands.Count);
@@ -135,6 +139,13 @@ internal static class DeterministicSlotAllocator
             .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .ThenBy(item => item.TurnOrder)
             .ThenBy(item => item.Id, StringComparer.Ordinal);
+
+    private static int EndpointOrder(LinkSegmentEndpointRole left, LinkSegmentEndpointRole right)
+    {
+        if (left == LinkSegmentEndpointRole.Departure && right == LinkSegmentEndpointRole.Arrival) return -1;
+        if (right == LinkSegmentEndpointRole.Departure && left == LinkSegmentEndpointRole.Arrival) return 1;
+        return 1;
+    }
 
     private static DeterministicSlotAssignment AssignCompleteOverlap(
         LinkSegmentAllocationRegionIdentity region,

@@ -195,7 +195,13 @@ internal static class ProjectInterLayerSlotCompiler
             range, null, role,
             route.Link.Order, order,
             new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.LowerLayer}"),
-            revision, new RouteRevision(0));
+            revision, new RouteRevision(0), null,
+            route.SourcePoint.X <= route.TargetPoint.X
+                ? LinkSegmentEndpointRole.Departure
+                : LinkSegmentEndpointRole.Arrival,
+            route.SourcePoint.X <= route.TargetPoint.X
+                ? LinkSegmentEndpointRole.Arrival
+                : LinkSegmentEndpointRole.Departure);
 
     private static LinkSegmentRole DepartureRole(CanonicalTopologyFamily family) => family switch
     {

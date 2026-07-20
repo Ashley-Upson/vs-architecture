@@ -3,6 +3,7 @@ using System.Collections.Generic;
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal enum LinkSegmentOrientation { Horizontal, Vertical }
+internal enum LinkSegmentEndpointRole { None, Departure, Arrival }
 internal enum LinkSegmentRole
 {
     ConnectionDeparture,
@@ -32,7 +33,9 @@ internal sealed record LinkSegmentDemand(
     MovementScopeIdentity? MovementScope,
     LayoutRevision PlacementRevision,
     RouteRevision RouteRevision,
-    string? OwnershipEnvelopeId = null);
+    string? OwnershipEnvelopeId = null,
+    LinkSegmentEndpointRole MinimumEndpointRole = LinkSegmentEndpointRole.None,
+    LinkSegmentEndpointRole MaximumEndpointRole = LinkSegmentEndpointRole.None);
 
 internal sealed record AssignedLinkSegment(
     string Id,

@@ -42,10 +42,23 @@ public sealed class DeterministicSlotAllocatorTests
     [Fact]
     public void Endpoint_contact_orders_right_departure_above_left_arrival()
     {
-        var result = Assign(Demand("left-arrival", 0, 10), Demand("right-departure", 10, 20));
+        var result = Assign(
+            Demand("left-arrival", 0, 10) with { MaximumEndpointRole = LinkSegmentEndpointRole.Arrival },
+            Demand("right-departure", 10, 20) with { MinimumEndpointRole = LinkSegmentEndpointRole.Departure });
 
         Assert.Equal(0, result.SegmentsByDemandId["right-departure"].SlotIndex);
         Assert.Equal(1, result.SegmentsByDemandId["left-arrival"].SlotIndex);
+    }
+
+    [Fact]
+    public void Endpoint_contact_orders_left_departure_above_right_arrival()
+    {
+        var result = Assign(
+            Demand("left-departure", 0, 10) with { MaximumEndpointRole = LinkSegmentEndpointRole.Departure },
+            Demand("right-arrival", 10, 20) with { MinimumEndpointRole = LinkSegmentEndpointRole.Arrival });
+
+        Assert.Equal(0, result.SegmentsByDemandId["left-departure"].SlotIndex);
+        Assert.Equal(1, result.SegmentsByDemandId["right-arrival"].SlotIndex);
     }
 
     [Fact]
