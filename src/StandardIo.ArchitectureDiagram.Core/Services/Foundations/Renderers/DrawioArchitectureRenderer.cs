@@ -40,9 +40,11 @@ public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPag
     {
         if (model is null) throw new ArgumentNullException(nameof(model));
         cancellationToken.ThrowIfCancellationRequested();
-        if (mode != ArchitectureRenderingMode.Production)
-            throw new NotSupportedException("Development project-region rendering has not yet been migrated to the typed renderer.");
-        return _exporter.GenerateArchitectureResult(ToLegacyModel(model), ToLegacySettings(settings));
+        var legacyModel = ToLegacyModel(model);
+        var legacySettings = ToLegacySettings(settings);
+        return mode == ArchitectureRenderingMode.DevelopmentProjectRegion
+            ? _exporter.GenerateArchitectureProjectRegionResult(legacyModel, legacySettings)
+            : _exporter.GenerateArchitectureResult(legacyModel, legacySettings);
     }
 
     private static DiagramModel ToLegacyModel(ArchitectureDiagramModel model)

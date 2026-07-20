@@ -51,11 +51,7 @@ public static class Program
                 .BuildServiceProvider();
             if (string.Equals(settings.OutputRenderer, "drawio", StringComparison.OrdinalIgnoreCase))
             {
-                if (CanUseTypedPipeline(options))
-                {
-                    return await GenerateTypedDrawioAsync(provider, options, settings).ConfigureAwait(false);
-                }
-                var exitCode = await GenerateDrawioAsync(provider, options, settings).ConfigureAwait(false);
+                var exitCode = await GenerateUnifiedDrawioAsync(provider, options, settings).ConfigureAwait(false);
                 if (performance is not null)
                 {
                     await WritePerformanceReportAsync(performance, options.PerformanceOutputPath!).ConfigureAwait(false);
@@ -91,43 +87,57 @@ public static class Program
         Console.WriteLine("Usage: StandardIo.ArchitectureDiagram.Cli <path> [--diagram-types <architecture|data-model|architecture,data-model>] [--data-model-snapshot-output <json>] [--diagram-manifest <json>] [--settings <json>] [--renderer <drawio|json>] [--output <path>] [--project <name-or-path>] [--strict-validation] [--diagnostics-output <json>] [--performance-output <json>] [--serialization-repeat <count>] [--development-project-region <directory>]");
     }
 
-    private static bool CanUseTypedPipeline(CliOptions options) =>
-        string.IsNullOrWhiteSpace(options.DiagramManifestPath) &&
-        string.IsNullOrWhiteSpace(options.ProjectRegionDirectory) &&
-        string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath) &&
-        string.IsNullOrWhiteSpace(options.PerformanceOutputPath) &&
-        options.SerializationRepeatCount == 0 &&
-        !options.StrictValidation;
-
-    private static async Task<int> GenerateTypedDrawioAsync(
+    private static async Task<int> GenerateUnifiedDrawioAsync(
         ServiceProvider provider,
         CliOptions options,
         DiagramSettings settings)
     {
-        var target = await provider.GetRequiredService<IWorkspacePathBroker>()
-            .LoadAsync(options.InputPath!, new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
-            .ConfigureAwait(false);
-        var jobs = new List<DiagramGenerationJob>();
+        WorkspacePathLoadResult? target = null;
+        DiagramModel? manifest = null;
+        if (string.IsNullOrWhiteSpace(options.DiagramManifestPath))
+            target = await provider.GetRequiredService<IWorkspacePathBroker>()
+                .LoadAsync(options.InputPath!, new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
+                .ConfigureAwait(false);
+        else
+            manifest = DiagramModelSerializer.Import(File.ReadAllText(options.DiagramManifestPath));
+        var pages = new List<StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioPage>();
+        TypedArchitectureGenerationResult? architecture = null;
         foreach (var diagramType in options.DiagramTypes)
         {
             switch (diagramType)
             {
                 case DiagramType.Architecture:
-                    jobs.Add(new ArchitectureGenerationJob(
+                    var architectureJob = new ArchitectureGenerationJob(
                         LegacyDiagramSettingsAdapter.ToArchitectureAnalysis(settings),
-                        LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings)));
+                        LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings));
+                    var mode = string.IsNullOrWhiteSpace(options.ProjectRegionDirectory)
+                        ? ArchitectureRenderingMode.Production
+                        : ArchitectureRenderingMode.DevelopmentProjectRegion;
+                    architecture = manifest is null
+                        ? await provider.GetRequiredService<IArchitectureGenerationService>()
+                            .GenerateAsync(target!.Projects, architectureJob, mode, options.SerializationRepeatCount).ConfigureAwait(false)
+                        : await provider.GetRequiredService<IArchitectureGenerationService>()
+                            .GenerateAsync(LegacyArchitectureModelAdapter.ToArchitecture(manifest), architectureJob,
+                                mode, options.SerializationRepeatCount).ConfigureAwait(false);
+                    pages.Add(architecture.Page);
                     break;
                 case DiagramType.DataModel:
-                    jobs.Add(new DataModelGenerationJob(
-                        LegacyDiagramSettingsAdapter.ToDataModelAnalysis(settings),
-                        LegacyDiagramSettingsAdapter.ToDataModelRendering(settings)));
+                    if (target is null)
+                        throw new InvalidOperationException("A legacy Architecture manifest cannot supply a Data Model job. Select Architecture only or use source input.");
+                    var dataResult = await provider.GetRequiredService<ITypedDiagramGenerationOrchestrator>()
+                        .GenerateAsync(target.Projects, new DiagramGenerationRequest(
+                            [new DataModelGenerationJob(
+                                LegacyDiagramSettingsAdapter.ToDataModelAnalysis(settings),
+                                LegacyDiagramSettingsAdapter.ToDataModelRendering(settings))],
+                            new StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioDocumentSettings()))
+                        .ConfigureAwait(false);
+                    pages.AddRange(dataResult.Pages);
                     break;
             }
         }
-        var result = await provider.GetRequiredService<ITypedDiagramGenerationOrchestrator>()
-            .GenerateAsync(target.Projects, new DiagramGenerationRequest(jobs, new StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioDocumentSettings()))
-            .ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(options.DataModelSnapshotOutputPath))
+        var document = provider.GetRequiredService<IDrawioDocumentComposer>()
+            .Compose(pages, new StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioDocumentSettings());
+        if (!string.IsNullOrWhiteSpace(options.DataModelSnapshotOutputPath) && target is not null)
         {
             var dataModel = await provider.GetRequiredService<IDataModelAnalyser>()
                 .AnalyseAsync(target.Projects, LegacyDiagramSettingsAdapter.ToDataModelAnalysis(settings))
@@ -137,153 +147,42 @@ public static class Program
                 .WriteTextAsync(snapshotPath, DataModelDiagramSerializer.Export(dataModel)).ConfigureAwait(false);
             Console.WriteLine($"Data Model snapshot: {snapshotPath}");
         }
+        var targetName = target?.Name ?? "diagram";
         var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
-            ? Path.Combine(Directory.GetCurrentDirectory(), $"{target.Name}.architecture.drawio")
+            ? Path.Combine(Directory.GetCurrentDirectory(), options.DiagramTypes.Count == 1 && options.DiagramTypes[0] == DiagramType.DataModel
+                ? $"{targetName}.data-model.drawio"
+                : options.DiagramTypes.Count == 1 ? $"{targetName}.architecture.drawio" : $"{targetName}.diagrams.drawio")
             : Path.GetFullPath(options.OutputPath);
         await provider.GetRequiredService<IDiagramFileBroker>()
-            .WriteTextAsync(outputPath, result.Document.Content).ConfigureAwait(false);
-        Console.WriteLine($"Output: {outputPath}");
-        Console.WriteLine($"Pages: {string.Join(", ", result.Document.PageNames)}");
-        return 0;
-    }
+            .WriteTextAsync(outputPath, document.Content).ConfigureAwait(false);
 
-    private static async Task<int> GenerateDrawioAsync(
-        ServiceProvider provider,
-        CliOptions options,
-        DiagramSettings settings)
-    {
-        var workspaceTimer = Stopwatch.StartNew();
-        WorkspacePathLoadResult? target = null;
-        DiagramModel diagram = null!;
-        if (!string.IsNullOrWhiteSpace(options.DiagramManifestPath))
+        if (architecture?.SerializationRepeat is { IsDeterministic: false })
+            throw new InvalidOperationException("Typed Architecture page serialization was not deterministic.");
+        if (architecture is not null && !string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath))
         {
-            diagram = DiagramModelSerializer.Import(File.ReadAllText(options.DiagramManifestPath));
+            var diagnosticsPath = Path.GetFullPath(options.DiagnosticsOutputPath);
+            await provider.GetRequiredService<IDiagramFileBroker>()
+                .WriteTextAsync(diagnosticsPath, architecture.Diagnostics.ReportJson).ConfigureAwait(false);
+            Console.WriteLine($"Diagnostics: {diagnosticsPath}");
         }
-        else
+        if (architecture?.DevelopmentArtifacts is not null && !string.IsNullOrWhiteSpace(options.ProjectRegionDirectory))
         {
-            using (GenerationPerformanceSession.Current?.Measure("project/workspace acquisition"))
-            {
-                target = await provider.GetRequiredService<IWorkspacePathBroker>()
-                    .LoadAsync(
-                        options.InputPath!,
-                        new WorkspacePathLoadOptions { ProjectFilter = options.ProjectFilter })
-                    .ConfigureAwait(false);
-            }
-        }
-        workspaceTimer.Stop();
-        var analysisTimer = Stopwatch.StartNew();
-        if (target is not null)
-            using (GenerationPerformanceSession.Current?.Measure("semantic analysis", outputObjects: target.Projects.Count))
-            {
-                diagram = await provider.GetRequiredService<IDiagramAnalysisProcessingService>()
-                    .AnalyzeAsync(target.Projects, settings)
-                    .ConfigureAwait(false);
-            }
-        analysisTimer.Stop();
-        var exporter = provider.GetRequiredService<IDeterministicDrawioExporter>();
-        if (!string.IsNullOrWhiteSpace(options.ProjectRegionDirectory))
-        {
-            var concrete = (DeterministicDrawioExporter)exporter;
-            var legacy = concrete.GenerateResult(diagram, settings).Document;
-            var region = concrete.GenerateProjectRegion(diagram, settings);
             var directory = Path.GetFullPath(options.ProjectRegionDirectory);
             Directory.CreateDirectory(directory);
-            var evidenceBroker = provider.GetRequiredService<IDiagramFileBroker>();
-            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "legacy-before.drawio"), legacy).ConfigureAwait(false);
-            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "common-after.drawio"), region.Document).ConfigureAwait(false);
-            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "invariants.json"), region.InvariantJson).ConfigureAwait(false);
-            using var invariantDocument = JsonDocument.Parse(region.InvariantJson);
-            var invariantRoot = invariantDocument.RootElement;
-            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "logical-invariants.json"), JsonSerializer.Serialize(new
-            {
-                eligible = invariantRoot.GetProperty("eligible"),
-                fallbackReasons = invariantRoot.GetProperty("fallbackReasons"),
-                logicalRoutes = invariantRoot.GetProperty("logicalRoutes"),
-                findings = invariantRoot.GetProperty("logicalFindings")
-            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "physical-invariants.json"), JsonSerializer.Serialize(new
-            {
-                eligible = invariantRoot.GetProperty("eligible"),
-                physicalGeometryAuthority = "CoordinateOwnershipCompiler",
-                findings = invariantRoot.GetProperty("physicalFindings")
-            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            await evidenceBroker.WriteTextAsync(Path.Combine(directory, "authority-trace.json"), JsonSerializer.Serialize(new
-            {
-                terminalAuthority = "ProjectTerminalAllocator",
-                topologyAuthority = invariantRoot.GetProperty("topologySelectionAuthority"),
-                horizontalYAuthority = invariantRoot.GetProperty("horizontalSegmentYAuthority"),
-                verticalXAuthority = invariantRoot.GetProperty("verticalColumnXAuthority"),
-                obstacleCompilationAuthority = invariantRoot.GetProperty("obstacleCompilationAuthority"),
-                physicalGeometryAuthority = "CoordinateOwnershipCompiler",
-                legacyCandidateSelectionInvoked = invariantRoot.GetProperty("legacyCandidateSelectionInvoked"),
-                traversalTopologyReplacementRemaining = invariantRoot.GetProperty("traversalTopologyReplacementRemaining"),
-                repairTopologyMutationRemaining = invariantRoot.GetProperty("repairTopologyMutationRemaining")
-            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            foreach (var artifact in architecture.DevelopmentArtifacts.NamedJsonArtifacts)
+                await provider.GetRequiredService<IDiagramFileBroker>()
+                    .WriteTextAsync(Path.Combine(directory, artifact.Key), artifact.Value).ConfigureAwait(false);
+            await provider.GetRequiredService<IDiagramFileBroker>()
+                .WriteTextAsync(Path.Combine(directory, "common-after.drawio"), document.Content).ConfigureAwait(false);
             Console.WriteLine($"Project region evidence: {directory}");
-            Console.WriteLine(region.Eligible ? "Project region eligible." :
-                $"Project region fallback: {string.Join(",", region.FallbackReasons)}");
-            return 0;
         }
-        var generation = exporter.GenerateResult(diagram, settings, new[]
-        {
-            new PipelineStageMetric("workspace acquisition", workspaceTimer.ElapsedMilliseconds),
-            new PipelineStageMetric("semantic analysis", analysisTimer.ElapsedMilliseconds)
-        });
-        var outputPath = string.IsNullOrWhiteSpace(options.OutputPath)
-            ? Path.Combine(Directory.GetCurrentDirectory(), $"{target?.Name ?? "diagram"}.architecture.drawio")
-            : Path.GetFullPath(options.OutputPath);
-        var broker = provider.GetRequiredService<IDiagramFileBroker>();
-        using (GenerationPerformanceSession.Current?.Measure("file write", outputObjects: generation.Document.Length))
-        {
-            await broker.WriteTextAsync(outputPath, generation.Document).ConfigureAwait(false);
-        }
-
-        string? reportPath = null;
-        if (options.StrictValidation || !string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath))
-        {
-            DrawioDiagnosticExportResult diagnostic;
-            using (GenerationPerformanceSession.Current?.Measure("optional diagnostic materialization"))
-            {
-                diagnostic = exporter.ExportDiagnostic(generation);
-            }
-            reportPath = string.IsNullOrWhiteSpace(options.DiagnosticsOutputPath)
-                ? Path.ChangeExtension(outputPath, ".validation.json")
-                : Path.GetFullPath(options.DiagnosticsOutputPath);
-            using (GenerationPerformanceSession.Current?.Measure("diagnostic JSON file write", outputObjects: diagnostic.ReportJson.Length))
-            {
-                await broker.WriteTextAsync(reportPath, diagnostic.ReportJson).ConfigureAwait(false);
-            }
-            var focusedDirectory = Path.Combine(
-                Path.GetDirectoryName(outputPath) ?? Directory.GetCurrentDirectory(),
-                $"{Path.GetFileNameWithoutExtension(outputPath)}-focused");
-            foreach (var focused in diagnostic.FocusedOutputs.OrderBy(item => item.Key, StringComparer.Ordinal))
-            {
-                var focusedPath = Path.Combine(focusedDirectory, $"{focused.Key}.drawio");
-                using (GenerationPerformanceSession.Current?.Measure("focused diagnostic file write", outputObjects: focused.Value.Length))
-                {
-                    await broker.WriteTextAsync(focusedPath, focused.Value).ConfigureAwait(false);
-                }
-            }
-        }
-
-        var unresolved = generation.ValidationFindings.Where(finding => finding.IsStrictlyEnforced).ToArray();
-        if (unresolved.Length > 0)
-        {
-            Console.WriteLine("Diagram generated with geometry advisories:");
-            foreach (var category in unresolved.GroupBy(finding => finding.Category).OrderBy(group => group.Key, StringComparer.Ordinal))
-            {
-                Console.WriteLine($"  {category.Key}: {category.Count()}");
-            }
-        }
-
         Console.WriteLine($"Output: {outputPath}");
-        if (reportPath is not null) Console.WriteLine($"Diagnostics: {reportPath}");
-        if (options.StrictValidation && unresolved.Length > 0)
+        Console.WriteLine($"Pages: {string.Join(", ", document.PageNames)}");
+        if (options.StrictValidation && architecture is { StrictValidationPassed: false })
         {
-            Console.Error.WriteLine($"Strict validation failed with {unresolved.Length} unresolved finding(s); the diagram was still written.");
+            Console.Error.WriteLine($"Strict validation failed with {architecture.LogicalFindings.Concat(architecture.PhysicalFindings).Count(finding => finding.IsStrictlyEnforced)} finding(s); the diagram was still written.");
             return 1;
         }
-
         return 0;
     }
 

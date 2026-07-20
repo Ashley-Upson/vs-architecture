@@ -11,6 +11,32 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
+    public ArchitectureRenderResult GenerateArchitectureProjectRegionResult(DiagramModel diagram, DiagramSettings settings)
+    {
+        var region = GenerateProjectRegion(diagram, settings);
+        var document = System.Xml.Linq.XDocument.Parse(region.Document);
+        var graph = new System.Xml.Linq.XElement(document.Root!.Elements("diagram").Single().Element("mxGraphModel")!);
+        var page = new DrawioPage("Architecture", "architecture", graph, Array.Empty<DiagramDiagnostic>());
+        using var invariant = JsonDocument.Parse(region.InvariantJson);
+        var root = invariant.RootElement;
+        var logical = ReadRegionFindings(root, "logicalFindings");
+        var physical = ReadRegionPhysicalFindings(root);
+        var routes = root.GetProperty("logicalRoutes").EnumerateArray().Select(route => new GeneratedRoute(
+            route.GetProperty("logicalEdgeId").GetString() ?? string.Empty,
+            route.GetProperty("points").EnumerateArray().Select(point => new ValidationPoint(
+                point.GetProperty("X").GetInt32(), point.GetProperty("Y").GetInt32())).ToArray())).ToArray();
+        return new ArchitectureRenderResult(
+            page, Array.Empty<ValidationFinding>(), logical, physical,
+            Array.Empty<RouteRepairAttempt>(), routes, region.StageTimings,
+            new ArchitectureEligibilityResult(region.Eligible, region.FallbackReasons),
+            () => new DrawioDiagnosticExportResult(region.Document, region.InvariantJson,
+                new Dictionary<string, string>(), logical.Count(item => item.IsStrictlyEnforced) + physical.Length,
+                logical.Select(item => item.LogicalRouteId).Concat(physical.Select(item => item.LogicalRouteId))
+                    .Distinct(StringComparer.Ordinal).Count()),
+            new ArchitectureDevelopmentArtifacts(region.InvariantJson,
+                new Dictionary<string, string> { ["invariants.json"] = region.InvariantJson }));
+    }
+
     public DrawioPage GenerateArchitecturePage(DiagramModel diagram, DiagramSettings settings)
         => GenerateArchitectureResult(diagram, settings).Page;
 
@@ -157,55 +183,24 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         DiagramSettings settings,
         IReadOnlyList<PipelineStageMetric>? upstreamTimings = null)
     {
-        var prepared = Prepare(diagram, settings);
-        if (upstreamTimings is not null)
-        {
-            prepared.StageTimings.InsertRange(0, upstreamTimings);
-        }
-        var findings = prepared.Layout.Traceability.Violations
-            .Select(violation => ToFinding(violation, prepared.IsEnforced(violation)))
-            .ToArray();
-        var preRepairFindings = prepared.Layout.PreRepairTraceability.Violations
-            .Select(violation => ToFinding(violation, enforced: false))
-            .ToArray();
-        var document = Measure(prepared.StageTimings, "serialization", () =>
-            new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership));
-        var repeatCount = GenerationPerformanceSession.Current?.SerializationRepeatCount ?? 0;
-        for (var repeat = 0; repeat < repeatCount; repeat++)
-        {
-            using (PerformanceAudit.Measure(
-                "serialization-only repeat",
-                prepared.Layout.Nodes.Count,
-                prepared.Layout.Links.Count,
-                prepared.Ownership.Segments.Count,
-                layoutRevision: prepared.Layout.LayoutRevision.Value))
-            {
-                var repeated = new DiagramFileBuilder(prepared.Settings).Build(prepared.Layout, prepared.Ownership);
-                if (!string.Equals(document, repeated, StringComparison.Ordinal))
-                {
-                    throw new InvalidOperationException("Serialization-only repeat produced different XML.");
-                }
-            }
-        }
+        var typed = GenerateArchitectureResult(diagram, settings);
+        var document = new DrawioDocumentComposer().Compose(
+            new[] { typed.Page }, new DrawioDocumentSettings()).Content;
+        var timings = upstreamTimings is null
+            ? typed.Timings
+            : upstreamTimings.Concat(typed.Timings).ToArray();
         return new DrawioGenerationResult(
             document,
-            preRepairFindings,
-            findings,
-            prepared.Layout.RepairAttempts,
-            prepared.Layout.Links.Values
-                .OrderBy(link => link.Link.Id, StringComparer.Ordinal)
-                .Select(link => new GeneratedRoute(
-                    link.Link.Id,
-                    new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint })
-                        .Select(point => new ValidationPoint(point.X, point.Y))
-                        .ToArray()))
-                .ToArray(),
+            typed.PreRepairFindings,
+            typed.LogicalFindings,
+            typed.RepairAttempts,
+            typed.Routes,
             serializationSucceeded: true,
-            strictValidationPassed: findings.All(finding => !finding.IsStrictlyEnforced),
-            () => BuildDiagnostic(prepared, document),
-            stageTimings: AllTimings(prepared));
+            strictValidationPassed: typed.LogicalFindings.Concat(typed.PhysicalFindings)
+                .All(finding => !finding.IsStrictlyEnforced),
+            () => typed.Diagnostics,
+            stageTimings: timings);
     }
-
     public DrawioDiagnosticExportResult ExportDiagnostic(DrawioGenerationResult generationResult)
     {
         if (generationResult is null) throw new ArgumentNullException(nameof(generationResult));
@@ -403,4 +398,27 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             violation.ActualSpacing,
             violation.ParallelOverlapLength,
             enforced);
+
+    private static ValidationFinding[] ReadRegionFindings(JsonElement root, string propertyName) =>
+        root.TryGetProperty(propertyName, out var findings)
+            ? findings.EnumerateArray().Select(finding => new ValidationFinding(
+                finding.TryGetProperty("category", out var category) ? category.GetString() ?? "LogicalGeometryFinding" : "LogicalGeometryFinding",
+                finding.TryGetProperty("edgeId", out var edge) ? edge.GetString() ?? string.Empty : string.Empty,
+                finding.TryGetProperty("OtherEdgeId", out var otherEdge) ? otherEdge.GetString() : null,
+                finding.TryGetProperty("OtherNodeId", out var otherNode) ? otherNode.GetString() : null,
+                0,
+                finding.TryGetProperty("Description", out var description) ? description.GetString() ?? string.Empty : string.Empty,
+                Array.Empty<ValidationPoint>(), Array.Empty<ValidationSegment>(), null, null, null,
+                finding.TryGetProperty("code", out var code) && code.GetString() != TraceabilityViolationCode.PerpendicularCrossing.ToString())).ToArray()
+            : Array.Empty<ValidationFinding>();
+
+    private static ValidationFinding[] ReadRegionPhysicalFindings(JsonElement root) =>
+        root.TryGetProperty("physicalFindings", out var findings)
+            ? findings.EnumerateArray().Select(finding => new ValidationFinding(
+                "PhysicalGeometryFinding",
+                finding.TryGetProperty("LogicalEdgeId", out var edge) ? edge.GetString() ?? string.Empty : string.Empty,
+                null, null, 0,
+                finding.TryGetProperty("Description", out var description) ? description.GetString() ?? string.Empty : string.Empty,
+                Array.Empty<ValidationPoint>(), Array.Empty<ValidationSegment>(), null, null, null, true)).ToArray()
+            : Array.Empty<ValidationFinding>();
 }

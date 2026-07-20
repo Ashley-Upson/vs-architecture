@@ -11,6 +11,7 @@ using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 
@@ -38,6 +39,16 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
         CancellationToken cancellationToken = default)
     {
         var diagram = await analyser.AnalyseAsync(selectedProjects, job.Analysis, cancellationToken).ConfigureAwait(false);
+        return await GenerateAsync(diagram, job, mode, serializationRepeatCount, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<TypedArchitectureGenerationResult> GenerateAsync(
+        ArchitectureDiagramModel diagram,
+        ArchitectureGenerationJob job,
+        ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production,
+        int serializationRepeatCount = 0,
+        CancellationToken cancellationToken = default)
+    {
         var rendered = renderer.RenderWithDiagnostics(diagram, job.Rendering, mode, cancellationToken);
         var page = string.IsNullOrWhiteSpace(job.PageNameHint)
             ? rendered.Page
@@ -51,11 +62,11 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             rendered.LogicalFindings.Count,
             rendered.PhysicalFindings.Count,
             page.StablePageKey);
-        return new TypedArchitectureGenerationResult(
+        return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, rendered.PreRepairFindings, rendered.LogicalFindings,
             rendered.PhysicalFindings, rendered.RepairAttempts, rendered.Routes,
             rendered.Timings, manifest, rendered.Eligibility, () => rendered.Diagnostics,
-            repeat, rendered.DevelopmentArtifacts);
+            repeat, rendered.DevelopmentArtifacts));
     }
 
     private SerializationRepeatResult? Repeat(DrawioPage page, int repeatCount)

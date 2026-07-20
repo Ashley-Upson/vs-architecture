@@ -57,6 +57,18 @@ public sealed class DiagramPipelineDependencyGuardTests
         Assert.DoesNotContain("IArchitectureRenderer", dataRenderer, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Cli_has_no_concrete_exporter_or_duplicate_architecture_result_dependency()
+    {
+        var source = File.ReadAllText(Path.Combine(Root(), "src", "StandardIo.ArchitectureDiagram.Cli", "Program.cs"));
+
+        Assert.DoesNotContain("DeterministicDrawioExporter", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDeterministicDrawioExporter", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DrawioGenerationResult", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GenerateProjectRegion", source, StringComparison.Ordinal);
+        Assert.Contains("IArchitectureGenerationService", source, StringComparison.Ordinal);
+    }
+
     private static IEnumerable<string> Sources(params string[] segments) =>
         Directory.EnumerateFiles(Path.Combine(new[] { Root(), "src", "StandardIo.ArchitectureDiagram.Core" }.Concat(segments).ToArray()), "*.cs");
 

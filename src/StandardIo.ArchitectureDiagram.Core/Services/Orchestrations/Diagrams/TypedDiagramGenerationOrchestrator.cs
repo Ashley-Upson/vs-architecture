@@ -15,27 +15,24 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 
 public sealed class TypedDiagramGenerationOrchestrator : ITypedDiagramGenerationOrchestrator
 {
-    private readonly IArchitectureAnalyser _architectureAnalyser;
-    private readonly IArchitectureRenderer<DrawioPage> _architectureRenderer;
+    private readonly IArchitectureGenerationService _architectureGenerationService;
     private readonly IDataModelAnalyser _dataModelAnalyser;
     private readonly IDataModelRenderer<DrawioPage> _dataModelRenderer;
     private readonly IDrawioDocumentComposer _composer;
 
     public TypedDiagramGenerationOrchestrator()
-        : this(new RoslynDependencyAnalyzer(), new DrawioArchitectureRenderer(),
+        : this(new ArchitectureGenerationService(new RoslynDependencyAnalyzer(), new DrawioArchitectureRenderer(), new DrawioDocumentComposer()),
             new RoslynDataModelAnalyser(), new DrawioDataModelRenderer(), new DrawioDocumentComposer())
     {
     }
 
     public TypedDiagramGenerationOrchestrator(
-        IArchitectureAnalyser architectureAnalyser,
-        IArchitectureRenderer<DrawioPage> architectureRenderer,
+        IArchitectureGenerationService architectureGenerationService,
         IDataModelAnalyser dataModelAnalyser,
         IDataModelRenderer<DrawioPage> dataModelRenderer,
         IDrawioDocumentComposer composer)
     {
-        _architectureAnalyser = architectureAnalyser ?? throw new ArgumentNullException(nameof(architectureAnalyser));
-        _architectureRenderer = architectureRenderer ?? throw new ArgumentNullException(nameof(architectureRenderer));
+        _architectureGenerationService = architectureGenerationService ?? throw new ArgumentNullException(nameof(architectureGenerationService));
         _dataModelAnalyser = dataModelAnalyser ?? throw new ArgumentNullException(nameof(dataModelAnalyser));
         _dataModelRenderer = dataModelRenderer ?? throw new ArgumentNullException(nameof(dataModelRenderer));
         _composer = composer ?? throw new ArgumentNullException(nameof(composer));
@@ -80,9 +77,9 @@ public sealed class TypedDiagramGenerationOrchestrator : ITypedDiagramGeneration
         switch (job)
         {
             case ArchitectureGenerationJob architecture:
-                var architectureModel = await _architectureAnalyser.AnalyseAsync(
-                    projects, architecture.Analysis, cancellationToken).ConfigureAwait(false);
-                return _architectureRenderer.Render(architectureModel, architecture.Rendering, cancellationToken);
+                var architectureResult = await _architectureGenerationService.GenerateAsync(
+                    projects, architecture, cancellationToken: cancellationToken).ConfigureAwait(false);
+                return architectureResult.Page;
             case DataModelGenerationJob dataModel:
                 var dataModelModel = await _dataModelAnalyser.AnalyseAsync(
                     projects, dataModel.Analysis, cancellationToken).ConfigureAwait(false);

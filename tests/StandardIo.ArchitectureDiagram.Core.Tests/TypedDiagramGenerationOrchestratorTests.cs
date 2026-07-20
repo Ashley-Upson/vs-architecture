@@ -51,7 +51,7 @@ public sealed class TypedDiagramGenerationOrchestratorTests
     }
 
     private static TypedDiagramGenerationOrchestrator Service(List<string> calls, int dataEntities) => new(
-        new FakeArchitectureAnalyser(calls), new FakeArchitectureRenderer(calls),
+        new FakeArchitectureGenerationService(calls),
         new FakeDataModelAnalyser(calls, dataEntities), new FakeDataModelRenderer(calls),
         new DrawioDocumentComposer());
 
@@ -59,21 +59,26 @@ public sealed class TypedDiagramGenerationOrchestratorTests
         new System.Xml.Linq.XElement("mxGraphModel", new System.Xml.Linq.XElement("root",
             new System.Xml.Linq.XElement("mxCell", new System.Xml.Linq.XAttribute("id", "0")))), []);
 
-    private sealed class FakeArchitectureAnalyser(List<string> calls) : IArchitectureAnalyser
+    private sealed class FakeArchitectureGenerationService(List<string> calls) : IArchitectureGenerationService
     {
-        public Task<ArchitectureDiagramModel> AnalyseAsync(IEnumerable<Project> selectedProjects, ArchitectureAnalysisSettings settings, CancellationToken cancellationToken = default)
+        public Task<TypedArchitectureGenerationResult> GenerateAsync(IEnumerable<Project> selectedProjects, ArchitectureGenerationJob job, ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production, int serializationRepeatCount = 0, CancellationToken cancellationToken = default)
         {
             calls.Add("architecture-analysis");
-            return Task.FromResult(new ArchitectureDiagramModel([], [], [], null));
-        }
-    }
-
-    private sealed class FakeArchitectureRenderer(List<string> calls) : IArchitectureRenderer<DrawioPage>
-    {
-        public DrawioPage Render(ArchitectureDiagramModel model, ArchitectureRenderSettings settings, CancellationToken cancellationToken = default)
-        {
             calls.Add("architecture-render");
-            return Page("Architecture", "architecture");
+            return Result();
+        }
+
+        public Task<TypedArchitectureGenerationResult> GenerateAsync(ArchitectureDiagramModel diagram, ArchitectureGenerationJob job, ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production, int serializationRepeatCount = 0, CancellationToken cancellationToken = default) => Result();
+
+        private static Task<TypedArchitectureGenerationResult> Result()
+        {
+            var page = Page("Architecture", "architecture");
+            return Task.FromResult(new TypedArchitectureGenerationResult(
+                new ArchitectureDiagramModel([], [], [], null), page, [], [], [], [], [], [],
+                new ArchitectureGenerationManifest(0, 0, 0, 0, 0, 0, "architecture"),
+                new ArchitectureEligibilityResult(true, []),
+                () => new DrawioDiagnosticExportResult("", "{}", new Dictionary<string, string>(), 0, 0),
+                null, null));
         }
     }
 
