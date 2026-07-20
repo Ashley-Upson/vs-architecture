@@ -158,7 +158,7 @@ public sealed class DeterministicDrawioExporterTests
         Assert.Contains(result.StageTimings, timing => timing.Stage == "render graph construction");
         Assert.Contains(result.StageTimings, timing => timing.Stage == "normalization");
         Assert.Contains(result.StageTimings, timing => timing.Stage == "ownership");
-        Assert.Contains(result.StageTimings, timing => timing.Stage == "serialization");
+        Assert.Contains(result.StageTimings, timing => timing.Stage == "architecture page serialization");
         using var report = JsonDocument.Parse(result.Diagnostics.ReportJson);
         var summary = report.RootElement.GetProperty("summary");
         Assert.True(summary.GetProperty("diagnosticReuse").GetBoolean());
