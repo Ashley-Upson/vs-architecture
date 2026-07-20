@@ -49,17 +49,17 @@ The analysis directory contains `architecture-analysis.json`, `architecture-anal
 | StandardIo VSIX | 14 / 3 | 14 / 3 | 0 | 964 x 834 | 496 | 4 |
 | StandardIo Core.Tests | 102 / 15 | 106 / 15 | 0 | 8030 x 1794 | 5,494 | 24 |
 | StandardIo Core configured | 21 / 24 | 20 / 24 | 0 | 5890 x 1226 | 31,703 | 58 |
-| StandardIo Core full | 390 / 435 | 467 / 434 | 0 | 109167 x 6370 | 4,095,559 | 902 |
+| StandardIo Core full | 392 / 437 | 469 / 436 | 0 | 113600 x 6430 | 4,362,644 | 908 |
 | cCoder TemplateController | 31 / 45 | 32 / 44 | 0 | 5590 x 1386 | 52,708 | 92 |
 | cCoder SubmissionController | 13 / 13 | 13 / 13 | 0 | 1661 x 994 | 4,014 | 24 |
 | cCoder ContentController | 14 / 15 | 14 / 15 | 0 | 2071 x 994 | 5,301 | 28 |
 | cCoder five-controller region | 116 / 196 | 121 / 194 | 0 after correction | 17732 x 2854 | 904,863 | 458 |
 | cCoder full project | 393 / 340 | 315 / 337 | 0 | 42439 x 4310 | 1,632,878 | 634 |
-| StandardIo solution | 497 / 453 | 577 / 452 | 9 | 112337 x 7058 | 4,238,460 | 916 |
+| StandardIo solution | 499 / 455 | 579 / 454 | 14 | 115988 x 7118 | 4,496,748 | 930 |
 
-The largest hard-green result is StandardIo Core: 467 rendered nodes and 434 routes. Its recorded pipeline timing was 3,190 ms, including 1,431 ms project-region generation and 746 ms logical/physical validation. The cCoder full-project run was 1,810 ms total.
+The largest hard-green result is StandardIo Core: 469 rendered nodes and 436 routes. Its recorded pipeline timing was 3,086 ms, including 1,379 ms project-region generation and 755 ms logical/physical validation. The cCoder full-project run was 1,898 ms total.
 
-The solution-level result is intentionally retained as failing evidence. It has six overlapping project-container pairs and three project-label route intersections. Its nodes are placed as one global positional region and project bounds are derived afterwards, allowing different project containers to overlap. This is owned by multi-project placement; route nudging or validation weakening is not an acceptable correction.
+The solution-level result is intentionally retained as failing evidence. Its current 14 findings include six overlapping project-container pairs; the overlapping regions also produce project-label, route-node, and derived logical/physical findings. Its nodes are placed as one global positional region and project bounds are derived afterwards, allowing different project containers to overlap. This is owned by multi-project placement; route nudging or validation weakening is not an acceptable correction.
 
 ## Defects found and corrected
 
@@ -84,6 +84,8 @@ The remaining Core findings were fixed top-entry and bottom-exit stems separated
 `TraceabilityValidator` remains the canonical logical check for node collision, shared segments, parallel spacing, reused bends, reversals, and perpendicular contacts. `ProjectPhysicalGeometryValidator` reconstructs ownership-segmented routes, verifies exact logical geometry, repeats traceability checks, and checks project-label intersections. `NodeOverlapValidator` is the canonical placement gate.
 
 `ArchitectureGeometryAnalyser` independently checks structured generated nodes/routes for node overlap, invalid dimensions, containment, link-node intersection, shared segments, diagonals, zero-length segments, deterministic hashes, route length, detour, bends, terminal stubs, page bounds, and project-container overlap. It also incorporates enforced typed logical/physical findings instead of replacing the canonical validators.
+
+Every selected semantic link is reconciled from the typed diagram to physical route metadata. The evaluated inputs contain no `Unsupported` links: differences between semantic and rendered counts are explicitly classified as interface-endpoint omissions (one in StandardIo Core/solution, one in TemplateController, two in the five-controller region, and three in the cCoder full project).
 
 Current evidence-only gaps include comprehensive compactness attribution, authorised boundary-transition verification, slot/column mismatch classification, clean-crossing counts, and project-label geometry as a first-class analyser model. These remain diagnostic work; validation was not weakened.
 
