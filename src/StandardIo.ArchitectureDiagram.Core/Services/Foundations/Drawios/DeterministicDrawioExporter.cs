@@ -62,10 +62,12 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                     .Select(point => new ValidationPoint(point.X, point.Y)).ToArray())).ToArray();
         var document = new DrawioDocumentComposer().Compose(new[] { page }, new DrawioDocumentSettings()).Content;
         return new ArchitectureRenderResult(
-            page, preRepair, findings, Array.Empty<ValidationFinding>(),
+            page, preRepair, findings, prepared.PhysicalFindings,
             prepared.Layout.RepairAttempts, routes, AllTimings(prepared),
-            new ArchitectureEligibilityResult(findings.All(finding => !finding.IsStrictlyEnforced),
-                findings.Where(finding => finding.IsStrictlyEnforced).Select(finding => finding.Category).Distinct().ToArray()),
+            new ArchitectureEligibilityResult(
+                findings.Concat(prepared.PhysicalFindings).All(finding => !finding.IsStrictlyEnforced),
+                findings.Concat(prepared.PhysicalFindings).Where(finding => finding.IsStrictlyEnforced)
+                    .Select(finding => finding.Category).Distinct().ToArray()),
             () => BuildDiagnostic(prepared, document));
     }
 
@@ -345,8 +347,12 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
             }
         }
+        var projectLabels = Measure(timings, "project-label bounds", () => ProjectLabelGeometryMeasurer.Measure(
+            layout.Projects, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding));
+        var physicalFindings = Measure(timings, "node-overlap validation", () =>
+            NodeOverlapValidator.Validate(layout.Nodes, projectLabels));
 
-        return new PreparedExport(settings, layout, ownership, IsEnforced, timings);
+        return new PreparedExport(settings, layout, ownership, physicalFindings, IsEnforced, timings);
     }
 
     private static T Measure<T>(ICollection<PipelineStageMetric> timings, string stage, Func<T> action)
@@ -375,6 +381,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         DiagramSettings Settings,
         RenderLayout Layout,
         CoordinateOwnershipCompilation Ownership,
+        IReadOnlyList<ValidationFinding> PhysicalFindings,
         Func<TraceabilityViolation, bool> IsEnforced,
         List<PipelineStageMetric> StageTimings);
 

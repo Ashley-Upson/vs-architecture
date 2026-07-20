@@ -180,7 +180,11 @@ public static class Program
         Console.WriteLine($"Pages: {string.Join(", ", document.PageNames)}");
         if (options.StrictValidation && architecture is { StrictValidationPassed: false })
         {
-            Console.Error.WriteLine($"Strict validation failed with {architecture.LogicalFindings.Concat(architecture.PhysicalFindings).Count(finding => finding.IsStrictlyEnforced)} finding(s); the diagram was still written.");
+            var enforced = architecture.LogicalFindings.Concat(architecture.PhysicalFindings)
+                .Where(finding => finding.IsStrictlyEnforced).ToArray();
+            Console.Error.WriteLine($"Strict validation failed with {enforced.Length} finding(s); the diagram was still written.");
+            foreach (var category in enforced.GroupBy(finding => finding.Category).OrderBy(group => group.Key, StringComparer.Ordinal))
+                Console.Error.WriteLine($"  {category.Key}: {category.Count()}");
             return 1;
         }
         return 0;
