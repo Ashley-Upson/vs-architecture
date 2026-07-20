@@ -73,6 +73,20 @@ public sealed class DeterministicSlotAllocatorTests
     }
 
     [Fact]
+    public void Arrival_does_not_reuse_a_lane_above_its_departure_predecessor()
+    {
+        var result = Assign(
+            Demand("blocker-a", 0, 8),
+            Demand("blocker-b", 0, 8),
+            Demand("departure", 0, 20) with { MaximumEndpointRole = LinkSegmentEndpointRole.Departure },
+            Demand("arrival", 20, 30) with { MinimumEndpointRole = LinkSegmentEndpointRole.Arrival });
+
+        Assert.True(
+            result.SegmentsByDemandId["departure"].SlotIndex <
+            result.SegmentsByDemandId["arrival"].SlotIndex);
+    }
+
+    [Fact]
     public void Transitive_overlap_forms_one_complete_component()
     {
         var result = Assign(Demand("a", 0, 10), Demand("b", 8, 18), Demand("c", 16, 26));

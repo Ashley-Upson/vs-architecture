@@ -88,12 +88,26 @@ internal static class DeterministicSlotAllocator
     {
         var slotEnds = new List<int>();
         var assigned = new List<(LinkSegmentDemand Demand, int Slot)>();
-        foreach (var demand in OrderComponent(demands, options))
+        var predecessors = BuildPredecessors(demands, options);
+        var slotsByDemandId = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var demand in OrderComponent(demands, predecessors))
         {
-            var slot = slotEnds.FindIndex(end => CanReuse(end, demand.OccupiedInterval.Minimum, options));
+            var minimumSlot = predecessors[demand.Id]
+                .Where(slotsByDemandId.ContainsKey)
+                .Select(predecessor => slotsByDemandId[predecessor] + 1)
+                .DefaultIfEmpty(0)
+                .Max();
+            var slot = -1;
+            for (var index = minimumSlot; index < slotEnds.Count; index++)
+                if (CanReuse(slotEnds[index], demand.OccupiedInterval.Minimum, options))
+                {
+                    slot = index;
+                    break;
+                }
             if (slot < 0) { slot = slotEnds.Count; slotEnds.Add(demand.OccupiedInterval.Maximum); }
             else slotEnds[slot] = demand.OccupiedInterval.Maximum;
             assigned.Add((demand, slot));
+            slotsByDemandId.Add(demand.Id, slot);
         }
         var required = options.Padding * 2 + Math.Max(1, slotEnds.Count) * options.Separation;
         var origin = region.AllowedAxisRange.Minimum + options.Padding;
@@ -106,7 +120,7 @@ internal static class DeterministicSlotAllocator
         return ($"segment-component:{region.EnvelopeIdentity}:{identity}", demands, segments, required);
     }
 
-    private static IReadOnlyList<LinkSegmentDemand> OrderComponent(
+    private static IReadOnlyDictionary<string, HashSet<string>> BuildPredecessors(
         IReadOnlyList<LinkSegmentDemand> demands,
         LinkSegmentAssignmentOptions options)
     {
@@ -126,7 +140,13 @@ internal static class DeterministicSlotAllocator
             if (leftBeforeRight) predecessors[right.Id].Add(left.Id);
             else predecessors[left.Id].Add(right.Id);
         }
+        return predecessors;
+    }
 
+    private static IReadOnlyList<LinkSegmentDemand> OrderComponent(
+        IReadOnlyList<LinkSegmentDemand> demands,
+        IReadOnlyDictionary<string, HashSet<string>> predecessors)
+    {
         var remaining = demands.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var ordered = new List<LinkSegmentDemand>(demands.Count);
         while (remaining.Count > 0)
