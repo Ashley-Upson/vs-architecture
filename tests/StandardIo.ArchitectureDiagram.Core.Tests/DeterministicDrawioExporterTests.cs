@@ -190,7 +190,7 @@ public sealed class DeterministicDrawioExporterTests
                 new DependencyEdge("edge_controller_service", "type_controller", "type_service", "internal"),
                 new DependencyEdge("edge_controller_repository", "type_controller", "type_repository", "internal"),
                 new DependencyEdge("edge_service_repository", "type_service", "type_repository", "internal")
-            }),
+            }, RootMetadata("type_controller")),
             settings);
 
         var edges = document.Descendants("mxCell").Where(cell => (string?)cell.Attribute("edge") == "1").ToArray();
@@ -975,7 +975,7 @@ public sealed class DeterministicDrawioExporterTests
         var document = Render(new DiagramModel(
             new[] { new ProjectContainer("project", "Project", nodes) },
             Array.Empty<ExternalDependencyNode>(),
-            edges), settings);
+            edges, RootMetadata("processing")), settings);
         var routes = childIds.ToDictionary(
             id => id,
             id => CompleteEdgePointsBetween(document, "TemplateRenderProcessingService", id + "Service"));
@@ -1020,11 +1020,11 @@ public sealed class DeterministicDrawioExporterTests
         var forward = Render(new DiagramModel(
             new[] { new ProjectContainer("project", "Project", nodes) },
             Array.Empty<ExternalDependencyNode>(),
-            edges), settings);
+            edges, RootMetadata("source")), settings);
         var reversed = Render(new DiagramModel(
             new[] { new ProjectContainer("project", "Project", nodes) },
             Array.Empty<ExternalDependencyNode>(),
-            edges.AsEnumerable().Reverse().ToArray()), settings);
+            edges.AsEnumerable().Reverse().ToArray(), RootMetadata("source")), settings);
 
         AssertMonotonicFanOut(forward, "ProcessingSource", targetIds, settings.Layout.ParallelLaneSpacing);
         AssertMonotonicFanOut(reversed, "ProcessingSource", targetIds, settings.Layout.ParallelLaneSpacing);
@@ -1514,6 +1514,13 @@ public sealed class DeterministicDrawioExporterTests
             .Single(part => part.StartsWith(prefix, StringComparison.Ordinal))
             .Substring(prefix.Length);
     }
+
+    private static DiagramMetadata RootMetadata(params string[] ids) => new(
+        SemanticSelection: new SemanticSelectionReport(
+            "ConfiguredRootOutgoingReachability",
+            new[] { new RootDiscoveryPatternDefinition(0, 1, "fixture") },
+            ids.Select(id => new SemanticRootMatch(id, id, 0, 1, "fixture")).ToArray(),
+            Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<int>()));
 
     private sealed class StubDeterministicExporter : IDeterministicDrawioExporter
     {

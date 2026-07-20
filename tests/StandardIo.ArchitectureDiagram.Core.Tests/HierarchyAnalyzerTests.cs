@@ -66,8 +66,9 @@ public sealed class HierarchyAnalyzerTests
         settings.Layout.ExposureTreeLayoutThreshold = 1;
         settings.NodeDuplication.AllowDuplicateNodes = false;
         settings.NodeDuplication.DuplicationExceptionPatterns.Clear();
-        var graph = RenderGraph.From(Diagram(
+        var graph = RenderGraph.From(DiagramWithRoots(
             Nodes("RootController", "OtherController", "SharedService"),
+            new[] { "RootController", "OtherController" },
             Edges(("RootController", "SharedService"), ("OtherController", "SharedService"))), settings);
 
         var hierarchy = HierarchyAnalyzer.Analyze(graph, new LayoutRevision(0));
@@ -82,8 +83,9 @@ public sealed class HierarchyAnalyzerTests
     {
         var duplicated = DiagramSettings.CreateDefault();
         duplicated.Layout.ExposureTreeLayoutThreshold = 1;
-        var duplicatedGraph = RenderGraph.From(Diagram(
+        var duplicatedGraph = RenderGraph.From(DiagramWithRoots(
             Nodes("RootController", "Service"),
+            new[] { "RootController" },
             Edges(("RootController", "Service"))), duplicated);
         var duplicatedHierarchy = HierarchyAnalyzer.Analyze(duplicatedGraph, new LayoutRevision(0));
         var clonedService = duplicatedGraph.Nodes.Single(node => node.Name == "Service");
@@ -94,8 +96,9 @@ public sealed class HierarchyAnalyzerTests
         canonical.Layout.ExposureTreeLayoutThreshold = 1;
         canonical.NodeDuplication.AllowDuplicateNodes = false;
         canonical.NodeDuplication.DuplicationExceptionPatterns.Add("Service$");
-        var exceptionGraph = RenderGraph.From(Diagram(
+        var exceptionGraph = RenderGraph.From(DiagramWithRoots(
             Nodes("RootController", "OtherController", "Service"),
+            new[] { "RootController", "OtherController" },
             Edges(("RootController", "Service"), ("OtherController", "Service"))), canonical);
         Assert.Equal(2, exceptionGraph.Nodes.Count(node => node.Name == "Service"));
     }
@@ -116,6 +119,14 @@ public sealed class HierarchyAnalyzerTests
 
     private static DiagramModel Diagram(TypeNode[] nodes, DependencyEdge[] edges) =>
         new(new[] { new ProjectContainer("project", "Project", nodes) }, Array.Empty<ExternalDependencyNode>(), edges);
+
+    private static DiagramModel DiagramWithRoots(TypeNode[] nodes, string[] rootIds, DependencyEdge[] edges) =>
+        new(new[] { new ProjectContainer("project", "Project", nodes) }, Array.Empty<ExternalDependencyNode>(), edges,
+            new DiagramMetadata(SemanticSelection: new SemanticSelectionReport(
+                "ConfiguredRootOutgoingReachability",
+                new[] { new RootDiscoveryPatternDefinition(0, 1, "fixture") },
+                rootIds.Select(id => new SemanticRootMatch(id, $"Fixture.{id}", 0, 1, "fixture")).ToArray(),
+                Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<int>())));
 
     private static TypeNode[] Nodes(params string[] ids) =>
         ids.Select((id, order) => new TypeNode(id, "project", id, $"Fixture.{id}", "Class")).ToArray();

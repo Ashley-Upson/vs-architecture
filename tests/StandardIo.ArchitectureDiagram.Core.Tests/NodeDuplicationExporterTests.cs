@@ -120,8 +120,16 @@ public sealed class NodeDuplicationExporterTests
             {
                 new DependencyEdge("edge_a", "parent_a", "shared", "internal"),
                 new DependencyEdge("edge_b", "parent_b", "shared", "internal")
-            });
+            },
+            RootMetadata("parent_a", "parent_b"));
     }
+
+    private static DiagramMetadata RootMetadata(params string[] ids) => new(
+        SemanticSelection: new SemanticSelectionReport(
+            "ConfiguredRootOutgoingReachability",
+            new[] { new RootDiscoveryPatternDefinition(0, 1, "fixture") },
+            ids.Select(id => new SemanticRootMatch(id, id, 0, 1, "fixture")).ToArray(),
+            Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<int>()));
 
     private static TypeNode Node(string id, string projectId, string name) =>
         new(id, projectId, name, $"App.{name}", "Class");

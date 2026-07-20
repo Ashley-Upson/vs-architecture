@@ -189,11 +189,12 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             inputRoutes: edges.Count,
             outputObjects: 1))
         {
-            return new DiagramModel(
+            var discovered = new DiagramModel(
                 projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
                 orderedExternalDependencies.ToImmutableArray(),
                 edges.ToImmutableArray(),
                 new DiagramMetadata());
+            return SemanticScopeSelector.Select(discovered, settings);
         }
     }
 

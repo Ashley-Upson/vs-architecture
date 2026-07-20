@@ -170,7 +170,11 @@ internal sealed class RenderGraph
                 graph = FromBaseDiagram(diagram, duplicationPolicy);
             }
 
-            if (graph.Nodes.Count < settings.Layout.ExposureTreeLayoutThreshold)
+            var configuredRoots = diagram.Metadata?.SemanticSelection?.Roots
+                .OrderBy(root => root.PatternIndex).ThenBy(root => root.MatchedCanonicalValue, StringComparer.Ordinal)
+                .Select(root => root.SemanticNodeId).Where(id => graph.Nodes.Any(node => node.Id == id))
+                .Distinct(StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
+            if (configuredRoots.Length == 0)
             {
                 return graph;
             }
@@ -181,8 +185,8 @@ internal sealed class RenderGraph
                 graph.Links.Count))
             {
                 var result = settings.NodeDuplication.AllowDuplicateNodes
-                    ? BuildExposureTreeGraph(graph)
-                    : BuildCanonicalExposureGraph(graph, duplicationPolicy);
+                    ? BuildExposureTreeGraph(graph, configuredRoots)
+                    : BuildCanonicalExposureGraph(graph, duplicationPolicy, configuredRoots);
                 PerformanceAudit.Increment("render paths/clones created", result.Nodes.Count);
                 PerformanceAudit.Increment("render links created", result.Links.Count);
                 return result;
@@ -191,10 +195,10 @@ internal sealed class RenderGraph
 
         private static RenderGraph BuildCanonicalExposureGraph(
             RenderGraph graph,
-            NodeDuplicationPolicy duplicationPolicy)
+            NodeDuplicationPolicy duplicationPolicy,
+            IReadOnlyList<string> configuredRootIds)
         {
             var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
-            var incoming = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
             var outgoing = graph.Links
                 .GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .ToDictionary(
@@ -208,24 +212,9 @@ internal sealed class RenderGraph
 
             foreach (var link in graph.Links)
             {
-                if (incoming.ContainsKey(link.TargetId))
-                {
-                    incoming[link.TargetId]++;
-                }
             }
 
-            var preferredRoots = graph.Nodes
-                .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && IsExposureNode(node))
-                .OrderBy(node => node.FullName, StringComparer.Ordinal)
-                .ThenBy(node => node.Id, StringComparer.Ordinal)
-                .ToArray();
-            var roots = preferredRoots.Length > 0
-                ? preferredRoots
-                : graph.Nodes
-                    .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && incoming[node.Id] == 0)
-                    .OrderBy(node => node.FullName, StringComparer.Ordinal)
-                    .ThenBy(node => node.Id, StringComparer.Ordinal)
-                    .ToArray();
+            var roots = configuredRootIds.Where(nodeById.ContainsKey).Select(id => nodeById[id]).ToArray();
 
             if (roots.Length == 0)
             {
@@ -304,9 +293,8 @@ internal sealed class RenderGraph
             }
         }
 
-        private static RenderGraph BuildExposureTreeGraph(RenderGraph graph)
+        private static RenderGraph BuildExposureTreeGraph(RenderGraph graph, IReadOnlyList<string> configuredRootIds)
         {
-            var incoming = graph.Nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
             var outgoing = graph.Links
                 .GroupBy(link => link.SourceId, StringComparer.Ordinal)
                 .ToDictionary(
@@ -320,31 +308,16 @@ internal sealed class RenderGraph
 
             foreach (var link in graph.Links)
             {
-                if (incoming.ContainsKey(link.TargetId))
-                {
-                    incoming[link.TargetId]++;
-                }
             }
 
-            var preferredRoots = graph.Nodes
-                .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && IsExposureNode(node))
-                .OrderBy(node => node.Order)
-                .ThenBy(node => node.Id, StringComparer.Ordinal)
-                .ToArray();
-            var roots = preferredRoots.Length > 0
-                ? preferredRoots
-                : graph.Nodes
-                    .Where(node => !node.IsExternal && outgoing.ContainsKey(node.Id) && incoming[node.Id] == 0)
-                    .OrderBy(node => node.Order)
-                    .ThenBy(node => node.Id, StringComparer.Ordinal)
-                    .ToArray();
+            var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+            var roots = configuredRootIds.Where(nodeById.ContainsKey).Select(id => nodeById[id]).ToArray();
 
             if (roots.Length == 0)
             {
                 return graph;
             }
 
-            var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
             var clonedNodes = new List<RenderNode>();
             var clonedLinks = new List<RenderLink>();
             var originalNodesInTrees = new HashSet<string>(StringComparer.Ordinal);
@@ -391,12 +364,6 @@ internal sealed class RenderGraph
             }
 
             return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, graph.DataModels);
-        }
-
-        private static bool IsExposureNode(RenderNode node)
-        {
-            return node.FullName.Contains(".Exposures.", StringComparison.OrdinalIgnoreCase) ||
-                node.Name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsModelType(TypeNode type)

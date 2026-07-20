@@ -7,7 +7,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class RenderGraphDuplicationTests
 {
     [Fact]
-    public void Default_exposure_rendering_duplicates_shared_dependency_per_branch()
+    public void Configured_root_rendering_duplicates_shared_dependency_per_branch()
     {
         var settings = DiagramSettings.CreateDefault();
         settings.Layout.ExposureTreeLayoutThreshold = 1;
@@ -134,7 +134,8 @@ public sealed class RenderGraphDuplicationTests
             {
                 new DependencyEdge("to_service", "controller", "service", "internal"),
                 new DependencyEdge("to_root", "service", "controller", "internal")
-            });
+            },
+            RootMetadata("controller"));
 
         var graph = RenderGraph.From(diagram, settings);
 
@@ -158,7 +159,8 @@ public sealed class RenderGraphDuplicationTests
         {
             new DependencyEdge("edge_a", "parent_a", "shared", "internal"),
             new DependencyEdge("edge_b", "parent_b", "shared", "internal")
-        });
+        },
+        RootMetadata("parent_a", "parent_b"));
 
     internal static DiagramModel SharedExternalDiagram() => new(
         new[]
@@ -223,4 +225,11 @@ public sealed class RenderGraphDuplicationTests
         settings.NodeDuplication.AllowDuplicateNodes = false;
         return settings;
     }
+
+    private static DiagramMetadata RootMetadata(params string[] ids) => new(
+        SemanticSelection: new SemanticSelectionReport(
+            "ConfiguredRootReachability",
+            new[] { new RootDiscoveryPatternDefinition(0, 1, "explicit-test-root") },
+            ids.Select((id, index) => new SemanticRootMatch(id, id, 0, 1, "explicit-test-root")).ToArray(),
+            ids, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<int>()));
 }
