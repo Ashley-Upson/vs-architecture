@@ -50,6 +50,22 @@ public sealed class SemanticScopeSelectorTests
     }
 
     [Fact]
+    public void Configured_scope_does_not_force_property_table_candidates_into_architecture()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.RootDiscoveryPatternsText = "^Fixture\\.RootController$";
+        var source = Diagram();
+        var types = source.Projects.Single().Types.Select(type => type.Id == "unrelated"
+            ? type with { Properties = new[] { new TypeProperty("Name", "string") }, MethodCount = 0 }
+            : type).ToArray();
+        source = source with { Projects = new[] { source.Projects.Single() with { Types = types } } };
+
+        var result = SemanticScopeSelector.Select(source, settings);
+
+        Assert.DoesNotContain(result.Projects.SelectMany(project => project.Types), type => type.Id == "unrelated");
+    }
+
+    [Fact]
     public void Duplicate_matches_preserve_first_pattern_provenance()
     {
         var settings = DiagramSettings.CreateDefault();

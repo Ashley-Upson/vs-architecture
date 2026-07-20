@@ -32,7 +32,7 @@ internal sealed class DiagramFileBuilder
                 layout.LayoutRevision.Value))
             {
                 var architectureRoot = new ArchitectureGenerator(this).Generate(layout, ownership);
-                var dataModelRoot = new DataModelGenerator(this).Generate(layout.Graph.DataModels);
+                var dataModelRoot = new DataModelGenerator(this).Generate(Array.Empty<RenderNode>());
 
                 var file = new XElement("mxfile",
                     new XAttribute("host", "StandardIo.ArchitectureDiagram"),

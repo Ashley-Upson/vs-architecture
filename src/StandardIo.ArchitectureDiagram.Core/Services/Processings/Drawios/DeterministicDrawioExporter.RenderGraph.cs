@@ -17,13 +17,11 @@ internal sealed class RenderGraph
             IReadOnlyList<RenderProject> projects,
             IReadOnlyList<RenderNode> nodes,
             IReadOnlyList<RenderLink> links,
-            IReadOnlyList<RenderNode> dataModels,
             IReadOnlyDictionary<string, string>? placementParentByNode = null)
         {
             Projects = projects;
             Nodes = nodes;
             Links = links;
-            DataModels = dataModels;
             PlacementParentByNode = placementParentByNode ?? new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
@@ -33,8 +31,6 @@ internal sealed class RenderGraph
 
         public IReadOnlyList<RenderLink> Links { get; }
 
-        public IReadOnlyList<RenderNode> DataModels { get; }
-
         public IReadOnlyDictionary<string, string> PlacementParentByNode { get; }
 
         internal RenderGraph WithDisconnectedProject(DisconnectedNodeProjectLayout disconnected) =>
@@ -42,7 +38,7 @@ internal sealed class RenderGraph
                 Projects.Where(project => !string.Equals(project.Id, disconnected.Project.Id, StringComparison.Ordinal))
                     .Concat(new[] { disconnected.Project }).ToArray(),
                 Nodes.Select(node => disconnected.Nodes.TryGetValue(node.Id, out var layout) ? layout.Node : node).ToArray(),
-                Links, DataModels, PlacementParentByNode);
+                Links, PlacementParentByNode);
 
         public static RenderGraph From(DiagramModel diagram)
         {
@@ -61,7 +57,7 @@ internal sealed class RenderGraph
             {
                 foreach (var type in project.Types)
                 {
-                    if (type.Kind == "Interface" || IsModelType(type))
+                    if (type.Kind == "Interface")
                     {
                         continue;
                     }
@@ -72,12 +68,6 @@ internal sealed class RenderGraph
                     }
                 }
             }
-
-            var dataModels = diagram.Projects
-                .SelectMany(project => project.Types)
-                .Where(type => type.Kind != "Interface" && IsModelType(type))
-                .Select((type, order) => ToRenderNode(type, order))
-                .ToArray();
 
             var knownSourceIds = new HashSet<string>(nodes.Select(node => node.Id), StringComparer.Ordinal);
             var projectBySourceId = nodes.ToDictionary(node => node.Id, node => node.ProjectId, StringComparer.Ordinal);
@@ -158,7 +148,7 @@ internal sealed class RenderGraph
                     item.Edge.TargetId))
                 .ToArray();
 
-            return new RenderGraph(projects, nodes, links, dataModels);
+            return new RenderGraph(projects, nodes, links);
         }
 
         public static RenderGraph From(DiagramModel diagram, DiagramSettings settings)
@@ -228,7 +218,7 @@ internal sealed class RenderGraph
                 Visit(root.Id, root.Id, SafeId(root.Id), null, new HashSet<string>(StringComparer.Ordinal));
             }
 
-            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, graph.DataModels, placementParentByNode);
+            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, placementParentByNode);
 
             string Visit(
                 string originalNodeId,
@@ -355,13 +345,7 @@ internal sealed class RenderGraph
                 }
             }
 
-            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks, graph.DataModels);
-        }
-
-        private static bool IsModelType(TypeNode type)
-        {
-            var hasProperties = type.Properties?.Count > 0;
-            return hasProperties && type.MethodCount == 0;
+            return new RenderGraph(graph.Projects, clonedNodes, clonedLinks);
         }
 
         private static string CloneNodeId(string rootId, string path, string nodeId)

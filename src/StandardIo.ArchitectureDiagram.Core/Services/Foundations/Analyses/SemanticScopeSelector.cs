@@ -51,7 +51,7 @@ internal static class SemanticScopeSelector
             .OrderBy(edge => edge.Id, StringComparer.Ordinal).ToArray();
         var projects = source.Projects.Select(project => project with
             {
-                Types = project.Types.Where(type => selected.Contains(type.Id) || IsDataModel(type))
+                Types = project.Types.Where(type => selected.Contains(type.Id))
                     .OrderBy(type => type.FullName, StringComparer.Ordinal).ToImmutableArray()
             }).Where(project => project.Types.Count > 0).ToImmutableArray();
         var selectedExternal = source.ExternalDependencies.Where(node => selected.Contains(node.Id))
@@ -64,8 +64,6 @@ internal static class SemanticScopeSelector
                 selectedEdges.Select(edge => edge.Id), source.Edges.Select(edge => edge.Id).Except(selectedEdges.Select(edge => edge.Id)),
                 unmatched));
     }
-
-    internal static bool IsDataModel(TypeNode type) => type.Kind != "Interface" && type.Properties?.Count > 0 && type.MethodCount == 0;
 
     private static DiagramMetadata Metadata(DiagramModel source, string policy,
         IReadOnlyList<RootDiscoveryPatternDefinition> patterns, IReadOnlyList<SemanticRootMatch> roots,
