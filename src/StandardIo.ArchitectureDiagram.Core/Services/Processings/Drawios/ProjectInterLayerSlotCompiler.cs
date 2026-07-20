@@ -256,7 +256,7 @@ internal static class ProjectInterLayerSlotCompiler
     private static bool PositiveOverlap(AxisInterval first, AxisInterval second) =>
         Math.Min(first.Maximum, second.Maximum) > Math.Max(first.Minimum, second.Minimum);
 
-    private static IEnumerable<AxisInterval> FixedColumnExclusions(
+    internal static IEnumerable<AxisInterval> FixedColumnExclusions(
         CanonicalTopologyPlan plan,
         IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
         IReadOnlyDictionary<string, LinkLayout> routes,
@@ -275,8 +275,10 @@ internal static class ProjectInterLayerSlotCompiler
             var sourceInterval = new AxisInterval(route.SourcePoint.Y, departureY);
             if (PositiveOverlap(verticalInterval, sourceInterval))
                 yield return new AxisInterval(route.SourcePoint.X - separation, route.SourcePoint.X + separation);
-            if (other.RequiresDestinationColumn || other.RequiresReturnColumn) continue;
-            var arrivalInterval = new AxisInterval(departureY, route.TargetPoint.Y);
+            var arrivalY = other.RequiresDestinationColumn || other.RequiresReturnColumn
+                ? assignments[routeDemands[1].Id].AxisCoordinate
+                : departureY;
+            var arrivalInterval = new AxisInterval(arrivalY, route.TargetPoint.Y);
             if (PositiveOverlap(verticalInterval, arrivalInterval))
                 yield return new AxisInterval(route.TargetPoint.X - separation, route.TargetPoint.X + separation);
         }
