@@ -88,7 +88,7 @@ internal static class DeterministicSlotAllocator
     {
         var slotEnds = new List<int>();
         var assigned = new List<(LinkSegmentDemand Demand, int Slot)>();
-        foreach (var demand in OrderComponent(demands))
+        foreach (var demand in OrderComponent(demands, options))
         {
             var slot = slotEnds.FindIndex(end => CanReuse(end, demand.OccupiedInterval.Minimum, options));
             if (slot < 0) { slot = slotEnds.Count; slotEnds.Add(demand.OccupiedInterval.Maximum); }
@@ -106,16 +106,24 @@ internal static class DeterministicSlotAllocator
         return ($"segment-component:{region.EnvelopeIdentity}:{identity}", demands, segments, required);
     }
 
-    private static IReadOnlyList<LinkSegmentDemand> OrderComponent(IReadOnlyList<LinkSegmentDemand> demands)
+    private static IReadOnlyList<LinkSegmentDemand> OrderComponent(
+        IReadOnlyList<LinkSegmentDemand> demands,
+        LinkSegmentAssignmentOptions options)
     {
         var predecessors = demands.ToDictionary(item => item.Id,
             _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
         foreach (var left in demands)
         foreach (var right in demands)
         {
-            if (left.Id == right.Id || left.OccupiedInterval.Maximum != right.OccupiedInterval.Minimum) continue;
-            var first = EndpointOrder(left.MaximumEndpointRole, right.MinimumEndpointRole);
-            if (first < 0) predecessors[right.Id].Add(left.Id);
+            if (string.CompareOrdinal(left.Id, right.Id) >= 0) continue;
+            var leftBeforeRight = RequiresEndpointPrecedence(left, right, options.Separation);
+            var rightBeforeLeft = RequiresEndpointPrecedence(right, left, options.Separation);
+            if (leftBeforeRight == rightBeforeLeft)
+            {
+                AddTouchingIntervalFallback(left, right, predecessors);
+                continue;
+            }
+            if (leftBeforeRight) predecessors[right.Id].Add(left.Id);
             else predecessors[left.Id].Add(right.Id);
         }
 
@@ -140,11 +148,32 @@ internal static class DeterministicSlotAllocator
             .ThenBy(item => item.TurnOrder)
             .ThenBy(item => item.Id, StringComparer.Ordinal);
 
-    private static int EndpointOrder(LinkSegmentEndpointRole left, LinkSegmentEndpointRole right)
+    private static bool RequiresEndpointPrecedence(
+        LinkSegmentDemand departure,
+        LinkSegmentDemand arrival,
+        int separation)
     {
-        if (left == LinkSegmentEndpointRole.Departure && right == LinkSegmentEndpointRole.Arrival) return -1;
-        if (right == LinkSegmentEndpointRole.Departure && left == LinkSegmentEndpointRole.Arrival) return 1;
-        return 1;
+        foreach (var departurePoint in Endpoints(departure, LinkSegmentEndpointRole.Departure))
+        foreach (var arrivalPoint in Endpoints(arrival, LinkSegmentEndpointRole.Arrival))
+            if (Math.Abs(departurePoint - arrivalPoint) < separation) return true;
+        return false;
+    }
+
+    private static IEnumerable<int> Endpoints(LinkSegmentDemand demand, LinkSegmentEndpointRole role)
+    {
+        if (demand.MinimumEndpointRole == role) yield return demand.OccupiedInterval.Minimum;
+        if (demand.MaximumEndpointRole == role) yield return demand.OccupiedInterval.Maximum;
+    }
+
+    private static void AddTouchingIntervalFallback(
+        LinkSegmentDemand left,
+        LinkSegmentDemand right,
+        IReadOnlyDictionary<string, HashSet<string>> predecessors)
+    {
+        if (left.OccupiedInterval.Maximum == right.OccupiedInterval.Minimum)
+            predecessors[left.Id].Add(right.Id);
+        else if (right.OccupiedInterval.Maximum == left.OccupiedInterval.Minimum)
+            predecessors[right.Id].Add(left.Id);
     }
 
     private static DeterministicSlotAssignment AssignCompleteOverlap(

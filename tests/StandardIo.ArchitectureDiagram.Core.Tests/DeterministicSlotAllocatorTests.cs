@@ -62,6 +62,17 @@ public sealed class DeterministicSlotAllocatorTests
     }
 
     [Fact]
+    public void Near_endpoint_overlap_orders_departure_above_arrival()
+    {
+        var result = Assign(
+            Demand("long-arrival", 0, 104) with { MaximumEndpointRole = LinkSegmentEndpointRole.Arrival },
+            Demand("short-departure", 98, 130) with { MinimumEndpointRole = LinkSegmentEndpointRole.Departure });
+
+        Assert.Equal(0, result.SegmentsByDemandId["short-departure"].SlotIndex);
+        Assert.Equal(1, result.SegmentsByDemandId["long-arrival"].SlotIndex);
+    }
+
+    [Fact]
     public void Transitive_overlap_forms_one_complete_component()
     {
         var result = Assign(Demand("a", 0, 10), Demand("b", 8, 18), Demand("c", 16, 26));
