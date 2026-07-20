@@ -61,4 +61,12 @@ public static class LegacyDiagramSettingsAdapter
             new DataModelGenerationJob(ToDataModelAnalysis(settings), ToDataModelRendering(settings))
         ],
         new DrawioDocumentSettings());
+
+    public static DiagramGenerationRequest ArchitectureRequest(DiagramSettings settings) => new(
+        [new ArchitectureGenerationJob(ToArchitectureAnalysis(settings), ToArchitectureRendering(settings), "Architecture")],
+        new DrawioDocumentSettings());
+
+    public static DiagramGenerationRequest DataModelRequest(DiagramSettings settings) => new(
+        [new DataModelGenerationJob(ToDataModelAnalysis(settings), ToDataModelRendering(settings), PageNameHint: "Data Model")],
+        new DrawioDocumentSettings());
 }
