@@ -10,6 +10,14 @@ internal static class SemanticScopeSelector
 {
     public static DiagramModel Select(DiagramModel source, DiagramSettings settings)
     {
+        return Select(source, new ArchitectureAnalysisSettings
+        {
+            RootDiscoveryPatternsText = settings.RootDiscoveryPatternsText
+        });
+    }
+
+    public static DiagramModel Select(DiagramModel source, ArchitectureAnalysisSettings settings)
+    {
         var patterns = RootDiscoveryPatternParser.Parse(settings.RootDiscoveryPatternsText);
         var internalNodes = source.Projects.SelectMany(project => project.Types).ToArray();
         var nodeIdentity = internalNodes.ToDictionary(node => node.Id, node => node.FullName, StringComparer.Ordinal);

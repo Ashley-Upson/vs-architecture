@@ -19,14 +19,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
         CancellationToken cancellationToken = default)
     {
         settings ??= new ArchitectureAnalysisSettings();
-        var legacySettings = new DiagramSettings
-        {
-            ExcludedNamespaces = settings.ExcludedNamespaces.ToList(),
-            ExcludedNames = settings.ExcludedNames.ToList(),
-            RootDiscoveryPatternsText = settings.RootDiscoveryPatternsText,
-            ExternalDependencyTag = settings.ExternalDependencyTag
-        };
-        var model = await AnalyzeCoreAsync(selectedProjects, legacySettings, cancellationToken).ConfigureAwait(false);
+        var model = await AnalyzeCoreAsync(selectedProjects, settings, cancellationToken).ConfigureAwait(false);
         return ToArchitectureDiagram(model);
     }
 
@@ -35,18 +28,18 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
         DiagramSettings settings,
         CancellationToken cancellationToken = default)
     {
-        return await AnalyzeCoreAsync(new[] { selectedProject }, settings, cancellationToken).ConfigureAwait(false);
+        return await AnalyzeCoreAsync(new[] { selectedProject }, ToArchitectureSettings(settings), cancellationToken).ConfigureAwait(false);
     }
 
     public Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
         CancellationToken cancellationToken = default) =>
-        AnalyzeCoreAsync(selectedProjects, settings, cancellationToken);
+        AnalyzeCoreAsync(selectedProjects, ToArchitectureSettings(settings), cancellationToken);
 
     private async Task<DiagramModel> AnalyzeCoreAsync(
         IEnumerable<Project> selectedProjects,
-        DiagramSettings settings,
+        ArchitectureAnalysisSettings settings,
         CancellationToken cancellationToken)
     {
         var projects = selectedProjects?.Where(project => project is not null)
@@ -54,7 +47,6 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
             .ThenBy(project => project.Name, System.StringComparer.Ordinal)
             .ToList()
             ?? new List<Project>();
-        var resolver = new StyleResolver(settings);
         var typeBySymbol = new Dictionary<ISymbol, TypeNode>(SymbolEqualityComparer.Default);
         var typeByFullName = new Dictionary<string, TypeNode>();
         var registeredImplementationByService = new Dictionary<ISymbol, INamedTypeSymbol>(SymbolEqualityComparer.Default);
@@ -94,7 +86,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
                 var fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                     .Replace("global::", string.Empty);
 
-                if (resolver.IsExcluded(type.Name, fullName))
+                if (IsExcluded(type.Name, fullName, settings))
                 {
                     continue;
                 }
@@ -219,6 +211,23 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
                 new DiagramMetadata());
             return SemanticScopeSelector.Select(discovered, settings);
         }
+    }
+
+    private static ArchitectureAnalysisSettings ToArchitectureSettings(DiagramSettings settings) => new()
+    {
+        ExcludedNamespaces = settings.ExcludedNamespaces.ToList(),
+        ExcludedNames = settings.ExcludedNames.ToList(),
+        RootDiscoveryPatternsText = settings.RootDiscoveryPatternsText,
+        ExternalDependencyTag = settings.ExternalDependencyTag
+    };
+
+    private static bool IsExcluded(string name, string fullName, ArchitectureAnalysisSettings settings)
+    {
+        var index = fullName.LastIndexOf('.');
+        var @namespace = index <= 0 ? string.Empty : fullName.Substring(0, index);
+        return settings.ExcludedNames.Any(pattern => GlobMatcher.IsMatch(name, pattern)) ||
+               settings.ExcludedNames.Any(pattern => GlobMatcher.IsMatch(fullName, pattern)) ||
+               settings.ExcludedNamespaces.Any(pattern => GlobMatcher.IsMatch(@namespace, pattern));
     }
 
     private static ArchitectureDiagramModel ToArchitectureDiagram(DiagramModel model)
@@ -460,7 +469,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
         Dictionary<string, ExternalDependencyNode> externalDependencies,
         List<ExternalDependencyNode> orderedExternalDependencies,
         IReadOnlyList<string> usingNamespaces,
-        DiagramSettings settings)
+        ArchitectureAnalysisSettings settings)
     {
         var assemblyName = symbol.ContainingAssembly?.Identity.Name;
         if (string.IsNullOrWhiteSpace(assemblyName) || IsImplicitFrameworkDependency(symbol, assemblyName!, usingNamespaces))
