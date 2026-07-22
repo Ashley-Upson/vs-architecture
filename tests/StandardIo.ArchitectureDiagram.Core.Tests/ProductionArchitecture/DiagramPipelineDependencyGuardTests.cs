@@ -20,7 +20,7 @@ public sealed class DiagramPipelineDependencyGuardTests
     {
         var source = File.ReadAllText(Source(
             "Services", "Processings", "Drawios", "DeterministicDrawioExporter.RenderLayout.cs"));
-        var start = source.IndexOf("internal static RenderLayout BuildProjectRegion", StringComparison.Ordinal);
+        var start = source.IndexOf("internal static ProjectRegionLayout BuildProjectRegion", StringComparison.Ordinal);
         Assert.True(start >= 0);
         var projectRegion = source.Substring(start);
 
