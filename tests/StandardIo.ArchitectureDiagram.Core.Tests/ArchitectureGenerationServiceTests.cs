@@ -8,6 +8,7 @@ using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Architectures;
 using Xunit;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
@@ -19,12 +20,14 @@ public sealed class ArchitectureGenerationServiceTests
     public async Task Generate_analyses_and_renders_once_and_repeats_only_serialization()
     {
         var analyser = new CountingAnalyser();
+        var projector = new CountingProjector();
         var renderer = new CountingRenderer();
-        var service = new ArchitectureGenerationService(analyser, renderer, new DrawioDocumentComposer());
+        var service = new ArchitectureGenerationService(analyser, projector, renderer, new DrawioDocumentComposer());
 
         var result = await service.GenerateAsync([], Job(), serializationRepeatCount: 3);
 
         Assert.Equal(1, analyser.Count);
+        Assert.Equal(1, projector.Count);
         Assert.Equal(1, renderer.Count);
         Assert.Equal(3, result.SerializationRepeat!.RequestedRepeats);
         Assert.True(result.SerializationRepeat.IsDeterministic);
@@ -69,7 +72,7 @@ public sealed class ArchitectureGenerationServiceTests
         public int Count { get; private set; }
         public int DiagnosticCount { get; private set; }
 
-        public ArchitectureRenderResult RenderWithDiagnostics(ArchitectureDiagramModel model, ArchitectureRenderSettings settings, ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production, CancellationToken cancellationToken = default)
+        public ArchitectureRenderResult RenderWithDiagnostics(ArchitectureRenderGraph graph, ArchitectureRenderSettings settings, ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production, CancellationToken cancellationToken = default)
         {
             Count++;
             var page = new DrawioPage("Architecture", "architecture",
@@ -81,6 +84,17 @@ public sealed class ArchitectureGenerationServiceTests
                     DiagnosticCount++;
                     return new DrawioDiagnosticExportResult("", "{}", new Dictionary<string, string>(), 0, 0);
                 });
+        }
+    }
+
+    private sealed class CountingProjector : IArchitectureTopologyProjector
+    {
+        public int Count { get; private set; }
+
+        public ArchitectureRenderGraph Project(ArchitectureDiagramModel diagram, NodeDuplicationSettings settings)
+        {
+            Count++;
+            return new ArchitectureTopologyProjector().Project(diagram, settings);
         }
     }
 }

@@ -4,6 +4,7 @@ using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Architectures;
 using Xunit;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
@@ -14,7 +15,7 @@ public sealed class DrawioArchitectureRendererTests
     [Fact]
     public void Render_accepts_typed_architecture_model_and_returns_only_a_page()
     {
-        var model = Model();
+        var model = Graph();
 
         var page = new DrawioArchitectureRenderer().Render(model, Settings());
 
@@ -22,23 +23,20 @@ public sealed class DrawioArchitectureRendererTests
         Assert.Equal("architecture", page.StablePageKey);
         Assert.Equal("mxGraphModel", page.GraphModel.Name.LocalName);
         Assert.Null(page.GraphModel.Ancestors("mxfile").SingleOrDefault());
-        Assert.Contains(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("id") == "service");
-        Assert.Contains(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("logicalEdgeId") == "edge");
+        Assert.Contains(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("value") == "Service");
+        Assert.Contains(page.GraphModel.Descendants("mxCell"), cell =>
+            ((string?)cell.Attribute("logicalEdgeId"))?.Contains("edge", StringComparison.Ordinal) == true);
     }
 
     [Fact]
     public void Production_page_geometry_matches_canonical_project_region_exporter_for_equivalent_input()
     {
-        var typed = new DrawioArchitectureRenderer().Render(Model(), Settings());
+        var graph = Graph();
+        var typed = new DrawioArchitectureRenderer().Render(graph, Settings());
         var legacySettings = DiagramSettings.CreateDefault();
         legacySettings.Layout = Settings().Layout;
-        var legacyModel = new DiagramModel(
-            [new ProjectContainer("project", "Fixture", [
-                new TypeNode("root", "project", "Root", "Fixture.Root", "Class"),
-                new TypeNode("service", "project", "Service", "Fixture.Service", "Class")])],
-            [], [new DependencyEdge("edge", "root", "service", "internal")]);
         var canonicalPage = new DeterministicDrawioExporter()
-            .GenerateArchitectureProjectRegionResult(legacyModel, legacySettings).Page.GraphModel;
+            .GenerateArchitectureProjectRegionResult(graph, legacySettings).Page.GraphModel;
 
         Assert.Equal(canonicalPage.ToString(SaveOptions.DisableFormatting),
             typed.GraphModel.ToString(SaveOptions.DisableFormatting));
@@ -49,8 +47,8 @@ public sealed class DrawioArchitectureRendererTests
     {
         var renderer = new DrawioArchitectureRenderer();
 
-        var production = renderer.RenderWithDiagnostics(Model(), Settings(), ArchitectureRenderingMode.Production);
-        var development = renderer.RenderWithDiagnostics(Model(), Settings(), ArchitectureRenderingMode.DevelopmentProjectRegion);
+        var production = renderer.RenderWithDiagnostics(Graph(), Settings(), ArchitectureRenderingMode.Production);
+        var development = renderer.RenderWithDiagnostics(Graph(), Settings(), ArchitectureRenderingMode.DevelopmentProjectRegion);
 
         Assert.Equal(
             development.Page.GraphModel.ToString(SaveOptions.DisableFormatting),
@@ -70,6 +68,9 @@ public sealed class DrawioArchitectureRendererTests
             new ArchitectureNode("root", "project", "Root", "Fixture.Root", "Class", "", []),
             new ArchitectureNode("service", "project", "Service", "Fixture.Service", "Class", "", [])], "")],
         [], [new ArchitectureLink("edge", "root", "service", "internal")], null);
+
+    private static ArchitectureRenderGraph Graph() =>
+        new ArchitectureTopologyProjector().Project(Model(), Settings().NodeDuplication);
 
     private static ArchitectureRenderSettings Settings()
     {

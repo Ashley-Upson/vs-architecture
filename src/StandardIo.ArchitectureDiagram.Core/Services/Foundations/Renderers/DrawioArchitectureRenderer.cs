@@ -6,7 +6,6 @@ using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
-using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 
@@ -23,54 +22,25 @@ public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPag
         _exporter = exporter ?? throw new ArgumentNullException(nameof(exporter));
 
     public DrawioPage Render(
-        ArchitectureDiagramModel model,
+        ArchitectureRenderGraph graph,
         ArchitectureRenderSettings settings,
         CancellationToken cancellationToken = default)
     {
-        if (model is null) throw new ArgumentNullException(nameof(model));
+        if (graph is null) throw new ArgumentNullException(nameof(graph));
         cancellationToken.ThrowIfCancellationRequested();
-        return RenderWithDiagnostics(model, settings, ArchitectureRenderingMode.Production, cancellationToken).Page;
+        return RenderWithDiagnostics(graph, settings, ArchitectureRenderingMode.Production, cancellationToken).Page;
     }
 
     public ArchitectureRenderResult RenderWithDiagnostics(
-        ArchitectureDiagramModel model,
+        ArchitectureRenderGraph graph,
         ArchitectureRenderSettings settings,
         ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production,
         CancellationToken cancellationToken = default)
     {
-        if (model is null) throw new ArgumentNullException(nameof(model));
+        if (graph is null) throw new ArgumentNullException(nameof(graph));
         cancellationToken.ThrowIfCancellationRequested();
-        var legacyModel = ToLegacyModel(model);
         var legacySettings = ToLegacySettings(settings);
-        return _exporter.GenerateArchitectureProjectRegionResult(legacyModel, legacySettings);
-    }
-
-    private static DiagramModel ToLegacyModel(ArchitectureDiagramModel model)
-    {
-        var selection = model.Selection;
-        var report = selection is null ? null : new SemanticSelectionReport(
-            selection.ScopePolicy,
-            selection.Roots.Select(root => new RootDiscoveryPatternDefinition(
-                root.PatternIndex, root.SourceLine, root.PatternText)).Distinct().OrderBy(item => item.PatternIndex).ToArray(),
-            selection.Roots.Select(root => new SemanticRootMatch(
-                root.SemanticNodeId, root.MatchedCanonicalValue, root.PatternIndex,
-                root.SourceLine, root.PatternText)).ToArray(),
-            selection.SelectedNodeIds, selection.OmittedNodeIds,
-            selection.SelectedLinkIds, selection.OmittedLinkIds, selection.UnmatchedPatternIndexes);
-        return new DiagramModel(
-            model.Projects.Select(project => new ProjectContainer(
-                project.Id, project.Name,
-                project.Nodes.Select(node => new TypeNode(
-                    node.Id, node.ProjectId, node.Name, node.FullName, node.Kind,
-                    node.UniqueId, node.Interfaces, SemanticTypeIdentity: node.SemanticTypeIdentity,
-                    InterfaceIdentity: node.InterfaceIdentity,
-                    ImplementationIdentity: node.ImplementationIdentity,
-                    ImplementationCount: node.ImplementationCount,
-                    InterfaceResolution: node.InterfaceResolution)).ToArray(), project.UniqueId)).ToArray(),
-            model.ExternalNodes.Select(node => new ExternalDependencyNode(
-                node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
-            model.Links.Select(link => new DependencyEdge(link.Id, link.SourceId, link.TargetId, link.Kind)).ToArray(),
-            new DiagramMetadata(SemanticSelection: report));
+        return _exporter.GenerateArchitectureProjectRegionResult(graph, legacySettings);
     }
 
     private static DiagramSettings ToLegacySettings(ArchitectureRenderSettings settings)

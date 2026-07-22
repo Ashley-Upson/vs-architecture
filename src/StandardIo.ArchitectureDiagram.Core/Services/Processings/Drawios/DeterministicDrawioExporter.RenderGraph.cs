@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -43,6 +44,22 @@ internal sealed class RenderGraph
         public static RenderGraph From(DiagramModel diagram)
         {
             return FromBaseDiagram(diagram, NodeDuplicationPolicy.AllowAll);
+        }
+
+        public static RenderGraph From(ArchitectureRenderGraph graph)
+        {
+            if (graph is null) throw new ArgumentNullException(nameof(graph));
+            var projects = graph.Projects.OrderBy(project => project.Order)
+                .Select(project => new RenderProject(project.Id, project.Name, project.Order)).ToArray();
+            var nodes = graph.Nodes.OrderBy(node => node.Order).Select(node => new RenderNode(
+                node.Id, node.ProjectId, node.DisplayText, node.SemanticTypeIdentity, node.NodeKind,
+                node.IsExternal, node.ExternalTag, node.Order, Array.Empty<string>(), Array.Empty<TypeProperty>(), 0)).ToArray();
+            var links = graph.Links.OrderBy(link => link.Order).Select(link => new RenderLink(
+                link.Id, link.SourceRenderInstanceId, link.TargetRenderInstanceId, link.Kind, link.Order,
+                link.SourceSemanticId, link.TargetSemanticId)).ToArray();
+            var parents = graph.Nodes.Where(node => node.PlacementParentRenderId is not null)
+                .ToDictionary(node => node.Id, node => node.PlacementParentRenderId!, StringComparer.Ordinal);
+            return new RenderGraph(projects, nodes, links, parents);
         }
 
         private static RenderGraph FromBaseDiagram(DiagramModel diagram, NodeDuplicationPolicy duplicationPolicy)

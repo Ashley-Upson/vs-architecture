@@ -11,6 +11,7 @@ using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Architectures;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
@@ -18,17 +19,28 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 public sealed class ArchitectureGenerationService : IArchitectureGenerationService
 {
     private readonly IArchitectureAnalyser analyser;
+    private readonly IArchitectureTopologyProjector projector;
     private readonly IArchitectureDiagnosticRenderer renderer;
     private readonly IDrawioDocumentComposer composer;
 
     public ArchitectureGenerationService(
         IArchitectureAnalyser analyser,
+        IArchitectureTopologyProjector projector,
         IArchitectureDiagnosticRenderer renderer,
         IDrawioDocumentComposer composer)
     {
         this.analyser = analyser ?? throw new ArgumentNullException(nameof(analyser));
+        this.projector = projector ?? throw new ArgumentNullException(nameof(projector));
         this.renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
         this.composer = composer ?? throw new ArgumentNullException(nameof(composer));
+    }
+
+    public ArchitectureGenerationService(
+        IArchitectureAnalyser analyser,
+        IArchitectureDiagnosticRenderer renderer,
+        IDrawioDocumentComposer composer)
+        : this(analyser, new ArchitectureTopologyProjector(), renderer, composer)
+    {
     }
 
     public async Task<TypedArchitectureGenerationResult> GenerateAsync(
@@ -49,7 +61,8 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
         int serializationRepeatCount = 0,
         CancellationToken cancellationToken = default)
     {
-        var rendered = renderer.RenderWithDiagnostics(diagram, job.Rendering, mode, cancellationToken);
+        var projected = projector.Project(diagram, job.Rendering.NodeDuplication);
+        var rendered = renderer.RenderWithDiagnostics(projected, job.Rendering, mode, cancellationToken);
         var page = string.IsNullOrWhiteSpace(job.PageNameHint)
             ? rendered.Page
             : rendered.Page with { SuggestedName = job.PageNameHint!.Trim() };

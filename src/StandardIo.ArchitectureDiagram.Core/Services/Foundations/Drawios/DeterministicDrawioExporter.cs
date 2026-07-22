@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 
@@ -11,9 +12,22 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
 {
+    public ArchitectureRenderResult GenerateArchitectureProjectRegionResult(
+        ArchitectureRenderGraph graph,
+        DiagramSettings settings)
+    {
+        var region = GenerateProjectRegion(graph, settings);
+        return ToArchitectureRenderResult(region);
+    }
+
     public ArchitectureRenderResult GenerateArchitectureProjectRegionResult(DiagramModel diagram, DiagramSettings settings)
     {
         var region = GenerateProjectRegion(diagram, settings);
+        return ToArchitectureRenderResult(region);
+    }
+
+    private static ArchitectureRenderResult ToArchitectureRenderResult(ProjectRegionGenerationResult region)
+    {
         var document = System.Xml.Linq.XDocument.Parse(region.Document);
         var graph = new System.Xml.Linq.XElement(document.Root!.Elements("diagram").Single().Element("mxGraphModel")!);
         var page = new DrawioPage("Architecture", "architecture", graph, Array.Empty<DiagramDiagnostic>());
@@ -80,6 +94,36 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         var timings = new List<PipelineStageMetric>();
         var reasons = ProjectRegionEligibility.Explain(diagram);
         var graph = Measure(timings, "project-region semantic preparation", () => RenderGraph.From(diagram, settings));
+        return GenerateProjectRegion(
+            graph, settings, timings, reasons, diagram.Projects.Count,
+            diagram.Projects.Sum(project => project.Types.Count) + diagram.ExternalDependencies.Count,
+            diagram.Edges.Count);
+    }
+
+    public ProjectRegionGenerationResult GenerateProjectRegion(
+        ArchitectureRenderGraph projected,
+        DiagramSettings settings)
+    {
+        if (projected is null) throw new ArgumentNullException(nameof(projected));
+        settings ??= DiagramSettings.CreateDefault();
+        var timings = new List<PipelineStageMetric>();
+        var graph = Measure(timings, "projected render graph adaptation", () => RenderGraph.From(projected));
+        return GenerateProjectRegion(
+            graph, settings, timings, Array.Empty<string>(), projected.Projects.Count,
+            projected.Nodes.Select(node => node.SemanticNodeId).Distinct(StringComparer.Ordinal).Count(),
+            projected.Links.Select(link => link.SemanticLinkId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    private ProjectRegionGenerationResult GenerateProjectRegion(
+        RenderGraph graph,
+        DiagramSettings settings,
+        List<PipelineStageMetric> timings,
+        IReadOnlyList<string> initialReasons,
+        int semanticProjectCount,
+        int semanticNodeCount,
+        int semanticLinkCount)
+    {
+        var reasons = initialReasons;
         var layout = Measure(timings, "project-region generation", () => RenderLayout.BuildProjectRegion(graph, settings));
         var ownership = Measure(timings, "project-region ownership compilation", () =>
             CoordinateOwnershipCompiler.Compile(layout.Nodes, layout.Projects, layout.Links, settings.ShowProjectContainers));
@@ -110,9 +154,9 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         var invariantJson = JsonSerializer.Serialize(new
         {
             mode = "IndependentProjectRegion",
-            semanticProjectCount = diagram.Projects.Count,
-            semanticNodeCount = diagram.Projects.Sum(project => project.Types.Count) + diagram.ExternalDependencies.Count,
-            semanticLinkCount = diagram.Edges.Count,
+            semanticProjectCount,
+            semanticNodeCount,
+            semanticLinkCount,
             renderNodeCount = layout.Nodes.Count,
             renderLinkCount = layout.Links.Count,
             eligible = reasons.Count == 0,
