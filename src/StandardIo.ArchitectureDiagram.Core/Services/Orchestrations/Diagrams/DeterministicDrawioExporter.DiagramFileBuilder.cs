@@ -23,6 +23,25 @@ internal sealed class DiagramFileBuilder
 
         public string Build(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
+            return Build(
+                ToSerializationLayout(layout),
+                ownership,
+                new LegacyRouteSerializationMetadata(
+                    layout.PathSelection,
+                    layout.RegionalPathSelection,
+                    layout.Traversals));
+        }
+
+        public string Build(ProjectRegionLayout layout, CoordinateOwnershipCompilation ownership)
+        {
+            return Build(ToSerializationLayout(layout), ownership, legacyMetadata: null);
+        }
+
+        private string Build(
+            DiagramSerializationLayout layout,
+            CoordinateOwnershipCompilation ownership,
+            LegacyRouteSerializationMetadata? legacyMetadata)
+        {
             XDocument document;
             using (PerformanceAudit.Measure(
                 "DiagramFileBuilder XML construction",
@@ -33,7 +52,7 @@ internal sealed class DiagramFileBuilder
                 layout.LayoutRevision.Value))
             {
                 var page = new DrawioPage(
-                    "Architecture", "architecture", BuildArchitecturePage(layout, ownership),
+                    "Architecture", "architecture", BuildArchitecturePage(layout, ownership, legacyMetadata),
                     Array.Empty<DiagramDiagnostic>());
                 var composed = new DrawioDocumentComposer().Compose(
                     new[] { page }, new DrawioDocumentSettings());
@@ -56,12 +75,34 @@ internal sealed class DiagramFileBuilder
 
         public XElement BuildArchitecturePage(RenderLayout layout, CoordinateOwnershipCompilation ownership)
         {
-            if (layout is null) throw new ArgumentNullException(nameof(layout));
-            if (ownership is null) throw new ArgumentNullException(nameof(ownership));
-            return GraphModel(new ArchitectureGenerator(this).Generate(layout, ownership));
+            return BuildArchitecturePage(
+                ToSerializationLayout(layout),
+                ownership,
+                new LegacyRouteSerializationMetadata(
+                    layout.PathSelection,
+                    layout.RegionalPathSelection,
+                    layout.Traversals));
         }
 
-        private XElement ArchitectureRoot(RenderLayout layout, CoordinateOwnershipCompilation ownership)
+        public XElement BuildArchitecturePage(ProjectRegionLayout layout, CoordinateOwnershipCompilation ownership)
+        {
+            return BuildArchitecturePage(ToSerializationLayout(layout), ownership, legacyMetadata: null);
+        }
+
+        private XElement BuildArchitecturePage(
+            DiagramSerializationLayout layout,
+            CoordinateOwnershipCompilation ownership,
+            LegacyRouteSerializationMetadata? legacyMetadata)
+        {
+            if (layout is null) throw new ArgumentNullException(nameof(layout));
+            if (ownership is null) throw new ArgumentNullException(nameof(ownership));
+            return GraphModel(new ArchitectureGenerator(this).Generate(layout, ownership, legacyMetadata));
+        }
+
+        private XElement ArchitectureRoot(
+            DiagramSerializationLayout layout,
+            CoordinateOwnershipCompilation ownership,
+            LegacyRouteSerializationMetadata? legacyMetadata)
         {
             var root = new XElement("root",
                 new XElement("mxCell", new XAttribute("id", "0")),
@@ -131,20 +172,21 @@ internal sealed class DiagramFileBuilder
             {
                 PerformanceAudit.Increment("XML edge metadata lookups");
                 PerformanceAudit.Increment("metadata projections");
-                layout.Traversals.Traversals.TryGetValue(segment.LogicalEdgeId, out var traversal);
-                var pathDecision = layout.PathSelection?.Decisions.FirstOrDefault(decision =>
+                EdgeTraversal? traversal = null;
+                legacyMetadata?.Traversals.Traversals.TryGetValue(segment.LogicalEdgeId, out traversal);
+                var pathDecision = legacyMetadata?.PathSelection?.Decisions.FirstOrDefault(decision =>
                     string.Equals(decision.EdgeId, segment.LogicalEdgeId, StringComparison.Ordinal));
                 CorridorPathCandidate? pathCandidate = null;
-                if (layout.PathSelection is not null)
+                if (legacyMetadata?.PathSelection is not null)
                 {
-                    layout.PathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
+                    legacyMetadata.PathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
                 }
-                if (layout.RegionalPathSelection is not null)
+                if (legacyMetadata?.RegionalPathSelection is not null)
                 {
-                    layout.RegionalPathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
-                    if (layout.RegionalPathSelection.Initial.TryGetValue(segment.LogicalEdgeId, out var initialPathCandidate))
+                    legacyMetadata.RegionalPathSelection.Selected.TryGetValue(segment.LogicalEdgeId, out pathCandidate);
+                    if (legacyMetadata.RegionalPathSelection.Initial.TryGetValue(segment.LogicalEdgeId, out var initialPathCandidate))
                     {
-                        var regionalDecision = layout.RegionalPathSelection.Decisions.FirstOrDefault(decision =>
+                        var regionalDecision = legacyMetadata.RegionalPathSelection.Decisions.FirstOrDefault(decision =>
                             decision.MutableEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
                         pathDecision = new CorridorPathDecision(
                             segment.LogicalEdgeId,
@@ -153,9 +195,9 @@ internal sealed class DiagramFileBuilder
                             regionalDecision?.Reason ?? "No local traceability interaction was discovered.");
                     }
                 }
-                var rejectedPathEvaluations = layout.PathSelection?.Evaluations.Where(evaluation =>
+                var rejectedPathEvaluations = legacyMetadata?.PathSelection?.Evaluations.Where(evaluation =>
                     evaluation.EdgeId == segment.LogicalEdgeId && !evaluation.IsSelected).ToArray();
-                var regionDecision = layout.RegionalPathSelection?.Decisions.FirstOrDefault(decision =>
+                var regionDecision = legacyMetadata?.RegionalPathSelection?.Decisions.FirstOrDefault(decision =>
                     decision.MutableEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal) ||
                     decision.FixedContextEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
                 root.Add(Edge(
@@ -164,7 +206,7 @@ internal sealed class DiagramFileBuilder
                     pathDecision,
                     pathCandidate,
                     rejectedPathEvaluations,
-                    layout.RegionalPathSelection is not null,
+                    legacyMetadata?.RegionalPathSelection is not null,
                     regionDecision));
             }
 
@@ -180,11 +222,30 @@ internal sealed class DiagramFileBuilder
                 _builder = builder;
             }
 
-            public XElement Generate(RenderLayout layout, CoordinateOwnershipCompilation ownership)
+            public XElement Generate(
+                DiagramSerializationLayout layout,
+                CoordinateOwnershipCompilation ownership,
+                LegacyRouteSerializationMetadata? legacyMetadata)
             {
-                return _builder.ArchitectureRoot(layout, ownership);
+                return _builder.ArchitectureRoot(layout, ownership, legacyMetadata);
             }
         }
+
+        private static DiagramSerializationLayout ToSerializationLayout(RenderLayout layout) =>
+            new(
+                layout.Graph,
+                layout.Nodes,
+                layout.Projects,
+                layout.Links,
+                layout.LayoutRevision);
+
+        private static DiagramSerializationLayout ToSerializationLayout(ProjectRegionLayout layout) =>
+            new(
+                layout.Graph,
+                layout.Nodes,
+                layout.Projects,
+                layout.Links,
+                layout.LayoutRevision);
 
 private XElement GraphModel(XElement root)
         {

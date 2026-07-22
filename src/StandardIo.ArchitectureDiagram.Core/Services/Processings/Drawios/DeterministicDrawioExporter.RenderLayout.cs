@@ -1286,7 +1286,7 @@ internal sealed partial class RenderLayout
             return attachments.Single(item => item.RouteId == link.Id).AxisCoordinate - node.CenterX;
         }
 
-        internal static RenderLayout BuildProjectRegion(RenderGraph graph, DiagramSettings settings)
+        internal static ProjectRegionLayout BuildProjectRegion(RenderGraph graph, DiagramSettings settings)
         {
             var timings = new List<PipelineStageMetric>();
             var placed = MeasureStage(timings, "project-region positional placement", () =>
@@ -1331,35 +1331,9 @@ internal sealed partial class RenderLayout
                 LogicalRouteNormalizer.Normalize(activePlacement.Nodes, slotCompilation.Links, settings.Layout.LinkPadding));
             var validation = MeasureStage(timings, "project-region logical validation", () =>
                 TraceabilityValidator.Validate(activePlacement.Nodes, links, settings.Layout.ParallelLaneSpacing));
-            var emptyCorridors = new CorridorObservation(
-                new Dictionary<string, RoutingCorridor>(StringComparer.Ordinal),
-                new Dictionary<string, CorridorJunction>(StringComparer.Ordinal),
-                Array.Empty<CorridorSegmentMapping>(),
-                new Dictionary<string, CorridorUsage>(StringComparer.Ordinal));
-            var emptyLanes = new CorridorLaneAllocation(
-                new Dictionary<string, IReadOnlyDictionary<string, AllocatedCorridorLane>>(StringComparer.Ordinal),
-                Array.Empty<string>());
-            var geometry = links.ToDictionary(item => item.Key, item => new CompiledEdgeGeometry(
-                item.Key, new[] { item.Value.SourcePoint }.Concat(item.Value.Points)
-                    .Concat(new[] { item.Value.TargetPoint }).ToArray(), false), StringComparer.Ordinal);
-            var traversals = new EdgeTraversalCompilation(
-                new Dictionary<string, EdgeTraversal>(StringComparer.Ordinal), geometry, Array.Empty<TraversalDiagnostic>());
-            return new RenderLayout(
-                graph,
-                activePlacement.Nodes,
-                activePlacement.Projects,
-                links,
-                null,
-                null,
-                traversals,
-                validation,
-                emptyCorridors,
-                emptyLanes,
-                repairRunReason: "CanonicalProjectSlotsCompiled",
-                stageTimings: timings,
-                layoutRevision: activePlacement.Revision,
-                canonicalTopologyPlans: topology.Plans,
-                projectSlotCompilation: slotCompilation);
+            return new ProjectRegionLayout(
+                graph, activePlacement.Nodes, activePlacement.Projects, links, validation,
+                timings, activePlacement.Revision, topology.Plans, slotCompilation);
         }
 
         private static double Ratio(int x, Rect rect)
