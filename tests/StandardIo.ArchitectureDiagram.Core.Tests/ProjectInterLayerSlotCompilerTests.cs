@@ -80,6 +80,34 @@ public sealed class ProjectInterLayerSlotCompilerTests
     }
 
     [Fact]
+    public void Project_slot_skips_a_node_intersecting_only_the_requested_horizontal_span()
+    {
+        var compiled = CompileObstacleFixture(new Rect(180, 65, 120, 60));
+        var assignment = compiled.Assignments["route:horizontal:0"];
+
+        Assert.True(assignment.AxisCoordinate > 135);
+        Assert.Empty(compiled.RequiredLayerExpansion);
+    }
+
+    [Fact]
+    public void Node_outside_the_requested_horizontal_span_does_not_block_the_preferred_slot()
+    {
+        var compiled = CompileObstacleFixture(new Rect(700, 65, 120, 60));
+
+        Assert.Equal(70, compiled.Assignments["route:horizontal:0"].AxisCoordinate);
+    }
+
+    [Fact]
+    public void Project_slot_requests_project_scoped_expansion_when_every_existing_slot_is_blocked()
+    {
+        var compiled = CompileObstacleFixture(new Rect(180, 55, 120, 150));
+
+        var expansion = Assert.Single(compiled.RequiredLayerExpansion);
+        Assert.Equal(new ProjectLayerExpansionIdentity("project", 1), expansion.Key);
+        Assert.True(expansion.Value > 0);
+    }
+
+    [Fact]
     public void Destination_columns_do_not_occupy_another_routes_fixed_target_entry_column()
     {
         var graph = RenderGraph.From(new DiagramModel(
@@ -165,6 +193,31 @@ public sealed class ProjectInterLayerSlotCompilerTests
         return ProjectInterLayerSlotCompiler.Compile(
             CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans,
             nodes, Routes(graph, nodes), new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+    }
+
+    private static ProjectSlotCompilation CompileObstacleFixture(Rect obstacleRect)
+    {
+        var graph = RenderGraph.From(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", new[]
+            {
+                Node("source"), Node("target"), Node("obstacle")
+            }) }, Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("route", "source", "target", "Dependency") }));
+        var nodes = new Dictionary<string, NodeLayout>(StringComparer.Ordinal)
+        {
+            ["source"] = Layout(graph, "source", new Rect(0, 0, 120, 60), 0),
+            ["target"] = Layout(graph, "target", new Rect(440, 180, 120, 60), 1),
+            ["obstacle"] = Layout(graph, "obstacle", obstacleRect, 2)
+        };
+        var link = graph.Links.Single();
+        var routes = new Dictionary<string, LinkLayout>(StringComparer.Ordinal)
+        {
+            [link.Id] = new(link, new Point(60, 60), new Point(500, 180), Array.Empty<Point>(), 0.5, 0.5)
+        };
+        var revision = new LayoutRevision(1);
+        return ProjectInterLayerSlotCompiler.Compile(
+            CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans,
+            nodes, routes, new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
     }
 
     private static RenderGraph Graph(IEnumerable<string> projectIds, IEnumerable<(string Id, string Source, string Target)> links)

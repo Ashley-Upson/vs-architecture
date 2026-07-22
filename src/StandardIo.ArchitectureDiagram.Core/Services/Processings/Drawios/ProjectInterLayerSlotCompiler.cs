@@ -61,11 +61,17 @@ internal static class ProjectInterLayerSlotCompiler
                 sample.MovementScope, revision);
             var assigned = DeterministicSlotAllocator.Assign(identity, group,
                 new LinkSegmentAssignmentOptions(separation, padding));
-            foreach (var item in assigned.SegmentsByDemandId)
+            var selectedAssignments = string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal)
+                ? ConstrainProjectAssignments(group.ToArray(), assigned.SegmentsByDemandId, plans, nodes,
+                    projectLabels, separation, padding)
+                : assigned.SegmentsByDemandId;
+            foreach (var item in selectedAssignments)
                 assignments.Add(item.Key, string.Equals(sample.DemandCategory, "RootTransition", StringComparison.Ordinal)
                     ? preservedRootAssignments[item.Key]
                     : item.Value);
-            var missing = Math.Max(0, assigned.RequiredExtent - allowedRange.Length);
+            var requiredExtent = selectedAssignments.Values.Select(item => item.SlotIndex)
+                .DefaultIfEmpty(0).Max() * separation + separation + padding * 2;
+            var missing = Math.Max(0, Math.Max(assigned.RequiredExtent, requiredExtent) - allowedRange.Length);
             if (missing > 0 && sample.CoordinateFrameId is not null &&
                 string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal))
             {
@@ -148,6 +154,56 @@ internal static class ProjectInterLayerSlotCompiler
         return new ProjectSlotCompilation(
             links, demands, assignments, verticalColumns, returnSides, requiredExpansion,
             bands.Count, requiredExpansion.Count, timings);
+    }
+
+    private static IReadOnlyDictionary<string, AssignedLinkSegment> ConstrainProjectAssignments(
+        IReadOnlyList<LinkSegmentDemand> demands,
+        IReadOnlyDictionary<string, AssignedLinkSegment> preferred,
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, ProjectLabelGeometry> labels,
+        int separation,
+        int padding)
+    {
+        var result = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
+        foreach (var demand in demands.OrderBy(item => preferred[item.Id].SlotIndex)
+                     .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
+                     .ThenBy(item => item.TurnOrder).ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            var plan = plans[demand.LogicalRouteId];
+            var slot = preferred[demand.Id].SlotIndex;
+            while (ProjectSlotBlocked(demand, slot, result.Values, plan, nodes, labels, separation, padding))
+                slot++;
+            var coordinate = demand.AllowedAxisRange.Minimum + padding + slot * separation;
+            result.Add(demand.Id, preferred[demand.Id] with { AxisCoordinate = coordinate, SlotIndex = slot });
+        }
+        return result;
+    }
+
+    private static bool ProjectSlotBlocked(
+        LinkSegmentDemand demand,
+        int slot,
+        IEnumerable<AssignedLinkSegment> allocated,
+        CanonicalTopologyPlan plan,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, ProjectLabelGeometry> labels,
+        int separation,
+        int padding)
+    {
+        var y = demand.AllowedAxisRange.Minimum + padding + slot * separation;
+        if (nodes.Values.Where(node => string.Equals(node.Node.ProjectId, demand.CoordinateFrameId, StringComparison.Ordinal) &&
+                node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId)
+            .Any(node => y >= node.Rect.Y - padding && y <= node.Rect.Bottom + padding &&
+                         PositiveOverlap(demand.OccupiedInterval,
+                             new AxisInterval(node.Rect.X - padding, node.Rect.Right + padding))))
+            return true;
+        if (labels.TryGetValue(demand.CoordinateFrameId!, out var label) &&
+            y >= label.ProjectLabelObstacleBounds.Y && y <= label.ProjectLabelObstacleBounds.Bottom &&
+            PositiveOverlap(demand.OccupiedInterval,
+                new AxisInterval(label.ProjectLabelObstacleBounds.X, label.ProjectLabelObstacleBounds.Right)))
+            return true;
+        return allocated.Any(other => Math.Abs(other.AxisCoordinate - y) < separation &&
+            PositiveOverlap(demand.OccupiedInterval, other.OccupiedInterval));
     }
 
     private static IReadOnlyDictionary<string, AssignedLinkSegment> PreservedRootAssignments(
