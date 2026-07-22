@@ -9,7 +9,8 @@ internal static class ProjectOwnershipBoundsCompiler
     public static IReadOnlyDictionary<string, ProjectLayout> Compile(
         IReadOnlyDictionary<string, ProjectLayout> projects,
         IReadOnlyDictionary<string, NodeLayout> nodes,
-        CoordinateOwnershipCompilation ownership,
+        IReadOnlyDictionary<string, LinkLayout> links,
+        IReadOnlyDictionary<string, RouteSemanticOwnership> ownership,
         int containerPadding,
         int projectHeaderHeight)
     {
@@ -19,14 +20,10 @@ internal static class ProjectOwnershipBoundsCompiler
             var ownedNodes = nodes.Values
                 .Where(node => string.Equals(node.Node.ProjectId, project.Project.Id, StringComparison.Ordinal))
                 .ToArray();
-            var ownedPoints = ownership.Segments
-                .Where(segment => string.Equals(segment.OwnerProjectId, project.Project.Id, StringComparison.Ordinal))
-                .SelectMany(segment => new[] { segment.AbsoluteStart }
-                    .Concat(segment.AbsoluteWaypoints)
-                    .Concat(new[] { segment.AbsoluteEnd }))
-                .Concat(ownership.Anchors
-                    .Where(anchor => string.Equals(anchor.OwnerProjectId, project.Project.Id, StringComparison.Ordinal))
-                    .Select(anchor => anchor.AbsolutePoint))
+            var ownedPoints = ownership.Values
+                .Where(route => route.Relationship == RouteProjectRelationship.SameProject &&
+                    string.Equals(route.SameProjectOwnerId, project.Project.Id, StringComparison.Ordinal))
+                .SelectMany(route => CompletePoints(links[route.LogicalRouteId]))
                 .ToArray();
 
             if (ownedNodes.Length == 0 && ownedPoints.Length == 0)
@@ -60,4 +57,7 @@ internal static class ProjectOwnershipBoundsCompiler
 
         return result;
     }
+
+    private static IEnumerable<Point> CompletePoints(LinkLayout link) =>
+        new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint });
 }

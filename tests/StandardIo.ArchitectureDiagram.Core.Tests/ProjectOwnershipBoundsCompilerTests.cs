@@ -14,9 +14,10 @@ public sealed class ProjectOwnershipBoundsCompilerTests
         var projects = Projects(Project("a", new Rect(0, 0, 300, 200)));
         var nodes = Nodes(Node("source", "a", new Rect(20, 40, 20, 20)), Node("target", "a", new Rect(40, 80, 20, 20)));
         var link = Link("edge", "source", "target", new Point(30, 60), new[] { new Point(220, 60), new Point(220, 80) }, new Point(50, 80));
-        var ownership = CoordinateOwnershipCompiler.Compile(nodes, projects, Links(link), true);
+        var links = Links(link);
 
-        var result = ProjectOwnershipBoundsCompiler.Compile(projects, nodes, ownership, 10, 20);
+        var semantic = RouteSemanticOwnershipCompiler.Compile(nodes, links);
+        var result = ProjectOwnershipBoundsCompiler.Compile(projects, nodes, links, semantic, 10, 20);
 
         Assert.Equal(230, result["a"].Rect.Right);
         Assert.True(result["a"].Rect.Right > nodes.Values.Max(node => node.Rect.Right) + 10);
@@ -32,14 +33,39 @@ public sealed class ProjectOwnershipBoundsCompilerTests
             Node("source", "a", new Rect(20, 40, 20, 20)),
             Node("target", "b", new Rect(360, 40, 20, 20)));
         var link = Link("edge", "source", "target", new Point(30, 60), new[] { new Point(100, 60), new Point(250, 60), new Point(300, 60) }, new Point(370, 60));
-        var ownership = CoordinateOwnershipCompiler.Compile(nodes, projects, Links(link), true);
+        var links = Links(link);
+        var ownership = CoordinateOwnershipCompiler.Compile(nodes, projects, links, true);
 
-        var result = ProjectOwnershipBoundsCompiler.Compile(projects, nodes, ownership, 10, 20);
+        var semantic = RouteSemanticOwnershipCompiler.Compile(nodes, links);
+        var result = ProjectOwnershipBoundsCompiler.Compile(projects, nodes, links, semantic, 10, 20);
 
-        Assert.Equal(110, result["a"].Rect.Right);
-        Assert.Equal(290, result["b"].Rect.X);
+        Assert.Equal(50, result["a"].Rect.Right);
+        Assert.Equal(350, result["b"].Rect.X);
+        Assert.True(result["a"].Rect.Right < 100);
+        Assert.True(result["b"].Rect.X > 300);
         Assert.DoesNotContain(ownership.Segments.Where(segment => segment.OwnerProjectId is not null),
             segment => segment.AbsoluteWaypoints.Contains(new Point(250, 60)));
+    }
+
+    [Fact]
+    public void Compile_contains_both_exterior_sides_with_padding_and_is_idempotent()
+    {
+        var projects = Projects(Project("a", new Rect(0, 0, 100, 120)));
+        var nodes = Nodes(
+            Node("source", "a", new Rect(20, 40, 20, 20)),
+            Node("target", "a", new Rect(60, 80, 20, 20)));
+        var links = Links(Link("edge", "source", "target", new Point(30, 60),
+            new[] { new Point(-50, 60), new Point(-50, 120), new Point(150, 120), new Point(150, 80) },
+            new Point(70, 80)));
+        var semantic = RouteSemanticOwnershipCompiler.Compile(nodes, links);
+
+        var first = ProjectOwnershipBoundsCompiler.Compile(projects, nodes, links, semantic, 10, 20);
+        var second = ProjectOwnershipBoundsCompiler.Compile(first, nodes, links, semantic, 10, 20);
+
+        Assert.Equal(-60, first["a"].Rect.X);
+        Assert.Equal(160, first["a"].Rect.Right);
+        Assert.Equal(first["a"].Rect, second["a"].Rect);
+        Assert.All(links["edge"].Points, point => Assert.True(first["a"].Rect.Contains(point)));
     }
 
     private static IReadOnlyDictionary<string, ProjectLayout> Projects(params ProjectLayout[] projects) =>

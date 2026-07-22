@@ -125,17 +125,17 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
     {
         var reasons = initialReasons;
         var layout = Measure(timings, "project-region generation", () => ProjectRegionLayoutBuilder.Build(graph, settings));
-        var ownership = Measure(timings, "project-region ownership compilation", () =>
-            CoordinateOwnershipCompiler.Compile(layout.Nodes, layout.Projects, layout.Links, settings.ShowProjectContainers));
+        var semanticOwnership = Measure(timings, "project-region semantic ownership", () =>
+            RouteSemanticOwnershipCompiler.Compile(layout.Nodes, layout.Links));
         if (settings.ShowProjectContainers)
         {
             var projects = Measure(timings, "project-region bounds", () => ProjectOwnershipBoundsCompiler.Compile(
-                layout.Projects, layout.Nodes, ownership, settings.Layout.ContainerPadding,
+                layout.Projects, layout.Nodes, layout.Links, semanticOwnership, settings.Layout.ContainerPadding,
                 settings.Layout.ProjectHeaderHeight));
             layout = layout.WithProjects(projects);
-            ownership = Measure(timings, "project-region ownership rebase", () =>
-                CoordinateOwnershipCompiler.Rebase(ownership, projects));
         }
+        var ownership = Measure(timings, "project-region ownership compilation", () =>
+            CoordinateOwnershipCompiler.Compile(layout.Nodes, layout.Projects, layout.Links, settings.ShowProjectContainers));
         var projectLabels = Measure(timings, "project-region project-label bounds", () =>
             ProjectLabelGeometryMeasurer.Measure(
                 layout.Projects, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding));
@@ -378,11 +378,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 edgeCorridors.Overlaps(otherCorridors);
         }
 
-        var ownership = Measure(timings, "ownership", () => CoordinateOwnershipCompiler.Compile(
-            layout.Nodes,
-            layout.Projects,
-            layout.Links,
-            settings.ShowProjectContainers));
+        var semanticOwnership = RouteSemanticOwnershipCompiler.Compile(layout.Nodes, layout.Links);
         if (settings.ShowProjectContainers)
         {
             IReadOnlyDictionary<string, ProjectLayout> projects;
@@ -390,29 +386,25 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 "project-bound calculation",
                 layout.Nodes.Count,
                 layout.Links.Count,
-                ownership.Segments.Count,
+                layout.Links.Count,
                 layout.Graph.Projects.Count,
                 layout.LayoutRevision.Value))
             {
                 projects = ProjectOwnershipBoundsCompiler.Compile(
                     layout.Projects,
                     layout.Nodes,
-                    ownership,
+                    layout.Links,
+                    semanticOwnership,
                     settings.Layout.ContainerPadding,
                     settings.Layout.ProjectHeaderHeight);
             }
             layout = layout.WithProjects(projects);
-            using (PerformanceAudit.Measure(
-                "ownership rebase",
-                layout.Nodes.Count,
-                layout.Links.Count,
-                ownership.Segments.Count,
-                ownership.Segments.Count,
-                layout.LayoutRevision.Value))
-            {
-                ownership = CoordinateOwnershipCompiler.Rebase(ownership, projects);
-            }
         }
+        var ownership = Measure(timings, "ownership", () => CoordinateOwnershipCompiler.Compile(
+            layout.Nodes,
+            layout.Projects,
+            layout.Links,
+            settings.ShowProjectContainers));
         var projectLabels = Measure(timings, "project-label bounds", () => ProjectLabelGeometryMeasurer.Measure(
             layout.Projects, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding));
         var physicalFindings = Measure(timings, "node-overlap validation", () =>
