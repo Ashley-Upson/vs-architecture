@@ -402,11 +402,11 @@ public sealed class RoslynDependencyAnalyzerTests
         var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
         var project = Assert.Single(graph.Projects);
         var processing = project.Types.Single(t => t.Name == "CultureProcessingService");
-        var serviceInterface = project.Types.Single(t => t.Name == "ICultureService");
-        var serviceImplementation = project.Types.Single(t => t.Name == "CultureService");
+        var serviceImplementation = project.Types.Single(t => t.Name == "CultureService : ICultureService");
 
         Assert.Contains(graph.Edges, e => e.SourceId == processing.Id && e.TargetId == serviceImplementation.Id);
-        Assert.DoesNotContain(graph.Edges, e => e.SourceId == processing.Id && e.TargetId == serviceInterface.Id);
+        Assert.DoesNotContain(project.Types, t => t.FullName == "Api.ICultureService");
+        Assert.Equal(InterfaceResolutionStatus.Unique, serviceImplementation.InterfaceResolution);
     }
 
     [Fact]

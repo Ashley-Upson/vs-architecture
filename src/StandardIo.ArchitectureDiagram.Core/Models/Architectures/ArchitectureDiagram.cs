@@ -9,7 +9,12 @@ public sealed record ArchitectureNode(
     string FullName,
     string Kind,
     string UniqueId,
-    IReadOnlyList<string> Interfaces);
+    IReadOnlyList<string> Interfaces,
+    string? SemanticTypeIdentity = null,
+    string? InterfaceIdentity = null,
+    string? ImplementationIdentity = null,
+    int ImplementationCount = 0,
+    InterfaceResolutionStatus InterfaceResolution = InterfaceResolutionStatus.NotApplicable);
 
 public sealed record ArchitectureProject(
     string Id,

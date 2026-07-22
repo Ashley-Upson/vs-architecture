@@ -62,7 +62,11 @@ public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPag
                 project.Id, project.Name,
                 project.Nodes.Select(node => new TypeNode(
                     node.Id, node.ProjectId, node.Name, node.FullName, node.Kind,
-                    node.UniqueId, node.Interfaces)).ToArray(), project.UniqueId)).ToArray(),
+                    node.UniqueId, node.Interfaces, SemanticTypeIdentity: node.SemanticTypeIdentity,
+                    InterfaceIdentity: node.InterfaceIdentity,
+                    ImplementationIdentity: node.ImplementationIdentity,
+                    ImplementationCount: node.ImplementationCount,
+                    InterfaceResolution: node.InterfaceResolution)).ToArray(), project.UniqueId)).ToArray(),
             model.ExternalNodes.Select(node => new ExternalDependencyNode(
                 node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
             model.Links.Select(link => new DependencyEdge(link.Id, link.SourceId, link.TargetId, link.Kind)).ToArray(),

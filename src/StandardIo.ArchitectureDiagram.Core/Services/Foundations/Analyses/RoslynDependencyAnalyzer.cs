@@ -49,7 +49,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
             ?? new List<Project>();
         var typeBySymbol = new Dictionary<ISymbol, TypeNode>(SymbolEqualityComparer.Default);
         var typeByFullName = new Dictionary<string, TypeNode>();
-        var registeredImplementationByService = new Dictionary<ISymbol, INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var registrationsByService = new Dictionary<string, Dictionary<string, INamedTypeSymbol>>(System.StringComparer.Ordinal);
         var projectTypes = new List<(Project Project, string ProjectId, List<TypeNode> Types)>();
         var projectCompilations = new List<(Project Project, Compilation Compilation)>();
 
@@ -116,13 +116,23 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
         {
             foreach (var registration in await CollectServiceRegistrationsAsync(project, compilation, cancellationToken).ConfigureAwait(false))
             {
-                if (!SymbolEqualityComparer.Default.Equals(registration.Service.OriginalDefinition, registration.Implementation.OriginalDefinition) &&
-                    !registeredImplementationByService.ContainsKey(registration.Service.OriginalDefinition))
+                if (SymbolEqualityComparer.Default.Equals(
+                    registration.Service.OriginalDefinition,
+                    registration.Implementation.OriginalDefinition))
                 {
-                    registeredImplementationByService[registration.Service.OriginalDefinition] = registration.Implementation.OriginalDefinition;
+                    continue;
                 }
+
+                var serviceIdentity = TypeIdentity(registration.Service);
+                var implementationIdentity = TypeIdentity(registration.Implementation);
+                if (!registrationsByService.TryGetValue(serviceIdentity, out var implementations))
+                    registrationsByService[serviceIdentity] = implementations =
+                        new Dictionary<string, INamedTypeSymbol>(System.StringComparer.Ordinal);
+                implementations[implementationIdentity] = registration.Implementation.OriginalDefinition;
             }
         }
+
+        ApplyInterfaceResolution(projectTypes, typeBySymbol, typeByFullName, registrationsByService);
 
         var projectContainers = projectTypes
             .Select(p => new ProjectContainer(
@@ -176,7 +186,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
 
                     foreach (var dependency in CollectConstructorDependencies(declaration, model, cancellationToken))
                     {
-                        var resolvedDependency = ResolveRegisteredImplementation(dependency, registeredImplementationByService);
+                        var resolvedDependency = ResolveRegisteredImplementation(dependency, registrationsByService);
                         if (SymbolEqualityComparer.Default.Equals(resolvedDependency, sourceSymbol))
                         {
                             continue;
@@ -239,7 +249,9 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
                 project.Name,
                 project.Types.Select(type => new ArchitectureNode(
                     type.Id, type.ProjectId, type.Name, type.FullName, type.Kind, type.UniqueId,
-                    type.Interfaces ?? System.Array.Empty<string>())).ToArray(),
+                    type.Interfaces ?? System.Array.Empty<string>(), type.SemanticTypeIdentity,
+                    type.InterfaceIdentity, type.ImplementationIdentity, type.ImplementationCount,
+                    type.InterfaceResolution)).ToArray(),
                 project.UniqueId)).ToArray(),
             model.ExternalDependencies.Select(node => new ArchitectureExternalNode(
                 node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
@@ -306,7 +318,8 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
                 }
 
                 if (model.GetTypeInfo(serviceType, cancellationToken).Type is INamedTypeSymbol service &&
-                    model.GetTypeInfo(implementationType, cancellationToken).Type is INamedTypeSymbol implementation)
+                    ResolveRegistrationImplementation(invocation, implementationType, model, cancellationToken) is
+                        INamedTypeSymbol implementation)
                 {
                     registrations.Add(new ServiceRegistration(service.OriginalDefinition, implementation.OriginalDefinition));
                 }
@@ -319,21 +332,26 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
     private static bool TryGetServiceRegistrationTypeSyntax(
         InvocationExpressionSyntax invocation,
         out TypeSyntax serviceType,
-        out TypeSyntax implementationType)
+        out TypeSyntax? implementationType)
     {
         serviceType = null!;
-        implementationType = null!;
+        implementationType = null;
 
         if (GetInvokedName(invocation.Expression) is not GenericNameSyntax genericName ||
-            genericName.TypeArgumentList.Arguments.Count != 2 ||
-            genericName.Identifier.ValueText is not ("AddScoped" or "AddTransient" or "AddSingleton"))
+            !IsRegistrationMethod(genericName.Identifier.ValueText) ||
+            genericName.TypeArgumentList.Arguments.Count is < 1 or > 2)
         {
             return false;
         }
 
         serviceType = genericName.TypeArgumentList.Arguments[0];
-        implementationType = genericName.TypeArgumentList.Arguments[1];
+        if (genericName.TypeArgumentList.Arguments.Count == 2)
+            implementationType = genericName.TypeArgumentList.Arguments[1];
         return true;
+
+        static bool IsRegistrationMethod(string name) => name is
+            "AddScoped" or "AddTransient" or "AddSingleton" or
+            "TryAddScoped" or "TryAddTransient" or "TryAddSingleton";
 
         static SimpleNameSyntax? GetInvokedName(ExpressionSyntax expression)
         {
@@ -349,12 +367,138 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
 
     private static INamedTypeSymbol ResolveRegisteredImplementation(
         INamedTypeSymbol dependency,
-        Dictionary<ISymbol, INamedTypeSymbol> registeredImplementationByService)
+        Dictionary<string, Dictionary<string, INamedTypeSymbol>> registrationsByService)
     {
-        return registeredImplementationByService.TryGetValue(dependency.OriginalDefinition, out var implementation)
-            ? implementation
+        return registrationsByService.TryGetValue(TypeIdentity(dependency), out var implementations) &&
+               implementations.Count == 1
+            ? implementations.Values.Single()
             : dependency;
     }
+
+    private static INamedTypeSymbol? ResolveRegistrationImplementation(
+        InvocationExpressionSyntax invocation,
+        TypeSyntax? implementationType,
+        SemanticModel model,
+        CancellationToken cancellationToken)
+    {
+        if (implementationType is not null)
+            return model.GetTypeInfo(implementationType, cancellationToken).Type as INamedTypeSymbol;
+
+        foreach (var argument in invocation.ArgumentList.Arguments.Reverse())
+        {
+            var expression = argument.Expression switch
+            {
+                SimpleLambdaExpressionSyntax simple when simple.Body is ExpressionSyntax body => body,
+                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.Body is ExpressionSyntax body => body,
+                _ => argument.Expression
+            };
+            if (model.GetTypeInfo(expression, cancellationToken).Type is INamedTypeSymbol implementation &&
+                implementation.TypeKind == TypeKind.Class)
+                return implementation;
+        }
+
+        return null;
+    }
+
+    private static void ApplyInterfaceResolution(
+        IList<(Project Project, string ProjectId, List<TypeNode> Types)> projectTypes,
+        Dictionary<ISymbol, TypeNode> typeBySymbol,
+        Dictionary<string, TypeNode> typeByFullName,
+        Dictionary<string, Dictionary<string, INamedTypeSymbol>> registrationsByService)
+    {
+        var replacements = new Dictionary<string, TypeNode>(System.StringComparer.Ordinal);
+        var removed = new HashSet<string>(System.StringComparer.Ordinal);
+        var uniqueInterfacesByImplementation = new Dictionary<string, List<INamedTypeSymbol>>(System.StringComparer.Ordinal);
+
+        foreach (var entry in typeBySymbol.ToArray())
+        {
+            if (entry.Key is not INamedTypeSymbol symbol || symbol.TypeKind != TypeKind.Interface)
+                continue;
+
+            var node = entry.Value;
+            if (!registrationsByService.TryGetValue(TypeIdentity(symbol), out var implementations) ||
+                implementations.Count == 0)
+            {
+                replacements[node.Id] = node with
+                {
+                    SemanticTypeIdentity = node.FullName,
+                    InterfaceIdentity = node.FullName,
+                    ImplementationCount = 0,
+                    InterfaceResolution = InterfaceResolutionStatus.Unresolved
+                };
+                continue;
+            }
+
+            if (implementations.Count > 1)
+            {
+                replacements[node.Id] = node with
+                {
+                    Name = $"{node.Name}\n({implementations.Count} implementations)",
+                    SemanticTypeIdentity = node.FullName,
+                    InterfaceIdentity = node.FullName,
+                    ImplementationCount = implementations.Count,
+                    InterfaceResolution = InterfaceResolutionStatus.Multiple
+                };
+                continue;
+            }
+
+            var implementation = implementations.Values.Single();
+            var implementationIdentity = TypeIdentity(implementation);
+            if (!uniqueInterfacesByImplementation.TryGetValue(implementationIdentity, out var services))
+                uniqueInterfacesByImplementation[implementationIdentity] = services = new List<INamedTypeSymbol>();
+            services.Add(symbol);
+            removed.Add(node.Id);
+        }
+
+        foreach (var entry in typeBySymbol.ToArray())
+        {
+            if (entry.Key is not INamedTypeSymbol symbol || symbol.TypeKind != TypeKind.Class)
+                continue;
+
+            var node = entry.Value;
+            if (!uniqueInterfacesByImplementation.TryGetValue(TypeIdentity(symbol), out var services))
+            {
+                replacements[node.Id] = node with { SemanticTypeIdentity = node.FullName };
+                continue;
+            }
+
+            var ordered = services
+                .OrderBy(service => service.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), System.StringComparer.Ordinal)
+                .ToArray();
+            var interfaceNames = string.Join(", ", ordered.Select(service => service.Name));
+            var interfaceIdentities = string.Join(";", ordered.Select(service => service
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)));
+            replacements[node.Id] = node with
+            {
+                Name = $"{node.Name} : {interfaceNames}",
+                SemanticTypeIdentity = node.FullName,
+                InterfaceIdentity = interfaceIdentities,
+                ImplementationIdentity = node.FullName,
+                ImplementationCount = 1,
+                InterfaceResolution = InterfaceResolutionStatus.Unique
+            };
+        }
+
+        foreach (var project in projectTypes)
+        {
+            var updated = project.Types.Where(node => !removed.Contains(node.Id))
+                .Select(node => replacements.TryGetValue(node.Id, out var replacement) ? replacement : node)
+                .ToList();
+            project.Types.Clear();
+            project.Types.AddRange(updated);
+        }
+
+        foreach (var key in typeBySymbol.Keys.ToArray())
+            if (removed.Contains(typeBySymbol[key].Id)) typeBySymbol.Remove(key);
+            else if (replacements.TryGetValue(typeBySymbol[key].Id, out var replacement)) typeBySymbol[key] = replacement;
+        foreach (var key in typeByFullName.Keys.ToArray())
+            if (removed.Contains(typeByFullName[key].Id)) typeByFullName.Remove(key);
+            else if (replacements.TryGetValue(typeByFullName[key].Id, out var replacement)) typeByFullName[key] = replacement;
+    }
+
+    private static string TypeIdentity(INamedTypeSymbol symbol) =>
+        symbol.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            .Replace("global::", string.Empty);
 
     private static IEnumerable<INamedTypeSymbol> CollectConstructorDependencies(
         TypeDeclarationSyntax declaration,

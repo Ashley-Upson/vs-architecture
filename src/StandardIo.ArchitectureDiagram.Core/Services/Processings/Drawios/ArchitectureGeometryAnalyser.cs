@@ -103,8 +103,6 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
         var physicalPairs = cells.Where(cell => Attr(cell, "edge") == "1" && Attr(cell, "logicalEdgeId") is not null)
             .Select(cell => (Route: Attr(cell, "logicalEdgeId")!, Source: Attr(cell, "semanticSourceId"), Target: Attr(cell, "semanticTargetId")))
             .Distinct().ToArray();
-        var nodeKinds = generation.Diagram.Projects.SelectMany(project => project.Nodes)
-            .ToDictionary(node => node.Id, node => node.Kind, StringComparer.Ordinal);
         return generation.Diagram.Links.OrderBy(link => link.Id, StringComparer.Ordinal).Select(link =>
         {
             var matching = routes.Where(route => route == link.Id || route.EndsWith("__" + link.Id, StringComparison.Ordinal))
@@ -117,10 +115,6 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
             if (collapsed.Length > 0)
                 return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.CollapsedByApprovedRule,
                     "Equivalent semantic source/target pair is represented by another physical route.", collapsed);
-            if (nodeKinds.TryGetValue(link.SourceId, out var sourceKind) && sourceKind == "Interface" ||
-                nodeKinds.TryGetValue(link.TargetId, out var targetKind) && targetKind == "Interface")
-                return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.ExplicitlyOmitted,
-                    "Interface endpoints are not rendered as Architecture nodes.", Array.Empty<string>());
             return new ArchitectureLinkReconciliation(link.Id, ArchitectureLinkDisposition.Unsupported,
                 "No rendered route or approved collapsed semantic pair was found.", Array.Empty<string>());
         }).ToArray();

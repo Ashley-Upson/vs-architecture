@@ -57,11 +57,6 @@ internal sealed class RenderGraph
             {
                 foreach (var type in project.Types)
                 {
-                    if (type.Kind == "Interface")
-                    {
-                        continue;
-                    }
-
                     if (seenNodeIds.Add(type.Id))
                     {
                         nodes.Add(ToRenderNode(type, nodes.Count));
