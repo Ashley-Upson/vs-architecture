@@ -40,7 +40,7 @@ internal static class PlacementPipeline
             revision);
     }
 
-        private static Dictionary<string, int> CalculateWidths(RenderGraph graph, DiagramSettings settings)
+        internal static Dictionary<string, int> CalculateWidths(RenderGraph graph, DiagramSettings settings)
         {
             var incoming = graph.Links.GroupBy(link => link.TargetId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);

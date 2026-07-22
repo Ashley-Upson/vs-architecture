@@ -9,7 +9,7 @@ internal static class ProjectRegionPlacement
 {
     public static PlacedGraph Place(RenderGraph graph, DiagramSettings settings, LayoutRevision revision)
     {
-        if (graph.Projects.Count <= 1)
+        if (graph.Projects.Count == 0)
             return PlacementPipeline.Place(graph, settings, revision,
                 disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
 
@@ -79,22 +79,31 @@ internal static class ProjectRegionPlacement
             var ids = new HashSet<string>(projectNodes.Select(node => node.Id), StringComparer.Ordinal);
             var projectLinks = graph.Links.Where(link => ids.Contains(link.SourceId) && ids.Contains(link.TargetId))
                 .OrderBy(link => link.Order).ThenBy(link => link.Id, StringComparer.Ordinal).ToArray();
-            var parents = graph.PlacementParentByNode.Where(pair => ids.Contains(pair.Key) && ids.Contains(pair.Value))
+            var internalNodes = projectNodes.Where(node => !node.IsExternal).ToArray();
+            var internalIds = new HashSet<string>(internalNodes.Select(node => node.Id), StringComparer.Ordinal);
+            var internalLinks = projectLinks
+                .Where(link => internalIds.Contains(link.SourceId) && internalIds.Contains(link.TargetId)).ToArray();
+            var parents = graph.PlacementParentByNode
+                .Where(pair => internalIds.Contains(pair.Key) && internalIds.Contains(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-            var subgraph = RenderGraph.Create([project], projectNodes, projectLinks, parents);
-            var placed = PlacementPipeline.Place(subgraph, settings, revision,
+            var internalGraph = RenderGraph.Create([project], internalNodes, internalLinks, parents);
+            var placed = PlacementPipeline.Place(internalGraph, settings, revision,
                 disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
-            if (placed.Projects.ContainsKey(project.Id)) return placed;
-            var emptyBounds = new Rect(
-                settings.Layout.ContainerPadding,
-                settings.Layout.ContainerPadding,
-                settings.Layout.NodeWidth + settings.Layout.ContainerPadding * 2,
-                settings.Layout.ProjectHeaderHeight + settings.Layout.ContainerPadding * 2);
-            return new PlacedGraph(subgraph, placed.Nodes,
-                new Dictionary<string, ProjectLayout>(StringComparer.Ordinal)
-                {
-                    [project.Id] = new ProjectLayout(project, emptyBounds)
-                }, revision);
+            var completeGraph = RenderGraph.Create([project], projectNodes, projectLinks,
+                graph.PlacementParentByNode.Where(pair => ids.Contains(pair.Key) && ids.Contains(pair.Value))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+            var nodes = ExperimentalExternalTerminalLayerPlacement.Apply(
+                completeGraph, placed.Nodes, settings);
+            var projects = PlacementPipeline.PositionProjects(completeGraph, settings, nodes);
+            if (!projects.ContainsKey(project.Id))
+            {
+                projects[project.Id] = new ProjectLayout(project, new Rect(
+                    settings.Layout.ContainerPadding,
+                    settings.Layout.ContainerPadding,
+                    settings.Layout.NodeWidth + settings.Layout.ContainerPadding * 2,
+                    settings.Layout.ProjectHeaderHeight + settings.Layout.ContainerPadding * 2));
+            }
+            return new PlacedGraph(completeGraph, nodes, projects, revision);
         }
     }
 
