@@ -149,7 +149,7 @@ internal static class PlacementPipeline
             cancellationToken.ThrowIfCancellationRequested();
             CenterParentsOverChildren(graph, settings, result);
             ResolveLayerOverlaps(settings, result);
-            ReserveLinkCorridors(graph, settings, result);
+            ReserveVerticalLinkAisles(graph, settings, result);
             ResolveLayerOverlaps(settings, result);
             AlignBaselineNodes(settings, result);
             RelaxNonTopDepthAlignment(graph, settings, result);
@@ -775,7 +775,7 @@ internal static class PlacementPipeline
             }
         }
 
-        private static void ReserveLinkCorridors(
+        private static void ReserveVerticalLinkAisles(
             RenderGraph graph,
             DiagramSettings settings,
             Dictionary<string, NodeLayout> nodes)
@@ -792,7 +792,7 @@ internal static class PlacementPipeline
                         Link = link,
                         UpperDepth = Math.Min(source.Depth, target.Depth),
                         LowerDepth = Math.Max(source.Depth, target.Depth),
-                        CorridorX = corridorX
+                        ReservedAisleX = corridorX
                     };
                 })
                 .OrderBy(item => item.Link.Order)
@@ -803,12 +803,12 @@ internal static class PlacementPipeline
             {
                 for (var depth = claim.UpperDepth; depth <= claim.LowerDepth; depth++)
                 {
-                    ReserveCorridorOnLayer(settings, nodes, depth, claim.CorridorX);
+                    ReserveAisleOnLayer(settings, nodes, depth, claim.ReservedAisleX);
                 }
             }
         }
 
-        private static void ReserveCorridorOnLayer(
+        private static void ReserveAisleOnLayer(
             DiagramSettings settings,
             Dictionary<string, NodeLayout> nodes,
             int depth,
