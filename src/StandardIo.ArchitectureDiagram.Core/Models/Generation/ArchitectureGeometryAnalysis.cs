@@ -7,7 +7,9 @@ public enum ArchitectureAnalysisSeverity { HardInvalid, LikelyDefect, VisualQual
 public sealed record ArchitectureGeometryFinding(
     ArchitectureAnalysisSeverity Severity, string Code, string Description,
     string? NodeId = null, string? LogicalRouteId = null, string? OtherId = null,
-    IReadOnlyList<ValidationPoint>? Locations = null);
+    IReadOnlyList<ValidationPoint>? Locations = null,
+    IReadOnlyList<string>? ProjectIds = null,
+    IReadOnlyList<ValidationRectangle>? RelevantBounds = null);
 
 public sealed record ValidationRectangle(int X, int Y, int Width, int Height)
 {

@@ -31,6 +31,7 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
         var terminals = LogicalTerminals(cells.Values);
         var routes = generation.Routes.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal)
             .Select(route => AnalyseRoute(route, nodes, terminals, findings)).ToArray();
+        ValidateRoutesAgainstUnrelatedProjects(generation.Routes, terminals, nodes, projects, findings);
         var links = ReconcileLinks(generation, cells.Values);
         ValidateRoutePairs(generation.Routes, findings);
         IncludeTypedFindings(generation, findings);
@@ -182,6 +183,39 @@ public sealed class ArchitectureGeometryAnalyser : IArchitectureGeometryAnalyser
             var maximum = Segments(routes[left].Points).SelectMany(a => Segments(routes[right].Points).Select(b => CollinearOverlap(a, b))).DefaultIfEmpty().Max();
             if (maximum > 0) findings.Add(Hard("SharedSegment", $"Routes {routes[left].LogicalRouteId} and {routes[right].LogicalRouteId} share {maximum}px.",
                 route: routes[left].LogicalRouteId, other: routes[right].LogicalRouteId));
+        }
+    }
+
+    private static void ValidateRoutesAgainstUnrelatedProjects(
+        IReadOnlyList<GeneratedRoute> routes,
+        IReadOnlyDictionary<string, (string? Source, string? Target)> terminals,
+        IReadOnlyList<ArchitectureNodeGeometry> nodes,
+        IReadOnlyList<ArchitectureProjectGeometry> projects,
+        ICollection<ArchitectureGeometryFinding> findings)
+    {
+        var nodeById = nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+        foreach (var route in routes)
+        {
+            terminals.TryGetValue(route.LogicalRouteId, out var terminal);
+            var sourceProject = terminal.Source is not null && nodeById.TryGetValue(terminal.Source, out var source)
+                ? source.OwnerProjectId : null;
+            var targetProject = terminal.Target is not null && nodeById.TryGetValue(terminal.Target, out var target)
+                ? target.OwnerProjectId : null;
+            foreach (var project in projects.Where(project => project.Id != sourceProject && project.Id != targetProject))
+            {
+                var offending = Segments(route.Points).FirstOrDefault(segment =>
+                    SegmentIntersectsInterior(segment.Start, segment.End, project.Bounds));
+                if (offending == default) continue;
+                findings.Add(new ArchitectureGeometryFinding(
+                    ArchitectureAnalysisSeverity.HardInvalid,
+                    "RouteThroughUnrelatedProject",
+                    $"Route {route.LogicalRouteId} passes through unrelated project {project.Id}.",
+                    LogicalRouteId: route.LogicalRouteId,
+                    OtherId: project.Id,
+                    Locations: new[] { offending.Start, offending.End },
+                    ProjectIds: new[] { project.Id },
+                    RelevantBounds: new[] { project.Bounds }));
+            }
         }
     }
 

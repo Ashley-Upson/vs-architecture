@@ -64,6 +64,26 @@ public sealed class ArchitectureGeometryAnalyserTests
         Assert.Contains(analysis.Findings, finding => finding.Code == "ProjectContainerIntersection");
     }
 
+    [Fact]
+    public void Detects_route_through_unrelated_project_with_structured_context()
+    {
+        var page = Page(
+            Project("source_project", 0, 0, 100, 100),
+            Project("unrelated", 120, 0, 100, 100),
+            Project("target_project", 240, 0, 100, 100),
+            Node("a", 10, 10, 40, 40, "source_project"),
+            Node("target", 10, 10, 40, 40, "target_project"),
+            Edge("edge", "a", "target"));
+        var route = new GeneratedRoute("edge",
+            [new ValidationPoint(50, 50), new ValidationPoint(290, 50)]);
+
+        var finding = Assert.Single(new ArchitectureGeometryAnalyser().Analyse(Result(page, route)).Findings,
+            item => item.Code == "RouteThroughUnrelatedProject");
+
+        Assert.Equal(new[] { "unrelated" }, finding.ProjectIds);
+        Assert.Equal(new ValidationRectangle(120, 0, 100, 100), Assert.Single(finding.RelevantBounds!));
+    }
+
     private static TypedArchitectureGenerationResult Result(DrawioPage page, params GeneratedRoute[] routes)
     {
         var diagram = new ArchitectureDiagramModel(
@@ -83,6 +103,11 @@ public sealed class ArchitectureGeometryAnalyserTests
 
     private static XElement Node(string id, int x, int y, int width, int height) => new("mxCell",
         new XAttribute("id", id), new XAttribute("value", id), new XAttribute("vertex", "1"), new XAttribute("parent", "1"),
+        new XElement("mxGeometry", new XAttribute("x", x), new XAttribute("y", y), new XAttribute("width", width),
+            new XAttribute("height", height), new XAttribute("as", "geometry")));
+
+    private static XElement Node(string id, int x, int y, int width, int height, string parent) => new("mxCell",
+        new XAttribute("id", id), new XAttribute("value", id), new XAttribute("vertex", "1"), new XAttribute("parent", parent),
         new XElement("mxGeometry", new XAttribute("x", x), new XAttribute("y", y), new XAttribute("width", width),
             new XAttribute("height", height), new XAttribute("as", "geometry")));
 
