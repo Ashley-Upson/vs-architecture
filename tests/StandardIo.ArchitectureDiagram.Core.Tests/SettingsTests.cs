@@ -6,6 +6,58 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class SettingsTests
 {
     [Fact]
+    public void Sparse_overlay_preserves_product_style_rules()
+    {
+        var settings = SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "rootDiscoveryPatternsText": "" }""");
+
+        Assert.NotEmpty(settings.StyleRules);
+        Assert.Contains(settings.StyleRules, rule => rule.Match == "*Controller");
+    }
+
+    [Fact]
+    public void Explicit_empty_overlay_lists_clear_product_defaults()
+    {
+        var settings = SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "styleRules": [], "overrides": [] }""");
+
+        Assert.Empty(settings.StyleRules);
+        Assert.Empty(settings.Overrides);
+    }
+
+    [Fact]
+    public void Nested_overlay_retains_omitted_sibling_properties()
+    {
+        var baseline = DiagramSettings.CreateDefault();
+        var settings = SettingsSerializer.ApplyOverlay(
+            baseline,
+            """{ "version": 2, "layout": { "verticalSpacing": 123 } }""");
+
+        Assert.Equal(123, settings.Layout.VerticalSpacing);
+        Assert.Equal(baseline.Layout.HorizontalSpacing, settings.Layout.HorizontalSpacing);
+        Assert.Equal(baseline.Layout.NodeWidth, settings.Layout.NodeWidth);
+    }
+
+    [Fact]
+    public void Explicit_null_overlay_value_fails_with_property_path()
+    {
+        var exception = Assert.Throws<InvalidDataException>(() => SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "layout": { "verticalSpacing": null } }"""));
+
+        Assert.Contains("layout.verticalSpacing", exception.Message);
+    }
+
+    [Fact]
+    public void Unsupported_overlay_version_fails()
+    {
+        Assert.Throws<NotSupportedException>(() => SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 999 }"""));
+    }
+    [Fact]
     public void Import_migrates_unversioned_settings_without_changing_existing_choices()
     {
         var settings = SettingsSerializer.Import("""

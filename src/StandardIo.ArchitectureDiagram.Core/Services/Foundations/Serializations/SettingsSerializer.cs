@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -93,6 +96,91 @@ public static class SettingsSerializer
         settings.Layout.DuplicateHighNoiseNodePatterns ??= new();
 
         return settings;
+    }
+
+    public static DiagramSettings ApplyOverlay(DiagramSettings baseline, string json)
+    {
+        if (baseline is null) throw new ArgumentNullException(nameof(baseline));
+        if (string.IsNullOrWhiteSpace(json)) throw new InvalidDataException("Settings overlay JSON is empty.");
+
+        using var baselineDocument = JsonDocument.Parse(Export(baseline));
+        JsonDocument overlayDocument;
+        try
+        {
+            overlayDocument = JsonDocument.Parse(json);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("Settings overlay JSON is invalid.", exception);
+        }
+
+        using (overlayDocument)
+        {
+            if (overlayDocument.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("Settings overlay JSON did not contain a settings object.");
+
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+                WriteOverlayObject(writer, baselineDocument.RootElement, overlayDocument.RootElement, string.Empty);
+            return Import(Encoding.UTF8.GetString(stream.ToArray()));
+        }
+    }
+
+    private static void WriteOverlayObject(
+        Utf8JsonWriter writer,
+        JsonElement baseline,
+        JsonElement overlay,
+        string path)
+    {
+        writer.WriteStartObject();
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var baselineProperty in baseline.EnumerateObject())
+        {
+            writer.WritePropertyName(baselineProperty.Name);
+            if (!TryGetProperty(overlay, baselineProperty.Name, out var overlayValue))
+                baselineProperty.Value.WriteTo(writer);
+            else
+                WriteOverlayValue(writer, baselineProperty.Value, overlayValue,
+                    path.Length == 0 ? baselineProperty.Name : $"{path}.{baselineProperty.Name}");
+            written.Add(baselineProperty.Name);
+        }
+
+        // Preserve the serializer's existing unknown-property policy by passing unknown members through.
+        // JsonSerializer currently ignores them during Import.
+        foreach (var overlayProperty in overlay.EnumerateObject().Where(property => !written.Contains(property.Name)))
+        {
+            writer.WritePropertyName(overlayProperty.Name);
+            if (overlayProperty.Value.ValueKind == JsonValueKind.Null)
+                throw new InvalidDataException($"Settings overlay property '{overlayProperty.Name}' cannot be null.");
+            overlayProperty.Value.WriteTo(writer);
+        }
+        writer.WriteEndObject();
+    }
+
+    private static bool TryGetProperty(JsonElement source, string name, out JsonElement value)
+    {
+        foreach (var property in source.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            value = property.Value;
+            return true;
+        }
+        value = default;
+        return false;
+    }
+
+    private static void WriteOverlayValue(
+        Utf8JsonWriter writer,
+        JsonElement baseline,
+        JsonElement overlay,
+        string path)
+    {
+        if (overlay.ValueKind == JsonValueKind.Null)
+            throw new InvalidDataException($"Settings overlay property '{path}' cannot be null.");
+        if (baseline.ValueKind == JsonValueKind.Object && overlay.ValueKind == JsonValueKind.Object)
+            WriteOverlayObject(writer, baseline, overlay, path);
+        else
+            overlay.WriteTo(writer);
     }
 
     private static int ReadSourceVersion(string json)

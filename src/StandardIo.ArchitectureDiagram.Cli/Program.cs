@@ -38,9 +38,13 @@ public static class Program
                 performance = GenerationPerformanceSession.Start(options.SerializationRepeatCount);
             }
 
-            var settings = string.IsNullOrWhiteSpace(options.SettingsPath)
-                ? DiagramSettings.CreateDefault()
-                : SettingsSerializer.Import(File.ReadAllText(options.SettingsPath));
+            var settings = DiagramSettings.CreateDefault();
+            if (!string.IsNullOrWhiteSpace(options.SettingsPath))
+            {
+                settings = SettingsSerializer.ApplyOverlay(
+                    settings,
+                    File.ReadAllText(options.SettingsPath));
+            }
 
             if (!string.IsNullOrWhiteSpace(options.RendererId))
             {
