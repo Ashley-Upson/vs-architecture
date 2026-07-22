@@ -29,7 +29,22 @@ internal sealed record RenderProject(string Id, string Name, int Order);
         int Order,
         string? SemanticSourceId = null,
         string? SemanticTargetId = null);
-    internal sealed record NodeLayout(RenderNode Node, Rect Rect, int Depth, bool IsStandalone);
+    internal enum NodePlacementAuthority
+    {
+        StandaloneExternalRegion,
+        ExclusiveOneToOneChain,
+        ExclusiveSiblingSubtree,
+        SharedDependency,
+        GeneralFallback
+    }
+    internal sealed record NodeLayout(
+        RenderNode Node,
+        Rect Rect,
+        int Depth,
+        bool IsStandalone,
+        NodePlacementAuthority PlacementAuthority = NodePlacementAuthority.GeneralFallback,
+        Rect? PlacementOriginalRect = null,
+        string? PlacementReason = null);
     internal sealed record ProjectLayout(RenderProject Project, Rect Rect);
     internal enum LogicalRouteStage
     {

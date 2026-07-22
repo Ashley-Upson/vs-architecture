@@ -11,7 +11,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
     {
         var fixture = Fixture(
             [("controller", "ApiController", 5, false), ("coord", "WorkCoordinationService", 0, false),
-             ("broker", "DataBroker", 2, false)]);
+             ("broker", "DataBroker", 2, false)],
+            [("controller", "coord"), ("coord", "broker")]);
 
         var result = Assign(fixture.Placement);
 
@@ -27,7 +28,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
         var fixture = Fixture(
             [("c1", "FirstController", 4, false), ("c2", "SecondController", 2, false),
              ("c3", "ThirdController", 2, false), ("b1", "FirstBroker", 5, false),
-             ("b2", "SecondBroker", 3, false)]);
+             ("b2", "SecondBroker", 3, false)],
+            [("c1", "b1"), ("c2", "b1"), ("c3", "b2")]);
 
         var result = Assign(fixture.Placement);
         var controller = result.ActiveGroups.Single(group => group.Name == "Controller");
@@ -46,7 +48,7 @@ public sealed class ConfiguredSemanticLayerPlacementTests
             [("controller", "ApiController", 0, false), ("orchestration", "FlowOrchestrationService", 1, false),
              ("thing", "ThisFuckingThing", 5, false), ("p1", "FirstProcessingService", 3, false),
              ("p2", "SecondProcessingService", 4, false)],
-            [("thing", "p1"), ("thing", "p2")]);
+            [("controller", "orchestration"), ("thing", "p1"), ("thing", "p2")]);
 
         var result = Assign(fixture.Placement);
         var diagnostic = result.UnmatchedNodes.Single(node => node.NodeId == "thing");
@@ -73,7 +75,7 @@ public sealed class ConfiguredSemanticLayerPlacementTests
     }
 
     [Fact]
-    public void Disconnected_unmatched_node_uses_nearest_group_majority()
+    public void Disconnected_unmatched_node_is_excluded_from_project_semantic_assignment()
     {
         var fixture = Fixture(
             [("controller", "ApiController", 0, false), ("broker", "DataBroker", 6, false),
@@ -81,9 +83,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
 
         var result = Assign(fixture.Placement);
 
-        Assert.Equal(result.FinalDepthByNodeId["broker"], result.FinalDepthByNodeId["unknown"]);
-        Assert.Equal("OriginalDepthNearestGroupMajority",
-            result.UnmatchedNodes.Single(node => node.NodeId == "unknown").DecisionReason);
+        Assert.Equal(5, result.FinalDepthByNodeId["unknown"]);
+        Assert.DoesNotContain(result.UnmatchedNodes, node => node.NodeId == "unknown");
     }
 
     [Fact]
@@ -91,7 +92,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
     {
         var fixture = Fixture(
             [("controller", "ApiController", 4, false), ("broker", "DataBroker", 1, false),
-             ("external", "ExternalService", 0, true)]);
+             ("external", "ExternalService", 0, true)],
+            [("controller", "broker"), ("broker", "external")]);
         var result = Assign(fixture.Placement);
 
         Assert.Equal(2, result.FinalDepthByNodeId["external"]);
@@ -116,7 +118,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
     [Fact]
     public void Positional_placement_consumes_semantic_depths_without_overlap()
     {
-        var fixture = Fixture([("first", "FirstBroker", 1, false), ("second", "SecondBroker", 4, false)]);
+        var fixture = Fixture([("first", "FirstBroker", 1, false), ("second", "SecondBroker", 4, false)],
+            [("first", "second")]);
         var result = Assign(fixture.Placement);
         var placed = ProjectRegionPlacement.Place(fixture.Placement.Graph, Settings(), new LayoutRevision(0),
             result.FinalDepthByNodeId);

@@ -52,7 +52,8 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 new Dictionary<string, string>
                 {
                     ["invariants.json"] = region.InvariantJson,
-                    ["semantic-layer-report.json"] = semanticLayerReport
+                    ["semantic-layer-report.json"] = semanticLayerReport,
+                    ["placement-authority-report.json"] = semanticLayerReport
                 }));
     }
 
@@ -186,6 +187,9 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                     node.Node.Name,
                     node.Depth,
                     node.IsStandalone,
+                    placementAuthority = node.PlacementAuthority.ToString(),
+                    originalRect = node.PlacementOriginalRect,
+                    placementReason = node.PlacementReason,
                     node.Rect
                 }, StringComparer.Ordinal),
             originalDepthByNodeId = layout.SemanticLayerPlacement.OriginalDepthByNodeId,

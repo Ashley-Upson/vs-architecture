@@ -831,7 +831,7 @@ public sealed class DeterministicDrawioExporterTests
     }
 
     [Fact]
-    public void Render_keeps_project_container_as_border_parent()
+    public void Render_places_unlinked_project_node_in_root_standalone_region()
     {
         var document = Render(new DiagramModel(
             new[]
@@ -844,8 +844,9 @@ public sealed class DeterministicDrawioExporterTests
             Array.Empty<ExternalDependencyNode>(),
             Array.Empty<DependencyEdge>()));
 
-        Assert.Equal("1", (string?)Cell(document, "project_api").Attribute("vertex"));
-        Assert.Equal("project_api", (string?)Cell(document, "type_controller").Attribute("parent"));
+        Assert.DoesNotContain(document.Descendants("mxCell"), cell =>
+            (string?)cell.Attribute("id") == "project_api");
+        Assert.Equal("1", (string?)Cell(document, "type_controller").Attribute("parent"));
     }
 
     [Fact]

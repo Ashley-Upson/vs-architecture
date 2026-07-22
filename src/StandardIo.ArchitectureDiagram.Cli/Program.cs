@@ -214,6 +214,10 @@ public static class Program
                     "semantic-layer-report.json", out var semanticLayerReport) == true)
                 await broker.WriteTextAsync(
                     Path.Combine(directory, "semantic-layer-report.json"), semanticLayerReport).ConfigureAwait(false);
+            if (architecture.DevelopmentArtifacts?.NamedJsonArtifacts.TryGetValue(
+                    "placement-authority-report.json", out var placementAuthorityReport) == true)
+                await broker.WriteTextAsync(
+                    Path.Combine(directory, "placement-authority-report.json"), placementAuthorityReport).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 

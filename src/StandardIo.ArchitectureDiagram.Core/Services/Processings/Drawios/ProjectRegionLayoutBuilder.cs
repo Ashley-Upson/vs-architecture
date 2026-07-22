@@ -20,7 +20,8 @@ internal static class ProjectRegionLayoutBuilder
             ConfiguredSemanticLayerPlacement.Assign(graph, settings, new LayoutRevision(0)));
         var placed = MeasureStage(timings, "project-region positional placement", () =>
             ProjectRegionPlacement.Place(graph, settings, new LayoutRevision(0),
-                semanticLayers.Enabled ? semanticLayers.FinalDepthByNodeId : null));
+                semanticLayers.Enabled ? semanticLayers.FinalDepthByNodeId : null,
+                new HashSet<string>(semanticLayers.ActiveGroups.Select(group => group.ProjectId), StringComparer.Ordinal)));
         var activePlacement = MeasureStage(timings, "project-region layer-band placement", () =>
             semanticLayers.Enabled
                 ? ProjectLayerBandPlacement.AlignProjects(placed, settings)

@@ -135,12 +135,8 @@ internal static class PlacementPipeline
             var incidentIds = completeIncidentNodeIds is null ? new HashSet<string>(
                 graph.Links.SelectMany(link => new[] { link.SourceId, link.TargetId }),
                 StringComparer.Ordinal) : new HashSet<string>(completeIncidentNodeIds, StringComparer.Ordinal);
-            var connected = (semanticDepthsApplied
-                ? graph.Nodes
-                : graph.Nodes.Where(node => incidentIds.Contains(node.Id))).ToArray();
-            var standalone = (semanticDepthsApplied
-                ? Array.Empty<RenderNode>()
-                : graph.Nodes.Where(node => !incidentIds.Contains(node.Id))).ToArray();
+            var connected = graph.Nodes.Where(node => incidentIds.Contains(node.Id)).ToArray();
+            var standalone = graph.Nodes.Where(node => !incidentIds.Contains(node.Id)).ToArray();
             var result = new Dictionary<string, NodeLayout>(StringComparer.Ordinal);
 
             foreach (var layer in connected
@@ -155,7 +151,8 @@ internal static class PlacementPipeline
                         node,
                         new Rect(x, NodeY(layer.Key, settings, depthOffsets), widths[node.Id], settings.Layout.NodeHeight),
                         layer.Key,
-                        !incidentIds.Contains(node.Id));
+                        false,
+                        NodePlacementAuthority.GeneralFallback);
                     RecordBasePlacement(basePlacements, result[node.Id]);
                     x += widths[node.Id] + settings.Layout.HorizontalSpacing;
                 }
@@ -226,7 +223,8 @@ internal static class PlacementPipeline
                         settings.Layout.NodeHeight),
                     disconnectedPlacement == DisconnectedPlacementPolicy.DedicatedRegionBelow
                         ? disconnectedBaseDepth + row : depths[node.Id],
-                    true);
+                    true,
+                    NodePlacementAuthority.StandaloneExternalRegion);
                 RecordBasePlacement(basePlacements, result[node.Id]);
             }
 
@@ -887,7 +885,7 @@ internal static class PlacementPipeline
             }
         }
 
-        private static void ResolveLayerOverlaps(DiagramSettings settings, Dictionary<string, NodeLayout> nodes)
+        internal static void ResolveLayerOverlaps(DiagramSettings settings, Dictionary<string, NodeLayout> nodes)
         {
             foreach (var layer in nodes.Values
                 .GroupBy(node => node.Depth)
@@ -915,7 +913,8 @@ internal static class PlacementPipeline
             foreach (var project in graph.Projects)
             {
                 var projectNodes = nodes.Values
-                    .Where(node => string.Equals(node.Node.ProjectId, project.Id, StringComparison.Ordinal))
+                    .Where(node => node.PlacementAuthority != NodePlacementAuthority.StandaloneExternalRegion &&
+                        string.Equals(node.Node.ProjectId, project.Id, StringComparison.Ordinal))
                     .ToArray();
                 if (projectNodes.Length == 0)
                 {

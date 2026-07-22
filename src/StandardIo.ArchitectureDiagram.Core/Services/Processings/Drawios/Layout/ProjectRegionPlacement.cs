@@ -8,7 +8,8 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 internal static class ProjectRegionPlacement
 {
     public static PlacedGraph Place(RenderGraph graph, DiagramSettings settings, LayoutRevision revision,
-        IReadOnlyDictionary<string, int>? finalDepthByNodeId = null)
+        IReadOnlyDictionary<string, int>? finalDepthByNodeId = null,
+        ISet<string>? dependencyPlacementProjectIds = null)
     {
         if (graph.Projects.Count == 0)
             return PlacementPipeline.Place(graph, settings, revision,
@@ -16,6 +17,10 @@ internal static class ProjectRegionPlacement
                 disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
 
         var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+        var incidentNodeIds = new HashSet<string>(graph.Links.SelectMany(link =>
+            new[] { link.SourceId, link.TargetId }), StringComparer.Ordinal);
+        var standaloneIds = new HashSet<string>(graph.Nodes.Where(node => !node.IsExternal &&
+            !incidentNodeIds.Contains(node.Id)).Select(node => node.Id), StringComparer.Ordinal);
         var local = graph.Projects.OrderBy(project => project.Id, StringComparer.Ordinal)
             .ToDictionary(project => project.Id, project => PlaceProject(project), StringComparer.Ordinal);
         var dependencyEdges = graph.Links.Select(link => new
@@ -72,11 +77,12 @@ internal static class ProjectRegionPlacement
         }
 
         PlaceRootOwnedNodes(graph, settings, revision, nodes, projects, gapX);
+        PlaceStandaloneNodes(graph, standaloneIds, settings, nodes, projects);
         return new PlacedGraph(graph, nodes, projects, revision);
 
         PlacedGraph PlaceProject(RenderProject project)
         {
-            var projectNodes = graph.Nodes.Where(node => node.ProjectId == project.Id)
+            var projectNodes = graph.Nodes.Where(node => node.ProjectId == project.Id && !standaloneIds.Contains(node.Id))
                 .OrderBy(node => node.Order).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray();
             var ids = new HashSet<string>(projectNodes.Select(node => node.Id), StringComparer.Ordinal);
             var projectLinks = graph.Links.Where(link => ids.Contains(link.SourceId) && ids.Contains(link.TargetId))
@@ -99,8 +105,11 @@ internal static class ProjectRegionPlacement
             var completeGraph = RenderGraph.Create([project], projectNodes, projectLinks,
                 graph.PlacementParentByNode.Where(pair => ids.Contains(pair.Key) && ids.Contains(pair.Value))
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+            var dependencyPlaced = dependencyPlacementProjectIds?.Contains(project.Id) == true
+                ? ProjectDependencyPlacement.Apply(completeGraph, placed.Nodes, settings)
+                : placed.Nodes;
             var nodes = ExperimentalExternalTerminalLayerPlacement.Apply(
-                completeGraph, placed.Nodes, settings);
+                completeGraph, dependencyPlaced, settings);
             var projects = PlacementPipeline.PositionProjects(completeGraph, settings, nodes);
             if (!projects.ContainsKey(project.Id))
             {
@@ -111,6 +120,38 @@ internal static class ProjectRegionPlacement
                     settings.Layout.ProjectHeaderHeight + settings.Layout.ContainerPadding * 2));
             }
             return new PlacedGraph(completeGraph, nodes, projects, revision);
+        }
+    }
+
+    private static void PlaceStandaloneNodes(
+        RenderGraph graph,
+        ISet<string> standaloneIds,
+        DiagramSettings settings,
+        IDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, ProjectLayout> projects)
+    {
+        var standalone = graph.Nodes.Where(node => standaloneIds.Contains(node.Id))
+            .OrderBy(node => node.Id, StringComparer.Ordinal).ToArray();
+        if (standalone.Length == 0) return;
+        var widths = PlacementPipeline.CalculateWidths(graph, settings);
+        var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalone.Length)));
+        var columnWidth = standalone.Select(node => widths[node.Id]).DefaultIfEmpty(settings.Layout.NodeWidth).Max() +
+            settings.Layout.HorizontalSpacing;
+        var startX = projects.Values.Select(project => project.Rect.X).DefaultIfEmpty(settings.Layout.ContainerPadding).Min();
+        var startY = projects.Values.Select(project => project.Rect.Bottom).DefaultIfEmpty(settings.Layout.ContainerPadding).Max() +
+            settings.Layout.StandaloneGroupSpacing + graph.Links.Count * settings.Layout.ParallelLaneSpacing;
+        var depth = nodes.Values.Where(node => node.PlacementAuthority != NodePlacementAuthority.StandaloneExternalRegion)
+            .Select(node => node.Depth).DefaultIfEmpty(-1).Max() + 1;
+        for (var index = 0; index < standalone.Length; index++)
+        {
+            var source = standalone[index];
+            var rootOwned = source with { ProjectId = null };
+            nodes[source.Id] = new NodeLayout(rootOwned, new Rect(
+                startX + index % columns * columnWidth,
+                startY + index / columns * (settings.Layout.NodeHeight + settings.Layout.VerticalSpacing),
+                widths[source.Id], settings.Layout.NodeHeight), depth, true,
+                NodePlacementAuthority.StandaloneExternalRegion, null,
+                "No incident rendered links; placed in the root standalone grid.");
         }
     }
 

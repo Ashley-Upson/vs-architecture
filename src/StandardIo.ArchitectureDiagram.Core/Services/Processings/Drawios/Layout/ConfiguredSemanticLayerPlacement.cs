@@ -29,13 +29,16 @@ internal static class ConfiguredSemanticLayerPlacement
         var compiledRules = rules.Select((rule, index) => new CompiledRule(index, rule.Name, rule.Pattern,
             new Regex(rule.Pattern, RegexOptions.CultureInvariant, RegexTimeout))).ToArray();
         var finalDepths = new Dictionary<string, int>(originalDepths, StringComparer.Ordinal);
+        var incidentNodeIds = new HashSet<string>(graph.Links.SelectMany(link =>
+            new[] { link.SourceId, link.TargetId }), StringComparer.Ordinal);
         var groups = new List<SemanticLayerGroupDiagnostic>();
         var unmatchedDiagnostics = new List<UnmatchedSemanticLayerDiagnostic>();
         var externalDepths = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var project in graph.Projects.OrderBy(item => item.Id, StringComparer.Ordinal))
         {
-            var projectNodes = graph.Nodes.Where(node => node.ProjectId == project.Id).ToArray();
+            var projectNodes = graph.Nodes.Where(node => node.ProjectId == project.Id &&
+                (node.IsExternal || incidentNodeIds.Contains(node.Id))).ToArray();
             var internalNodes = projectNodes.Where(node => !node.IsExternal)
                 .OrderBy(node => node.Id, StringComparer.Ordinal).ToArray();
             var firstRuleByNode = internalNodes.ToDictionary(node => node.Id,

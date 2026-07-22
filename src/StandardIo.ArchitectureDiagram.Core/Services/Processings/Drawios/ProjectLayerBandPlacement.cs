@@ -9,7 +9,8 @@ internal static class ProjectLayerBandPlacement
 {
     public static PlacedGraph Align(PlacedGraph placement, DiagramSettings settings)
     {
-        var owned = placement.Nodes.Values.Where(node => node.Node.ProjectId is not null).ToArray();
+        var owned = placement.Nodes.Values.Where(node => node.Node.ProjectId is not null &&
+            node.PlacementAuthority != NodePlacementAuthority.StandaloneExternalRegion).ToArray();
         if (owned.Length == 0) return placement;
         var layerY = new Dictionary<int, int>();
         var y = owned.Min(node => node.Rect.Y);
@@ -20,7 +21,7 @@ internal static class ProjectLayerBandPlacement
         }
         var nodes = placement.Nodes.ToDictionary(item => item.Key, item =>
         {
-            if (item.Value.Node.ProjectId is null) return item.Value;
+            if (item.Value.Node.ProjectId is null || item.Value.PlacementAuthority == NodePlacementAuthority.StandaloneExternalRegion) return item.Value;
             return item.Value with { Rect = item.Value.Rect with { Y = layerY[item.Value.Depth] } };
         }, StringComparer.Ordinal);
         return placement.Revise(nodes, PlacementPipeline.PositionProjects(placement.Graph, settings, nodes));
@@ -29,7 +30,8 @@ internal static class ProjectLayerBandPlacement
     public static PlacedGraph AlignProjects(PlacedGraph placement, DiagramSettings settings)
     {
         var nodes = placement.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        foreach (var project in placement.Nodes.Values.Where(node => node.Node.ProjectId is not null)
+        foreach (var project in placement.Nodes.Values.Where(node => node.Node.ProjectId is not null &&
+                     node.PlacementAuthority != NodePlacementAuthority.StandaloneExternalRegion)
                      .GroupBy(node => node.Node.ProjectId!, StringComparer.Ordinal))
         {
             var y = project.Min(node => node.Rect.Y);
@@ -50,7 +52,7 @@ internal static class ProjectLayerBandPlacement
     {
         var nodes = immutableBase.Nodes.ToDictionary(item => item.Key, item =>
         {
-            if (item.Value.Node.ProjectId is null) return item.Value;
+            if (item.Value.Node.ProjectId is null || item.Value.PlacementAuthority == NodePlacementAuthority.StandaloneExternalRegion) return item.Value;
             var delta = expansions.Where(expansion =>
                     string.Equals(expansion.Key.ProjectId, item.Value.Node.ProjectId, StringComparison.Ordinal) &&
                     item.Value.Depth >= expansion.Key.LowerDepth)
