@@ -124,7 +124,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         int semanticLinkCount)
     {
         var reasons = initialReasons;
-        var layout = Measure(timings, "project-region generation", () => RenderLayout.BuildProjectRegion(graph, settings));
+        var layout = Measure(timings, "project-region generation", () => ProjectRegionLayoutBuilder.Build(graph, settings));
         var ownership = Measure(timings, "project-region ownership compilation", () =>
             CoordinateOwnershipCompiler.Compile(layout.Nodes, layout.Projects, layout.Links, settings.ShowProjectContainers));
         if (settings.ShowProjectContainers)

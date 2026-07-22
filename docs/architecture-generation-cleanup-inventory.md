@@ -111,7 +111,7 @@ The supported typed Architecture path is:
 
 ## Cleanup constraints and deletion proof
 
-1. Typed generation must never call `RenderLayout.Build`, `LegacyRoutingPipeline`, a `Corridor*` allocator/selector, or `RouteRepairCoordinator`.
+1. Typed generation must reach `ProjectRegionLayoutBuilder` and never call `RenderLayout.Build`, `LegacyRoutingPipeline`, a `Corridor*` allocator/selector, or `RouteRepairCoordinator`.
 2. Compatibility APIs remain supported until repository consumers and tests are migrated or explicitly retained under Legacy Compatibility.
 3. Geometry equality is assessed against the committed Phase 3 artifacts before and after each structural change.
 4. Small checked-in fixtures remain; generated evidence under `docs/evidence` does not.

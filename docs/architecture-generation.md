@@ -21,7 +21,7 @@ Roslyn analysis
 -> Draw.io serialization
 ```
 
-`DrawioArchitectureRenderer` and `RenderLayout.BuildProjectRegion` are the production rendering authority. `DrawioDiagramRenderer`, the `IDiagramRenderer` registry, the old `RenderLayout.Build` path, and the corridor candidate/observer/allocator pipeline exist only for supported legacy compatibility.
+`DrawioArchitectureRenderer` and `ProjectRegionLayoutBuilder` are the production rendering authority. `DrawioDiagramRenderer`, the `IDiagramRenderer` registry, the old `RenderLayout.Build` path, and the corridor candidate/observer/allocator pipeline exist only for supported legacy compatibility.
 
 ## Semantic analysis and interface resolution
 

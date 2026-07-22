@@ -18,11 +18,8 @@ public sealed class DiagramPipelineDependencyGuardTests
     [Fact]
     public void Typed_project_region_path_does_not_invoke_legacy_routing()
     {
-        var source = File.ReadAllText(Source(
-            "Services", "Processings", "Drawios", "DeterministicDrawioExporter.RenderLayout.cs"));
-        var start = source.IndexOf("internal static ProjectRegionLayout BuildProjectRegion", StringComparison.Ordinal);
-        Assert.True(start >= 0);
-        var projectRegion = source.Substring(start);
+        var projectRegion = File.ReadAllText(Source(
+            "Services", "Processings", "Drawios", "ProjectRegionLayoutBuilder.cs"));
 
         Assert.DoesNotContain("LegacyRoutingPipeline", projectRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("CorridorObserver", projectRegion, StringComparison.Ordinal);
