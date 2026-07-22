@@ -9,6 +9,10 @@ using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 
+/// <summary>
+/// Canonical production renderer for typed Architecture generation. CLI and VSIX Architecture jobs
+/// resolve this renderer through <see cref="IArchitectureDiagnosticRenderer"/>.
+/// </summary>
 public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPage>, IArchitectureDiagnosticRenderer
 {
     private readonly DeterministicDrawioExporter _exporter;

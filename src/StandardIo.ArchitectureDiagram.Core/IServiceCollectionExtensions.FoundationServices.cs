@@ -18,6 +18,13 @@ public static partial class IServiceCollectionExtensions
         services.AddTransient<IArchitectureDiagnosticRenderer, DrawioArchitectureRenderer>();
         services.AddTransient<IDataModelRenderer<StandardIo.ArchitectureDiagram.Core.Models.Drawios.DrawioPage>, DrawioDataModelRenderer>();
         services.AddTransient<IDrawioDocumentComposer, DrawioDocumentComposer>();
+        AddLegacyDiagramRendererCompatibility(services);
+    }
+
+    // Compatibility registrations for the public DiagramModel renderer contract. Typed Architecture
+    // generation resolves IArchitectureDiagnosticRenderer above and cannot dispatch through this registry.
+    private static void AddLegacyDiagramRendererCompatibility(IServiceCollection services)
+    {
         services.AddTransient<IDiagramRenderer, DrawioDiagramRenderer>();
         services.AddTransient<IDiagramRenderer, JsonDiagramRenderer>();
         services.AddTransient<IDiagramRendererRegistry, DiagramRendererRegistry>();

@@ -5,6 +5,31 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DiagramPipelineDependencyGuardTests
 {
     [Fact]
+    public void Typed_architecture_renderer_does_not_resolve_the_legacy_renderer_registry()
+    {
+        var source = File.ReadAllText(Source(
+            "Services", "Orchestrations", "Diagrams", "ArchitectureGenerationService.cs"));
+
+        Assert.Contains("IArchitectureDiagnosticRenderer renderer", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDiagramRendererRegistry", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDiagramRenderer", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Typed_project_region_path_does_not_invoke_legacy_routing()
+    {
+        var source = File.ReadAllText(Source(
+            "Services", "Processings", "Drawios", "DeterministicDrawioExporter.RenderLayout.cs"));
+        var start = source.IndexOf("internal static RenderLayout BuildProjectRegion", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var projectRegion = source.Substring(start);
+
+        Assert.DoesNotContain("LegacyRoutingPipeline", projectRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain("CorridorObserver", projectRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain("CorridorLaneAllocator", projectRegion, StringComparison.Ordinal);
+        Assert.Contains("ProjectInterLayerSlotCompiler.Compile", projectRegion, StringComparison.Ordinal);
+    }
+    [Fact]
     public void Analysis_domains_do_not_depend_on_each_other_or_drawio()
     {
         var architecture = Sources("Services", "Foundations", "Analyses");
