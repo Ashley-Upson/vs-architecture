@@ -12,21 +12,29 @@ internal static class PlacementPipeline
     internal enum DisconnectedPlacementPolicy { LegacyRight, DedicatedRegionBelow }
     private const string ExposureTreeIdPrefix = "tree_";
 
+    public static PlacedGraph Place(RenderGraph graph, DiagramSettings settings, LayoutRevision revision,
+        CancellationToken cancellationToken,
+        DisconnectedPlacementPolicy disconnectedPlacement = DisconnectedPlacementPolicy.LegacyRight) =>
+        Place(graph, settings, revision, null, null, cancellationToken, disconnectedPlacement);
+
     public static PlacedGraph Place(
         RenderGraph graph,
         DiagramSettings settings,
         LayoutRevision revision,
+        IReadOnlyDictionary<string, int>? finalDepthByNodeId = null,
+        ISet<string>? completeIncidentNodeIds = null,
         CancellationToken cancellationToken = default,
         DisconnectedPlacementPolicy disconnectedPlacement = DisconnectedPlacementPolicy.LegacyRight)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var hierarchy = HierarchyAnalyzer.Analyze(graph, revision, cancellationToken);
-        var depthOffsets = CalculateDepthOffsets(graph, settings, hierarchy.VisualLayerByNode);
+        var depths = finalDepthByNodeId ?? hierarchy.VisualLayerByNode;
+        var depthOffsets = CalculateDepthOffsets(graph, settings, depths);
         var widths = CalculateWidths(graph, settings);
         var basePlacements = new Dictionary<string, NodeBasePlacement>(StringComparer.Ordinal);
         var nodes = PositionNodes(
-            graph, settings, hierarchy.VisualLayerByNode, depthOffsets, widths, basePlacements,
-            disconnectedPlacement, cancellationToken);
+            graph, settings, depths, depthOffsets, widths, basePlacements,
+            disconnectedPlacement, cancellationToken, finalDepthByNodeId is not null, completeIncidentNodeIds);
         cancellationToken.ThrowIfCancellationRequested();
         var projects = PositionProjects(graph, settings, nodes);
         cancellationToken.ThrowIfCancellationRequested();
@@ -113,19 +121,26 @@ internal static class PlacementPipeline
             IReadOnlyDictionary<string, int> widths,
             Dictionary<string, NodeBasePlacement> basePlacements,
             DisconnectedPlacementPolicy disconnectedPlacement,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool semanticDepthsApplied,
+            ISet<string>? completeIncidentNodeIds)
         {
             if (graph.Nodes.Any(node => node.Id.StartsWith(ExposureTreeIdPrefix, StringComparison.Ordinal)) &&
+                !semanticDepthsApplied &&
                 (graph.Nodes.Count >= settings.Layout.ExposureTreeLayoutThreshold || IsRootedExposureForest(graph)))
             {
                 return PositionExposureTrees(graph, settings, depths, widths, basePlacements, cancellationToken);
             }
 
-            var incidentIds = new HashSet<string>(
+            var incidentIds = completeIncidentNodeIds is null ? new HashSet<string>(
                 graph.Links.SelectMany(link => new[] { link.SourceId, link.TargetId }),
-                StringComparer.Ordinal);
-            var connected = graph.Nodes.Where(node => incidentIds.Contains(node.Id)).ToArray();
-            var standalone = graph.Nodes.Where(node => !incidentIds.Contains(node.Id)).ToArray();
+                StringComparer.Ordinal) : new HashSet<string>(completeIncidentNodeIds, StringComparer.Ordinal);
+            var connected = (semanticDepthsApplied
+                ? graph.Nodes
+                : graph.Nodes.Where(node => incidentIds.Contains(node.Id))).ToArray();
+            var standalone = (semanticDepthsApplied
+                ? Array.Empty<RenderNode>()
+                : graph.Nodes.Where(node => !incidentIds.Contains(node.Id))).ToArray();
             var result = new Dictionary<string, NodeLayout>(StringComparer.Ordinal);
 
             foreach (var layer in connected
@@ -140,7 +155,7 @@ internal static class PlacementPipeline
                         node,
                         new Rect(x, NodeY(layer.Key, settings, depthOffsets), widths[node.Id], settings.Layout.NodeHeight),
                         layer.Key,
-                        false);
+                        !incidentIds.Contains(node.Id));
                     RecordBasePlacement(basePlacements, result[node.Id]);
                     x += widths[node.Id] + settings.Layout.HorizontalSpacing;
                 }

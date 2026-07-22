@@ -13,7 +13,7 @@ public sealed class ConfiguredSemanticLayerPlacementTests
             [("controller", "ApiController", 5, false), ("coord", "WorkCoordinationService", 0, false),
              ("broker", "DataBroker", 2, false)]);
 
-        var result = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, Settings());
+        var result = Assign(fixture.Placement);
 
         Assert.Equal(new[] { "Controller", "CoordinationService", "Broker" },
             result.ActiveGroups.Select(group => group.Name));
@@ -29,7 +29,7 @@ public sealed class ConfiguredSemanticLayerPlacementTests
              ("c3", "ThirdController", 2, false), ("b1", "FirstBroker", 5, false),
              ("b2", "SecondBroker", 3, false)]);
 
-        var result = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, Settings());
+        var result = Assign(fixture.Placement);
         var controller = result.ActiveGroups.Single(group => group.Name == "Controller");
         var broker = result.ActiveGroups.Single(group => group.Name == "Broker");
 
@@ -48,7 +48,7 @@ public sealed class ConfiguredSemanticLayerPlacementTests
              ("p2", "SecondProcessingService", 4, false)],
             [("thing", "p1"), ("thing", "p2")]);
 
-        var result = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, Settings());
+        var result = Assign(fixture.Placement);
         var diagnostic = result.UnmatchedNodes.Single(node => node.NodeId == "thing");
 
         Assert.Equal(result.FinalDepthByNodeId["orchestration"], result.FinalDepthByNodeId["thing"]);
@@ -63,8 +63,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
              ("broker", "DataBroker", 5, false), ("a", "Alpha", 7, false),
              ("b", "Beta", 6, false), ("conflict", "Conflict", 4, false)],
             [("a", "b"), ("b", "processing"), ("broker", "conflict"), ("conflict", "controller")]);
-        var first = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, Settings());
-        var reversed = ConfiguredSemanticLayerPlacement.Apply(fixture.ReversedPlacement, Settings());
+        var first = Assign(fixture.Placement);
+        var reversed = Assign(fixture.ReversedPlacement);
 
         Assert.Equal(first.FinalDepthByNodeId.OrderBy(item => item.Key),
             reversed.FinalDepthByNodeId.OrderBy(item => item.Key));
@@ -79,7 +79,7 @@ public sealed class ConfiguredSemanticLayerPlacementTests
             [("controller", "ApiController", 0, false), ("broker", "DataBroker", 6, false),
              ("unknown", "Unknown", 5, false)]);
 
-        var result = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, Settings());
+        var result = Assign(fixture.Placement);
 
         Assert.Equal(result.FinalDepthByNodeId["broker"], result.FinalDepthByNodeId["unknown"]);
         Assert.Equal("OriginalDepthNearestGroupMajority",
@@ -87,22 +87,15 @@ public sealed class ConfiguredSemanticLayerPlacementTests
     }
 
     [Fact]
-    public void Externals_use_terminal_depth_and_horizontal_geometry_is_immutable()
+    public void Externals_use_terminal_depth()
     {
         var fixture = Fixture(
             [("controller", "ApiController", 4, false), ("broker", "DataBroker", 1, false),
              ("external", "ExternalService", 0, true)]);
-        var baseline = fixture.Placement.Nodes.ToDictionary(item => item.Key,
-            item => (item.Value.Rect.X, item.Value.Rect.Width));
-
-        var result = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, Settings());
+        var result = Assign(fixture.Placement);
 
         Assert.Equal(2, result.FinalDepthByNodeId["external"]);
         Assert.DoesNotContain(result.ActiveGroups, group => group.MatchedNodeCount > 0 && group.Name == "Service");
-        Assert.Equal(0, result.ChangedXCount);
-        Assert.Equal(0, result.ChangedWidthCount);
-        Assert.All(result.Placement.Nodes, item => Assert.Equal(baseline[item.Key],
-            (item.Value.Rect.X, item.Value.Rect.Width)));
     }
 
     [Fact]
@@ -112,7 +105,8 @@ public sealed class ConfiguredSemanticLayerPlacementTests
         var settings = Settings();
         settings.Layout.NodeLayerGroups = [];
 
-        var result = ConfiguredSemanticLayerPlacement.Apply(fixture.Placement, settings);
+        var result = ConfiguredSemanticLayerPlacement.Assign(fixture.Placement.Graph, settings,
+            fixture.Placement.Revision, fixture.Placement.Nodes.ToDictionary(item => item.Key, item => item.Value.Depth));
 
         Assert.False(result.Enabled);
         Assert.Equal(fixture.Placement.Nodes.ToDictionary(item => item.Key, item => item.Value.Depth),
@@ -120,23 +114,57 @@ public sealed class ConfiguredSemanticLayerPlacementTests
     }
 
     [Fact]
-    public void Same_layer_horizontal_overlap_is_reported_without_moving_nodes()
+    public void Positional_placement_consumes_semantic_depths_without_overlap()
     {
         var fixture = Fixture([("first", "FirstBroker", 1, false), ("second", "SecondBroker", 4, false)]);
-        var second = fixture.Placement.Nodes["second"];
-        var overlapping = fixture.Placement.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        overlapping["second"] = second with { Rect = second.Rect with { X = 150 } };
-        var placement = new PlacedGraph(fixture.Placement.Graph, overlapping, fixture.Placement.Projects,
-            fixture.Placement.Revision);
+        var result = Assign(fixture.Placement);
+        var placed = ProjectRegionPlacement.Place(fixture.Placement.Graph, Settings(), new LayoutRevision(0),
+            result.FinalDepthByNodeId);
+        var layer = placed.Nodes.Values.Where(node => node.Depth == result.FinalDepthByNodeId["first"]).ToArray();
 
-        var result = ConfiguredSemanticLayerPlacement.Apply(placement, Settings());
+        Assert.Equal(2, layer.Length);
+        Assert.True(layer[0].Rect.Right <= layer[1].Rect.X || layer[1].Rect.Right <= layer[0].Rect.X);
+    }
 
-        Assert.Single(result.HorizontalOverlaps);
-        Assert.Equal(0, result.ChangedXCount);
-        Assert.Equal(150, result.Placement.Nodes["second"].Rect.X);
+    [Fact]
+    public void Split_layers_and_reversed_enumeration_produce_deterministic_placement()
+    {
+        var fixture = Fixture(
+            [("controller", "ApiController", 4, false), ("service", "PageRenderContentService", 4, false),
+             ("broker", "PageBroker", 4, false)],
+            [("controller", "service"), ("service", "broker")]);
+        var firstDepths = Assign(fixture.Placement);
+        var reversedDepths = Assign(fixture.ReversedPlacement);
+        var first = ProjectRegionPlacement.Place(fixture.Placement.Graph, Settings(), new LayoutRevision(0),
+            firstDepths.FinalDepthByNodeId);
+        var reversed = ProjectRegionPlacement.Place(fixture.ReversedPlacement.Graph, Settings(), new LayoutRevision(0),
+            reversedDepths.FinalDepthByNodeId);
+
+        Assert.Equal(3, first.Nodes.Values.Select(node => node.Depth).Distinct().Count());
+        Assert.Equal(first.Nodes.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.Rect)),
+            reversed.Nodes.OrderBy(item => item.Key).Select(item => (item.Key, item.Value.Rect)));
+    }
+
+    [Fact]
+    public void Complete_graph_connectivity_keeps_internal_node_linked_only_to_external_out_of_standalone_region()
+    {
+        var fixture = Fixture(
+            [("controller", "ApiController", 0, false), ("params", "PageRenderParams", 2, false),
+             ("external", "ExternalPage", 3, true)],
+            [("params", "external")]);
+        var depths = Assign(fixture.Placement);
+        var placed = ProjectRegionPlacement.Place(fixture.Placement.Graph, Settings(), new LayoutRevision(0),
+            depths.FinalDepthByNodeId);
+
+        Assert.False(placed.Nodes["params"].IsStandalone);
+        Assert.Equal(depths.FinalDepthByNodeId["params"], placed.Nodes["params"].Depth);
     }
 
     private static DiagramSettings Settings() => DiagramSettings.CreateDefault();
+
+    private static ConfiguredSemanticLayerPlacementResult Assign(PlacedGraph placement) =>
+        ConfiguredSemanticLayerPlacement.Assign(placement.Graph, Settings(), placement.Revision,
+            placement.Nodes.ToDictionary(item => item.Key, item => item.Value.Depth));
 
     private static PlacementFixture Fixture(
         IReadOnlyList<(string Id, string Name, int Depth, bool External)> specifications,

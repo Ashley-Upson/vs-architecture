@@ -23,24 +23,11 @@ internal sealed record UnmatchedSemanticLayerDiagnostic(
     string DecisionReason,
     bool ConstraintConflict);
 
-internal sealed record SemanticLayerOverlapDiagnostic(
-    string ProjectId,
-    int SemanticDepth,
-    string FirstNodeId,
-    string SecondNodeId,
-    int OverlapWidth);
-
 internal sealed record ConfiguredSemanticLayerPlacementResult(
-    PlacedGraph Placement,
     bool Enabled,
     IReadOnlyList<SemanticLayerGroupDiagnostic> ActiveGroups,
     IReadOnlyList<UnmatchedSemanticLayerDiagnostic> UnmatchedNodes,
-    IReadOnlyList<SemanticLayerOverlapDiagnostic> HorizontalOverlaps,
     IReadOnlyDictionary<string, int> OriginalDepthByNodeId,
     IReadOnlyDictionary<string, int> FinalDepthByNodeId,
     int ExternalNodeCount,
-    IReadOnlyDictionary<string, int> ExternalDepthByProject,
-    int ChangedXCount,
-    int ChangedWidthCount,
-    int MaximumXDelta,
-    int MaximumWidthDelta);
+    IReadOnlyDictionary<string, int> ExternalDepthByProject);

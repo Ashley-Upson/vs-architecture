@@ -156,6 +156,22 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         if (physicalValidation.Findings.Count > 0)
             reasons = reasons.Concat(new[] { $"PhysicalValidationFindings:{physicalValidation.Findings.Count}" }).ToArray();
         var allTimings = timings.Concat(layout.StageTimings).ToArray();
+        var semanticLayerOverlaps = layout.Nodes.Values.Where(node => node.Node.ProjectId is not null)
+            .GroupBy(node => (node.Node.ProjectId!, node.Depth)).SelectMany(group =>
+            {
+                var ordered = group.OrderBy(node => node.Rect.X)
+                    .ThenBy(node => node.Node.Id, StringComparer.Ordinal).ToArray();
+                return ordered.SelectMany((left, index) => ordered.Skip(index + 1).Where(right =>
+                            Math.Min(left.Rect.Right, right.Rect.Right) > Math.Max(left.Rect.X, right.Rect.X))
+                        .Select(right => new
+                        {
+                            projectId = group.Key.Item1,
+                            semanticDepth = group.Key.Depth,
+                            firstNodeId = left.Node.Id,
+                            secondNodeId = right.Node.Id,
+                            overlapWidth = Math.Min(left.Rect.Right, right.Rect.Right) - Math.Max(left.Rect.X, right.Rect.X)
+                        }));
+            }).ToArray();
         var semanticLayerReport = new
         {
             enabled = layout.SemanticLayerPlacement.Enabled,
@@ -163,14 +179,15 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             unmatchedNodes = layout.SemanticLayerPlacement.UnmatchedNodes,
             externalNodeCount = layout.SemanticLayerPlacement.ExternalNodeCount,
             externalDepthByProject = layout.SemanticLayerPlacement.ExternalDepthByProject,
-            horizontalInvariance = new
-            {
-                changedXCount = layout.SemanticLayerPlacement.ChangedXCount,
-                changedWidthCount = layout.SemanticLayerPlacement.ChangedWidthCount,
-                maximumXDelta = layout.SemanticLayerPlacement.MaximumXDelta,
-                maximumWidthDelta = layout.SemanticLayerPlacement.MaximumWidthDelta
-            },
-            horizontalOverlaps = layout.SemanticLayerPlacement.HorizontalOverlaps,
+            horizontalOverlaps = semanticLayerOverlaps,
+            nodePlacement = layout.Nodes.Values.OrderBy(node => node.Node.Id, StringComparer.Ordinal)
+                .ToDictionary(node => node.Node.Id, node => new
+                {
+                    node.Node.Name,
+                    node.Depth,
+                    node.IsStandalone,
+                    node.Rect
+                }, StringComparer.Ordinal),
             originalDepthByNodeId = layout.SemanticLayerPlacement.OriginalDepthByNodeId,
             finalDepthByNodeId = layout.SemanticLayerPlacement.FinalDepthByNodeId
         };

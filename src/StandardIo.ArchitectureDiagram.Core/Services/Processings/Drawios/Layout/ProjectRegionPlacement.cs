@@ -7,10 +7,12 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class ProjectRegionPlacement
 {
-    public static PlacedGraph Place(RenderGraph graph, DiagramSettings settings, LayoutRevision revision)
+    public static PlacedGraph Place(RenderGraph graph, DiagramSettings settings, LayoutRevision revision,
+        IReadOnlyDictionary<string, int>? finalDepthByNodeId = null)
     {
         if (graph.Projects.Count == 0)
             return PlacementPipeline.Place(graph, settings, revision,
+                finalDepthByNodeId,
                 disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
 
         var nodeById = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
@@ -87,7 +89,12 @@ internal static class ProjectRegionPlacement
                 .Where(pair => internalIds.Contains(pair.Key) && internalIds.Contains(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             var internalGraph = RenderGraph.Create([project], internalNodes, internalLinks, parents);
-            var placed = PlacementPipeline.Place(internalGraph, settings, revision,
+            var projectDepths = finalDepthByNodeId is null ? null : internalNodes.ToDictionary(
+                node => node.Id, node => finalDepthByNodeId[node.Id], StringComparer.Ordinal);
+            var completeIncidentIds = new HashSet<string>(projectLinks.SelectMany(link =>
+                new[] { link.SourceId, link.TargetId }), StringComparer.Ordinal);
+            var placed = PlacementPipeline.Place(internalGraph, settings, revision, projectDepths,
+                completeIncidentIds,
                 disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow);
             var completeGraph = RenderGraph.Create([project], projectNodes, projectLinks,
                 graph.PlacementParentByNode.Where(pair => ids.Contains(pair.Key) && ids.Contains(pair.Value))
