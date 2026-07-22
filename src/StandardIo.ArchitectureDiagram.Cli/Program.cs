@@ -164,44 +164,48 @@ public static class Program
             var analyser = provider.GetRequiredService<IArchitectureGeometryAnalyser>();
             var analysis = analyser.Analyse(architecture);
             var broker = provider.GetRequiredService<IDiagramFileBroker>();
-            await broker.WriteTextAsync(Path.Combine(directory, "architecture-analysis.json"), analyser.ToJson(analysis)).ConfigureAwait(false);
-            await broker.WriteTextAsync(Path.Combine(directory, "architecture-analysis.md"), analyser.ToMarkdown(analysis)).ConfigureAwait(false);
-            await broker.WriteTextAsync(Path.Combine(directory, "logical-findings.json"), JsonSerializer.Serialize(
-                architecture.LogicalFindings, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            await broker.WriteTextAsync(Path.Combine(directory, "physical-findings.json"), JsonSerializer.Serialize(
-                architecture.PhysicalFindings, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            await broker.WriteTextAsync(Path.Combine(directory, "placement-analysis.json"), JsonSerializer.Serialize(new
-            {
-                analysis.Summary.PageBounds,
-                analysis.Projects,
-                analysis.Nodes
-            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            await broker.WriteTextAsync(Path.Combine(directory, "routing-analysis.json"), JsonSerializer.Serialize(new
-            {
-                analysis.Summary.TotalRouteLength,
-                analysis.Summary.MaximumRouteLength,
-                analysis.Summary.MaximumDetourRatio,
-                analysis.Summary.TotalBends,
-                analysis.Summary.MaximumBendsPerRoute,
-                analysis.Routes
-            }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             var projected = architecture.ProjectedGraph;
-            var provenance = new
-            {
-                inputPath = Path.GetFullPath(options.InputPath!),
-                sourceRevision = TryReadGitRevision(options.InputPath!),
-                cliVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown",
-                normalizedSettings = JsonSerializer.Deserialize<JsonElement>(SettingsSerializer.Export(settings)),
-                scopeMode = architecture.Diagram.Selection?.ScopePolicy ?? "FullInput",
-                configuredRoots = architecture.Diagram.Selection?.Roots.Select(root => root.SemanticNodeId).ToArray()
-                    ?? Array.Empty<string>(),
-                inferredRoots = projected?.TraversalRootSemanticIds ?? Array.Empty<string>(),
+            var evidence = new ArchitectureGenerationEvidence(
+                new ArchitectureEvidenceInput(
+                    Path.GetFullPath(options.InputPath!),
+                    TryReadGitRevision(options.InputPath!),
+                    typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown",
+                    JsonSerializer.Deserialize<JsonElement>(SettingsSerializer.Export(settings)),
+                    architecture.Diagram.Selection?.ScopePolicy ?? "FullInput",
+                    architecture.Diagram.Selection?.Roots.Select(root => root.SemanticNodeId).ToArray()
+                        ?? Array.Empty<string>(),
+                    projected?.TraversalRootSemanticIds ?? Array.Empty<string>()),
                 architecture.Manifest,
-                validationFindings = analysis.Findings,
-                semanticNodeToRenderInstances = projected?.RenderInstancesBySemanticNodeId
-            };
-            await broker.WriteTextAsync(Path.Combine(directory, "generation-provenance.json"),
-                JsonSerializer.Serialize(provenance, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+                new ArchitectureEvidenceTopology(
+                    architecture.Manifest,
+                    projected?.RenderInstancesBySemanticNodeId),
+                new ArchitectureEvidencePlacement(
+                    analysis.Summary.PageBounds,
+                    analysis.Projects,
+                    analysis.Nodes),
+                new ArchitectureEvidenceAllocation(
+                    "ProjectTerminalAllocator", "Project-local terminals", DetailedTelemetryIncluded: false),
+                new ArchitectureEvidenceAllocation(
+                    "ProjectInterLayerSlotCompiler", "Project-local bands", DetailedTelemetryIncluded: false),
+                new ArchitectureEvidenceAllocation(
+                    "Topology-family route compilers", "Project-local and root coordinates", DetailedTelemetryIncluded: false),
+                architecture.Routes,
+                new ArchitectureEvidenceOwnership(
+                    architecture.Routes.Count,
+                    analysis.Summary.PhysicalEdgeCellCount,
+                    "Logical routes split into deterministic project-owned and root-owned Draw.io edge segments."),
+                new ArchitectureEvidenceValidation(
+                    architecture.LogicalFindings,
+                    architecture.PhysicalFindings,
+                    analysis.Findings),
+                new ArchitectureEvidenceDeterminism(
+                    analysis.Summary.PageSha256,
+                    analysis.Summary.AnalysisSha256,
+                    architecture.SerializationRepeat),
+                architecture.Timings);
+            await broker.WriteTextAsync(
+                Path.Combine(directory, "architecture-evidence.json"),
+                JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 
