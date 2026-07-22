@@ -20,7 +20,20 @@ public sealed record ArchitectureGenerationManifest(
     int RenderedRouteCount,
     int LogicalFindingCount,
     int PhysicalFindingCount,
-    string PageStableKey);
+    string PageStableKey)
+{
+    public int SemanticClassCount { get; init; }
+    public int SemanticInterfaceCount { get; init; }
+    public int UniqueInterfaceResolutionCount { get; init; }
+    public int UnresolvedInterfaceCount { get; init; }
+    public int MultipleInterfaceResolutionCount { get; init; }
+    public int ProjectedRenderNodeCount { get; init; }
+    public int ProjectedRenderLinkCount { get; init; }
+    public int DuplicatedInstanceCount { get; init; }
+    public int CanonicalSharedNodeCount { get; init; }
+    public int ExceptionAuthorisedDuplicateCount { get; init; }
+    public int MultiParentNodeCount { get; init; }
+}
 
 public sealed record ArchitectureEligibilityResult(bool Eligible, IReadOnlyList<string> Reasons);
 
@@ -87,7 +100,8 @@ public sealed class TypedArchitectureGenerationResult
         ArchitectureEligibilityResult eligibility,
         Func<DrawioDiagnosticExportResult> diagnosticFactory,
         SerializationRepeatResult? serializationRepeat,
-        ArchitectureDevelopmentArtifacts? developmentArtifacts)
+        ArchitectureDevelopmentArtifacts? developmentArtifacts,
+        ArchitectureRenderGraph? projectedGraph = null)
     {
         Diagram = diagram;
         Page = page;
@@ -102,6 +116,7 @@ public sealed class TypedArchitectureGenerationResult
         diagnostics = new Lazy<DrawioDiagnosticExportResult>(diagnosticFactory, true);
         SerializationRepeat = serializationRepeat;
         DevelopmentArtifacts = developmentArtifacts;
+        ProjectedGraph = projectedGraph;
     }
 
     public ArchitectureDiagramModel Diagram { get; }
@@ -117,5 +132,6 @@ public sealed class TypedArchitectureGenerationResult
     public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
     public SerializationRepeatResult? SerializationRepeat { get; }
     public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
+    public ArchitectureRenderGraph? ProjectedGraph { get; }
     public bool StrictValidationPassed => LogicalFindings.Concat(PhysicalFindings).All(finding => !finding.IsStrictlyEnforced);
 }

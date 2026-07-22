@@ -34,6 +34,9 @@ public sealed class ArchitectureGenerationServiceTests
         Assert.Equal(4, result.SerializationRepeat.DocumentHashes.Count);
         Assert.Equal(2, result.Manifest.SemanticNodeCount);
         Assert.Equal(1, result.Manifest.SemanticLinkCount);
+        Assert.Equal(2, result.Manifest.ProjectedRenderNodeCount);
+        Assert.Equal(1, result.Manifest.ProjectedRenderLinkCount);
+        Assert.NotNull(result.ProjectedGraph);
     }
 
     [Fact]

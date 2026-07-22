@@ -185,6 +185,23 @@ public static class Program
                 analysis.Summary.MaximumBendsPerRoute,
                 analysis.Routes
             }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            var projected = architecture.ProjectedGraph;
+            var provenance = new
+            {
+                inputPath = Path.GetFullPath(options.InputPath!),
+                sourceRevision = TryReadGitRevision(options.InputPath!),
+                cliVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown",
+                normalizedSettings = JsonSerializer.Deserialize<JsonElement>(SettingsSerializer.Export(settings)),
+                scopeMode = architecture.Diagram.Selection?.ScopePolicy ?? "FullInput",
+                configuredRoots = architecture.Diagram.Selection?.Roots.Select(root => root.SemanticNodeId).ToArray()
+                    ?? Array.Empty<string>(),
+                inferredRoots = projected?.TraversalRootSemanticIds ?? Array.Empty<string>(),
+                architecture.Manifest,
+                validationFindings = analysis.Findings,
+                semanticNodeToRenderInstances = projected?.RenderInstancesBySemanticNodeId
+            };
+            await broker.WriteTextAsync(Path.Combine(directory, "generation-provenance.json"),
+                JsonSerializer.Serialize(provenance, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 
@@ -220,6 +237,26 @@ public static class Program
             return 1;
         }
         return 0;
+    }
+
+    private static string? TryReadGitRevision(string inputPath)
+    {
+        var current = File.Exists(inputPath) ? Path.GetDirectoryName(Path.GetFullPath(inputPath)) : Path.GetFullPath(inputPath);
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            var git = Path.Combine(current, ".git");
+            if (Directory.Exists(git))
+            {
+                var headPath = Path.Combine(git, "HEAD");
+                if (!File.Exists(headPath)) return null;
+                var head = File.ReadAllText(headPath).Trim();
+                if (!head.StartsWith("ref: ", StringComparison.Ordinal)) return head;
+                var reference = Path.Combine(git, head.Substring(5).Replace('/', Path.DirectorySeparatorChar));
+                return File.Exists(reference) ? File.ReadAllText(reference).Trim() : null;
+            }
+            current = Directory.GetParent(current)?.FullName;
+        }
+        return null;
     }
 
     private static async Task WritePerformanceReportAsync(

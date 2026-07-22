@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
@@ -67,19 +69,39 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             ? rendered.Page
             : rendered.Page with { SuggestedName = job.PageNameHint!.Trim() };
         var repeat = Repeat(page, serializationRepeatCount);
+        var semanticNodes = diagram.Projects.SelectMany(project => project.Nodes).ToArray();
+        var instanceCounts = projected.Nodes.GroupBy(node => node.SemanticNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var incomingParents = projected.Links.GroupBy(link => link.TargetSemanticId, StringComparer.Ordinal)
+            .Count(group => group.Select(link => link.SourceSemanticId).Distinct(StringComparer.Ordinal).Skip(1).Any());
         var manifest = new ArchitectureGenerationManifest(
             diagram.Projects.Count,
-            diagram.Projects.Sum(project => project.Nodes.Count) + diagram.ExternalNodes.Count,
+            semanticNodes.Length + diagram.ExternalNodes.Count,
             diagram.Links.Count,
             rendered.Routes.Count,
             rendered.LogicalFindings.Count,
             rendered.PhysicalFindings.Count,
-            page.StablePageKey);
+            page.StablePageKey)
+        {
+            SemanticClassCount = semanticNodes.Count(node => node.Kind == "Class"),
+            SemanticInterfaceCount = semanticNodes.Count(node => node.Kind == "Interface"),
+            UniqueInterfaceResolutionCount = semanticNodes.Count(node => node.InterfaceResolution == InterfaceResolutionStatus.Unique),
+            UnresolvedInterfaceCount = semanticNodes.Count(node => node.InterfaceResolution == InterfaceResolutionStatus.Unresolved),
+            MultipleInterfaceResolutionCount = semanticNodes.Count(node => node.InterfaceResolution == InterfaceResolutionStatus.Multiple),
+            ProjectedRenderNodeCount = projected.Nodes.Count,
+            ProjectedRenderLinkCount = projected.Links.Count,
+            DuplicatedInstanceCount = projected.Nodes.Count(node => node.Occurrence == ArchitectureRenderNodeOccurrence.Duplicated),
+            CanonicalSharedNodeCount = instanceCounts.Count(pair => pair.Value == 1 &&
+                projected.Links.Count(link => link.TargetSemanticId == pair.Key) > 1),
+            ExceptionAuthorisedDuplicateCount = projected.Nodes.Count(node =>
+                node.DuplicationReason == ArchitectureDuplicationReason.ExceptionPattern),
+            MultiParentNodeCount = incomingParents
+        };
         return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, rendered.PreRepairFindings, rendered.LogicalFindings,
             rendered.PhysicalFindings, rendered.RepairAttempts, rendered.Routes,
             rendered.Timings, manifest, rendered.Eligibility, () => rendered.Diagnostics,
-            repeat, rendered.DevelopmentArtifacts));
+            repeat, rendered.DevelopmentArtifacts, projected));
     }
 
     private SerializationRepeatResult? Repeat(DrawioPage page, int repeatCount)
