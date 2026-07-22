@@ -148,6 +148,7 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly DataGridView _overrides = StyleGrid(includeMatcher: false);
     private readonly StyleEditor _projectStyle = new("Project Container Style");
     private readonly StyleEditor _externalStyle = new("External Dependency Style");
+    private List<NodeLayerGroupRule> _nodeLayerGroups = new();
 
     public DiagramOptionsControl()
     {
@@ -204,6 +205,11 @@ internal sealed class DiagramOptionsControl : UserControl
         _dataModelRelationshipSideOffset.Value = Clamp(settings.Layout.DataModelRelationshipSideOffset, _dataModelRelationshipSideOffset);
         _dataModelRelationshipStubLength.Value = Clamp(settings.Layout.DataModelRelationshipStubLength, _dataModelRelationshipStubLength);
         _baselineAlignmentPattern.Text = settings.Layout.BaselineAlignmentPattern;
+        _nodeLayerGroups = settings.Layout.NodeLayerGroups.Select(rule => new NodeLayerGroupRule
+        {
+            Name = rule.Name,
+            Pattern = rule.Pattern
+        }).ToList();
         _showProjectContainers.Checked = settings.ShowProjectContainers;
         _allowDuplicateNodes.Checked = settings.NodeDuplication.AllowDuplicateNodes;
         _duplicationExceptionPatterns.Text = string.Join(Environment.NewLine, settings.NodeDuplication.DuplicationExceptionPatterns);
@@ -264,7 +270,12 @@ internal sealed class DiagramOptionsControl : UserControl
                 DataModelRelationshipStubLength = (int)_dataModelRelationshipStubLength.Value,
                 BaselineAlignmentPattern = string.IsNullOrWhiteSpace(_baselineAlignmentPattern.Text)
                     ? StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings.DefaultBaselineAlignmentPattern
-                    : _baselineAlignmentPattern.Text.Trim()
+                    : _baselineAlignmentPattern.Text.Trim(),
+                NodeLayerGroups = _nodeLayerGroups.Select(rule => new NodeLayerGroupRule
+                {
+                    Name = rule.Name,
+                    Pattern = rule.Pattern
+                }).ToList()
             },
             Connector = new ConnectorStyle
             {
@@ -297,6 +308,8 @@ internal sealed class DiagramOptionsControl : UserControl
         settings.Layout.BaselineAlignmentPattern = string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)
             ? StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings.DefaultBaselineAlignmentPattern
             : settings.Layout.BaselineAlignmentPattern.Trim();
+        settings.Layout.NodeLayerGroups ??= StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings
+            .CreateDefaultNodeLayerGroups();
         settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
             ? DiagramRendererIds.Drawio
             : settings.OutputRenderer.Trim();

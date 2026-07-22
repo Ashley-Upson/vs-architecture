@@ -39,6 +39,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             route.GetProperty("logicalEdgeId").GetString() ?? string.Empty,
             route.GetProperty("points").EnumerateArray().Select(point => new ValidationPoint(
                 point.GetProperty("X").GetInt32(), point.GetProperty("Y").GetInt32())).ToArray())).ToArray();
+        var semanticLayerReport = root.GetProperty("semanticLayerPlacement").GetRawText();
         return new ArchitectureRenderResult(
             page, Array.Empty<ValidationFinding>(), logical, physical,
             Array.Empty<RouteRepairAttempt>(), routes, region.StageTimings,
@@ -48,7 +49,11 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                 logical.Select(item => item.LogicalRouteId).Concat(physical.Select(item => item.LogicalRouteId))
                     .Distinct(StringComparer.Ordinal).Count()),
             new ArchitectureDevelopmentArtifacts(region.InvariantJson,
-                new Dictionary<string, string> { ["invariants.json"] = region.InvariantJson }));
+                new Dictionary<string, string>
+                {
+                    ["invariants.json"] = region.InvariantJson,
+                    ["semantic-layer-report.json"] = semanticLayerReport
+                }));
     }
 
     public DrawioPage GenerateArchitecturePage(DiagramModel diagram, DiagramSettings settings)
@@ -151,6 +156,24 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
         if (physicalValidation.Findings.Count > 0)
             reasons = reasons.Concat(new[] { $"PhysicalValidationFindings:{physicalValidation.Findings.Count}" }).ToArray();
         var allTimings = timings.Concat(layout.StageTimings).ToArray();
+        var semanticLayerReport = new
+        {
+            enabled = layout.SemanticLayerPlacement.Enabled,
+            activeGroups = layout.SemanticLayerPlacement.ActiveGroups,
+            unmatchedNodes = layout.SemanticLayerPlacement.UnmatchedNodes,
+            externalNodeCount = layout.SemanticLayerPlacement.ExternalNodeCount,
+            externalDepthByProject = layout.SemanticLayerPlacement.ExternalDepthByProject,
+            horizontalInvariance = new
+            {
+                changedXCount = layout.SemanticLayerPlacement.ChangedXCount,
+                changedWidthCount = layout.SemanticLayerPlacement.ChangedWidthCount,
+                maximumXDelta = layout.SemanticLayerPlacement.MaximumXDelta,
+                maximumWidthDelta = layout.SemanticLayerPlacement.MaximumWidthDelta
+            },
+            horizontalOverlaps = layout.SemanticLayerPlacement.HorizontalOverlaps,
+            originalDepthByNodeId = layout.SemanticLayerPlacement.OriginalDepthByNodeId,
+            finalDepthByNodeId = layout.SemanticLayerPlacement.FinalDepthByNodeId
+        };
         var invariantJson = JsonSerializer.Serialize(new
         {
             mode = "IndependentProjectRegion",
@@ -167,6 +190,7 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             horizontalSegmentYAuthority = "DeterministicSlotAllocator",
             verticalColumnXAuthority = "VerticalLinkColumnAllocator / ReturnColumnAllocator",
             topologySelectionAuthority = "CanonicalTopologyFamilySelector",
+            semanticLayerPlacement = semanticLayerReport,
             topologyFamilies = layout.CanonicalTopologyPlans.Values
                 .GroupBy(plan => plan.Family).OrderBy(group => group.Key)
                 .ToDictionary(group => group.Key.ToString(), group => group.Count()),

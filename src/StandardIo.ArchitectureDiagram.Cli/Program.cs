@@ -210,6 +210,10 @@ public static class Program
             await broker.WriteTextAsync(
                 Path.Combine(directory, "architecture-evidence.json"),
                 JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            if (architecture.DevelopmentArtifacts?.NamedJsonArtifacts.TryGetValue(
+                    "semantic-layer-report.json", out var semanticLayerReport) == true)
+                await broker.WriteTextAsync(
+                    Path.Combine(directory, "semantic-layer-report.json"), semanticLayerReport).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 

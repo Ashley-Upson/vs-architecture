@@ -26,6 +26,23 @@ internal static class ProjectLayerBandPlacement
         return placement.Revise(nodes, PlacementPipeline.PositionProjects(placement.Graph, settings, nodes));
     }
 
+    public static PlacedGraph AlignProjects(PlacedGraph placement, DiagramSettings settings)
+    {
+        var nodes = placement.Nodes.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var project in placement.Nodes.Values.Where(node => node.Node.ProjectId is not null)
+                     .GroupBy(node => node.Node.ProjectId!, StringComparer.Ordinal))
+        {
+            var y = project.Min(node => node.Rect.Y);
+            foreach (var layer in project.GroupBy(node => node.Depth).OrderBy(group => group.Key))
+            {
+                foreach (var node in layer)
+                    nodes[node.Node.Id] = node with { Rect = node.Rect with { Y = y } };
+                y += layer.Max(node => node.Rect.Height) + settings.Layout.VerticalSpacing;
+            }
+        }
+        return placement.Revise(nodes, PlacementPipeline.PositionProjects(placement.Graph, settings, nodes));
+    }
+
     public static PlacedGraph Expand(
         PlacedGraph immutableBase,
         DiagramSettings settings,

@@ -6,6 +6,53 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class SettingsTests
 {
     [Fact]
+    public void Default_semantic_layer_groups_are_ordered_from_controller_to_broker()
+    {
+        Assert.Equal(new[]
+        {
+            "Controller", "Manager", "AggregationService", "ManagementService",
+            "CoordinationService", "OrchestrationService", "ProcessingService", "Service", "Broker"
+        }, DiagramSettings.CreateDefault().Layout.NodeLayerGroups.Select(rule => rule.Name));
+    }
+
+    [Fact]
+    public void Sparse_overlay_preserves_default_layer_groups_and_explicit_empty_list_disables_them()
+    {
+        var baseline = DiagramSettings.CreateDefault();
+        var preserved = SettingsSerializer.ApplyOverlay(baseline, "{ \"layout\": { \"verticalSpacing\": 90 } }");
+        var disabled = SettingsSerializer.ApplyOverlay(baseline, "{ \"layout\": { \"nodeLayerGroups\": [] } }");
+
+        Assert.Equal(9, preserved.Layout.NodeLayerGroups.Count);
+        Assert.Empty(disabled.Layout.NodeLayerGroups);
+    }
+
+    [Theory]
+    [InlineData("", "Service$")]
+    [InlineData("Service", "")]
+    [InlineData("Service", "[")]
+    public void Invalid_semantic_layer_group_is_rejected(string name, string pattern)
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.NodeLayerGroups = [new NodeLayerGroupRule { Name = name, Pattern = pattern }];
+
+        var exception = Assert.Throws<InvalidDataException>(() => SettingsSerializer.Export(settings));
+
+        Assert.Contains(string.IsNullOrWhiteSpace(name) ? "blank name" : name, exception.Message);
+    }
+
+    [Fact]
+    public void Duplicate_semantic_layer_group_names_are_rejected()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.NodeLayerGroups =
+        [
+            new NodeLayerGroupRule { Name = "Service", Pattern = "Service$" },
+            new NodeLayerGroupRule { Name = "service", Pattern = "Broker$" }
+        ];
+
+        Assert.Throws<InvalidDataException>(() => SettingsSerializer.Export(settings));
+    }
+    [Fact]
     public void Sparse_overlay_preserves_product_style_rules()
     {
         var settings = SettingsSerializer.ApplyOverlay(

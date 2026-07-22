@@ -26,6 +26,7 @@ public static class SettingsSerializer
 
         _ = StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses.RootDiscoveryPatternParser
             .Parse(settings.RootDiscoveryPatternsText ?? string.Empty);
+        ValidateNodeLayerGroups(settings.Layout?.NodeLayerGroups);
         settings.Version = SettingsSchemaVersion.Current;
         return JsonSerializer.Serialize(settings, Options);
     }
@@ -94,6 +95,8 @@ public static class SettingsSerializer
             ? LayoutSettings.DefaultBaselineAlignmentPattern
             : settings.Layout.BaselineAlignmentPattern.Trim();
         settings.Layout.DuplicateHighNoiseNodePatterns ??= new();
+        settings.Layout.NodeLayerGroups ??= LayoutSettings.CreateDefaultNodeLayerGroups();
+        ValidateNodeLayerGroups(settings.Layout.NodeLayerGroups);
 
         return settings;
     }
@@ -213,6 +216,34 @@ public static class SettingsSerializer
         catch (JsonException exception)
         {
             throw new InvalidDataException("Settings JSON is invalid.", exception);
+        }
+    }
+
+    private static void ValidateNodeLayerGroups(IReadOnlyList<NodeLayerGroupRule>? rules)
+    {
+        if (rules is null) throw new InvalidDataException("Layout node layer groups cannot be null.");
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < rules.Count; index++)
+        {
+            var rule = rules[index] ?? throw new InvalidDataException(
+                $"Node layer group rule at index {index} cannot be null.");
+            rule.Name = rule.Name?.Trim() ?? string.Empty;
+            rule.Pattern = rule.Pattern?.Trim() ?? string.Empty;
+            if (rule.Name.Length == 0)
+                throw new InvalidDataException($"Node layer group rule at index {index} has a blank name.");
+            if (rule.Pattern.Length == 0)
+                throw new InvalidDataException($"Node layer group rule '{rule.Name}' has a blank pattern.");
+            if (!names.Add(rule.Name))
+                throw new InvalidDataException($"Node layer group name '{rule.Name}' is duplicated.");
+            try
+            {
+                _ = new Regex(rule.Pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidDataException(
+                    $"Node layer group rule '{rule.Name}' has an invalid pattern '{rule.Pattern}'.", exception);
+            }
         }
     }
 }

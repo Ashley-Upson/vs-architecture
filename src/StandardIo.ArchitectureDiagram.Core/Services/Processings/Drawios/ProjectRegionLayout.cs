@@ -13,7 +13,8 @@ internal sealed record ProjectRegionLayout(
     IReadOnlyList<PipelineStageMetric> StageTimings,
     LayoutRevision LayoutRevision,
     IReadOnlyDictionary<string, CanonicalTopologyPlan> CanonicalTopologyPlans,
-    ProjectSlotCompilation ProjectSlotCompilation)
+    ProjectSlotCompilation ProjectSlotCompilation,
+    ConfiguredSemanticLayerPlacementResult SemanticLayerPlacement)
 {
     public ProjectRegionLayout WithProjects(IReadOnlyDictionary<string, ProjectLayout> projects) =>
         this with { Projects = projects ?? throw new ArgumentNullException(nameof(projects)) };

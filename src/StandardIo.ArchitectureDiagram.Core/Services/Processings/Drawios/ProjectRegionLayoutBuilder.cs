@@ -18,8 +18,15 @@ internal static class ProjectRegionLayoutBuilder
         var timings = new List<PipelineStageMetric>();
         var placed = MeasureStage(timings, "project-region positional placement", () =>
             ProjectRegionPlacement.Place(graph, settings, new LayoutRevision(0)));
+        var semanticLayers = MeasureStage(timings, "project-region configured semantic layers", () =>
+            ConfiguredSemanticLayerPlacement.Apply(placed, settings));
         var activePlacement = MeasureStage(timings, "project-region layer-band placement", () =>
-            graph.Projects.Count > 1 ? placed : ProjectLayerBandPlacement.Align(placed, settings));
+            semanticLayers.Enabled
+                ? ProjectLayerBandPlacement.AlignProjects(semanticLayers.Placement, settings)
+                : graph.Projects.Count > 1
+                    ? placed
+                    : ProjectLayerBandPlacement.Align(placed, settings));
+        AssertHorizontalGeometry(placed.Nodes, activePlacement.Nodes);
         var immutableBandPlacement = activePlacement;
         var baseBandExtents = ProjectLayerExpansionReconciler.BaseBandExtents(
             immutableBandPlacement.Nodes, settings.Layout.LinkPadding,
@@ -104,7 +111,7 @@ internal static class ProjectRegionLayoutBuilder
             TraceabilityValidator.Validate(activePlacement.Nodes, links, settings.Layout.ParallelLaneSpacing));
         return new ProjectRegionLayout(
             graph, activePlacement.Nodes, activePlacement.Projects, links, validation,
-            timings, activePlacement.Revision, topology.Plans, slotCompilation);
+            timings, activePlacement.Revision, topology.Plans, slotCompilation, semanticLayers);
     }
 
     private static IReadOnlyList<ProjectLayerExpansionIdentity> ChangedBands(
@@ -128,6 +135,20 @@ internal static class ProjectRegionLayoutBuilder
             (desired.TryGetValue(key, out var right) ? right : 0) <
             (current.TryGetValue(key, out var left) ? left : 0));
         return grew && shrank ? "Mixed" : grew ? "Grew" : "Shrank";
+    }
+
+    private static void AssertHorizontalGeometry(
+        IReadOnlyDictionary<string, NodeLayout> baseline,
+        IReadOnlyDictionary<string, NodeLayout> current)
+    {
+        var changed = current.Values.Where(node =>
+                !baseline.TryGetValue(node.Node.Id, out var original) ||
+                original.Rect.X != node.Rect.X || original.Rect.Width != node.Rect.Width)
+            .OrderBy(node => node.Node.Id, StringComparer.Ordinal).ToArray();
+        if (changed.Length == 0) return;
+        throw new InvalidOperationException(
+            "Configured semantic layer placement changed horizontal node geometry: " +
+            string.Join(",", changed.Select(node => node.Node.Id)));
     }
 
     private static T MeasureStage<T>(ICollection<PipelineStageMetric> timings, string stage, Func<T> action)

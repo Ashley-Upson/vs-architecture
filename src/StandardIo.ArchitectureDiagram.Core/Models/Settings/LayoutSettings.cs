@@ -51,4 +51,18 @@ public sealed class LayoutSettings
         "*Logger",
         "ILogger*"
     };
+    public List<NodeLayerGroupRule> NodeLayerGroups { get; set; } = CreateDefaultNodeLayerGroups();
+
+    public static List<NodeLayerGroupRule> CreateDefaultNodeLayerGroups() => new()
+    {
+        new() { Name = "Controller", Pattern = "Controller$" },
+        new() { Name = "Manager", Pattern = "Manager$" },
+        new() { Name = "AggregationService", Pattern = "AggregationService$" },
+        new() { Name = "ManagementService", Pattern = "ManagementService$" },
+        new() { Name = "CoordinationService", Pattern = "CoordinationService$" },
+        new() { Name = "OrchestrationService", Pattern = "OrchestrationService$" },
+        new() { Name = "ProcessingService", Pattern = "ProcessingService$" },
+        new() { Name = "Service", Pattern = "Service$" },
+        new() { Name = "Broker", Pattern = "Broker$" }
+    };
 }
