@@ -35,7 +35,10 @@ internal sealed record LinkSegmentDemand(
     RouteRevision RouteRevision,
     string? OwnershipEnvelopeId = null,
     LinkSegmentEndpointRole MinimumEndpointRole = LinkSegmentEndpointRole.None,
-    LinkSegmentEndpointRole MaximumEndpointRole = LinkSegmentEndpointRole.None);
+    LinkSegmentEndpointRole MaximumEndpointRole = LinkSegmentEndpointRole.None,
+    string? BandId = null,
+    string? CoordinateFrameId = null,
+    string? DemandCategory = null);
 
 internal sealed record AssignedLinkSegment(
     string Id,

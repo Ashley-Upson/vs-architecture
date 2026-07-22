@@ -3,9 +3,18 @@ using System.Collections.Generic;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal readonly record struct InterLayerId(int UpperLayer, int LowerLayer, LayoutRevision LayoutRevision)
+internal enum InterLayerBandRole { Legacy, ProjectInternal, RootTransition }
+
+internal readonly record struct InterLayerId(
+    int UpperLayer,
+    int LowerLayer,
+    LayoutRevision LayoutRevision,
+    string? ProjectId = null,
+    InterLayerBandRole BandRole = InterLayerBandRole.Legacy)
 {
-    public override string ToString() => $"inter-layer:{UpperLayer}:{LowerLayer}:layout-{LayoutRevision.Value}";
+    public override string ToString() => ProjectId is null
+        ? $"inter-layer:{BandRole}:{UpperLayer}:{LowerLayer}:layout-{LayoutRevision.Value}"
+        : $"inter-layer:{BandRole}:project-{ProjectId}:{UpperLayer}:{LowerLayer}:layout-{LayoutRevision.Value}";
 }
 
 internal enum InterLayerMembershipRole { SourceTransition, TargetTransition, Through, Return }

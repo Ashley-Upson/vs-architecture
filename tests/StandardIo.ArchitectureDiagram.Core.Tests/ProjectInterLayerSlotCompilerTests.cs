@@ -7,6 +7,79 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class ProjectInterLayerSlotCompilerTests
 {
     [Fact]
+    public void Project_local_bands_do_not_share_physical_coordinates_for_equal_local_depths()
+    {
+        var first = CompileOffsetProjects(reverseProjects: false);
+        var reversed = CompileOffsetProjects(reverseProjects: true);
+
+        Assert.All(first.Demands.Where(demand => demand.CoordinateFrameId == "project-a"), demand =>
+        {
+            Assert.StartsWith("project:project-a:depth:", demand.MovementScope!.Value.Id);
+            Assert.Contains("project-project-a", demand.BandId);
+            Assert.Equal("ProjectInternal", demand.DemandCategory);
+            Assert.InRange(first.Assignments[demand.Id].AxisCoordinate,
+                demand.AllowedAxisRange.Minimum, demand.AllowedAxisRange.Maximum);
+            Assert.True(first.Assignments[demand.Id].AxisCoordinate > 1900);
+        });
+        Assert.All(first.Demands.Where(demand => demand.CoordinateFrameId == "project-b"), demand =>
+        {
+            Assert.StartsWith("project:project-b:depth:", demand.MovementScope!.Value.Id);
+            Assert.Contains("project-project-b", demand.BandId);
+            Assert.InRange(first.Assignments[demand.Id].AxisCoordinate,
+                demand.AllowedAxisRange.Minimum, demand.AllowedAxisRange.Maximum);
+            Assert.True(first.Assignments[demand.Id].AxisCoordinate < 1000);
+        });
+        Assert.Equal(first.Links.Keys.OrderBy(item => item), reversed.Links.Keys.OrderBy(item => item));
+        foreach (var routeId in first.Links.Keys)
+            Assert.Equal(first.Links[routeId].Points, reversed.Links[routeId].Points);
+    }
+
+    [Fact]
+    public void Cross_project_routes_use_a_distinct_root_transition_demand_category()
+    {
+        var graph = Graph(new[] { "project-a", "project-b" },
+            new[] { ("cross", "a0", "b1") });
+        var nodes = Layouts(graph);
+        var revision = new LayoutRevision(1);
+        var plans = CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans;
+        var compiled = ProjectInterLayerSlotCompiler.Compile(plans, nodes, Routes(graph, nodes),
+            new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+
+        var demand = Assert.Single(compiled.Demands);
+        Assert.Null(demand.CoordinateFrameId);
+        Assert.Equal("RootTransition", demand.DemandCategory);
+        Assert.StartsWith("root-transition:depth:", demand.MovementScope!.Value.Id);
+        Assert.Contains("RootTransition", demand.BandId);
+    }
+
+    [Fact]
+    public void Single_project_adjacent_route_retains_the_existing_slot_order_and_coordinate()
+    {
+        var graph = RenderGraph.From(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", new[] { Node("upper"), Node("lower") }) },
+            Array.Empty<ExternalDependencyNode>(),
+            new[] { new DependencyEdge("route", "upper", "lower", "Dependency") }));
+        var nodes = new Dictionary<string, NodeLayout>(StringComparer.Ordinal)
+        {
+            ["upper"] = Layout(graph, "upper", new Rect(0, 0, 120, 60), 0),
+            ["lower"] = Layout(graph, "lower", new Rect(240, 180, 120, 60), 1)
+        };
+        var route = graph.Links.Single();
+        var links = new Dictionary<string, LinkLayout>(StringComparer.Ordinal)
+        {
+            [route.Id] = new(route, new Point(60, 60), new Point(300, 180), Array.Empty<Point>(), 0.5, 0.5)
+        };
+        var revision = new LayoutRevision(1);
+        var plans = CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans;
+
+        var compiled = ProjectInterLayerSlotCompiler.Compile(plans, nodes, links,
+            new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+
+        Assert.Equal(70, compiled.Assignments["route:horizontal:0"].AxisCoordinate);
+        Assert.Equal(new[] { new Point(60, 70), new Point(300, 70) }, compiled.Links["route"].Points);
+    }
+
+    [Fact]
     public void Destination_columns_do_not_occupy_another_routes_fixed_target_entry_column()
     {
         var graph = RenderGraph.From(new DiagramModel(
@@ -76,7 +149,58 @@ public sealed class ProjectInterLayerSlotCompilerTests
         Assert.Contains(exclusions, interval => interval == new AxisInterval(108, 132));
     }
 
-    private static TypeNode Node(string id) => new(id, "project", id, $"Fixture.{id}", "Class");
+    private static ProjectSlotCompilation CompileOffsetProjects(bool reverseProjects)
+    {
+        var projectIds = reverseProjects ? new[] { "project-b", "project-a" } : new[] { "project-a", "project-b" };
+        var links = new[]
+        {
+            ("a-adjacent", "a0", "a1"), ("a-long", "a0", "a2"),
+            ("a-up", "a2", "a0"), ("a-same", "a1", "a1b"),
+            ("b-adjacent", "b0", "b1"), ("b-long", "b0", "b2"),
+            ("b-up", "b2", "b0"), ("b-same", "b1", "b1b")
+        };
+        var graph = Graph(projectIds, links);
+        var nodes = Layouts(graph);
+        var revision = new LayoutRevision(1);
+        return ProjectInterLayerSlotCompiler.Compile(
+            CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans,
+            nodes, Routes(graph, nodes), new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+    }
+
+    private static RenderGraph Graph(IEnumerable<string> projectIds, IEnumerable<(string Id, string Source, string Target)> links)
+    {
+        var projects = projectIds.Select(id =>
+        {
+            var prefix = id == "project-a" ? "a" : "b";
+            return new ProjectContainer(id, id, new[]
+            {
+                Node(prefix + "0", id), Node(prefix + "1", id), Node(prefix + "1b", id), Node(prefix + "2", id)
+            });
+        }).ToArray();
+        return RenderGraph.From(new DiagramModel(projects, Array.Empty<ExternalDependencyNode>(),
+            links.Select(link => new DependencyEdge(link.Id, link.Source, link.Target, "Dependency")).ToArray()));
+    }
+
+    private static IReadOnlyDictionary<string, NodeLayout> Layouts(RenderGraph graph) =>
+        graph.Nodes.ToDictionary(node => node.Id, node =>
+        {
+            var projectA = node.ProjectId == "project-a";
+            var origin = projectA ? 1900 : 100;
+            var depth = node.Id.EndsWith("0", StringComparison.Ordinal) ? 0 :
+                node.Id.EndsWith("2", StringComparison.Ordinal) ? 2 : 1;
+            var x = node.Id.EndsWith("b", StringComparison.Ordinal) ? 500 : depth * 200;
+            return new NodeLayout(node, new Rect(x, origin + depth * 250, 120, 60), depth, false);
+        }, StringComparer.Ordinal);
+
+    private static IReadOnlyDictionary<string, LinkLayout> Routes(
+        RenderGraph graph, IReadOnlyDictionary<string, NodeLayout> nodes) =>
+        graph.Links.ToDictionary(link => link.Id, link => new LinkLayout(link,
+            new Point(nodes[link.SourceId].Rect.CenterX, nodes[link.SourceId].Rect.Bottom),
+            new Point(nodes[link.TargetId].Rect.CenterX, nodes[link.TargetId].Rect.Y),
+            Array.Empty<Point>(), 0.5, 0.5), StringComparer.Ordinal);
+
+    private static TypeNode Node(string id, string projectId = "project") =>
+        new(id, projectId, id, $"Fixture.{id}", "Class");
 
     private static NodeLayout Layout(RenderGraph graph, string id, Rect rect, int depth) =>
         new(graph.Nodes.Single(node => node.Id == id), rect, depth, false);

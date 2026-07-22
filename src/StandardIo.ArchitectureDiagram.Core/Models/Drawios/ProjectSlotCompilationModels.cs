@@ -9,7 +9,9 @@ internal sealed record ProjectSlotCompilation(
     IReadOnlyDictionary<string, AssignedLinkSegment> Assignments,
     VerticalLinkColumnAssignment VerticalColumns,
     IReadOnlyDictionary<string, string> ReturnSideByRouteId,
-    IReadOnlyDictionary<int, int> RequiredLayerExpansionByLowerDepth,
+    IReadOnlyDictionary<ProjectLayerExpansionIdentity, int> RequiredLayerExpansion,
     int InterLayerCount,
     int ExpandedInterLayerCount,
     IReadOnlyList<PipelineStageMetric> Timings);
+
+internal readonly record struct ProjectLayerExpansionIdentity(string ProjectId, int LowerDepth);

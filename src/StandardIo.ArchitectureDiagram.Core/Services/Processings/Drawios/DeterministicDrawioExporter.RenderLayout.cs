@@ -1294,7 +1294,7 @@ internal sealed partial class RenderLayout
             var activePlacement = MeasureStage(timings, "project-region layer-band placement", () =>
                 graph.Projects.Count > 1 ? placed : ProjectLayerBandPlacement.Align(placed, settings));
             var immutableBandPlacement = activePlacement;
-            var accumulatedExpansions = new Dictionary<int, int>();
+            var accumulatedExpansions = new Dictionary<ProjectLayerExpansionIdentity, int>();
             CanonicalTopologySelection topology = null!;
             IReadOnlyDictionary<string, LinkLayout> terminalLayouts = null!;
             ProjectSlotCompilation slotCompilation = null!;
@@ -1311,8 +1311,8 @@ internal sealed partial class RenderLayout
                     topology.Plans, activePlacement.Nodes, terminalLayouts, projectLabels, activePlacement.Revision,
                     settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
                 timings.AddRange(slotCompilation.Timings);
-                if (slotCompilation.RequiredLayerExpansionByLowerDepth.Count == 0) break;
-                foreach (var expansion in slotCompilation.RequiredLayerExpansionByLowerDepth)
+                if (slotCompilation.RequiredLayerExpansion.Count == 0) break;
+                foreach (var expansion in slotCompilation.RequiredLayerExpansion)
                     accumulatedExpansions[expansion.Key] =
                         (accumulatedExpansions.TryGetValue(expansion.Key, out var existing) ? existing : 0) +
                         expansion.Value;
@@ -1320,10 +1320,11 @@ internal sealed partial class RenderLayout
                     ProjectLayerBandPlacement.Expand(immutableBandPlacement, settings, accumulatedExpansions));
                 if (iteration == 7)
                     throw new InvalidOperationException("Project InterLayer expansion did not converge: " +
-                        string.Join(",", slotCompilation.RequiredLayerExpansionByLowerDepth
-                            .OrderBy(item => item.Key).Select(item => $"depth-{item.Key}:{item.Value}:" +
-                                $"upper={activePlacement.Nodes.Values.Where(node => node.Depth == item.Key - 1).Select(node => node.Rect.Bottom).DefaultIfEmpty(-1).Max()}:" +
-                                $"lower={activePlacement.Nodes.Values.Where(node => node.Depth == item.Key).Select(node => node.Rect.Y).DefaultIfEmpty(-1).Min()}")));
+                        string.Join(",", slotCompilation.RequiredLayerExpansion
+                            .OrderBy(item => item.Key.ProjectId, StringComparer.Ordinal).ThenBy(item => item.Key.LowerDepth)
+                            .Select(item => $"project-{item.Key.ProjectId}:depth-{item.Key.LowerDepth}:{item.Value}:" +
+                                $"upper={activePlacement.Nodes.Values.Where(node => node.Node.ProjectId == item.Key.ProjectId && node.Depth == item.Key.LowerDepth - 1).Select(node => node.Rect.Bottom).DefaultIfEmpty(-1).Max()}:" +
+                                $"lower={activePlacement.Nodes.Values.Where(node => node.Node.ProjectId == item.Key.ProjectId && node.Depth == item.Key.LowerDepth).Select(node => node.Rect.Y).DefaultIfEmpty(-1).Min()}")));
             }
             slotCompilation = slotCompilation with { ExpandedInterLayerCount = accumulatedExpansions.Count };
             var links = MeasureStage(timings, "project-region canonical normalization", () =>

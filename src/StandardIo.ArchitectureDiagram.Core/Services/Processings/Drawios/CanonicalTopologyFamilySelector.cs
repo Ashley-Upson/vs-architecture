@@ -27,10 +27,18 @@ internal static class CanonicalTopologyFamilySelector
             }
 
             var family = Family(source, target);
+            var projectId = family is CanonicalTopologyFamily.AdjacentDownward or
+                CanonicalTopologyFamily.LongDownward or CanonicalTopologyFamily.SameLayerReturn or
+                CanonicalTopologyFamily.UpwardReturn
+                ? source.Node.ProjectId
+                : null;
+            var bandRole = projectId is null
+                ? InterLayerBandRole.RootTransition
+                : InterLayerBandRole.ProjectInternal;
             InterLayerId? departure = source.IsStandalone || target.IsStandalone
-                ? null : new InterLayerId(source.Depth, source.Depth + 1, revision);
+                ? null : new InterLayerId(source.Depth, source.Depth + 1, revision, projectId, bandRole);
             InterLayerId? arrival = family is CanonicalTopologyFamily.SameLayerReturn or CanonicalTopologyFamily.UpwardReturn
-                ? new InterLayerId(Math.Max(0, target.Depth - 1), target.Depth, revision)
+                ? new InterLayerId(Math.Max(0, target.Depth - 1), target.Depth, revision, projectId, bandRole)
                 : null;
             var isReturn = family is CanonicalTopologyFamily.SameLayerReturn or CanonicalTopologyFamily.UpwardReturn;
             var destinationColumn = family == CanonicalTopologyFamily.LongDownward;

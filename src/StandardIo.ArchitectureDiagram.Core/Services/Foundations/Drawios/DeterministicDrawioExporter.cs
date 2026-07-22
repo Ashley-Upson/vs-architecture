@@ -187,7 +187,11 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                     maximumEndpointRole = demand.MaximumEndpointRole.ToString(),
                     assignedCoordinate = layout.ProjectSlotCompilation.Assignments[demand.Id].AxisCoordinate,
                     slotIndex = layout.ProjectSlotCompilation.Assignments[demand.Id].SlotIndex,
-                    movementScope = demand.MovementScope?.Id
+                    movementScope = demand.MovementScope?.Id,
+                    bandId = demand.BandId,
+                    coordinateFrameId = demand.CoordinateFrameId,
+                    demandCategory = demand.DemandCategory,
+                    allocationEnvelope = $"project-interLayer:{demand.MovementScope?.Id}:{demand.AllowedAxisRange.Minimum}:{demand.AllowedAxisRange.Maximum}"
                 }),
             interLayersExpanded = layout.ProjectSlotCompilation?.ExpandedInterLayerCount ?? 0,
             corridorLaneYAssignmentsRemaining = 0,

@@ -20,7 +20,7 @@ internal static class ProjectInterLayerSlotCompiler
         var timings = new List<PipelineStageMetric>();
         var timer = Stopwatch.StartNew();
         var bands = Bands(nodes, revision, padding, separation, terminalLayouts.Count);
-        var projectHorizontalSpan = new AxisInterval(
+        var globalHorizontalSpan = new AxisInterval(
             nodes.Values.Min(item => item.Rect.X) - padding,
             nodes.Values.Max(item => item.Rect.Right) + padding);
         var demands = new List<LinkSegmentDemand>();
@@ -29,14 +29,15 @@ internal static class ProjectInterLayerSlotCompiler
         {
             var route = terminalLayouts[plan.LogicalRouteId];
             var departureId = BandForDeparture(plan, nodes, bands);
+            var horizontalSpan = HorizontalSpan(plan, nodes, padding, globalHorizontalSpan);
             demands.Add(Demand(plan, route, departureId, DepartureRole(plan.Family), 0,
-                bands[departureId], revision, projectHorizontalSpan));
+                bands[departureId], revision, horizontalSpan));
             if (plan.RequiresReturnColumn || plan.RequiresDestinationColumn)
             {
                 var arrivalId = BandForArrival(plan, nodes, bands);
                 demands.Add(Demand(plan, route, arrivalId,
                     plan.RequiresReturnColumn ? LinkSegmentRole.ReturnArrival : LinkSegmentRole.LongArrival,
-                    1, bands[arrivalId], revision, projectHorizontalSpan));
+                    1, bands[arrivalId], revision, horizontalSpan));
             }
         }
 
@@ -44,8 +45,10 @@ internal static class ProjectInterLayerSlotCompiler
         timings.Add(new PipelineStageMetric("project-region InterLayer discovery", timer.ElapsedMilliseconds));
 
         timer.Restart();
+        var preservedRootAssignments = PreservedRootAssignments(
+            plans, nodes, terminalLayouts, bands, revision, separation, padding, globalHorizontalSpan);
         var assignments = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
-        var requiredExpansion = new Dictionary<int, int>();
+        var requiredExpansion = new Dictionary<ProjectLayerExpansionIdentity, int>();
         foreach (var group in demands.GroupBy(item =>
                      $"{item.MovementScope?.Id}:{item.AllowedAxisRange.Minimum}:{item.AllowedAxisRange.Maximum}",
                      StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
@@ -58,13 +61,18 @@ internal static class ProjectInterLayerSlotCompiler
                 sample.MovementScope, revision);
             var assigned = DeterministicSlotAllocator.Assign(identity, group,
                 new LinkSegmentAssignmentOptions(separation, padding));
-            foreach (var item in assigned.SegmentsByDemandId) assignments.Add(item.Key, item.Value);
+            foreach (var item in assigned.SegmentsByDemandId)
+                assignments.Add(item.Key, string.Equals(sample.DemandCategory, "RootTransition", StringComparison.Ordinal)
+                    ? preservedRootAssignments[item.Key]
+                    : item.Value);
             var missing = Math.Max(0, assigned.RequiredExtent - allowedRange.Length);
-            if (missing > 0)
+            if (missing > 0 && sample.CoordinateFrameId is not null &&
+                string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal))
             {
-                var depth = int.Parse(sample.MovementScope!.Value.Id.Substring("depth:".Length));
-                requiredExpansion[depth] = Math.Max(
-                    requiredExpansion.TryGetValue(depth, out var existing) ? existing : 0, missing);
+                var band = bands.Keys.Single(item => string.Equals(item.ToString(), sample.BandId, StringComparison.Ordinal));
+                var expansionId = new ProjectLayerExpansionIdentity(sample.CoordinateFrameId, band.LowerLayer);
+                requiredExpansion[expansionId] = Math.Max(
+                    requiredExpansion.TryGetValue(expansionId, out var existing) ? existing : 0, missing);
             }
         }
 
@@ -142,6 +150,57 @@ internal static class ProjectInterLayerSlotCompiler
             bands.Count, requiredExpansion.Count, timings);
     }
 
+    private static IReadOnlyDictionary<string, AssignedLinkSegment> PreservedRootAssignments(
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> routes,
+        IReadOnlyDictionary<InterLayerId, AxisInterval> bands,
+        LayoutRevision revision,
+        int separation,
+        int padding,
+        AxisInterval globalHorizontalSpan)
+    {
+        var legacyDemands = new List<LinkSegmentDemand>();
+        foreach (var plan in plans.Values.OrderBy(item => routes[item.LogicalRouteId].Link.Order)
+                     .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal))
+        {
+            var route = routes[plan.LogicalRouteId];
+            var departure = ClosestBand(bands, nodes[plan.SourceNodeId].Depth, null,
+                InterLayerBandRole.RootTransition);
+            legacyDemands.Add(Demand(plan, route, departure, DepartureRole(plan.Family), 0,
+                bands[departure], revision, globalHorizontalSpan) with
+            {
+                MovementScope = new MovementScopeIdentity(
+                    MovementScopeKind.LayerAndLowerSuffix, $"depth:{departure.LowerLayer}")
+            });
+            if (!plan.RequiresReturnColumn && !plan.RequiresDestinationColumn) continue;
+            var arrival = ClosestBand(bands, Math.Max(-1, nodes[plan.TargetNodeId].Depth - 1), null,
+                InterLayerBandRole.RootTransition);
+            legacyDemands.Add(Demand(plan, route, arrival,
+                plan.RequiresReturnColumn ? LinkSegmentRole.ReturnArrival : LinkSegmentRole.LongArrival,
+                1, bands[arrival], revision, globalHorizontalSpan) with
+            {
+                MovementScope = new MovementScopeIdentity(
+                    MovementScopeKind.LayerAndLowerSuffix, $"depth:{arrival.LowerLayer}")
+            });
+        }
+
+        var result = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
+        foreach (var group in legacyDemands.GroupBy(item =>
+                     $"{item.MovementScope?.Id}:{item.AllowedAxisRange.Minimum}:{item.AllowedAxisRange.Maximum}",
+                     StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var sample = group.First();
+            var identity = new LinkSegmentAllocationRegionIdentity(
+                LinkSegmentOrientation.Horizontal, sample.AllowedAxisRange,
+                $"legacy-preserved-interLayer:{group.Key}", sample.MovementScope, revision);
+            var assigned = DeterministicSlotAllocator.Assign(identity, group,
+                new LinkSegmentAssignmentOptions(separation, padding));
+            foreach (var item in assigned.SegmentsByDemandId) result[item.Key] = item.Value;
+        }
+        return result;
+    }
+
     private static LinkLayout Materialize(
         CanonicalTopologyPlan plan,
         LinkLayout route,
@@ -194,14 +253,17 @@ internal static class ProjectInterLayerSlotCompiler
                 ? projectHorizontalSpan : new AxisInterval(route.SourcePoint.X, route.TargetPoint.X),
             range, null, role,
             route.Link.Order, order,
-            new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, $"depth:{band.LowerLayer}"),
+            new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix,
+                $"{(band.BandRole == InterLayerBandRole.ProjectInternal ? $"project:{band.ProjectId}" : "root-transition")}:depth:{band.LowerLayer}"),
             revision, new RouteRevision(0), null,
             route.SourcePoint.X <= route.TargetPoint.X
                 ? LinkSegmentEndpointRole.Departure
                 : LinkSegmentEndpointRole.Arrival,
             route.SourcePoint.X <= route.TargetPoint.X
                 ? LinkSegmentEndpointRole.Arrival
-                : LinkSegmentEndpointRole.Departure);
+                : LinkSegmentEndpointRole.Departure,
+            band.ToString(), band.ProjectId,
+            band.BandRole == InterLayerBandRole.ProjectInternal ? "ProjectInternal" : "RootTransition");
 
     private static LinkSegmentRole DepartureRole(CanonicalTopologyFamily family) => family switch
     {
@@ -217,7 +279,7 @@ internal static class ProjectInterLayerSlotCompiler
         IReadOnlyDictionary<InterLayerId, AxisInterval> bands)
     {
         var source = nodes[plan.SourceNodeId];
-        return ClosestBand(bands, source.Depth);
+        return ClosestBand(bands, source.Depth, ProjectId(plan, nodes), BandRole(plan, nodes));
     }
 
     private static InterLayerId BandForArrival(
@@ -226,11 +288,16 @@ internal static class ProjectInterLayerSlotCompiler
         IReadOnlyDictionary<InterLayerId, AxisInterval> bands)
     {
         var target = nodes[plan.TargetNodeId];
-        return ClosestBand(bands, Math.Max(-1, target.Depth - 1));
+        return ClosestBand(bands, Math.Max(-1, target.Depth - 1), ProjectId(plan, nodes), BandRole(plan, nodes));
     }
 
-    private static InterLayerId ClosestBand(IReadOnlyDictionary<InterLayerId, AxisInterval> bands, int upper) =>
-        bands.Keys.OrderBy(id => Math.Abs(id.UpperLayer - upper)).ThenBy(id => id.UpperLayer).First();
+    private static InterLayerId ClosestBand(
+        IReadOnlyDictionary<InterLayerId, AxisInterval> bands,
+        int upper,
+        string? projectId,
+        InterLayerBandRole role) =>
+        bands.Keys.Where(id => id.BandRole == role && string.Equals(id.ProjectId, projectId, StringComparison.Ordinal))
+            .OrderBy(id => Math.Abs(id.UpperLayer - upper)).ThenBy(id => id.UpperLayer).First();
 
     private static IReadOnlyDictionary<InterLayerId, AxisInterval> Bands(
         IReadOnlyDictionary<string, NodeLayout> nodes,
@@ -239,18 +306,74 @@ internal static class ProjectInterLayerSlotCompiler
         int separation,
         int routeCount)
     {
-        var layers = nodes.Values.Where(item => item.Node.ProjectId is not null).GroupBy(item => item.Depth)
-            .ToDictionary(item => item.Key, item => item.ToArray());
         var result = new Dictionary<InterLayerId, AxisInterval>();
+        foreach (var project in nodes.Values.Where(item => item.Node.ProjectId is not null)
+                     .GroupBy(item => item.Node.ProjectId!, StringComparer.Ordinal)
+                     .OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            AddBands(result, project.GroupBy(item => item.Depth).ToDictionary(item => item.Key, item => item.ToArray()),
+                revision, padding, separation, routeCount, project.Key, InterLayerBandRole.ProjectInternal);
+        }
+        var globalLayers = nodes.Values.Where(item => item.Node.ProjectId is not null).GroupBy(item => item.Depth)
+            .ToDictionary(item => item.Key, item => item.ToArray());
+        AddBands(result, globalLayers, revision, padding, separation, routeCount, null,
+            InterLayerBandRole.RootTransition);
+        return result;
+    }
+
+    private static void AddBands(
+        IDictionary<InterLayerId, AxisInterval> result,
+        IReadOnlyDictionary<int, NodeLayout[]> layers,
+        LayoutRevision revision,
+        int padding,
+        int separation,
+        int routeCount,
+        string? projectId,
+        InterLayerBandRole role)
+    {
         foreach (var upper in layers.Keys.OrderBy(item => item))
         {
             var upperBottom = layers[upper].Max(item => item.Rect.Bottom);
             var lowerTop = layers.TryGetValue(upper + 1, out var lower)
                 ? lower.Min(item => item.Rect.Y)
                 : upperBottom + padding * 2 + Math.Max(1, routeCount) * separation;
-            result[new InterLayerId(upper, upper + 1, revision)] = new AxisInterval(upperBottom, lowerTop);
+            result[new InterLayerId(upper, upper + 1, revision, projectId, role)] =
+                new AxisInterval(upperBottom, lowerTop);
         }
-        return result;
+    }
+
+    private static InterLayerBandRole BandRole(
+        CanonicalTopologyPlan plan,
+        IReadOnlyDictionary<string, NodeLayout> nodes) =>
+        ProjectId(plan, nodes) is null ? InterLayerBandRole.RootTransition : InterLayerBandRole.ProjectInternal;
+
+    private static string? ProjectId(
+        CanonicalTopologyPlan plan,
+        IReadOnlyDictionary<string, NodeLayout> nodes)
+    {
+        var sourceProject = nodes[plan.SourceNodeId].Node.ProjectId;
+        var targetProject = nodes[plan.TargetNodeId].Node.ProjectId;
+        var internalFamily = plan.Family is CanonicalTopologyFamily.AdjacentDownward or
+            CanonicalTopologyFamily.LongDownward or CanonicalTopologyFamily.SameLayerReturn or
+            CanonicalTopologyFamily.UpwardReturn;
+        return internalFamily && sourceProject is not null &&
+               string.Equals(sourceProject, targetProject, StringComparison.Ordinal)
+            ? sourceProject
+            : null;
+    }
+
+    private static AxisInterval HorizontalSpan(
+        CanonicalTopologyPlan plan,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        int padding,
+        AxisInterval globalSpan)
+    {
+        var projectId = ProjectId(plan, nodes);
+        if (projectId is null) return globalSpan;
+        var projectNodes = nodes.Values.Where(item =>
+            string.Equals(item.Node.ProjectId, projectId, StringComparison.Ordinal)).ToArray();
+        return new AxisInterval(projectNodes.Min(item => item.Rect.X) - padding,
+            projectNodes.Max(item => item.Rect.Right) + padding);
     }
 
     private static bool PositiveOverlap(AxisInterval first, AxisInterval second) =>

@@ -29,12 +29,14 @@ internal static class ProjectLayerBandPlacement
     public static PlacedGraph Expand(
         PlacedGraph immutableBase,
         DiagramSettings settings,
-        IReadOnlyDictionary<int, int> expansionByLowerDepth)
+        IReadOnlyDictionary<ProjectLayerExpansionIdentity, int> expansions)
     {
         var nodes = immutableBase.Nodes.ToDictionary(item => item.Key, item =>
         {
             if (item.Value.Node.ProjectId is null) return item.Value;
-            var delta = expansionByLowerDepth.Where(expansion => item.Value.Depth >= expansion.Key)
+            var delta = expansions.Where(expansion =>
+                    string.Equals(expansion.Key.ProjectId, item.Value.Node.ProjectId, StringComparison.Ordinal) &&
+                    item.Value.Depth >= expansion.Key.LowerDepth)
                 .Sum(expansion => expansion.Value);
             return item.Value with { Rect = item.Value.Rect with { Y = item.Value.Rect.Y + delta } };
         }, StringComparer.Ordinal);
