@@ -26,7 +26,7 @@ internal static class VerticalLinkColumnAllocator
                 return PositiveOverlap(column.VerticalInterval, demand.VerticalInterval);
             }).ToArray();
             if (conflicting.Length > 0) components++;
-            var candidates = Coordinates(demand, separation);
+            var candidates = Coordinates(demand, separation, conflicting);
             var selected = candidates.Cast<int?>().FirstOrDefault(x =>
                 conflicting.All(column => Math.Abs(column.X - x!.Value) >= separation) &&
                 !(demand.ForbiddenXIntervals ?? Array.Empty<AxisInterval>()).Any(interval => interval.ContainsClosed(x!.Value)));
@@ -43,10 +43,30 @@ internal static class VerticalLinkColumnAllocator
             comparisons);
     }
 
-    private static IEnumerable<int> Coordinates(VerticalLinkColumnDemand demand, int separation)
+    private static IEnumerable<int> Coordinates(
+        VerticalLinkColumnDemand demand,
+        int separation,
+        IReadOnlyList<AssignedVerticalLinkColumn> conflicting)
     {
-        yield return demand.PreferredX;
-        if (separation == 0) yield break;
+        var candidates = new HashSet<int>
+        {
+            demand.PreferredX,
+            demand.AllowedXInterval.Minimum,
+            demand.AllowedXInterval.Maximum
+        };
+        foreach (var interval in demand.ForbiddenXIntervals ?? Array.Empty<AxisInterval>())
+        {
+            if (interval.Minimum > int.MinValue) candidates.Add(interval.Minimum - 1);
+            if (interval.Maximum < int.MaxValue) candidates.Add(interval.Maximum + 1);
+        }
+        foreach (var column in conflicting)
+        {
+            candidates.Add(column.X - separation);
+            candidates.Add(column.X + separation);
+        }
+        if (separation == 0)
+            return candidates.Where(demand.AllowedXInterval.ContainsClosed)
+                .OrderBy(value => Math.Abs((long)value - demand.PreferredX)).ThenBy(value => value);
         var maximumSteps = Math.Max(
             Math.Abs(demand.PreferredX - demand.AllowedXInterval.Minimum),
             Math.Abs(demand.AllowedXInterval.Maximum - demand.PreferredX)) / separation + 1;
@@ -54,9 +74,11 @@ internal static class VerticalLinkColumnAllocator
         {
             var left = demand.PreferredX - step * separation;
             var right = demand.PreferredX + step * separation;
-            if (left >= demand.AllowedXInterval.Minimum) yield return left;
-            if (right <= demand.AllowedXInterval.Maximum) yield return right;
+            if (left >= demand.AllowedXInterval.Minimum) candidates.Add(left);
+            if (right <= demand.AllowedXInterval.Maximum) candidates.Add(right);
         }
+        return candidates.Where(demand.AllowedXInterval.ContainsClosed)
+            .OrderBy(value => Math.Abs((long)value - demand.PreferredX)).ThenBy(value => value);
     }
 
     private static int ColumnIndex(int x, int preferredX, int separation) =>

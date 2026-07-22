@@ -54,6 +54,19 @@ public sealed class VerticalLinkColumnAllocatorTests
         Assert.Equal(1, result.ConflictComparisons);
     }
 
+    [Fact]
+    public void Allocation_considers_a_valid_constraint_boundary_off_the_preferred_lattice()
+    {
+        var demand = Demand("a", 5, 0, 3, 0, 10) with
+        {
+            ForbiddenXIntervals = new[] { new AxisInterval(0, 2), new AxisInterval(4, 10) }
+        };
+
+        var result = VerticalLinkColumnAllocator.Assign(new[] { demand }, 4);
+
+        Assert.Equal(3, result.ColumnsByDemandId["a"].X);
+    }
+
     private static VerticalLinkColumnDemand Demand(
         string id,
         int preferredX,
