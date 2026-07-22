@@ -138,9 +138,7 @@ internal sealed class DiagramFileBuilder
                         nodeLayout.Node.IsExternal
                             ? $"{nodeLayout.Node.Tag}\n{nodeLayout.Node.Name}\n{nodeLayout.Node.FullName}"
                             : NodeLabel(nodeLayout.Node),
-                        nodeLayout.Node.IsExternal
-                            ? BuildNodeStyle(_settings.ExternalDependencyStyle)
-                            : BuildNodeStyle(_styleResolver.Resolve(ToTypeNode(nodeLayout.Node))),
+                        BuildNodeStyle(ResolveNodeStyle(nodeLayout.Node)),
                         parent,
                         rect));
                 }
@@ -202,6 +200,9 @@ internal sealed class DiagramFileBuilder
                     decision.FixedContextEdgeIds.Contains(segment.LogicalEdgeId, StringComparer.Ordinal));
                 root.Add(Edge(
                     segment,
+                    legacyMetadata is null
+                        ? TargetStrokeColor(layout, segment)
+                        : _settings.Connector.StrokeColor,
                     traversal,
                     pathDecision,
                     pathCandidate,
@@ -312,6 +313,7 @@ private XElement GraphModel(XElement root)
 
         private XElement Edge(
             PhysicalEdgeSegment segment,
+            string strokeColor,
             EdgeTraversal? traversal,
             CorridorPathDecision? pathDecision,
             CorridorPathCandidate? pathCandidate,
@@ -361,7 +363,7 @@ private XElement GraphModel(XElement root)
                         .OrderBy(code => code, StringComparer.Ordinal))),
                 segment.OwnerProjectId is null ? null : new XAttribute("ownerProjectId", segment.OwnerProjectId),
                 new XAttribute("labelOwner", segment.OwnsLabel ? "1" : "0"),
-                new XAttribute("style", BuildConnectorStyle(_settings.Connector, segment)),
+                new XAttribute("style", BuildConnectorStyle(_settings.Connector, segment, strokeColor)),
                 new XAttribute("edge", "1"),
                 new XAttribute("parent", segment.ParentId),
                 new XAttribute("source", segment.SourceCellId),
@@ -388,7 +390,25 @@ private XElement GraphModel(XElement root)
             return $"{shape}fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};{shadow}{style.ExtraStyle}";
         }
 
-        private static string BuildConnectorStyle(ConnectorStyle style, PhysicalEdgeSegment segment)
+        private NodeStyle ResolveNodeStyle(RenderNode node) =>
+            node.IsExternal ? _settings.ExternalDependencyStyle : _styleResolver.Resolve(ToTypeNode(node));
+
+        private string TargetStrokeColor(DiagramSerializationLayout layout, PhysicalEdgeSegment segment)
+        {
+            var targetId = segment.LogicalLink.Link.TargetId;
+            if (!layout.Nodes.TryGetValue(targetId, out var target)) return _settings.Connector.StrokeColor;
+            var fill = ResolveNodeStyle(target.Node).FillColor;
+            return IsValidDrawioColour(fill) ? fill : _settings.Connector.StrokeColor;
+        }
+
+        private static bool IsValidDrawioColour(string? value) =>
+            !string.IsNullOrWhiteSpace(value) &&
+            Regex.IsMatch(value, "^#[0-9a-fA-F]{6}$", RegexOptions.CultureInvariant);
+
+        private static string BuildConnectorStyle(
+            ConnectorStyle style,
+            PhysicalEdgeSegment segment,
+            string strokeColor)
         {
             var rounded = style.Rounded ? "rounded=1;" : "rounded=0;";
             var link = segment.LogicalLink;
@@ -397,7 +417,7 @@ private XElement GraphModel(XElement root)
             var entryX = segment.HasTargetArrow ? link.EntryX : 0.5;
             var entryY = segment.HasTargetArrow ? link.EntryY : 0.5;
             var endArrow = segment.HasTargetArrow ? "endArrow=block;endFill=1;" : "endArrow=none;endFill=0;";
-            return $"edgeStyle=none;noEdgeStyle=1;orthogonal=0;curved=0;html=1;{rounded}startArrow=none;{endArrow}strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(exitX)};exitY={FormatRatio(exitY)};exitPerimeter=0;entryX={FormatRatio(entryX)};entryY={FormatRatio(entryY)};entryPerimeter=0;";
+            return $"edgeStyle=none;noEdgeStyle=1;orthogonal=0;curved=0;html=1;{rounded}startArrow=none;{endArrow}strokeColor={strokeColor};strokeWidth={style.StrokeWidth};exitX={FormatRatio(exitX)};exitY={FormatRatio(exitY)};exitPerimeter=0;entryX={FormatRatio(entryX)};entryY={FormatRatio(entryY)};entryPerimeter=0;";
         }
 
         private static string BuildConnectorStyle(ConnectorStyle style, LinkLayout link)
