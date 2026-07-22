@@ -140,6 +140,49 @@ public sealed class ProjectInterLayerSlotCompilerTests
     }
 
     [Fact]
+    public void Long_routes_with_disjoint_actual_spans_reuse_departure_and_arrival_slots()
+    {
+        var graph = RenderGraph.From(new DiagramModel(
+            new[] { new ProjectContainer("project", "Project", new[]
+            {
+                Node("left-source"), Node("right-source"), Node("middle"), Node("left-target"), Node("right-target")
+            }) }, Array.Empty<ExternalDependencyNode>(), new[]
+            {
+                new DependencyEdge("left", "left-source", "left-target", "Dependency"),
+                new DependencyEdge("right", "right-source", "right-target", "Dependency")
+            }));
+        var nodes = new Dictionary<string, NodeLayout>(StringComparer.Ordinal)
+        {
+            ["left-source"] = Layout(graph, "left-source", new Rect(0, 0, 120, 60), 0),
+            ["right-source"] = Layout(graph, "right-source", new Rect(600, 0, 120, 60), 0),
+            ["middle"] = Layout(graph, "middle", new Rect(300, 180, 120, 60), 1),
+            ["left-target"] = Layout(graph, "left-target", new Rect(0, 360, 120, 60), 2),
+            ["right-target"] = Layout(graph, "right-target", new Rect(600, 360, 120, 60), 2)
+        };
+        var routes = graph.Links.ToDictionary(link => link.Id, link => new LinkLayout(
+            link,
+            new Point(nodes[link.SourceId].Rect.CenterX, nodes[link.SourceId].Rect.Bottom),
+            new Point(nodes[link.TargetId].Rect.CenterX, nodes[link.TargetId].Rect.Y),
+            Array.Empty<Point>(), 0.5, 0.5), StringComparer.Ordinal);
+        var revision = new LayoutRevision(1);
+
+        var compiled = ProjectInterLayerSlotCompiler.Compile(
+            CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans,
+            nodes, routes, new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+
+        Assert.Equal(compiled.Assignments["left:horizontal:0"].AxisCoordinate,
+            compiled.Assignments["right:horizontal:0"].AxisCoordinate);
+        Assert.Equal(compiled.Assignments["left:horizontal:1"].AxisCoordinate,
+            compiled.Assignments["right:horizontal:1"].AxisCoordinate);
+        Assert.InRange(compiled.RefinementIterations, 1, 4);
+        Assert.False(compiled.RefinementFallbackUsed);
+        var validation = TraceabilityValidator.Validate(nodes, compiled.Links, 12);
+        Assert.DoesNotContain(validation.Violations, violation => violation.Code is
+            TraceabilityViolationCode.NodeCollision or TraceabilityViolationCode.SharedSegment or
+            TraceabilityViolationCode.ParallelSpacing);
+    }
+
+    [Fact]
     public void Destination_column_exclusions_include_other_routes_fixed_arrival_segment()
     {
         var graph = RenderGraph.From(new DiagramModel(

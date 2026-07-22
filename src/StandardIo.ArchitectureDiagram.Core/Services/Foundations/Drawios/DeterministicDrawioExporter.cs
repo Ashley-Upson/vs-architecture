@@ -194,6 +194,8 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
                     allocationEnvelope = $"project-interLayer:{demand.MovementScope?.Id}:{demand.AllowedAxisRange.Minimum}:{demand.AllowedAxisRange.Maximum}"
                 }),
             interLayersExpanded = layout.ProjectSlotCompilation?.ExpandedInterLayerCount ?? 0,
+            slotRefinementIterations = layout.ProjectSlotCompilation?.RefinementIterations ?? 0,
+            slotRefinementFallbackUsed = layout.ProjectSlotCompilation?.RefinementFallbackUsed ?? false,
             corridorLaneYAssignmentsRemaining = 0,
             repairBasedHorizontalOffsetsRemaining = 0,
             destinationColumnsAssigned = layout.ProjectSlotCompilation?.VerticalColumns.ColumnsByDemandId.Count(item =>

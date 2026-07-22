@@ -8,6 +8,8 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
 internal static class ProjectInterLayerSlotCompiler
 {
+    private const int MaximumRefinementIterations = 4;
+
     public static ProjectSlotCompilation Compile(
         IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
         IReadOnlyDictionary<string, NodeLayout> nodes,
@@ -47,40 +49,10 @@ internal static class ProjectInterLayerSlotCompiler
         timer.Restart();
         var preservedRootAssignments = PreservedRootAssignments(
             plans, nodes, terminalLayouts, bands, revision, separation, padding, globalHorizontalSpan);
-        var assignments = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
-        var requiredExpansion = new Dictionary<ProjectLayerExpansionIdentity, int>();
-        foreach (var group in demands.GroupBy(item =>
-                     $"{item.MovementScope?.Id}:{item.AllowedAxisRange.Minimum}:{item.AllowedAxisRange.Maximum}",
-                     StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
-        {
-            var sample = group.First();
-            var allowedRange = sample.AllowedAxisRange;
-            var identity = new LinkSegmentAllocationRegionIdentity(
-                LinkSegmentOrientation.Horizontal, allowedRange,
-                $"project-interLayer:{group.Key}",
-                sample.MovementScope, revision);
-            var assigned = DeterministicSlotAllocator.Assign(identity, group,
-                new LinkSegmentAssignmentOptions(separation, padding));
-            var selectedAssignments = string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal)
-                ? ConstrainProjectAssignments(group.ToArray(), assigned.SegmentsByDemandId, plans, nodes,
-                    projectLabels, separation, padding)
-                : assigned.SegmentsByDemandId;
-            foreach (var item in selectedAssignments)
-                assignments.Add(item.Key, string.Equals(sample.DemandCategory, "RootTransition", StringComparison.Ordinal)
-                    ? preservedRootAssignments[item.Key]
-                    : item.Value);
-            var requiredExtent = selectedAssignments.Values.Select(item => item.SlotIndex)
-                .DefaultIfEmpty(0).Max() * separation + separation + padding * 2;
-            var missing = Math.Max(0, Math.Max(assigned.RequiredExtent, requiredExtent) - allowedRange.Length);
-            if (missing > 0 && sample.CoordinateFrameId is not null &&
-                string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal))
-            {
-                var band = bands.Keys.Single(item => string.Equals(item.ToString(), sample.BandId, StringComparison.Ordinal));
-                var expansionId = new ProjectLayerExpansionIdentity(sample.CoordinateFrameId, band.LowerLayer);
-                requiredExpansion[expansionId] = Math.Max(
-                    requiredExpansion.TryGetValue(expansionId, out var existing) ? existing : 0, missing);
-            }
-        }
+        var horizontal = AllocateHorizontal(demands, bands, plans, nodes, projectLabels, revision,
+            separation, padding, preservedRootAssignments);
+        var assignments = horizontal.Assignments;
+        var requiredExpansion = horizontal.RequiredExpansion;
 
         timer.Stop();
         timings.Add(new PipelineStageMetric("project-region horizontal slot allocation", timer.ElapsedMilliseconds));
@@ -101,10 +73,115 @@ internal static class ProjectInterLayerSlotCompiler
                 var rightCost = maximumX - route.SourcePoint.X + maximumX - route.TargetPoint.X;
                 return leftCost <= rightCost ? "Left" : "Right";
             }, StringComparer.Ordinal);
+        var verticalColumns = AllocateVertical(plans, nodes, terminalLayouts, projectLabels, demands, assignments,
+            returnOrder, returnSides, minimumX, maximumX, revision, separation, padding);
+        var refinementIterations = 0;
+        var refinementFallbackUsed = false;
+        for (var iteration = 1; iteration <= MaximumRefinementIterations; iteration++)
+        {
+            var refinedDemands = ActualSpanDemands(demands, plans, terminalLayouts, verticalColumns);
+            try
+            {
+                var refinedHorizontal = AllocateHorizontal(refinedDemands, bands, plans, nodes, projectLabels,
+                    revision, separation, padding, preservedRootAssignments);
+                var refinedColumns = AllocateVertical(plans, nodes, terminalLayouts, projectLabels, refinedDemands,
+                    refinedHorizontal.Assignments, returnOrder, returnSides, minimumX, maximumX, revision,
+                    separation, padding);
+                refinementIterations = iteration;
+                var stable = SameAssignments(assignments, refinedHorizontal.Assignments) &&
+                    SameColumns(verticalColumns, refinedColumns);
+                demands = refinedDemands.ToList();
+                assignments = refinedHorizontal.Assignments;
+                requiredExpansion = refinedHorizontal.RequiredExpansion;
+                verticalColumns = refinedColumns;
+                if (stable) break;
+                if (iteration == MaximumRefinementIterations) refinementFallbackUsed = true;
+            }
+            catch (InvalidOperationException)
+            {
+                refinementFallbackUsed = true;
+                break;
+            }
+        }
+        timer.Stop();
+        timings.Add(new PipelineStageMetric(
+            "project-region vertical and return column allocation", timer.ElapsedMilliseconds));
+
+        timer.Restart();
+        var links = plans.Values.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal).ToDictionary(
+            plan => plan.LogicalRouteId,
+            plan => Materialize(plan, terminalLayouts[plan.LogicalRouteId], demands, assignments, verticalColumns),
+            StringComparer.Ordinal);
+        timer.Stop();
+        timings.Add(new PipelineStageMetric("project-region constrained materialisation", timer.ElapsedMilliseconds));
+        return new ProjectSlotCompilation(
+            links, demands, assignments, verticalColumns, returnSides, requiredExpansion,
+            bands.Count, requiredExpansion.Count, refinementIterations, refinementFallbackUsed, timings);
+    }
+
+    private static HorizontalAllocation AllocateHorizontal(
+        IReadOnlyList<LinkSegmentDemand> demands,
+        IReadOnlyDictionary<InterLayerId, AxisInterval> bands,
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, ProjectLabelGeometry> projectLabels,
+        LayoutRevision revision,
+        int separation,
+        int padding,
+        IReadOnlyDictionary<string, AssignedLinkSegment> preservedRootAssignments)
+    {
+        var assignments = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
+        var requiredExpansion = new Dictionary<ProjectLayerExpansionIdentity, int>();
+        foreach (var group in demands.GroupBy(item =>
+                     $"{item.MovementScope?.Id}:{item.AllowedAxisRange.Minimum}:{item.AllowedAxisRange.Maximum}",
+                     StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var sample = group.First();
+            var allowedRange = sample.AllowedAxisRange;
+            var identity = new LinkSegmentAllocationRegionIdentity(
+                LinkSegmentOrientation.Horizontal, allowedRange,
+                $"project-interLayer:{group.Key}", sample.MovementScope, revision);
+            var assigned = DeterministicSlotAllocator.Assign(identity, group,
+                new LinkSegmentAssignmentOptions(separation, padding));
+            var selected = string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal)
+                ? ConstrainProjectAssignments(group.ToArray(), assigned.SegmentsByDemandId, plans, nodes,
+                    projectLabels, separation, padding)
+                : assigned.SegmentsByDemandId;
+            foreach (var item in selected)
+                assignments.Add(item.Key, string.Equals(sample.DemandCategory, "RootTransition", StringComparison.Ordinal)
+                    ? preservedRootAssignments[item.Key] : item.Value);
+            var requiredExtent = selected.Values.Select(item => item.SlotIndex).DefaultIfEmpty(0).Max() * separation +
+                separation + padding * 2;
+            var missing = Math.Max(0, Math.Max(assigned.RequiredExtent, requiredExtent) - allowedRange.Length);
+            if (missing <= 0 || sample.CoordinateFrameId is null ||
+                !string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal)) continue;
+            var band = bands.Keys.Single(item => string.Equals(item.ToString(), sample.BandId, StringComparison.Ordinal));
+            var expansionId = new ProjectLayerExpansionIdentity(sample.CoordinateFrameId, band.LowerLayer);
+            requiredExpansion[expansionId] = Math.Max(
+                requiredExpansion.TryGetValue(expansionId, out var existing) ? existing : 0, missing);
+        }
+        return new HorizontalAllocation(assignments, requiredExpansion);
+    }
+
+    private static VerticalLinkColumnAssignment AllocateVertical(
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> routes,
+        IReadOnlyDictionary<string, ProjectLabelGeometry> labels,
+        IReadOnlyList<LinkSegmentDemand> demands,
+        IReadOnlyDictionary<string, AssignedLinkSegment> assignments,
+        IReadOnlyDictionary<string, int> returnOrder,
+        IReadOnlyDictionary<string, string> returnSides,
+        int minimumX,
+        int maximumX,
+        LayoutRevision revision,
+        int separation,
+        int padding)
+    {
         var verticalDemands = plans.Values.Where(item => item.RequiresDestinationColumn || item.RequiresReturnColumn)
             .OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal).Select(plan =>
             {
-                var route = terminalLayouts[plan.LogicalRouteId];
+                var route = routes[plan.LogicalRouteId];
                 var routeDemands = demands.Where(item => item.LogicalRouteId == plan.LogicalRouteId)
                     .OrderBy(item => item.TurnOrder).ToArray();
                 var departureY = assignments[routeDemands[0].Id].AxisCoordinate;
@@ -126,12 +203,10 @@ internal static class ProjectInterLayerSlotCompiler
                 var forbidden = nodes.Values.Where(node => node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
                         PositiveOverlap(interval, new AxisInterval(node.Rect.Y - padding, node.Rect.Bottom + padding)))
                     .Select(node => new AxisInterval(node.Rect.X - padding, node.Rect.Right + padding))
-                    .Concat(projectLabels.Values.Where(label => PositiveOverlap(interval,
+                    .Concat(labels.Values.Where(label => PositiveOverlap(interval,
                             new AxisInterval(label.ProjectLabelObstacleBounds.Y, label.ProjectLabelObstacleBounds.Bottom)))
-                        .Select(label => new AxisInterval(
-                            label.ProjectLabelObstacleBounds.X, label.ProjectLabelObstacleBounds.Right)))
-                    .Concat(FixedColumnExclusions(
-                        plan, plans, terminalLayouts, demands, assignments, interval, separation))
+                        .Select(label => new AxisInterval(label.ProjectLabelObstacleBounds.X, label.ProjectLabelObstacleBounds.Right)))
+                    .Concat(FixedColumnExclusions(plan, plans, routes, demands, assignments, interval, separation))
                     .ToArray();
                 return new VerticalLinkColumnDemand(
                     $"{plan.LogicalRouteId}:destination-column", plan.LogicalRouteId, route.TargetPoint.X,
@@ -139,22 +214,44 @@ internal static class ProjectInterLayerSlotCompiler
                     plan.SourceNodeId, plan.TargetNodeId, nodes[plan.TargetNodeId].Node.ProjectId, null,
                     revision, new RouteRevision(0), forbidden);
             }).ToArray();
-        var verticalColumns = VerticalLinkColumnAllocator.Assign(verticalDemands, separation);
-        timer.Stop();
-        timings.Add(new PipelineStageMetric(
-            "project-region vertical and return column allocation", timer.ElapsedMilliseconds));
-
-        timer.Restart();
-        var links = plans.Values.OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal).ToDictionary(
-            plan => plan.LogicalRouteId,
-            plan => Materialize(plan, terminalLayouts[plan.LogicalRouteId], demands, assignments, verticalColumns),
-            StringComparer.Ordinal);
-        timer.Stop();
-        timings.Add(new PipelineStageMetric("project-region constrained materialisation", timer.ElapsedMilliseconds));
-        return new ProjectSlotCompilation(
-            links, demands, assignments, verticalColumns, returnSides, requiredExpansion,
-            bands.Count, requiredExpansion.Count, timings);
+        return VerticalLinkColumnAllocator.Assign(verticalDemands, separation);
     }
+
+    private static IReadOnlyList<LinkSegmentDemand> ActualSpanDemands(
+        IReadOnlyList<LinkSegmentDemand> source,
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, LinkLayout> routes,
+        VerticalLinkColumnAssignment columns)
+    {
+        return source.Select(demand =>
+        {
+            var plan = plans[demand.LogicalRouteId];
+            if (!plan.RequiresDestinationColumn && !plan.RequiresReturnColumn) return demand;
+            var columnId = plan.RequiresReturnColumn
+                ? $"{plan.LogicalRouteId}:return-column"
+                : $"{plan.LogicalRouteId}:destination-column";
+            var columnX = columns.ColumnsByDemandId[columnId].X;
+            var route = routes[plan.LogicalRouteId];
+            var interval = demand.TurnOrder == 0
+                ? new AxisInterval(route.SourcePoint.X, columnX)
+                : new AxisInterval(columnX, route.TargetPoint.X);
+            return demand with { OccupiedInterval = interval };
+        }).ToArray();
+    }
+
+    private static bool SameAssignments(
+        IReadOnlyDictionary<string, AssignedLinkSegment> left,
+        IReadOnlyDictionary<string, AssignedLinkSegment> right) =>
+        left.Count == right.Count && left.All(item => right.TryGetValue(item.Key, out var value) &&
+            item.Value.AxisCoordinate == value.AxisCoordinate && item.Value.SlotIndex == value.SlotIndex);
+
+    private static bool SameColumns(VerticalLinkColumnAssignment left, VerticalLinkColumnAssignment right) =>
+        left.ColumnsByDemandId.Count == right.ColumnsByDemandId.Count && left.ColumnsByDemandId.All(item =>
+            right.ColumnsByDemandId.TryGetValue(item.Key, out var value) && item.Value.X == value.X);
+
+    private sealed record HorizontalAllocation(
+        Dictionary<string, AssignedLinkSegment> Assignments,
+        Dictionary<ProjectLayerExpansionIdentity, int> RequiredExpansion);
 
     private static IReadOnlyDictionary<string, AssignedLinkSegment> ConstrainProjectAssignments(
         IReadOnlyList<LinkSegmentDemand> demands,

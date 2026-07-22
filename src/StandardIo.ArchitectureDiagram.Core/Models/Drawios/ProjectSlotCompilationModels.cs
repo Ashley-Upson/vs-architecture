@@ -12,6 +12,8 @@ internal sealed record ProjectSlotCompilation(
     IReadOnlyDictionary<ProjectLayerExpansionIdentity, int> RequiredLayerExpansion,
     int InterLayerCount,
     int ExpandedInterLayerCount,
+    int RefinementIterations,
+    bool RefinementFallbackUsed,
     IReadOnlyList<PipelineStageMetric> Timings);
 
 internal readonly record struct ProjectLayerExpansionIdentity(string ProjectId, int LowerDepth);
