@@ -10,7 +10,7 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class CoordinateOwnershipSerializationTests
 {
     [Fact]
-    public void Render_serializes_cross_project_segments_with_logical_metadata_and_arrows()
+    public void Render_serializes_cross_project_dependency_as_one_source_parented_edge()
     {
         var document = Render(new DiagramModel(
             new[]
@@ -23,28 +23,17 @@ public sealed class CoordinateOwnershipSerializationTests
 
         var segments = LogicalSegments(document, "edge_ab");
 
-        Assert.True(segments.Length >= 2);
-        Assert.Equal(Enumerable.Range(0, segments.Length), segments.Select(SegmentIndex));
-        Assert.All(segments, segment =>
-        {
-            Assert.Equal("source", (string?)segment.Attribute("semanticSourceId"));
-            Assert.Equal("target", (string?)segment.Attribute("semanticTargetId"));
-            Assert.Contains((string?)segment.Attribute("routingMode"), new[] { "traversal", "fallback" });
-        });
-        Assert.Contains("endArrow=none", Style(segments[0]));
-        Assert.All(segments.Skip(1).Take(segments.Length - 2), segment =>
-        {
-            Assert.Contains("startArrow=none", Style(segment));
-            Assert.Contains("endArrow=none", Style(segment));
-        });
-        Assert.Contains("endArrow=block", Style(segments[^1]));
-        Assert.Equal("project_a", (string?)segments[0].Attribute("ownerProjectId"));
-        Assert.Equal("project_b", (string?)segments[^1].Attribute("ownerProjectId"));
-        if (segments.Length > 2)
-        {
-            Assert.Contains(segments, segment => (string?)segment.Attribute("parent") == "1");
-        }
-        Assert.Single(segments, segment => (string?)segment.Attribute("labelOwner") == "1");
+        var edge = Assert.Single(segments);
+        Assert.Equal("edge_ab", (string?)edge.Attribute("id"));
+        Assert.Equal("source", (string?)edge.Attribute("source"));
+        Assert.Equal("target", (string?)edge.Attribute("target"));
+        Assert.Equal("source", (string?)edge.Attribute("semanticSourceId"));
+        Assert.Equal("target", (string?)edge.Attribute("semanticTargetId"));
+        Assert.Equal("project_a", (string?)edge.Attribute("parent"));
+        Assert.Equal("project_a", (string?)edge.Attribute("ownerProjectId"));
+        Assert.Contains("endArrow=block", Style(edge));
+        Assert.DoesNotContain(document.Descendants("mxCell"), cell =>
+            (string?)cell.Attribute("anchorRole") == "ownership-boundary");
     }
 
     [Fact]
@@ -151,7 +140,7 @@ public sealed class CoordinateOwnershipSerializationTests
     }
 
     [Fact]
-    public void Zero_size_anchor_metadata_survives_save_reopen_normalization()
+    public void Single_cross_project_edge_survives_save_reopen_without_anchors()
     {
         var document = Render(new DiagramModel(
             new[]
@@ -161,40 +150,13 @@ public sealed class CoordinateOwnershipSerializationTests
             },
             Array.Empty<ExternalDependencyNode>(),
             new[] { new DependencyEdge("edge_ab", "source", "target", "internal") }));
-        var anchors = document.Descendants("mxCell")
-            .Where(cell => (string?)cell.Attribute("anchorRole") == "ownership-boundary")
-            .ToArray();
-        Assert.NotEmpty(anchors);
-        foreach (var anchor in anchors)
-        {
-            anchor.Element("mxGeometry")!.Attribute("width")?.Remove();
-            anchor.Element("mxGeometry")!.Attribute("height")?.Remove();
-        }
-
         var reopened = XDocument.Parse(document.ToString(SaveOptions.DisableFormatting));
-        var reopenedAnchors = reopened.Descendants("mxCell")
-            .Where(cell => (string?)cell.Attribute("anchorRole") == "ownership-boundary")
-            .ToArray();
-
-        Assert.Equal(anchors.Length, reopenedAnchors.Length);
-        Assert.All(reopenedAnchors, anchor =>
-        {
-            Assert.Equal("edge_ab", (string?)anchor.Attribute("logicalEdgeId"));
-            Assert.False(string.IsNullOrWhiteSpace((string?)anchor.Attribute("ownerProjectId")));
-            Assert.Contains("movable=0", Style(anchor));
-            Assert.Contains("resizable=0", Style(anchor));
-            Assert.Contains("deletable=0", Style(anchor));
-            Assert.Equal(0, Dimension(anchor, "width"));
-            Assert.Equal(0, Dimension(anchor, "height"));
-        });
-
-        var firstAnchor = reopenedAnchors[0];
-        var owner = reopened.Descendants("mxCell")
-            .Single(cell => (string?)cell.Attribute("id") == (string?)firstAnchor.Attribute("parent"));
-        const int movementDelta = 41;
-        Assert.Equal(
-            Coordinate(owner, "x") + Coordinate(firstAnchor, "x") + movementDelta,
-            Coordinate(owner, "x") + movementDelta + Coordinate(firstAnchor, "x"));
+        var edge = Assert.Single(LogicalSegments(reopened, "edge_ab"));
+        Assert.Equal("project_a", (string?)edge.Attribute("parent"));
+        Assert.Equal("source", (string?)edge.Attribute("source"));
+        Assert.Equal("target", (string?)edge.Attribute("target"));
+        Assert.DoesNotContain(reopened.Descendants("mxCell"), cell =>
+            (string?)cell.Attribute("anchorRole") == "ownership-boundary");
     }
 
     [Fact]

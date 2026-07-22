@@ -26,21 +26,23 @@ public sealed class CoordinateOwnershipCompilerTests
     }
 
     [Fact]
-    public void Compile_splits_project_to_project_dependency_into_owned_root_owned_segments()
+    public void Compile_parents_cross_project_dependency_to_source_project()
     {
         var context = TwoProjectContext(new[] { new Point(200, 50) });
 
         var result = Compile(context);
 
-        Assert.Equal(new[] { "a", "1", "b" }, result.Segments.Select(segment => segment.ParentId));
-        Assert.Equal(new[] { "edge__segment__000", "edge__segment__001", "edge__segment__002" }, result.Segments.Select(segment => segment.Id));
-        Assert.Equal(2, result.Anchors.Count);
-        Assert.Equal(new[] { new Point(100, 50), new Point(300, 50) }, result.Anchors.Select(anchor => anchor.AbsolutePoint));
+        var edge = Assert.Single(result.Segments);
+        Assert.Equal("a", edge.ParentId);
+        Assert.Equal("edge", edge.Id);
+        Assert.Equal("source", edge.SourceCellId);
+        Assert.Equal("target", edge.TargetCellId);
+        Assert.Empty(result.Anchors);
         AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
     [Fact]
-    public void Compile_splits_project_to_external_dependency_at_project_boundary()
+    public void Compile_parents_project_to_external_dependency_to_source_project()
     {
         var context = Context(
             new[] { Project("a", new Rect(0, 0, 100, 100)) },
@@ -49,8 +51,8 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var result = Compile(context);
 
-        Assert.Equal(new[] { "a", "1" }, result.Segments.Select(segment => segment.ParentId));
-        Assert.Equal(new Point(100, 40), Assert.Single(result.Anchors).AbsolutePoint);
+        Assert.Equal("a", Assert.Single(result.Segments).ParentId);
+        Assert.Empty(result.Anchors);
     }
 
     [Fact]
@@ -68,8 +70,8 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var result = Compile(context);
 
-        Assert.Equal(new[] { "a", "1", "a" }, result.Segments.Select(segment => segment.ParentId));
-        Assert.Equal(2, result.Anchors.Count);
+        Assert.Equal("a", Assert.Single(result.Segments).ParentId);
+        Assert.Empty(result.Anchors);
         AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
@@ -92,7 +94,7 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var result = Compile(context);
 
-        Assert.Equal(new[] { "a", "1" }, result.Segments.Select(segment => segment.ParentId));
+        Assert.Equal("a", Assert.Single(result.Segments).ParentId);
         Assert.DoesNotContain(result.Segments, segment => segment.OwnerProjectId == "unrelated");
     }
 
@@ -116,17 +118,14 @@ public sealed class CoordinateOwnershipCompilerTests
     }
 
     [Fact]
-    public void Compile_assigns_markers_and_arrow_only_to_outer_segments()
+    public void Compile_assigns_markers_arrow_and_label_to_single_edge()
     {
         var result = Compile(TwoProjectContext(new[] { new Point(200, 50) }));
 
-        Assert.True(result.Segments[0].HasSourceMarker);
-        Assert.False(result.Segments[0].HasTargetArrow);
-        Assert.False(result.Segments[1].HasSourceMarker);
-        Assert.False(result.Segments[1].HasTargetArrow);
-        Assert.False(result.Segments[2].HasSourceMarker);
-        Assert.True(result.Segments[2].HasTargetArrow);
-        Assert.True(result.Segments[1].OwnsLabel);
+        var edge = Assert.Single(result.Segments);
+        Assert.True(edge.HasSourceMarker);
+        Assert.True(edge.HasTargetArrow);
+        Assert.True(edge.OwnsLabel);
     }
 
     [Fact]
@@ -144,8 +143,8 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var result = Compile(context);
 
-        Assert.Equal(2, result.Segments.Count);
-        Assert.All(result.Segments, segment => Assert.NotEqual(segment.AbsoluteStart, segment.AbsoluteEnd));
+        Assert.Single(result.Segments);
+        AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
     [Theory]
@@ -163,7 +162,7 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var result = Compile(context);
 
-        Assert.Equal(new Point(100, 50), Assert.Single(result.Anchors).AbsolutePoint);
+        Assert.Empty(result.Anchors);
         AssertEquivalentPolyline(CompletePoints(context.Link), CoordinateOwnershipCompiler.ReconstructAbsolutePoints(result, "edge"));
     }
 
@@ -177,9 +176,9 @@ public sealed class CoordinateOwnershipCompilerTests
 
         var result = Compile(context);
 
-        var anchor = Assert.Single(result.Anchors);
-        Assert.Equal(new Point(0, -50), anchor.AbsolutePoint);
-        Assert.Equal(new Point(200, 50), anchor.RelativePoint);
+        var edge = Assert.Single(result.Segments);
+        Assert.Empty(result.Anchors);
+        Assert.Equal(new[] { new Point(300, 50) }, edge.RelativeWaypoints);
     }
 
     [Fact]

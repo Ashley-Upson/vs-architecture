@@ -34,7 +34,6 @@ public sealed class ProjectOwnershipBoundsCompilerTests
             Node("target", "b", new Rect(360, 40, 20, 20)));
         var link = Link("edge", "source", "target", new Point(30, 60), new[] { new Point(100, 60), new Point(250, 60), new Point(300, 60) }, new Point(370, 60));
         var links = Links(link);
-        var ownership = CoordinateOwnershipCompiler.Compile(nodes, projects, links, true);
 
         var semantic = RouteSemanticOwnershipCompiler.Compile(nodes, links);
         var result = ProjectOwnershipBoundsCompiler.Compile(projects, nodes, links, semantic, 10, 20);
@@ -43,8 +42,6 @@ public sealed class ProjectOwnershipBoundsCompilerTests
         Assert.Equal(350, result["b"].Rect.X);
         Assert.True(result["a"].Rect.Right < 100);
         Assert.True(result["b"].Rect.X > 300);
-        Assert.DoesNotContain(ownership.Segments.Where(segment => segment.OwnerProjectId is not null),
-            segment => segment.AbsoluteWaypoints.Contains(new Point(250, 60)));
     }
 
     [Fact]
