@@ -30,6 +30,6 @@ Install it by double-clicking the `.vsix` file or using Visual Studio's VSIX ins
 - External dependencies collapse to package/assembly-level nodes.
 - The generated `.drawio` is intentionally editable so layout can be refined in diagrams.net or Draw.io-compatible tooling.
 
-## Routing architecture
+## Architecture generation
 
-The Draw.io renderer owns connector geometry and uses deterministic corridor, lane, junction, path-selection, and coordinate-ownership stages. See [Routing architecture](docs/routing-architecture.md) for the accepted invariants, optimisation limits, manual-editing behaviour, and defect-driven maintenance workflow.
+The typed Draw.io Architecture renderer owns connector geometry through deterministic topology selection, terminal allocation, horizontal slots, vertical columns, validation, and coordinate ownership. See [Architecture diagram generation](docs/architecture-generation.md) for the production pipeline, compatibility boundary, current limitations, and defect-driven maintenance workflow.
