@@ -1290,10 +1290,9 @@ internal sealed partial class RenderLayout
         {
             var timings = new List<PipelineStageMetric>();
             var placed = MeasureStage(timings, "project-region positional placement", () =>
-                PlacementPipeline.Place(graph, settings, new LayoutRevision(0),
-                    disconnectedPlacement: PlacementPipeline.DisconnectedPlacementPolicy.DedicatedRegionBelow));
+                ProjectRegionPlacement.Place(graph, settings, new LayoutRevision(0)));
             var activePlacement = MeasureStage(timings, "project-region layer-band placement", () =>
-                ProjectLayerBandPlacement.Align(placed, settings));
+                graph.Projects.Count > 1 ? placed : ProjectLayerBandPlacement.Align(placed, settings));
             var immutableBandPlacement = activePlacement;
             var accumulatedExpansions = new Dictionary<int, int>();
             CanonicalTopologySelection topology = null!;

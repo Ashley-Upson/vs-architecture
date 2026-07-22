@@ -34,6 +34,13 @@ internal sealed class RenderGraph
 
         public IReadOnlyDictionary<string, string> PlacementParentByNode { get; }
 
+        internal static RenderGraph Create(
+            IReadOnlyList<RenderProject> projects,
+            IReadOnlyList<RenderNode> nodes,
+            IReadOnlyList<RenderLink> links,
+            IReadOnlyDictionary<string, string>? placementParentByNode = null) =>
+            new(projects, nodes, links, placementParentByNode);
+
         internal RenderGraph WithDisconnectedProject(DisconnectedNodeProjectLayout disconnected) =>
             new RenderGraph(
                 Projects.Where(project => !string.Equals(project.Id, disconnected.Project.Id, StringComparison.Ordinal))
