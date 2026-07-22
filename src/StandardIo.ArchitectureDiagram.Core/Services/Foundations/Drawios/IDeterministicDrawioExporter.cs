@@ -2,6 +2,10 @@ using StandardIo.ArchitectureDiagram.Core.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
+/// <summary>
+/// Compatibility contract for legacy semantic models. New typed Architecture generation projects an
+/// ArchitectureRenderGraph and calls DeterministicDrawioExporter through DrawioArchitectureRenderer.
+/// </summary>
 public interface IDeterministicDrawioExporter
 {
     DrawioGenerationResult GenerateResult(

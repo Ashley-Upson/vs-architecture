@@ -178,4 +178,38 @@ Do not begin a broad routing rewrite. For each observed defect:
 9. Verify the complete diagram has no higher-priority traceability regression and that unaffected routes remain identical.
 10. Package a new VSIX only when the concrete defect is visibly improved and full build/test/determinism checks pass.
 
+## Typed Architecture production path
+
+The canonical production sequence is:
+
+```text
+Roslyn workspace and DI analysis
+-> ArchitectureDiagram semantic model
+-> ArchitectureTopologyProjector
+-> ArchitectureRenderGraph
+-> project-local placement and project-region composition
+-> DrawioArchitectureRenderer
+-> authoritative logical routes
+-> coordinate-ownership compilation
+-> Draw.io XML
+```
+
+The analyser owns semantic type and DI meaning. A uniquely registered interface is represented by its implementation-owned combined node (`OrderService : IOrderService`). An unresolved interface remains an interface node. Multiple distinct registrations remain one counted interface node. Class implementation alone is not treated as registration.
+
+The renderer-neutral projector owns canonical versus duplicated occurrences, exception matching, deterministic traversal roots, render-instance IDs, first-occurrence placement parents, project ownership and semantic-to-render-instance reconciliation. It owns no coordinates or Draw.io types. Empty-root mode infers roots by collapsing semantic strongly connected components, selecting zero-incoming components, and then adding the lowest remaining semantic ID until every selected node is represented.
+
+Duplication is independent of configured root filters. Enabled mode recreates repeated downstream occurrences. Disabled mode retains the first deterministic canonical occurrence. Exception patterns opt matching branches into duplicated behavior. Internal occurrences always remain owned by the source-code project defining the type. A canonical external node referenced by several projects is root-owned; duplicated external occurrences are project-local.
+
+Multi-project placement first lays out each project's owned graph in local coordinates. It then builds the project dependency graph, collapses project cycles for deterministic component placement, composes distinct non-overlapping global regions, and places shared root-owned external nodes outside those regions. The old global layer-band alignment is not allowed to interleave nodes again after region composition.
+
+Production validation reports node/project overlap, owner containment, route/node contact, unrelated-project traversal, project-label contact, shared segments, spacing, reversal and ownership reconstruction findings. Geometry findings do not suppress the diagram. CLI strict validation writes the diagram and reports a failing exit status afterward.
+
+Use these determinism terms precisely:
+
+- Serialization repeat repeats document serialization from one generated page.
+- Render repeat repeats projection, placement, routing, ownership and serialization from an existing semantic model.
+- Full-pipeline generation repeat independently repeats workspace creation/load, Roslyn analysis, DI resolution, topology projection, layout, routing, ownership and serialization.
+
+`DrawioArchitectureRenderer` is the only canonical typed Architecture renderer. `DrawioDiagramRenderer`, `IDeterministicDrawioExporter` and semantic-model exporter entry points are compatibility-only. Their tests do not constitute typed-production evidence.
+
 Optional future work—such as arbitrary junctions, lane permutations, opposing traffic, layout expansion for physical capacity, or diagnostic presentation—requires concrete diagram evidence rather than a predefined architectural stage.
