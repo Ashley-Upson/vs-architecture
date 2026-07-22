@@ -69,6 +69,9 @@ internal static class ProjectInterLayerSlotCompiler
             .ToDictionary(item => item.LogicalRouteId, item =>
             {
                 var route = terminalLayouts[item.LogicalRouteId];
+                if (IsDirectTargetLaneReturn(item, nodes))
+                    return route.TargetPoint.X < route.SourcePoint.X ? "Left" :
+                        route.TargetPoint.X > route.SourcePoint.X ? "Right" : "Left";
                 var leftCost = route.SourcePoint.X - minimumX + route.TargetPoint.X - minimumX;
                 var rightCost = maximumX - route.SourcePoint.X + maximumX - route.TargetPoint.X;
                 return leftCost <= rightCost ? "Left" : "Right";
@@ -189,6 +192,24 @@ internal static class ProjectInterLayerSlotCompiler
                 var interval = new AxisInterval(departureY, arrivalY);
                 if (plan.RequiresReturnColumn)
                 {
+                    if (IsDirectTargetLaneReturn(plan, nodes))
+                    {
+                        var source = nodes[plan.SourceNodeId];
+                        var directLeft = returnSides[plan.LogicalRouteId] == "Left";
+                        var directPreferred = directLeft
+                            ? source.Rect.X - padding - separation
+                            : source.Rect.Right + padding + separation;
+                        var directAllowed = directLeft
+                            ? new AxisInterval(minimumX - padding - separation * plans.Count, directPreferred)
+                            : new AxisInterval(directPreferred, maximumX + padding + separation * plans.Count);
+                        var directForbidden = VerticalColumnExclusions(
+                            plan, plans, nodes, routes, labels, demands, assignments, interval, separation, padding);
+                        return new VerticalLinkColumnDemand(
+                            $"{plan.LogicalRouteId}:return-column", plan.LogicalRouteId, directPreferred,
+                            directAllowed, source.Depth, nodes[plan.TargetNodeId].Depth, interval, padding,
+                            plan.SourceNodeId, plan.TargetNodeId, source.Node.ProjectId, null,
+                            revision, new RouteRevision(0), directForbidden);
+                    }
                     var lane = returnOrder[plan.LogicalRouteId] + 1;
                     var left = returnSides[plan.LogicalRouteId] == "Left";
                     var preferred = left ? minimumX - padding - separation * lane : maximumX + padding + separation * lane;
@@ -200,14 +221,8 @@ internal static class ProjectInterLayerSlotCompiler
                 }
                 var allowed = new AxisInterval(minimumX - padding - separation * plans.Count,
                     maximumX + padding + separation * plans.Count);
-                var forbidden = nodes.Values.Where(node => node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
-                        PositiveOverlap(interval, new AxisInterval(node.Rect.Y - padding, node.Rect.Bottom + padding)))
-                    .Select(node => new AxisInterval(node.Rect.X - padding, node.Rect.Right + padding))
-                    .Concat(labels.Values.Where(label => PositiveOverlap(interval,
-                            new AxisInterval(label.ProjectLabelObstacleBounds.Y, label.ProjectLabelObstacleBounds.Bottom)))
-                        .Select(label => new AxisInterval(label.ProjectLabelObstacleBounds.X, label.ProjectLabelObstacleBounds.Right)))
-                    .Concat(FixedColumnExclusions(plan, plans, routes, demands, assignments, interval, separation))
-                    .ToArray();
+                var forbidden = VerticalColumnExclusions(
+                    plan, plans, nodes, routes, labels, demands, assignments, interval, separation, padding);
                 return new VerticalLinkColumnDemand(
                     $"{plan.LogicalRouteId}:destination-column", plan.LogicalRouteId, route.TargetPoint.X,
                     allowed, nodes[plan.SourceNodeId].Depth, nodes[plan.TargetNodeId].Depth, interval, padding,
@@ -531,6 +546,37 @@ internal static class ProjectInterLayerSlotCompiler
 
     private static bool PositiveOverlap(AxisInterval first, AxisInterval second) =>
         Math.Min(first.Maximum, second.Maximum) > Math.Max(first.Minimum, second.Minimum);
+
+    internal static bool IsDirectTargetLaneReturn(
+        CanonicalTopologyPlan plan,
+        IReadOnlyDictionary<string, NodeLayout> nodes)
+    {
+        var sourceDepth = nodes[plan.SourceNodeId].Depth;
+        var targetDepth = nodes[plan.TargetNodeId].Depth;
+        return plan.RequiresReturnColumn &&
+            (targetDepth == sourceDepth || targetDepth == sourceDepth - 1);
+    }
+
+    private static AxisInterval[] VerticalColumnExclusions(
+        CanonicalTopologyPlan plan,
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> routes,
+        IReadOnlyDictionary<string, ProjectLabelGeometry> labels,
+        IReadOnlyList<LinkSegmentDemand> demands,
+        IReadOnlyDictionary<string, AssignedLinkSegment> assignments,
+        AxisInterval interval,
+        int separation,
+        int padding) =>
+        nodes.Values.Where(node => node.Node.Id != plan.SourceNodeId && node.Node.Id != plan.TargetNodeId &&
+                PositiveOverlap(interval, new AxisInterval(node.Rect.Y - padding, node.Rect.Bottom + padding)))
+            .Select(node => new AxisInterval(node.Rect.X - padding, node.Rect.Right + padding))
+            .Concat(labels.Values.Where(label => PositiveOverlap(interval,
+                    new AxisInterval(label.ProjectLabelObstacleBounds.Y, label.ProjectLabelObstacleBounds.Bottom)))
+                .Select(label => new AxisInterval(label.ProjectLabelObstacleBounds.X,
+                    label.ProjectLabelObstacleBounds.Right)))
+            .Concat(FixedColumnExclusions(plan, plans, routes, demands, assignments, interval, separation))
+            .ToArray();
 
     internal static IEnumerable<AxisInterval> FixedColumnExclusions(
         CanonicalTopologyPlan plan,

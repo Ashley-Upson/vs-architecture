@@ -6,6 +6,54 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
 public sealed class ProjectInterLayerSlotCompilerTests
 {
+    [Theory]
+    [InlineData(2, 2, 100, 500)]
+    [InlineData(2, 2, 500, 100)]
+    [InlineData(2, 1, 100, 500)]
+    [InlineData(2, 1, 500, 100)]
+    public void Short_upward_returns_leave_toward_target_and_join_target_band(
+        int sourceDepth, int targetDepth, int sourceX, int targetX)
+    {
+        var compiled = CompileDirectReturn(sourceDepth, targetDepth, sourceX, targetX);
+        var link = compiled.Links["route"];
+        var points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+        var source = points[0];
+        var target = points[^1];
+
+        Assert.True(ProjectInterLayerSlotCompiler.IsDirectTargetLaneReturn(compiled.Plan, compiled.Nodes));
+        Assert.True(points[1].Y > source.Y);
+        Assert.Equal(source.X, points[1].X);
+        Assert.Equal(sourceX < targetX ? 1 : -1, Math.Sign(points[2].X - points[1].X));
+        Assert.Equal(points[2].X, points[3].X);
+        Assert.True(points[3].Y < points[2].Y);
+        Assert.Equal(target.X, points[^2].X);
+        Assert.True(points[^2].Y < target.Y);
+        Assert.True(points.Min(point => point.Y) >= compiled.TargetBand.Minimum);
+    }
+
+    [Fact]
+    public void Direct_return_obstacle_uses_next_column_on_target_facing_side()
+    {
+        var ordinary = CompileDirectReturn(2, 1, 500, 100);
+        var preferredColumn = ordinary.Links["route"].Points[1].X;
+        var blocked = CompileDirectReturn(2, 1, 500, 100,
+            new Rect(preferredColumn - 5, 250, 10, 100));
+        var selected = blocked.Links["route"].Points[1].X;
+
+        Assert.NotEqual(preferredColumn, selected);
+        Assert.True(selected < preferredColumn - 15 || selected > preferredColumn + 15);
+        Assert.True(selected < blocked.SourceRect.X);
+    }
+
+    [Fact]
+    public void Direct_return_geometry_is_stable_when_node_enumeration_is_reversed()
+    {
+        var first = CompileDirectReturn(2, 1, 500, 100, reverseNodes: false);
+        var reversed = CompileDirectReturn(2, 1, 500, 100, reverseNodes: true);
+
+        Assert.Equal(first.Links["route"].Points, reversed.Links["route"].Points);
+    }
+
     [Fact]
     public void Project_local_bands_do_not_share_physical_coordinates_for_equal_local_depths()
     {
@@ -238,6 +286,45 @@ public sealed class ProjectInterLayerSlotCompilerTests
             nodes, Routes(graph, nodes), new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
     }
 
+    private static DirectReturnFixture CompileDirectReturn(
+        int sourceDepth,
+        int targetDepth,
+        int sourceX,
+        int targetX,
+        Rect? obstacle = null,
+        bool reverseNodes = false)
+    {
+        var modelNodes = new[] { Node("source"), Node("target"), Node("upper"), Node("lower") };
+        if (obstacle is not null) modelNodes = modelNodes.Concat(new[] { Node("obstacle") }).ToArray();
+        if (reverseNodes) modelNodes = Enumerable.Reverse(modelNodes).ToArray();
+        var graph = RenderGraph.From(new DiagramModel(
+            [new ProjectContainer("project", "Project", modelNodes)],
+            Array.Empty<ExternalDependencyNode>(),
+            [new DependencyEdge("route", "source", "target", "Dependency")]));
+        var nodes = new Dictionary<string, NodeLayout>(StringComparer.Ordinal)
+        {
+            ["source"] = Layout(graph, "source", new Rect(sourceX, 500, 120, 60), sourceDepth),
+            ["target"] = Layout(graph, "target", new Rect(targetX, targetDepth == sourceDepth ? 500 : 300, 120, 60), targetDepth),
+            ["upper"] = Layout(graph, "upper", new Rect(900, 100, 120, 60), 0),
+            ["lower"] = Layout(graph, "lower", new Rect(900, 700, 120, 60), 3)
+        };
+        if (obstacle is not null) nodes["obstacle"] = Layout(graph, "obstacle", obstacle.Value, 1);
+        var link = graph.Links.Single();
+        var routes = new Dictionary<string, LinkLayout>(StringComparer.Ordinal)
+        {
+            [link.Id] = new(link,
+                new Point(nodes["source"].Rect.CenterX, nodes["source"].Rect.Bottom),
+                new Point(nodes["target"].Rect.CenterX, nodes["target"].Rect.Y),
+                Array.Empty<Point>(), 0.5, 0.5)
+        };
+        var revision = new LayoutRevision(1);
+        var plans = CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans;
+        var compiled = ProjectInterLayerSlotCompiler.Compile(
+            plans, nodes, routes, new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+        var targetBand = compiled.Demands.Single(demand => demand.TurnOrder == 1).AllowedAxisRange;
+        return new DirectReturnFixture(compiled.Links, plans["route"], targetBand, nodes["source"].Rect, nodes);
+    }
+
     private static ProjectSlotCompilation CompileObstacleFixture(Rect obstacleRect)
     {
         var graph = RenderGraph.From(new DiagramModel(
@@ -306,4 +393,11 @@ public sealed class ProjectInterLayerSlotCompilerTests
         null, LinkSegmentRole.Through, 0, turnOrder,
         new MovementScopeIdentity(MovementScopeKind.LayerAndLowerSuffix, "depth:1"),
         new LayoutRevision(1), new RouteRevision(0));
+
+    private sealed record DirectReturnFixture(
+        IReadOnlyDictionary<string, LinkLayout> Links,
+        CanonicalTopologyPlan Plan,
+        AxisInterval TargetBand,
+        Rect SourceRect,
+        IReadOnlyDictionary<string, NodeLayout> Nodes);
 }
