@@ -196,6 +196,29 @@ public sealed class DeterministicDrawioExporter : IDeterministicDrawioExporter
             interLayersExpanded = layout.ProjectSlotCompilation?.ExpandedInterLayerCount ?? 0,
             slotRefinementIterations = layout.ProjectSlotCompilation?.RefinementIterations ?? 0,
             slotRefinementFallbackUsed = layout.ProjectSlotCompilation?.RefinementFallbackUsed ?? false,
+            layerGapReconciliationIterations = layout.ProjectSlotCompilation?.ExpansionIterations?.Select(state => new
+            {
+                state.Iteration,
+                state.ExpansionMapHash,
+                actualGaps = state.ActualGapByBand.OrderBy(item => item.Key.ProjectId, StringComparer.Ordinal)
+                    .ThenBy(item => item.Key.LowerDepth).Select(item => new
+                    {
+                        item.Key.ProjectId,
+                        item.Key.LowerDepth,
+                        Gap = item.Value
+                    }),
+                requiredExtents = state.RequiredExtentByBand.OrderBy(item => item.Key.ProjectId, StringComparer.Ordinal)
+                    .ThenBy(item => item.Key.LowerDepth).Select(item => new
+                    {
+                        item.Key.ProjectId,
+                        item.Key.LowerDepth,
+                        RequiredExtent = item.Value
+                    }),
+                changedBands = state.ChangedBands.Select(item => new { item.ProjectId, item.LowerDepth }),
+                state.ChangeKind,
+                state.CycleHandlingUsed
+            }),
+            layerGapCycleResolutionUsed = layout.ProjectSlotCompilation?.ExpansionCycleResolutionUsed ?? false,
             corridorLaneYAssignmentsRemaining = 0,
             repairBasedHorizontalOffsetsRemaining = 0,
             destinationColumnsAssigned = layout.ProjectSlotCompilation?.VerticalColumns.ColumnsByDemandId.Count(item =>

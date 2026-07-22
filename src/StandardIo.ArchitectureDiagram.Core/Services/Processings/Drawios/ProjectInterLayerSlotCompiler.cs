@@ -53,6 +53,7 @@ internal static class ProjectInterLayerSlotCompiler
             separation, padding, preservedRootAssignments);
         var assignments = horizontal.Assignments;
         var requiredExpansion = horizontal.RequiredExpansion;
+        var requiredExtentByBand = horizontal.RequiredExtentByBand;
 
         timer.Stop();
         timings.Add(new PipelineStageMetric("project-region horizontal slot allocation", timer.ElapsedMilliseconds));
@@ -96,6 +97,7 @@ internal static class ProjectInterLayerSlotCompiler
                 demands = refinedDemands.ToList();
                 assignments = refinedHorizontal.Assignments;
                 requiredExpansion = refinedHorizontal.RequiredExpansion;
+                requiredExtentByBand = refinedHorizontal.RequiredExtentByBand;
                 verticalColumns = refinedColumns;
                 if (stable) break;
                 if (iteration == MaximumRefinementIterations) refinementFallbackUsed = true;
@@ -119,6 +121,7 @@ internal static class ProjectInterLayerSlotCompiler
         timings.Add(new PipelineStageMetric("project-region constrained materialisation", timer.ElapsedMilliseconds));
         return new ProjectSlotCompilation(
             links, demands, assignments, verticalColumns, returnSides, requiredExpansion,
+            requiredExtentByBand,
             bands.Count, requiredExpansion.Count, refinementIterations, refinementFallbackUsed, timings);
     }
 
@@ -135,6 +138,11 @@ internal static class ProjectInterLayerSlotCompiler
     {
         var assignments = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
         var requiredExpansion = new Dictionary<ProjectLayerExpansionIdentity, int>();
+        var requiredExtentByBand = bands.Keys
+            .Where(band => band.BandRole == InterLayerBandRole.ProjectInternal && band.ProjectId is not null)
+            .ToDictionary(
+                band => new ProjectLayerExpansionIdentity(band.ProjectId!, band.LowerLayer),
+                _ => 0);
         foreach (var group in demands.GroupBy(item =>
                      $"{item.MovementScope?.Id}:{item.AllowedAxisRange.Minimum}:{item.AllowedAxisRange.Maximum}",
                      StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
@@ -155,15 +163,18 @@ internal static class ProjectInterLayerSlotCompiler
                     ? preservedRootAssignments[item.Key] : item.Value);
             var requiredExtent = selected.Values.Select(item => item.SlotIndex).DefaultIfEmpty(0).Max() * separation +
                 separation + padding * 2;
-            var missing = Math.Max(0, Math.Max(assigned.RequiredExtent, requiredExtent) - allowedRange.Length);
-            if (missing <= 0 || sample.CoordinateFrameId is null ||
+            var finalRequiredExtent = Math.Max(assigned.RequiredExtent, requiredExtent);
+            var missing = Math.Max(0, finalRequiredExtent - allowedRange.Length);
+            if (sample.CoordinateFrameId is null ||
                 !string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal)) continue;
             var band = bands.Keys.Single(item => string.Equals(item.ToString(), sample.BandId, StringComparison.Ordinal));
             var expansionId = new ProjectLayerExpansionIdentity(sample.CoordinateFrameId, band.LowerLayer);
+            requiredExtentByBand[expansionId] = Math.Max(requiredExtentByBand[expansionId], finalRequiredExtent);
+            if (missing <= 0) continue;
             requiredExpansion[expansionId] = Math.Max(
                 requiredExpansion.TryGetValue(expansionId, out var existing) ? existing : 0, missing);
         }
-        return new HorizontalAllocation(assignments, requiredExpansion);
+        return new HorizontalAllocation(assignments, requiredExpansion, requiredExtentByBand);
     }
 
     private static VerticalLinkColumnAssignment AllocateVertical(
@@ -266,7 +277,8 @@ internal static class ProjectInterLayerSlotCompiler
 
     private sealed record HorizontalAllocation(
         Dictionary<string, AssignedLinkSegment> Assignments,
-        Dictionary<ProjectLayerExpansionIdentity, int> RequiredExpansion);
+        Dictionary<ProjectLayerExpansionIdentity, int> RequiredExpansion,
+        Dictionary<ProjectLayerExpansionIdentity, int> RequiredExtentByBand);
 
     private static IReadOnlyDictionary<string, AssignedLinkSegment> ConstrainProjectAssignments(
         IReadOnlyList<LinkSegmentDemand> demands,
