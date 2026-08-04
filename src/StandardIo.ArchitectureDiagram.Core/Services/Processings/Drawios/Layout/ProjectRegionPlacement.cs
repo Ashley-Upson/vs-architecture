@@ -116,6 +116,9 @@ internal static class ProjectRegionPlacement
                 // exposure-tree pass has centred its parent. Reconcile the parent
                 // span once all rendered children have their final X coordinates.
                 PlacementPipeline.CenterExposureParentsOverChildren(completeGraph, nodes);
+                // Recentring happens after the normal placement overlap pass. A
+                // parent can therefore move into a neighbouring node's lane.
+                PlacementPipeline.ResolveLayerOverlaps(settings, nodes);
             }
             var projects = PlacementPipeline.PositionProjects(completeGraph, settings, nodes);
             if (!projects.ContainsKey(project.Id))
