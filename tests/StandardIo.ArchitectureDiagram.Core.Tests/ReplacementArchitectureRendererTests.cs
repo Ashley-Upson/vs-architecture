@@ -45,6 +45,22 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Render_centres_an_unobstructed_parent_over_its_direct_children()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(ChildFanoutGraph(), DiagramSettings.CreateDefault());
+        var nodes = result.Page.GraphModel.Descendants("mxCell")
+            .Where(cell => cell.Attribute("vertex")?.Value == "1" && cell.Attribute("semanticNodeId") is not null)
+            .ToDictionary(cell => cell.Attribute("semanticNodeId")!.Value, StringComparer.Ordinal);
+
+        var parent = Bounds(nodes["parent"]);
+        var children = new[] { Bounds(nodes["left"]), Bounds(nodes["right"]) };
+        var childSpanCentre = (children.Min(child => child.X) + children.Max(child => child.Right)) / 2;
+
+        Assert.Equal(childSpanCentre, parent.CenterX);
+        Assert.All(children, child => Assert.True(child.Y > parent.Bottom));
+    }
+
+    [Fact]
     public void Composed_document_preserves_drawio_structural_root_cells()
     {
         var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
@@ -160,6 +176,35 @@ public sealed class ReplacementArchitectureRendererTests
             ["external"] = new[] { "external" },
             ["baseline"] = new[] { "baseline" }
         });
+
+    private static ArchitectureRenderGraph ChildFanoutGraph() => new(
+        new[] { new ArchitectureRenderProject("project", "Project", 0) },
+        new[]
+        {
+            new ArchitectureRenderNode("parent", "parent", "project", "ParentOrchestrationService", "ParentOrchestrationService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, null, 0),
+            new ArchitectureRenderNode("left", "left", "project", "LeftProcessingService", "LeftProcessingService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, "parent", 1),
+            new ArchitectureRenderNode("right", "right", "project", "RightProcessingService", "RightProcessingService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, "parent", 2)
+        },
+        new[]
+        {
+            new ArchitectureRenderLink("parent-left", "parent-left", "parent", "left", "parent", "left", "Dependency", 0),
+            new ArchitectureRenderLink("parent-right", "parent-right", "parent", "right", "parent", "right", "Dependency", 1)
+        },
+        new[] { "parent" },
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>
+        {
+            ["parent"] = new[] { "parent" },
+            ["left"] = new[] { "left" },
+            ["right"] = new[] { "right" }
+        });
+
+    private static Rect Bounds(XElement cell)
+    {
+        var geometry = cell.Element("mxGeometry")!;
+        return new Rect(
+            (int)geometry.Attribute("x")!, (int)geometry.Attribute("y")!,
+            (int)geometry.Attribute("width")!, (int)geometry.Attribute("height")!);
+    }
 
     private static string RouteSignature(GeneratedRoute route) =>
         route.LogicalRouteId + ":" + string.Join(";", route.Points.Select(point => $"{point.X},{point.Y}"));
