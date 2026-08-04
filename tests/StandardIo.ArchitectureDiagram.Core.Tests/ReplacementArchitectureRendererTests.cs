@@ -172,6 +172,7 @@ public sealed class ReplacementArchitectureRendererTests
 
         Assert.Single(baselineYs);
         Assert.Equal(settings.Layout.NodeHeight + settings.Layout.VerticalSpacing, externalY - rootY);
+        Assert.DoesNotContain(result.LogicalFindings, finding => finding.Category == "NodeOverlap");
     }
 
     private static ArchitectureRenderGraph Graph(bool includeStandalone = false)

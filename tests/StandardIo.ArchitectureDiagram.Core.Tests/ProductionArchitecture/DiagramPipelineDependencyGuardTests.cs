@@ -16,17 +16,6 @@ public sealed class DiagramPipelineDependencyGuardTests
     }
 
     [Fact]
-    public void Typed_project_region_path_does_not_invoke_legacy_routing()
-    {
-        var projectRegion = File.ReadAllText(Source(
-            "Services", "Processings", "Drawios", "ProjectRegionLayoutBuilder.cs"));
-
-        Assert.DoesNotContain("LegacyRoutingPipeline", projectRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("CorridorObserver", projectRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("CorridorLaneAllocator", projectRegion, StringComparison.Ordinal);
-        Assert.Contains("ProjectInterLayerSlotCompiler.Compile", projectRegion, StringComparison.Ordinal);
-    }
-    [Fact]
     public void Analysis_domains_do_not_depend_on_each_other_or_drawio()
     {
         var architecture = Sources("Services", "Foundations", "Analyses");

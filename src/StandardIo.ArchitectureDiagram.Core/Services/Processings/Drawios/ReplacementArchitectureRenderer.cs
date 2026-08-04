@@ -36,7 +36,7 @@ public sealed class ReplacementArchitectureRenderer
         var hardFindings = findings.Where(finding => finding.IsStrictlyEnforced).ToArray();
         if (hardFindings.Length > 0)
             throw new InvalidOperationException(
-                "Replacement Architecture candidate rejected: " +
+                $"Replacement Architecture candidate rejected. {BuildPlacementSummary(planning, candidate, findings)} " +
                 string.Join("; ", hardFindings.Select(finding => $"{finding.Category} ({finding.LogicalRouteId}, node={finding.OtherNodeId}, otherRoute={finding.OtherRouteId}, {finding.Description})")));
 
         var page = new DrawioPage("Architecture", "architecture", graphModel,
@@ -606,6 +606,9 @@ public sealed class ReplacementArchitectureRenderer
 
         ResolveUnitCollisions(graph, rects, settings);
         AlignBaselineUnits(graph, rects, settings);
+        // Baseline alignment is a group movement. Repack complete positional units afterward;
+        // the repack is horizontal only, so it preserves the shared baseline Y coordinate.
+        ResolveUnitCollisions(graph, rects, settings);
         return rects;
     }
 
@@ -909,6 +912,32 @@ public sealed class ReplacementArchitectureRenderer
 
     private static string BuildPageJson(DrawioPageModel page) =>
         System.Text.Json.JsonSerializer.Serialize(page, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+    private static string BuildPlacementSummary(
+        ArchitecturePlacementGraph graph,
+        ArchitectureCandidatePlan candidate,
+        IReadOnlyList<ValidationFinding> findings)
+    {
+        var bounds = candidate.NodeRects.Values.Aggregate(
+            new Rect(0, 0, 0, 0), Union);
+        var largestGap = candidate.NodeRects.Values.OrderBy(rect => rect.X)
+            .Zip(candidate.NodeRects.Values.OrderBy(rect => rect.X).Skip(1),
+                (left, right) => right.X - left.Right)
+            .DefaultIfEmpty(0).Max();
+        var projectDimensions = string.Join(",", candidate.ProjectRects.Select(item =>
+            $"{item.Key}:{item.Value.Width}x{item.Value.Height}"));
+        var overlaps = findings.Where(finding => finding.Category == "NodeOverlap").ToArray();
+        var overlapSummary = overlaps.Length == 0
+            ? "none"
+            : string.Join("|", overlaps.Select(overlap =>
+            {
+                var first = graph.Nodes.SingleOrDefault(node => node.RenderInstanceId == overlap.LogicalRouteId);
+                var second = graph.Nodes.SingleOrDefault(node => node.RenderInstanceId == overlap.OtherNodeId);
+                return $"{overlap.LogicalRouteId}[{first?.SemanticNodeId},parent={first?.PositionalOwnerId},baseline={first?.IsBaseline},external={first?.IsExternal}]" +
+                    $"/{overlap.OtherNodeId}[{second?.SemanticNodeId},parent={second?.PositionalOwnerId},baseline={second?.IsBaseline},external={second?.IsExternal}]";
+            }));
+        return $"Placement nodes={candidate.NodeRects.Count}, bounds={bounds.Width}x{bounds.Height}, projects={projectDimensions}, largestGap={largestGap}, nodeOverlaps={overlaps.Length} ({overlapSummary}).";
+    }
 
     private static T Measure<T>(ICollection<PipelineStageMetric> timings, string name, Func<T> action)
     {
