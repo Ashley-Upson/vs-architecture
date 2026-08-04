@@ -1,25 +1,19 @@
-using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Architectures;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 
 /// <summary>
-/// Compatibility-only renderer for legacy <see cref="DiagramModel"/> callers.
-/// Typed Architecture production uses <see cref="DrawioArchitectureRenderer"/> and cannot dispatch here.
+/// Adapts the middleman diagram model into the typed Architecture render graph.
+/// Architecture generation then uses the same replacement renderer as the typed path.
 /// </summary>
 public sealed class DrawioDiagramRenderer : IDiagramRenderer
 {
-    private readonly IDeterministicDrawioExporter _exporter;
-
-    public DrawioDiagramRenderer()
-        : this(new DeterministicDrawioExporter())
-    {
-    }
-
-    public DrawioDiagramRenderer(IDeterministicDrawioExporter exporter)
-    {
-        _exporter = exporter ?? throw new System.ArgumentNullException(nameof(exporter));
-    }
+    private readonly ArchitectureTopologyProjector _projector = new();
+    private readonly ReplacementArchitectureRenderer _renderer = new();
 
     public string RendererId => DiagramRendererIds.Drawio;
 
@@ -31,6 +25,11 @@ public sealed class DrawioDiagramRenderer : IDiagramRenderer
 
     public string Render(DiagramModel diagram, DiagramSettings settings)
     {
-        return _exporter.GenerateResult(diagram, settings).Document;
+        if (diagram is null) throw new System.ArgumentNullException(nameof(diagram));
+        settings ??= DiagramSettings.CreateDefault();
+        var architecture = LegacyArchitectureModelAdapter.ToArchitecture(diagram);
+        var graph = _projector.Project(architecture, settings.NodeDuplication);
+        var page = _renderer.Render(graph, settings).Page;
+        return new DrawioDocumentComposer().Compose(new[] { page }, new DrawioDocumentSettings()).Content;
     }
 }

@@ -10,7 +10,6 @@ public static partial class IServiceCollectionExtensions
 {
     private static void AddArchitectureDiagramFoundationServices(IServiceCollection services)
     {
-        services.AddTransient<IDeterministicDrawioExporter, DeterministicDrawioExporter>();
         services.AddTransient<IRoslynDependencyAnalyzer, RoslynDependencyAnalyzer>();
         services.AddTransient<IArchitectureAnalyser, RoslynDependencyAnalyzer>();
         services.AddTransient<IDataModelAnalyser, RoslynDataModelAnalyser>();

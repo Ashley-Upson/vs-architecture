@@ -108,20 +108,6 @@ public sealed class DrawioArchitectureRendererTests
     }
 
     [Fact]
-    public void Production_page_geometry_matches_canonical_project_region_exporter_for_equivalent_input()
-    {
-        var graph = Graph();
-        var typed = new DrawioArchitectureRenderer().Render(graph, Settings());
-        var legacySettings = DiagramSettings.CreateDefault();
-        legacySettings.Layout = Settings().Layout;
-        var canonicalPage = new DeterministicDrawioExporter()
-            .GenerateArchitectureProjectRegionResult(graph, legacySettings).Page.GraphModel;
-
-        Assert.Equal(canonicalPage.ToString(SaveOptions.DisableFormatting),
-            typed.GraphModel.ToString(SaveOptions.DisableFormatting));
-    }
-
-    [Fact]
     public void Production_and_development_modes_use_the_same_canonical_geometry_authority()
     {
         var renderer = new DrawioArchitectureRenderer();

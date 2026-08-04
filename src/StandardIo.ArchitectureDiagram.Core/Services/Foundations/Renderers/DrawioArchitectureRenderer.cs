@@ -15,15 +15,15 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
 /// </summary>
 public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPage>, IArchitectureDiagnosticRenderer
 {
-    private readonly DeterministicDrawioExporter _exporter;
+    private readonly ReplacementArchitectureRenderer _replacementRenderer;
 
     public DrawioArchitectureRenderer()
-        : this(new DeterministicDrawioExporter())
+        : this(new ReplacementArchitectureRenderer())
     {
     }
 
-    public DrawioArchitectureRenderer(DeterministicDrawioExporter exporter) =>
-        _exporter = exporter ?? throw new ArgumentNullException(nameof(exporter));
+    public DrawioArchitectureRenderer(ReplacementArchitectureRenderer replacementRenderer) =>
+        _replacementRenderer = replacementRenderer ?? throw new ArgumentNullException(nameof(replacementRenderer));
 
     public DrawioPage Render(
         ArchitectureRenderGraph graph,
@@ -43,8 +43,7 @@ public sealed class DrawioArchitectureRenderer : IArchitectureRenderer<DrawioPag
     {
         if (graph is null) throw new ArgumentNullException(nameof(graph));
         cancellationToken.ThrowIfCancellationRequested();
-        var legacySettings = ToLegacySettings(settings);
-        return _exporter.GenerateArchitectureProjectRegionResult(graph, legacySettings);
+        return _replacementRenderer.Render(graph, ToLegacySettings(settings));
     }
 
     private static DiagramSettings ToLegacySettings(ArchitectureRenderSettings settings)

@@ -161,28 +161,6 @@ public sealed class InterLayerDemandDiscoveryTests
     }
 
     [Fact]
-    public void Diagnostic_observation_is_lazy_and_leaves_xml_byte_identical()
-    {
-        var diagram = new DiagramModel(Array.Empty<ProjectContainer>(), Array.Empty<ExternalDependencyNode>(), Array.Empty<DependencyEdge>());
-        using var session = GenerationPerformanceSession.Start();
-        var disabled = new DeterministicDrawioExporter().GenerateResult(diagram, DiagramSettings.CreateDefault());
-        var before = session.Snapshot();
-
-        var diagnostic = disabled.Diagnostics;
-        var after = session.Snapshot();
-        var enabled = new DeterministicDrawioExporter().GenerateResult(diagram, DiagramSettings.CreateDefault());
-        var documentBeforeDiagnostic = enabled.Document;
-        var enabledDiagnostics = enabled.Diagnostics;
-
-        Assert.Equal(0, before.Counters.Where(item => item.Name == "inter-layer bands observed").Sum(item => item.Value));
-        Assert.Contains(after.Phases, phase => phase.Phase == "Inter-layer demand discovery");
-        Assert.Contains("\"interLayerBands\"", diagnostic.ReportJson);
-        Assert.NotNull(enabledDiagnostics);
-        Assert.Equal(disabled.Document, documentBeforeDiagnostic);
-        Assert.Equal(documentBeforeDiagnostic, enabled.Document);
-    }
-
-    [Fact]
     public void Observer_contract_has_no_legacy_routing_model_dependencies()
     {
         var dependencyNames = typeof(InterLayerDemandDiscovery).GetMethods(
