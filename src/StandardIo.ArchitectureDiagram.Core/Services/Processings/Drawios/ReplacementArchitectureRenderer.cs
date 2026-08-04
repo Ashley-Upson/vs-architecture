@@ -125,6 +125,7 @@ public sealed class ReplacementArchitectureRenderer
                 link.SourcePlanningNodeId == node.Node.Id || link.TargetPlanningNodeId == node.Node.Id))
             .GroupBy(node => node.Depth).OrderBy(group => group.Key).ToArray();
         var y = settings.Layout.ContainerPadding * 2;
+        var depthByNodeId = graph.Nodes.ToDictionary(node => node.Node.Id, node => node.Depth, StringComparer.Ordinal);
         foreach (var layer in layers)
         {
             var x = settings.Layout.ContainerPadding * 2;
@@ -133,7 +134,14 @@ public sealed class ReplacementArchitectureRenderer
                 nodeRects[node.Node.Id] = new Rect(x, y, node.Width, node.Height);
                 x += node.Width + settings.Layout.HorizontalSpacing;
             }
-            y += settings.Layout.NodeHeight + settings.Layout.VerticalSpacing;
+            var bandPressure = graph.Links.Count(link =>
+            {
+                var sourceDepth = depthByNodeId[link.SourcePlanningNodeId];
+                var targetDepth = depthByNodeId[link.TargetPlanningNodeId];
+                return Math.Min(sourceDepth, targetDepth) <= layer.Key && layer.Key < Math.Max(sourceDepth, targetDepth);
+            });
+            y += settings.Layout.NodeHeight + settings.Layout.VerticalSpacing +
+                Math.Max(0, bandPressure) * settings.Layout.ParallelLaneSpacing + settings.Layout.LinkPadding * 2;
         }
 
         var connectedRight = nodeRects.Values.Select(rect => rect.Right).DefaultIfEmpty(0).Max();
@@ -403,6 +411,11 @@ public sealed class ReplacementArchitectureRenderer
     {
         var routes = new List<ArchitecturePhysicalRoute>();
         var outerX = nodes.Values.Select(node => node.Right).DefaultIfEmpty(0).Max() + settings.Layout.ParallelLaneSpacing;
+        var depthByNodeId = graph.Nodes.ToDictionary(node => node.Node.Id, node => node.Depth, StringComparer.Ordinal);
+        var laneByLinkId = graph.Links
+            .GroupBy(link => (SourceDepth: depthByNodeId[link.SourcePlanningNodeId], TargetDepth: depthByNodeId[link.TargetPlanningNodeId]))
+            .SelectMany(group => group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
+            .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
         foreach (var link in graph.Links.OrderBy(link => link.Order))
         {
             var source = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
@@ -412,7 +425,8 @@ public sealed class ReplacementArchitectureRenderer
             IReadOnlyList<Point> points;
             if (targetNode.Y > sourceNode.Y)
             {
-                var y = source.Y + Math.Max(settings.Layout.LinkPadding, (target.Y - source.Y) / 2);
+                var y = source.Y + settings.Layout.LinkPadding +
+                    laneByLinkId[link.Link.Id] * settings.Layout.ParallelLaneSpacing;
                 points = Normalize(new[] { source, new Point(source.X, y), new Point(target.X, y), target });
             }
             else

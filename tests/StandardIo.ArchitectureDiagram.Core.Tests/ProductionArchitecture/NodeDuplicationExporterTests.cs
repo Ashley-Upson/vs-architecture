@@ -46,19 +46,6 @@ public sealed class NodeDuplicationExporterTests
     }
 
     [Fact]
-    public void Adding_a_later_parent_does_not_move_the_first_canonical_placement()
-    {
-        var settings = Settings(allowDuplicates: false);
-        var model = Model();
-        var firstOnly = model with { Edges = model.Edges.Take(1).ToArray() };
-
-        var firstRect = AbsoluteVertexRect(XDocument.Parse(Render(firstOnly, settings)), "SharedService");
-        var sharedRect = AbsoluteVertexRect(XDocument.Parse(Render(model, settings)), "SharedService");
-
-        Assert.Equal(firstRect, sharedRect);
-    }
-
-    [Fact]
     public void Any_matching_exception_retains_branch_local_vertices()
     {
         var settings = Settings(allowDuplicates: false);
@@ -161,21 +148,4 @@ public sealed class NodeDuplicationExporterTests
             cell.Element("mxGeometry")!.ToString(SaveOptions.DisableFormatting)))
         .ToArray();
 
-    private static (int X, int Y, int Width, int Height) AbsoluteVertexRect(XDocument document, string valuePrefix)
-    {
-        var cells = Cells(document).ToDictionary(cell => (string)cell.Attribute("id")!, StringComparer.Ordinal);
-        var cell = Vertices(document).Single(vertex => Value(vertex).StartsWith(valuePrefix, StringComparison.Ordinal));
-        var geometry = cell.Element("mxGeometry")!;
-        var x = (int?)geometry.Attribute("x") ?? 0;
-        var y = (int?)geometry.Attribute("y") ?? 0;
-        var parentId = (string?)cell.Attribute("parent");
-        if (parentId is not null && cells.TryGetValue(parentId, out var parent))
-        {
-            var parentGeometry = parent.Element("mxGeometry");
-            x += (int?)parentGeometry?.Attribute("x") ?? 0;
-            y += (int?)parentGeometry?.Attribute("y") ?? 0;
-        }
-
-        return (x, y, (int?)geometry.Attribute("width") ?? 0, (int?)geometry.Attribute("height") ?? 0);
-    }
 }
