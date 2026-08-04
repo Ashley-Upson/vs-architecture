@@ -146,53 +146,8 @@ public sealed class ReplacementArchitectureRenderer
         ArchitecturePlacementGraph graph,
         DiagramSettings settings)
     {
-        var nodeRects = new Dictionary<string, Rect>(StringComparer.Ordinal);
-        var maxDepth = graph.Nodes.Select(node => node.Depth).DefaultIfEmpty(0).Max();
-        var layers = graph.Nodes.Where(node => graph.Links.Any(link =>
-                link.SourcePlanningNodeId == node.Node.Id || link.TargetPlanningNodeId == node.Node.Id))
-            .GroupBy(node => node.Depth).OrderBy(group => group.Key).ToArray();
-        var y = settings.Layout.ContainerPadding * 2;
-        var depthByNodeId = graph.Nodes.ToDictionary(node => node.Node.Id, node => node.Depth, StringComparer.Ordinal);
-        foreach (var layer in layers)
-        {
-            var x = settings.Layout.ContainerPadding * 2;
-            foreach (var node in layer.OrderBy(node => node.Order).ThenBy(node => node.Node.Id, StringComparer.Ordinal))
-            {
-                nodeRects[node.Node.Id] = new Rect(x, y, node.Width, node.Height);
-                x += node.Width + settings.Layout.HorizontalSpacing;
-            }
-            var bandPressure = graph.Links.Count(link =>
-            {
-                var sourceDepth = depthByNodeId[link.SourcePlanningNodeId];
-                var targetDepth = depthByNodeId[link.TargetPlanningNodeId];
-                return Math.Min(sourceDepth, targetDepth) <= layer.Key && layer.Key < Math.Max(sourceDepth, targetDepth);
-            });
-            y += settings.Layout.NodeHeight + settings.Layout.VerticalSpacing +
-                Math.Max(0, bandPressure) * settings.Layout.ParallelLaneSpacing + settings.Layout.LinkPadding * 2;
-        }
-
-        var connectedRight = nodeRects.Values.Select(rect => rect.Right).DefaultIfEmpty(0).Max();
-        var standalone = graph.Nodes.Where(node => !nodeRects.ContainsKey(node.Node.Id))
-            .OrderBy(node => node.Order).ThenBy(node => node.Node.Id, StringComparer.Ordinal).ToArray();
-        var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalone.Length)));
-        var standaloneX = connectedRight + settings.Layout.StandaloneGroupSpacing;
-        for (var index = 0; index < standalone.Length; index++)
-        {
-            var node = standalone[index];
-            nodeRects[node.Node.Id] = new Rect(
-                standaloneX + (index % columns) * (node.Width + settings.Layout.HorizontalSpacing),
-                settings.Layout.ContainerPadding * 2 + (index / columns) * (node.Height + settings.Layout.VerticalSpacing),
-                node.Width,
-                node.Height);
-        }
-
-        CenterParents(graph, nodeRects, settings);
-        ApplyBaselineAlignment(graph, nodeRects, settings);
-        PlaceExternalTerminals(graph, nodeRects, settings);
-        ResolveNodeOverlaps(graph, nodeRects, settings);
-        var expansionEvents = new List<ArchitectureExpansionEvent>();
-        ClearPortColumnObstacles(graph, nodeRects, settings, expansionEvents);
-        ResolveNodeOverlaps(graph, nodeRects, settings);
+        var nodeRects = PlaceCanonicalUnits(graph, settings);
+        var expansionEvents = Array.Empty<ArchitectureExpansionEvent>();
 
         var projectRects = BuildProjectRects(graph, nodeRects, settings);
         var terminals = AllocateTerminals(graph, nodeRects, settings);
@@ -211,8 +166,9 @@ public sealed class ReplacementArchitectureRenderer
                 .Distinct(StringComparer.Ordinal).ToArray(),
             new[]
             {
-                "Candidate ordering: source ArchitectureRenderGraph order",
-                "Candidate placement: contiguous depth layers with explicit standalone grid",
+                "Candidate ordering: canonical placement graph discovery order",
+                "Candidate placement: contiguous positional subtrees and isolated component grid",
+                "Candidate placement: baseline members share one final Y coordinate",
                 "Candidate routing: topology-specific orthogonal routes",
                 "Candidate validation: absolute physical scene before Draw.io projection"
             },
@@ -601,135 +557,160 @@ public sealed class ReplacementArchitectureRenderer
         return stubStartY;
     }
 
-    private static void CenterParents(ArchitecturePlacementGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
-    {
-        foreach (var source in graph.Nodes.OrderByDescending(node => node.Depth))
-        {
-            var children = graph.Links.Where(link => link.SourcePlanningNodeId == source.Node.Id)
-                .Select(link => nodes[link.TargetPlanningNodeId]).ToArray();
-            if (children.Length == 0) continue;
-            var left = children.Min(child => child.X);
-            var right = children.Max(child => child.Right);
-            var current = nodes[source.Node.Id];
-            nodes[source.Node.Id] = current with { X = Math.Max(settings.Layout.ContainerPadding, left + (right - left - current.Width) / 2) };
-        }
-    }
-
-    private static void ApplyBaselineAlignment(
+    private static Dictionary<string, Rect> PlaceCanonicalUnits(
         ArchitecturePlacementGraph graph,
-        Dictionary<string, Rect> nodes,
         DiagramSettings settings)
     {
-        var baseline = graph.Nodes.Where(node => node.IsBaseline)
-            .Select(node => nodes[node.Node.Id].Y).DefaultIfEmpty(-1).Min();
-        if (baseline < 0) return;
-        foreach (var node in graph.Nodes.Where(node => node.IsBaseline))
+        var placementNodes = graph.Nodes.ToDictionary(node => node.RenderInstanceId, StringComparer.Ordinal);
+        var ownedChildren = placementNodes.Values.ToDictionary(node => node.RenderInstanceId,
+            _ => new List<ArchitecturePlacementNode>(), StringComparer.Ordinal);
+        foreach (var node in placementNodes.Values)
         {
-            var rect = nodes[node.Node.Id];
-            nodes[node.Node.Id] = rect with { Y = baseline };
+            if (node.PositionalOwnerId is not null && ownedChildren.TryGetValue(node.PositionalOwnerId, out var children))
+                children.Add(node);
         }
+
+        foreach (var children in ownedChildren.Values)
+            children.Sort(ComparePlacementOrder);
+
+        var connected = new HashSet<string>(graph.Links.SelectMany(link =>
+            new[] { link.SourcePlanningNodeId, link.TargetPlanningNodeId }), StringComparer.Ordinal);
+        var roots = placementNodes.Values
+            .Where(node => connected.Contains(node.RenderInstanceId) &&
+                (node.PositionalOwnerId is null || !placementNodes.ContainsKey(node.PositionalOwnerId)))
+            .OrderBy(node => node.Order).ThenBy(node => node.RenderInstanceId, StringComparer.Ordinal)
+            .ToArray();
+        var rects = new Dictionary<string, Rect>(StringComparer.Ordinal);
+        var x = settings.Layout.ContainerPadding * 2;
+        var y = settings.Layout.ContainerPadding * 2;
+        foreach (var root in roots)
+        {
+            var width = MeasureUnit(root, ownedChildren, settings);
+            LayoutUnit(root, x, y, ownedChildren, rects, settings);
+            x += width + settings.Layout.StandaloneGroupSpacing;
+        }
+
+        var standalone = placementNodes.Values.Where(node => !rects.ContainsKey(node.RenderInstanceId))
+            .OrderBy(node => node.Order).ThenBy(node => node.RenderInstanceId, StringComparer.Ordinal).ToArray();
+        var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalone.Length)));
+        var standaloneX = rects.Values.Select(rect => rect.Right).DefaultIfEmpty(x).Max() + settings.Layout.StandaloneGroupSpacing;
+        for (var index = 0; index < standalone.Length; index++)
+        {
+            var node = standalone[index];
+            rects[node.RenderInstanceId] = new Rect(
+                standaloneX + (index % columns) * (node.Width + settings.Layout.HorizontalSpacing),
+                y + (index / columns) * (node.Height + settings.Layout.VerticalSpacing),
+                node.Width,
+                node.Height);
+        }
+
+        ResolveUnitCollisions(graph, rects, settings);
+        AlignBaselineUnits(graph, rects, settings);
+        return rects;
     }
 
-    private static void PlaceExternalTerminals(
-        ArchitecturePlacementGraph graph,
-        Dictionary<string, Rect> nodes,
+    private static int MeasureUnit(
+        ArchitecturePlacementNode node,
+        IReadOnlyDictionary<string, List<ArchitecturePlacementNode>> children,
         DiagramSettings settings)
     {
-        foreach (var external in graph.Nodes.Where(node => node.Node.IsExternal))
+        var childWidth = children[node.RenderInstanceId]
+            .Sum(child => MeasureUnit(child, children, settings));
+        if (children[node.RenderInstanceId].Count > 1)
+            childWidth += (children[node.RenderInstanceId].Count - 1) * settings.Layout.HorizontalSpacing;
+        return Math.Max(node.Width, childWidth);
+    }
+
+    private static void LayoutUnit(
+        ArchitecturePlacementNode node,
+        int left,
+        int top,
+        IReadOnlyDictionary<string, List<ArchitecturePlacementNode>> children,
+        IDictionary<string, Rect> rects,
+        DiagramSettings settings)
+    {
+        var childNodes = children[node.RenderInstanceId];
+        var measuredWidth = MeasureUnit(node, children, settings);
+        var rect = new Rect(left + (measuredWidth - node.Width) / 2, top, node.Width, node.Height);
+        rects[node.RenderInstanceId] = rect;
+        if (childNodes.Count == 0) return;
+
+        var childWidth = childNodes.Sum(child => MeasureUnit(child, children, settings)) +
+            (childNodes.Count - 1) * settings.Layout.HorizontalSpacing;
+        var childLeft = left + (measuredWidth - childWidth) / 2;
+        foreach (var child in childNodes)
         {
-            var parents = graph.Links.Where(link => link.TargetPlanningNodeId == external.Node.Id)
-                .Select(link => nodes[link.SourcePlanningNodeId]).OrderBy(rect => rect.X).ToArray();
-            if (parents.Length != 1) continue;
-            var parent = parents[0];
-            var rect = nodes[external.Node.Id];
-            nodes[external.Node.Id] = rect with
-            {
-                X = parent.CenterX - rect.Width / 2,
-                Y = parent.Bottom + settings.Layout.VerticalSpacing
-            };
+            var width = MeasureUnit(child, children, settings);
+            LayoutUnit(child, childLeft, rect.Bottom + settings.Layout.VerticalSpacing, children, rects, settings);
+            childLeft += width + settings.Layout.HorizontalSpacing;
         }
     }
 
-    private static void ClearPortColumnObstacles(
+    private static void ResolveUnitCollisions(
         ArchitecturePlacementGraph graph,
-        Dictionary<string, Rect> nodes,
-        DiagramSettings settings,
-        ICollection<ArchitectureExpansionEvent> expansionEvents)
+        Dictionary<string, Rect> rects,
+        DiagramSettings settings)
     {
-        if (graph.Links.Count == 0 || nodes.Count == 0) return;
-        for (var pass = 0; pass < 3; pass++)
+        var ordered = graph.Nodes.OrderBy(node => node.Order)
+            .ThenBy(node => node.RenderInstanceId, StringComparer.Ordinal).ToArray();
+        for (var pass = 0; pass < ordered.Length; pass++)
         {
             var moved = false;
-            var terminals = AllocateTerminals(graph, nodes, settings);
-            var sourceIndex = graph.Links.GroupBy(link => link.SourcePlanningNodeId).SelectMany(group =>
-                    group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
-                .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
-            var targetIndex = graph.Links.GroupBy(link => link.TargetPlanningNodeId).SelectMany(group =>
-                    group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
-                .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
-            foreach (var link in graph.Links.OrderBy(link => link.Order))
+            for (var firstIndex = 0; firstIndex < ordered.Length; firstIndex++)
+            for (var secondIndex = firstIndex + 1; secondIndex < ordered.Length; secondIndex++)
             {
-                var sourceTerminal = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
-                var targetTerminal = terminals.Single(terminal => terminal.LinkId == link.Link.Id && !terminal.IsSource).Point;
-                var source = nodes[link.SourcePlanningNodeId];
-                var target = nodes[link.TargetPlanningNodeId];
-                var top = Math.Min(source.Bottom, target.Y);
-                var bottom = Math.Max(source.Bottom, target.Y);
-                foreach (var item in nodes.Where(item => item.Key != link.SourcePlanningNodeId && item.Key != link.TargetPlanningNodeId).ToArray())
-                {
-                    var sourceColumnBlocked = item.Value.X < sourceTerminal.X && sourceTerminal.X < item.Value.Right &&
-                        item.Value.Y < bottom && top < item.Value.Bottom;
-                    var targetColumnBlocked = item.Value.X < targetTerminal.X && targetTerminal.X < item.Value.Right &&
-                        item.Value.Y < bottom && top < item.Value.Bottom;
-                    if (!sourceColumnBlocked && !targetColumnBlocked) continue;
-                    var right = nodes.Values.Max(rect => rect.Right) + settings.Layout.HorizontalSpacing;
-                    var fromX = item.Value.X;
-                    nodes[item.Key] = item.Value with { X = right };
-                    expansionEvents.Add(new ArchitectureExpansionEvent("global-node-shift", "port-column-clearance", item.Key,
-                        right - fromX, fromX, right,
-                        sourceColumnBlocked ? $"source-port-column:{link.Link.Id}" : $"target-port-column:{link.Link.Id}"));
-                    moved = true;
-                }
-
-                var sourceChannelY = source.Bottom + settings.Layout.LinkPadding +
-                    sourceIndex[link.Link.Id] * settings.Layout.ParallelLaneSpacing;
-                var targetChannelY = target.Y - settings.Layout.LinkPadding -
-                    targetIndex[link.Link.Id] * settings.Layout.ParallelLaneSpacing;
-                foreach (var item in nodes.Where(item => item.Key != link.SourcePlanningNodeId && item.Key != link.TargetPlanningNodeId).ToArray())
-                {
-                    var sourceChannelBlocked = SegmentIntersectsInterior(
-                        new Segment(new Point(sourceTerminal.X, sourceChannelY), new Point(Math.Max(source.Right, target.Right) + settings.Layout.HorizontalSpacing, sourceChannelY)), item.Value);
-                    var targetChannelBlocked = SegmentIntersectsInterior(
-                        new Segment(new Point(targetTerminal.X, targetChannelY), new Point(Math.Max(source.Right, target.Right) + settings.Layout.HorizontalSpacing, targetChannelY)), item.Value);
-                    if (!sourceChannelBlocked && !targetChannelBlocked) continue;
-                    var right = nodes.Values.Max(rect => rect.Right) + settings.Layout.HorizontalSpacing;
-                    var fromX = item.Value.X;
-                    nodes[item.Key] = item.Value with { X = right };
-                    expansionEvents.Add(new ArchitectureExpansionEvent("global-node-shift", "channel-clearance", item.Key,
-                        right - fromX, fromX, right,
-                        sourceChannelBlocked ? $"source-channel:{link.Link.Id}" : $"target-channel:{link.Link.Id}"));
-                    moved = true;
-                }
+                var first = ordered[firstIndex];
+                var second = ordered[secondIndex];
+                if (!Overlaps(rects[first.RenderInstanceId], rects[second.RenderInstanceId])) continue;
+                var unit = second.RenderInstanceId;
+                var delta = rects[first.RenderInstanceId].Right + settings.Layout.HorizontalSpacing - rects[unit].X;
+                if (delta <= 0) delta = settings.Layout.HorizontalSpacing;
+                MoveUnit(graph, unit, rects, delta, 0);
+                moved = true;
             }
             if (!moved) break;
         }
     }
 
-    private static void ResolveNodeOverlaps(ArchitecturePlacementGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
+    private static void AlignBaselineUnits(
+        ArchitecturePlacementGraph graph,
+        Dictionary<string, Rect> rects,
+        DiagramSettings settings)
     {
-        var ordered = graph.Nodes.OrderBy(node => nodes[node.Node.Id].Y)
-            .ThenBy(node => nodes[node.Node.Id].X).ThenBy(node => node.Order).ThenBy(node => node.Node.Id, StringComparer.Ordinal)
-            .ToArray();
-        for (var left = 0; left < ordered.Length; left++)
+        var baseline = graph.Nodes.Where(node => node.IsBaseline).ToArray();
+        if (baseline.Length == 0) return;
+        var targetY = baseline.Max(node => rects[node.RenderInstanceId].Y);
+        foreach (var node in baseline.OrderBy(node => node.Order))
         {
-            for (var right = left + 1; right < ordered.Length; right++)
-            {
-                var first = nodes[ordered[left].Node.Id];
-                var second = nodes[ordered[right].Node.Id];
-                if (!Overlaps(first, second)) continue;
-                nodes[ordered[right].Node.Id] = second with { X = first.Right + settings.Layout.HorizontalSpacing };
-            }
+            var delta = targetY - rects[node.RenderInstanceId].Y;
+            if (delta != 0) MoveUnit(graph, node.RenderInstanceId, rects, 0, delta);
         }
+    }
+
+    private static void MoveUnit(
+        ArchitecturePlacementGraph graph,
+        string unitId,
+        IDictionary<string, Rect> rects,
+        int deltaX,
+        int deltaY)
+    {
+        var members = new HashSet<string>(StringComparer.Ordinal) { unitId };
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var node in graph.Nodes)
+                if (node.PositionalOwnerId is not null && members.Contains(node.PositionalOwnerId) && members.Add(node.RenderInstanceId))
+                    changed = true;
+        }
+        foreach (var id in members)
+            rects[id] = rects[id] with { X = rects[id].X + deltaX, Y = rects[id].Y + deltaY };
+    }
+
+    private static int ComparePlacementOrder(ArchitecturePlacementNode left, ArchitecturePlacementNode right)
+    {
+        var order = left.Order.CompareTo(right.Order);
+        return order != 0 ? order : string.CompareOrdinal(left.RenderInstanceId, right.RenderInstanceId);
     }
 
     private static Dictionary<string, Rect> BuildProjectRects(ArchitecturePlacementGraph graph, IReadOnlyDictionary<string, Rect> nodes, DiagramSettings settings)
@@ -882,6 +863,23 @@ public sealed class ReplacementArchitectureRenderer
             pageBounds = scene.PageBounds,
             routeLength = candidate.RouteLength,
             bendCount = candidate.BendCount,
+            placement = new
+            {
+                nodeBounds = candidate.NodeRects,
+                projectDimensions = candidate.ProjectRects.ToDictionary(item => item.Key,
+                    item => new { item.Value.X, item.Value.Y, item.Value.Width, item.Value.Height }, StringComparer.Ordinal),
+                subtreeGroups = graph.Nodes.GroupBy(node => node.PlacementGroup, StringComparer.Ordinal)
+                    .OrderBy(group => group.Min(node => node.Order))
+                    .Select(group => new
+                    {
+                        group.Key,
+                        nodes = group.OrderBy(node => node.Order)
+                            .Select(node => node.RenderInstanceId).ToArray(),
+                        bounds = group.Select(node => candidate.NodeRects[node.RenderInstanceId])
+                            .Aggregate((left, right) => Union(left, right))
+                    }),
+                largestGaps = candidate.ExpansionDiagnostics.WidestGaps
+            },
             expansion = candidate.ExpansionDiagnostics,
             longestRoutes = scene.Routes
                 .OrderByDescending(route => route.Points.Zip(route.Points.Skip(1), (a, b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y)).Sum())

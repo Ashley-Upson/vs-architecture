@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using Xunit;
 
@@ -122,6 +123,41 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Render_keeps_positional_subtrees_contiguous_and_in_discovery_order()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(SubtreeGraph(), DiagramSettings.CreateDefault());
+        var nodes = NodeBounds(result);
+
+        Assert.True(nodes["a"].X < nodes["b"].X);
+        Assert.True(nodes["a-child"].X < nodes["b"].X);
+        Assert.True(nodes["a-child"].Right < nodes["b"].X || nodes["b"].Right < nodes["a-child"].X);
+        Assert.True(nodes["a"].Y < nodes["a-child"].Y);
+        Assert.Equal(nodes["a"].CenterX, (nodes["a-child"].X + nodes["a-child"].Right) / 2);
+    }
+
+    [Fact]
+    public void Render_centres_a_single_parent_external_terminal_directly_below_it()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(BaselineGraph(), DiagramSettings.CreateDefault());
+        var nodes = NodeBounds(result);
+
+        Assert.Equal(nodes["root"].CenterX, nodes["external"].CenterX);
+        Assert.Equal(nodes["root"].Bottom + DiagramSettings.CreateDefault().Layout.VerticalSpacing, nodes["external"].Y);
+    }
+
+    [Fact]
+    public void Render_keeps_standalone_region_outside_connected_subtrees()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(StandaloneGridGraph(), DiagramSettings.CreateDefault());
+        var nodes = NodeBounds(result);
+        var connectedRight = new[] { nodes["root"], nodes["child"] }.Max(node => node.Right);
+        var standalone = new[] { nodes["standalone-a"], nodes["standalone-b"], nodes["standalone-c"], nodes["standalone-d"] };
+
+        Assert.All(standalone, node => Assert.True(node.X > connectedRight));
+        Assert.True(standalone.Max(node => node.X) - standalone.Min(node => node.X) < 3 * DiagramSettings.CreateDefault().Layout.HorizontalSpacing + 3 * DiagramSettings.CreateDefault().Layout.NodeWidth);
+    }
+
+    [Fact]
     public void Render_locks_baseline_nodes_and_places_single_external_below_parent()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -205,6 +241,59 @@ public sealed class ReplacementArchitectureRendererTests
             (int)geometry.Attribute("x")!, (int)geometry.Attribute("y")!,
             (int)geometry.Attribute("width")!, (int)geometry.Attribute("height")!);
     }
+
+    private static System.Collections.Generic.Dictionary<string, Rect> NodeBounds(ArchitectureRenderResult result) =>
+        result.Page.GraphModel.Descendants("mxCell")
+            .Where(cell => cell.Attribute("vertex")?.Value == "1" && cell.Attribute("semanticNodeId") is not null)
+            .ToDictionary(cell => cell.Attribute("semanticNodeId")!.Value, Bounds, StringComparer.Ordinal);
+
+    private static ArchitectureRenderGraph SubtreeGraph() => new(
+        new[] { new ArchitectureRenderProject("project", "Project", 0) },
+        new[]
+        {
+            Node("a", "AOrchestrationService", null, 0),
+            Node("a-child", "AChildProcessingService", "a", 1),
+            Node("b", "BOrchestrationService", null, 2),
+            Node("b-child", "BChildProcessingService", "b", 3)
+        },
+        new[]
+        {
+            Link("a-a-child", "a", "a-child", 0),
+            Link("b-b-child", "b", "b-child", 1)
+        },
+        new[] { "a", "b" },
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>
+        {
+            ["a"] = new[] { "a" }, ["a-child"] = new[] { "a-child" },
+            ["b"] = new[] { "b" }, ["b-child"] = new[] { "b-child" }
+        });
+
+    private static ArchitectureRenderGraph StandaloneGridGraph() => new(
+        new[] { new ArchitectureRenderProject("project", "Project", 0) },
+        new[]
+        {
+            Node("root", "RootOrchestrationService", null, 0),
+            Node("child", "ChildProcessingService", "root", 1),
+            Node("standalone-a", "StandaloneAService", null, 2),
+            Node("standalone-b", "StandaloneBService", null, 3),
+            Node("standalone-c", "StandaloneCService", null, 4),
+            Node("standalone-d", "StandaloneDService", null, 5)
+        },
+        new[] { Link("root-child", "root", "child", 0) },
+        new[] { "root" },
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>
+        {
+            ["root"] = new[] { "root" }, ["child"] = new[] { "child" },
+            ["standalone-a"] = new[] { "standalone-a" }, ["standalone-b"] = new[] { "standalone-b" },
+            ["standalone-c"] = new[] { "standalone-c" }, ["standalone-d"] = new[] { "standalone-d" }
+        });
+
+    private static ArchitectureRenderNode Node(string id, string name, string? parent, int order) =>
+        new(id, id, "project", name, name, "Class", false, string.Empty, InterfaceResolutionStatus.NotApplicable,
+            null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, parent, order);
+
+    private static ArchitectureRenderLink Link(string id, string source, string target, int order) =>
+        new(id, id, source, target, source, target, "Dependency", order);
 
     private static string RouteSignature(GeneratedRoute route) =>
         route.LogicalRouteId + ":" + string.Join(";", route.Points.Select(point => $"{point.X},{point.Y}"));
