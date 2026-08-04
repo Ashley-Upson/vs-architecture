@@ -84,7 +84,10 @@ internal sealed record DrawioPageCell(
     IReadOnlyList<Point> Waypoints,
     bool IsEdge,
     string? SemanticSourceId = null,
-    string? SemanticTargetId = null);
+    string? SemanticTargetId = null,
+    string? SemanticNodeId = null,
+    double? ExitX = null,
+    double? EntryX = null);
 
 internal sealed class DrawioPageModel
 {

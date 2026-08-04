@@ -227,12 +227,17 @@ public sealed class ReplacementArchitectureRenderer
             }
             cells.Add(new DrawioPageCell(node.Node.Id, parent, null, null,
                 node.Node.IsExternal ? $"{node.Node.ExternalTag}\n{node.Node.DisplayText}" : node.Node.DisplayText,
-                NodeStyle(settings, node.Node), rect, Array.Empty<Point>(), false));
+                NodeStyle(settings, node.Node), rect, Array.Empty<Point>(), false,
+                SemanticNodeId: node.Node.SemanticNodeId));
         }
         foreach (var route in scene.Routes.OrderBy(route => route.Link.Link.Order))
         {
             var source = graph.Source.Nodes.Single(node => node.Id == route.Link.Link.SourceRenderInstanceId);
             var target = graph.Source.Nodes.Single(node => node.Id == route.Link.Link.TargetRenderInstanceId);
+            var sourceRect = scene.Candidate.NodeRects[source.Id];
+            var targetRect = scene.Candidate.NodeRects[target.Id];
+            var sourceTerminal = scene.Candidate.Terminals.Single(terminal => terminal.LinkId == route.Link.Link.Id && terminal.IsSource).Point;
+            var targetTerminal = scene.Candidate.Terminals.Single(terminal => terminal.LinkId == route.Link.Link.Id && !terminal.IsSource).Point;
             cells.Add(new DrawioPageCell(
                 $"edge_{route.Link.Link.Id}",
                 "1",
@@ -244,7 +249,9 @@ public sealed class ReplacementArchitectureRenderer
                 route.Points.Skip(1).Take(Math.Max(0, route.Points.Count - 2)).ToArray(),
                 true,
                 route.Link.Link.SourceSemanticId,
-                route.Link.Link.TargetSemanticId));
+                route.Link.Link.TargetSemanticId,
+                ExitX: (sourceTerminal.X - sourceRect.X) / (double)Math.Max(1, sourceRect.Width),
+                EntryX: (targetTerminal.X - targetRect.X) / (double)Math.Max(1, targetRect.Width)));
         }
         return new DrawioPageModel(cells, scene.PageBounds, scene.Candidate.Provenance);
     }
@@ -269,6 +276,10 @@ public sealed class ReplacementArchitectureRenderer
                     element.Add(new XAttribute("semanticSourceId", cell.SemanticSourceId));
                 if (cell.SemanticTargetId is not null)
                     element.Add(new XAttribute("semanticTargetId", cell.SemanticTargetId));
+                if (cell.ExitX is double exitX)
+                    element.Add(new XAttribute("exitX", FormatRatio(exitX)), new XAttribute("exitY", "1"));
+                if (cell.EntryX is double entryX)
+                    element.Add(new XAttribute("entryX", FormatRatio(entryX)), new XAttribute("entryY", "0"));
                 element.Add(new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"),
                     new XElement("Array", new XAttribute("as", "points"), cell.Waypoints.Select(point =>
                         new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y))))));
@@ -277,8 +288,12 @@ public sealed class ReplacementArchitectureRenderer
             {
                 element.Add(new XAttribute("vertex", "1"));
                 if (cell.Bounds is Rect rect)
+                {
+                    if (cell.SemanticNodeId is not null)
+                        element.Add(new XAttribute("semanticNodeId", cell.SemanticNodeId));
                     element.Add(new XElement("mxGeometry", new XAttribute("x", rect.X), new XAttribute("y", rect.Y),
                         new XAttribute("width", rect.Width), new XAttribute("height", rect.Height), new XAttribute("as", "geometry")));
+                }
             }
             root.Add(element);
         }
@@ -338,6 +353,18 @@ public sealed class ReplacementArchitectureRenderer
             foreach (var node in nodes.Where(node => node.Key != route.Link.Link.SourceRenderInstanceId && node.Key != route.Link.Link.TargetRenderInstanceId))
                 if (points.Zip(points.Skip(1), (a, b) => new Segment(a, b)).Any(segment => segment.Intersects(node.Value)))
                     findings.Add(Finding("LinkNodeIntersection", route.Link.Link.Id, $"Route intersects node {node.Key}.", true, node.Key));
+        }
+        foreach (var pair in routes.SelectMany((left, index) => routes.Skip(index + 1)
+                     .Select(right => (left, right))))
+        {
+            var shared = pair.left.Points.Zip(pair.left.Points.Skip(1), (start, end) => new Segment(start, end))
+                .SelectMany(first => pair.right.Points.Zip(pair.right.Points.Skip(1), (start, end) => new Segment(start, end))
+                    .Where(second => first.IsHorizontal == second.IsHorizontal && first.IsOrthogonal &&
+                        first.OverlapLength(second) > 0))
+                .FirstOrDefault();
+            if (shared.Length > 0)
+                findings.Add(FindingWithOtherRoute("SharedSegment", pair.left.Link.Link.Id,
+                    pair.right.Link.Link.Id, "Routes share a non-zero collinear segment.", true));
         }
         return findings;
     }
@@ -480,6 +507,11 @@ public sealed class ReplacementArchitectureRenderer
         new(category, routeId, null, otherNodeId, 1, description, Array.Empty<ValidationPoint>(),
             Array.Empty<ValidationSegment>(), null, null, null, strict);
 
+    private static ValidationFinding FindingWithOtherRoute(string category, string routeId, string otherRouteId,
+        string description, bool strict) =>
+        new(category, routeId, otherRouteId, null, 1, description, Array.Empty<ValidationPoint>(),
+            Array.Empty<ValidationSegment>(), null, null, null, strict);
+
     private static string NodeStyle(DiagramSettings settings, ArchitectureRenderNode node)
     {
         var style = node.IsExternal ? settings.ExternalDependencyStyle : new StyleResolver(settings).Resolve(
@@ -502,6 +534,8 @@ public sealed class ReplacementArchitectureRenderer
     private static bool IsColour(string value) =>
         !string.IsNullOrWhiteSpace(value) && value.Length is 7 or 9 && value[0] == '#' &&
         value.Skip(1).All(character => Uri.IsHexDigit(character));
+
+    private static string FormatRatio(double value) => value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
 
     private static string BuildProvenanceJson(ArchitecturePlanningGraph graph, ArchitectureCandidatePlan candidate,
         ArchitecturePhysicalScene scene, DrawioPageModel page, IReadOnlyList<ValidationFinding> findings) =>

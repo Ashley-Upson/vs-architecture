@@ -46,6 +46,19 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Render_emits_terminal_ratios_and_semantic_provenance()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
+        var edge = result.Page.GraphModel.Descendants("mxCell")
+            .Single(cell => cell.Attribute("logicalEdgeId")?.Value == "root-child");
+
+        Assert.NotNull(edge.Attribute("exitX"));
+        Assert.NotNull(edge.Attribute("entryX"));
+        Assert.Equal("root", edge.Attribute("semanticSourceId")?.Value);
+        Assert.Equal("child", edge.Attribute("semanticTargetId")?.Value);
+    }
+
+    [Fact]
     public void Render_places_standalone_nodes_in_a_grid()
     {
         var graph = Graph(includeStandalone: true);
