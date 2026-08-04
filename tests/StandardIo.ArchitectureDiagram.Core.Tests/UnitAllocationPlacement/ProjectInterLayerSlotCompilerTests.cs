@@ -55,6 +55,19 @@ public sealed class ProjectInterLayerSlotCompilerTests
     }
 
     [Fact]
+    public void Deep_upward_return_uses_a_local_target_facing_column_when_the_corridor_is_clear()
+    {
+        var compiled = CompileDirectReturn(5, 0, 226706, 238966);
+        var link = compiled.Links["route"];
+        var points = new[] { link.SourcePoint }.Concat(link.Points).Concat(new[] { link.TargetPoint }).ToArray();
+        var localColumn = points[2].X;
+
+        Assert.True(ProjectInterLayerSlotCompiler.IsDirectTargetLaneReturn(compiled.Plan, compiled.Nodes));
+        Assert.InRange(localColumn, compiled.SourceRect.Right + 22, compiled.SourceRect.Right + 22);
+        Assert.All(points, point => Assert.True(point.X > 0));
+    }
+
+    [Fact]
     public void Project_local_bands_do_not_share_physical_coordinates_for_equal_local_depths()
     {
         var first = CompileOffsetProjects(reverseProjects: false);

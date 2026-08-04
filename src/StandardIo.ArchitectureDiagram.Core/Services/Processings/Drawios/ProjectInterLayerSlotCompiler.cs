@@ -563,10 +563,13 @@ internal static class ProjectInterLayerSlotCompiler
         CanonicalTopologyPlan plan,
         IReadOnlyDictionary<string, NodeLayout> nodes)
     {
-        var sourceDepth = nodes[plan.SourceNodeId].Depth;
-        var targetDepth = nodes[plan.TargetNodeId].Depth;
+        // A return link's physical route should be chosen from its endpoint geometry,
+        // not from the number of semantic layers between those endpoints. A deep
+        // return can still have a clear local lane; sending it to the project edge
+        // creates the large detours seen when baseline-aligned nodes have different
+        // semantic depths.
         return plan.RequiresReturnColumn &&
-            (targetDepth == sourceDepth || targetDepth == sourceDepth - 1);
+            nodes[plan.SourceNodeId].Node.ProjectId == nodes[plan.TargetNodeId].Node.ProjectId;
     }
 
     private static AxisInterval[] VerticalColumnExclusions(
