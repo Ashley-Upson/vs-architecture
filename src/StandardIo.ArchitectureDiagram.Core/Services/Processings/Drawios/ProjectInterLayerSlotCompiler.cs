@@ -290,17 +290,59 @@ internal static class ProjectInterLayerSlotCompiler
         int padding)
     {
         var result = new Dictionary<string, AssignedLinkSegment>(StringComparer.Ordinal);
-        foreach (var demand in demands.OrderBy(item => preferred[item.Id].SlotIndex)
+        var fanoutLanes = FanoutLanes(demands, preferred, plans, nodes);
+        foreach (var demand in demands.OrderBy(item => fanoutLanes.ContainsKey(item.Id) ? 0 : 1)
+                     .ThenBy(item => fanoutLanes.TryGetValue(item.Id, out var fanout) ? fanout.Rank : 0)
+                     .ThenBy(item => preferred[item.Id].SlotIndex)
                      .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
                      .ThenBy(item => item.TurnOrder).ThenBy(item => item.Id, StringComparer.Ordinal))
         {
             var plan = plans[demand.LogicalRouteId];
             var slot = preferred[demand.Id].SlotIndex;
+            if (fanoutLanes.TryGetValue(demand.Id, out var lane))
+            {
+                slot = lane.BaseSlot + lane.Rank;
+            }
+
             while (ProjectSlotBlocked(demand, slot, result.Values, plan, nodes, labels, separation, padding))
                 slot++;
             var coordinate = demand.AllowedAxisRange.Minimum + padding + slot * separation;
             result.Add(demand.Id, preferred[demand.Id] with { AxisCoordinate = coordinate, SlotIndex = slot });
         }
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, FanoutLane> FanoutLanes(
+        IReadOnlyList<LinkSegmentDemand> demands,
+        IReadOnlyDictionary<string, AssignedLinkSegment> preferred,
+        IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,
+        IReadOnlyDictionary<string, NodeLayout> nodes)
+    {
+        var result = new Dictionary<string, FanoutLane>(StringComparer.Ordinal);
+        foreach (var group in demands
+                     .Where(item => item.TurnOrder == 0 &&
+                         plans[item.LogicalRouteId].Family is CanonicalTopologyFamily.AdjacentDownward or
+                             CanonicalTopologyFamily.LongDownward)
+                     .GroupBy(item => plans[item.LogicalRouteId].SourceNodeId, StringComparer.Ordinal))
+        {
+            var ordered = group
+                .OrderBy(item => nodes[plans[item.LogicalRouteId].TargetNodeId].Rect.CenterX)
+                .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
+                .ToArray();
+            if (ordered.Length < 2)
+            {
+                continue;
+            }
+
+            var baseSlot = ordered.Min(item => preferred[item.Id].SlotIndex);
+            for (var index = 0; index < ordered.Length; index++)
+            {
+                result[ordered[index].Id] = new FanoutLane(
+                    baseSlot,
+                    Math.Min(index, ordered.Length - 1 - index));
+            }
+        }
+
         return result;
     }
 
@@ -329,6 +371,8 @@ internal static class ProjectInterLayerSlotCompiler
         return allocated.Any(other => Math.Abs(other.AxisCoordinate - y) < separation &&
             PositiveOverlap(demand.OccupiedInterval, other.OccupiedInterval));
     }
+
+    private sealed record FanoutLane(int BaseSlot, int Rank);
 
     private static IReadOnlyDictionary<string, AssignedLinkSegment> PreservedRootAssignments(
         IReadOnlyDictionary<string, CanonicalTopologyPlan> plans,

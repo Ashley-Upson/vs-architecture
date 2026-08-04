@@ -141,6 +141,40 @@ public sealed class ProjectInterLayerSlotCompilerTests
     }
 
     [Fact]
+    public void Fanout_departures_put_middle_targets_below_outer_targets()
+    {
+        var graph = RenderGraph.From(new DiagramModel(
+            [new ProjectContainer("project", "Project", [Node("source"), Node("left"), Node("middle"), Node("right")])],
+            Array.Empty<ExternalDependencyNode>(),
+            [
+                new DependencyEdge("left-link", "source", "left", "Dependency"),
+                new DependencyEdge("middle-link", "source", "middle", "Dependency"),
+                new DependencyEdge("right-link", "source", "right", "Dependency")
+            ]));
+        var nodes = new Dictionary<string, NodeLayout>(StringComparer.Ordinal)
+        {
+            ["source"] = Layout(graph, "source", new Rect(300, 0, 120, 60), 0),
+            ["left"] = Layout(graph, "left", new Rect(0, 180, 120, 60), 1),
+            ["middle"] = Layout(graph, "middle", new Rect(300, 180, 120, 60), 1),
+            ["right"] = Layout(graph, "right", new Rect(600, 180, 120, 60), 1)
+        };
+        var routes = graph.Links.ToDictionary(link => link.Id, link => new LinkLayout(
+            link,
+            new Point(nodes[link.SourceId].Rect.CenterX, nodes[link.SourceId].Rect.Bottom),
+            new Point(nodes[link.TargetId].Rect.CenterX, nodes[link.TargetId].Rect.Y),
+            Array.Empty<Point>(), 0.5, 0.5), StringComparer.Ordinal);
+        var revision = new LayoutRevision(1);
+        var plans = CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans;
+
+        var compiled = ProjectInterLayerSlotCompiler.Compile(
+            plans, nodes, routes, new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+
+        Assert.True(compiled.Links["left-link"].Points[0].Y == compiled.Links["right-link"].Points[0].Y,
+            "outer fan-out routes should share the upper departure lane");
+        Assert.True(compiled.Links["middle-link"].Points[0].Y > compiled.Links["left-link"].Points[0].Y);
+    }
+
+    [Fact]
     public void Project_slot_skips_a_node_intersecting_only_the_requested_horizontal_span()
     {
         var compiled = CompileObstacleFixture(new Rect(180, 65, 120, 60));
