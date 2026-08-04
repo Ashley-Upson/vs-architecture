@@ -450,7 +450,7 @@ internal static class PlacementPipeline
             return gaps;
         }
 
-        private static void CenterExposureParentsOverChildren(
+        internal static void CenterExposureParentsOverChildren(
             RenderGraph graph,
             Dictionary<string, NodeLayout> nodes)
         {

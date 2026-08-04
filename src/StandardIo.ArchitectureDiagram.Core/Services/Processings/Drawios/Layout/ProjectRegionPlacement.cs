@@ -110,6 +110,13 @@ internal static class ProjectRegionPlacement
                 : placed.Nodes;
             var nodes = ExperimentalExternalTerminalLayerPlacement.Apply(
                 completeGraph, dependencyPlaced, settings);
+            if (completeGraph.Nodes.Any(node => node.Id.StartsWith("tree_", StringComparison.Ordinal)))
+            {
+                // External terminal placement can move a direct child after the
+                // exposure-tree pass has centred its parent. Reconcile the parent
+                // span once all rendered children have their final X coordinates.
+                PlacementPipeline.CenterExposureParentsOverChildren(completeGraph, nodes);
+            }
             var projects = PlacementPipeline.PositionProjects(completeGraph, settings, nodes);
             if (!projects.ContainsKey(project.Id))
             {

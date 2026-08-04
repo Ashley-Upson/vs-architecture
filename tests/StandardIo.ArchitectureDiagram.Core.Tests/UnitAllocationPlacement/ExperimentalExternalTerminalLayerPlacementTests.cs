@@ -111,6 +111,23 @@ public sealed class ExperimentalExternalTerminalLayerPlacementTests
     }
 
     [Fact]
+    public void Exposure_tree_parent_is_recentered_after_external_child_placement()
+    {
+        var graph = RenderGraph.Create(
+            [new RenderProject("project", "Project", 0)],
+            [Node("tree_root", "project", false, 0), Node("tree_child", "project", false, 1),
+             Node("tree_external", "project", true, 2)],
+            [Link("root-child", "tree_root", "tree_child"), Link("root-external", "tree_root", "tree_external")]);
+
+        var placed = Place(graph);
+        var root = placed.Nodes["tree_root"].Rect;
+        var children = new[] { placed.Nodes["tree_child"].Rect, placed.Nodes["tree_external"].Rect };
+        var childSpanCenter = (children.Min(rect => rect.X) + children.Max(rect => rect.Right)) / 2;
+
+        Assert.Equal(childSpanCenter, root.CenterX);
+    }
+
+    [Fact]
     public void Reversed_node_and_link_enumeration_has_identical_placement()
     {
         var graph = Graph(
