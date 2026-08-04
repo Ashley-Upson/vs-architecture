@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
@@ -29,18 +30,20 @@ internal sealed record ArchitecturePlacementNode(
 internal sealed record ArchitecturePlacementLink(
     ArchitectureRenderLink Link,
     int Order,
-    string Topology,
     string SourcePlanningNodeId,
     string TargetPlanningNodeId);
 
 internal sealed class ArchitecturePlacementGraph
 {
+    private readonly ArchitectureRenderGraph source;
+
     public ArchitecturePlacementGraph(
         ArchitectureRenderGraph source,
         IReadOnlyList<ArchitecturePlacementNode> nodes,
         IReadOnlyList<ArchitecturePlacementLink> links)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
+        this.source = source;
         Projects = Array.AsReadOnly(source.Projects.ToArray());
         RenderNodes = Array.AsReadOnly(source.Nodes.ToArray());
         TraversalRootSemanticIds = Array.AsReadOnly(source.TraversalRootSemanticIds.ToArray());
@@ -59,6 +62,7 @@ internal sealed class ArchitecturePlacementGraph
     public IReadOnlyDictionary<string, IReadOnlyList<string>> RenderInstancesBySemanticNodeId { get; }
     public IReadOnlyList<ArchitecturePlacementNode> Nodes { get; }
     public IReadOnlyList<ArchitecturePlacementLink> Links { get; }
+    public ArchitectureRenderGraph Source => source;
 }
 
 internal sealed record ArchitectureTerminal(
@@ -107,7 +111,8 @@ internal sealed record ArchitectureCandidatePlan(
     IReadOnlyList<ValidationFinding> Findings,
     int RouteLength,
     int BendCount,
-    ArchitectureExpansionDiagnostics ExpansionDiagnostics);
+    ArchitectureExpansionDiagnostics ExpansionDiagnostics,
+    ArchitectureRoutingEvidence RoutingEvidence);
 
 internal sealed record ArchitecturePhysicalScene(
     ArchitectureCandidatePlan Candidate,
@@ -116,6 +121,12 @@ internal sealed record ArchitecturePhysicalScene(
     IReadOnlyList<ArchitecturePhysicalRoute> Routes,
     IReadOnlyList<string> OwnershipTransitions,
     IReadOnlyList<ValidationFinding> Findings);
+
+internal sealed record CanonicalRoutingAllocation(
+    IReadOnlyList<ArchitectureTerminal> Terminals,
+    IReadOnlyList<ArchitecturePhysicalRoute> Routes,
+    IReadOnlyList<ValidationFinding> Findings,
+    ArchitectureRoutingEvidence Evidence);
 
 internal sealed record DrawioPageCell(
     string Id,

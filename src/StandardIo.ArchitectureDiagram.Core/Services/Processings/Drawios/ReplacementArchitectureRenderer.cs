@@ -68,7 +68,8 @@ public sealed class ReplacementArchitectureRenderer
                     ["planning.json"] = BuildProvenanceJson(planning, candidate, scene, pageModel, findings),
                     ["scene.json"] = BuildSceneJson(scene),
                     ["page-model.json"] = BuildPageJson(pageModel)
-                }));
+                }),
+            candidate.RoutingEvidence);
     }
 
     private static ArchitecturePlacementGraph BuildPlacementGraph(
@@ -130,7 +131,6 @@ public sealed class ReplacementArchitectureRenderer
         var planningLinks = links.Select(link => new ArchitecturePlacementLink(
             link,
             link.Order,
-            Topology(link, depths),
             link.SourceRenderInstanceId,
             link.TargetRenderInstanceId)).ToArray();
         return new ArchitecturePlacementGraph(graph, planningNodes, planningLinks);
@@ -144,9 +144,11 @@ public sealed class ReplacementArchitectureRenderer
         var expansionEvents = Array.Empty<ArchitectureExpansionEvent>();
 
         var projectRects = BuildProjectRects(graph, nodeRects, settings);
-        var terminals = AllocateTerminals(graph, nodeRects, settings);
-        var routes = BuildRoutes(graph, nodeRects, terminals, projectRects, settings);
-        var findings = ValidateScene(graph, nodeRects, projectRects, terminals, routes, settings);
+        var routing = AllocateAndMaterializeRoutes(graph, nodeRects, projectRects, settings);
+        var terminals = routing.Terminals;
+        var routes = routing.Routes;
+        var findings = routing.Findings.Concat(
+            ValidateScene(graph, nodeRects, projectRects, terminals, routes, settings)).ToArray();
         var expansionDiagnostics = BuildExpansionDiagnostics(graph, nodeRects, routes, expansionEvents, settings);
         return new ArchitectureCandidatePlan(
             "replacement-001",
@@ -169,7 +171,218 @@ public sealed class ReplacementArchitectureRenderer
             findings,
             routes.Sum(route => route.Points.Zip(route.Points.Skip(1), (a, b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y)).Sum()),
             routes.Sum(route => Math.Max(0, route.Points.Count - 2)),
-            expansionDiagnostics);
+            expansionDiagnostics,
+            routing.Evidence);
+    }
+
+    private static CanonicalRoutingAllocation AllocateAndMaterializeRoutes(
+        ArchitecturePlacementGraph graph,
+        IReadOnlyDictionary<string, Rect> nodeRects,
+        IReadOnlyDictionary<string, Rect> projectRects,
+        DiagramSettings settings)
+    {
+        var renderGraph = RenderGraph.From(graph.Source);
+        if (renderGraph.Nodes.Count == 0)
+            return new CanonicalRoutingAllocation(
+                Array.Empty<ArchitectureTerminal>(),
+                Array.Empty<ArchitecturePhysicalRoute>(),
+                Array.Empty<ValidationFinding>(),
+                new ArchitectureRoutingEvidence(0, new Dictionary<string, int>(StringComparer.Ordinal),
+                    0, 0, 0, 0, 0, 0, 0, 0));
+
+        var nodes = renderGraph.Nodes.ToDictionary(
+            node => node.Id,
+            node => new NodeLayout(
+                node,
+                nodeRects[node.Id],
+                graph.Nodes.Single(planning => planning.RenderInstanceId == node.Id).Depth,
+                node.IsExternal),
+            StringComparer.Ordinal);
+        var topology = CanonicalTopologyFamilySelector.Select(renderGraph, nodes, new LayoutRevision(0));
+        var projectLayouts = renderGraph.Projects
+            .Where(project => projectRects.ContainsKey(project.Id))
+            .ToDictionary(project => project.Id,
+                project => new ProjectLayout(project, projectRects[project.Id]), StringComparer.Ordinal);
+        var labels = ProjectLabelGeometryMeasurer.Measure(
+            projectLayouts, settings.Layout.ProjectHeaderHeight, settings.Layout.LinkPadding);
+        var findings = new List<ValidationFinding>();
+        IReadOnlyDictionary<string, LinkLayout> terminalLayouts;
+        try
+        {
+            terminalLayouts = ProjectTerminalAllocator.Allocate(renderGraph, nodes, settings);
+        }
+        catch (InvalidOperationException exception)
+        {
+            findings.Add(Finding("TerminalAllocation", "routing",
+                $"Collective terminal allocation was incomplete: {exception.Message}", true));
+            terminalLayouts = AllocateTraceableTerminals(renderGraph, nodes, settings);
+        }
+        var terminals = terminalLayouts.Values.SelectMany(layout => new[]
+        {
+            new ArchitectureTerminal(layout.Link.Id, layout.Link.SourceId, layout.SourcePoint, true,
+                "ProjectTerminalAllocator"),
+            new ArchitectureTerminal(layout.Link.Id, layout.Link.TargetId, layout.TargetPoint, false,
+                "ProjectTerminalAllocator")
+        }).ToArray();
+
+        findings.AddRange(topology.Rejections.Select(rejection =>
+            Finding("UnsupportedTopology", rejection, "No canonical topology plan was produced.", true)).ToList());
+        ProjectSlotCompilation? compilation = null;
+        try
+        {
+            compilation = ProjectInterLayerSlotCompiler.Compile(
+                topology.Plans, nodes, terminalLayouts, labels, new LayoutRevision(0),
+                Math.Max(settings.Layout.ParallelLaneSpacing, settings.Layout.EdgePortSpacing),
+                settings.Layout.LinkPadding);
+        }
+        catch (InvalidOperationException exception)
+        {
+            findings.Add(Finding("InterLayerAllocation", "routing",
+                $"Collective InterLayer/column allocation was incomplete: {exception.Message}", true));
+        }
+        var routes = new List<ArchitecturePhysicalRoute>();
+        foreach (var planningLink in graph.Links.OrderBy(link => link.Order))
+        {
+            if (!topology.Plans.TryGetValue(planningLink.Link.Id, out var plan))
+            {
+                findings.Add(Finding("UnallocatedRoute", planningLink.Link.Id,
+                    "Canonical routing allocation did not produce a route.", true));
+                continue;
+            }
+
+            if (compilation is null || !compilation.Links.TryGetValue(planningLink.Link.Id, out var layout))
+            {
+                routes.Add(TraceableUnallocatedRoute(planningLink, terminalLayouts[planningLink.Link.Id], plan));
+                continue;
+            }
+
+            if (plan.Family == CanonicalTopologyFamily.InternalToExternal)
+            {
+                routes.Add(MaterializeExternalRoute(planningLink, terminalLayouts[planningLink.Link.Id], plan));
+                continue;
+            }
+
+            var complete = Normalize(new[] { layout.SourcePoint }.Concat(layout.Points)
+                .Concat(new[] { layout.TargetPoint })).ToArray();
+            var routeDemands = compilation.Demands
+                .Where(demand => demand.LogicalRouteId == plan.LogicalRouteId)
+                .OrderBy(demand => demand.TurnOrder).ToArray();
+            var channels = routeDemands
+                .Select(demand => compilation.Assignments[demand.Id].AxisCoordinate).ToArray();
+            var column = compilation.VerticalColumns.ColumnsByDemandId.Values
+                .FirstOrDefault(item => item.LinkId == plan.LogicalRouteId);
+            routes.Add(new ArchitecturePhysicalRoute(
+                planningLink, complete, plan.Family.ToString(),
+                routeDemands.Length == 0 ? "none" : string.Join(",", routeDemands.Select(demand => demand.BandId)),
+                column is null ? "none" : $"column:{column.X}",
+                column?.X ?? layout.SourcePoint.X,
+                channels.ElementAtOrDefault(0), channels.ElementAtOrDefault(1)));
+        }
+
+        var familyCounts = topology.Plans.Values
+            .GroupBy(plan => plan.Family.ToString(), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var evidence = new ArchitectureRoutingEvidence(
+            topology.Plans.Count,
+            familyCounts,
+            terminals.Length,
+            compilation?.Demands.Count ?? 0,
+            compilation?.Assignments.Count ?? 0,
+            compilation?.VerticalColumns.ColumnsByDemandId.Values.Count(item =>
+                item.DemandId.Contains(":destination-column", StringComparison.Ordinal)) ?? 0,
+            compilation?.VerticalColumns.ColumnsByDemandId.Values.Count(item =>
+                item.DemandId.Contains(":return-column", StringComparison.Ordinal)) ?? 0,
+            topology.Plans.Values.Count(plan => plan.Family == CanonicalTopologyFamily.CrossProjectBoundaryTransition),
+            topology.Rejections.Count,
+            findings.Count);
+        return new CanonicalRoutingAllocation(terminals, routes, findings, evidence);
+    }
+
+    private static IReadOnlyDictionary<string, LinkLayout> AllocateTraceableTerminals(
+        RenderGraph graph,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        DiagramSettings settings)
+    {
+        var result = new Dictionary<string, LinkLayout>(StringComparer.Ordinal);
+        foreach (var node in nodes.Values.OrderBy(item => item.Node.Order))
+        {
+            Allocate(node.Node.Id, true);
+            Allocate(node.Node.Id, false);
+        }
+
+        return result;
+
+        void Allocate(string nodeId, bool source)
+        {
+            var node = nodes[nodeId];
+            var links = graph.Links
+                .Where(link => source ? link.SourceId == nodeId : link.TargetId == nodeId)
+                .OrderBy(link => source ? nodes[link.TargetId].Rect.CenterX : nodes[link.SourceId].Rect.CenterX)
+                .ThenBy(link => link.Order)
+                .ThenBy(link => link.Id, StringComparer.Ordinal)
+                .ToArray();
+            if (links.Length == 0) return;
+            var usable = Math.Max(1, node.Rect.Width - settings.Layout.LinkNodeWidthPadding * 2);
+            for (var index = 0; index < links.Length; index++)
+            {
+                var x = node.Rect.X + settings.Layout.LinkNodeWidthPadding +
+                    (usable * (index + 1) / (links.Length + 1));
+                var point = new Point(x, source ? node.Rect.Bottom : node.Rect.Y);
+                var link = links[index];
+                if (result.ContainsKey(link.Id))
+                {
+                    var existing = result[link.Id];
+                    result[link.Id] = existing with
+                    {
+                        TargetPoint = source ? existing.TargetPoint : point,
+                        SourcePoint = source ? point : existing.SourcePoint,
+                        EntryX = source ? existing.EntryX : Ratio(x, node.Rect),
+                        ExitX = source ? Ratio(x, node.Rect) : existing.ExitX
+                    };
+                }
+                else
+                {
+                    result[link.Id] = new LinkLayout(
+                        link, source ? point : new Point(nodes[link.SourceId].Rect.CenterX, nodes[link.SourceId].Rect.Bottom),
+                        source ? new Point(nodes[link.TargetId].Rect.CenterX, nodes[link.TargetId].Rect.Y) : point,
+                        Array.Empty<Point>(),
+                        source ? Ratio(x, node.Rect) : Ratio(nodes[link.SourceId].Rect.CenterX, nodes[link.SourceId].Rect),
+                        source ? Ratio(nodes[link.TargetId].Rect.CenterX, nodes[link.TargetId].Rect) : Ratio(x, node.Rect));
+                }
+            }
+        }
+    }
+
+    private static ArchitecturePhysicalRoute TraceableUnallocatedRoute(
+        ArchitecturePlacementLink link,
+        LinkLayout terminals,
+        CanonicalTopologyPlan plan)
+    {
+        var source = terminals.SourcePoint;
+        var target = terminals.TargetPoint;
+        var midY = source.Y <= target.Y ? source.Y + Math.Max(1, (target.Y - source.Y) / 2) : source.Y;
+        var points = Normalize(new[] { source, new Point(source.X, midY), new Point(target.X, midY), target }).ToArray();
+        return new ArchitecturePhysicalRoute(link, points, plan.Family.ToString(),
+            "unallocated", "unallocated", target.X, midY, midY);
+    }
+
+    private static ArchitecturePhysicalRoute MaterializeExternalRoute(
+        ArchitecturePlacementLink link,
+        LinkLayout terminals,
+        CanonicalTopologyPlan plan)
+    {
+        var source = terminals.SourcePoint;
+        var target = terminals.TargetPoint;
+        var midY = source.Y + Math.Max(1, (target.Y - source.Y) / 2);
+        var points = Normalize(new[]
+        {
+            source,
+            new Point(source.X, midY),
+            new Point(target.X, midY),
+            target
+        }).ToArray();
+        return new ArchitecturePhysicalRoute(link, points, plan.Family.ToString(),
+            "external-local", "external-local", target.X, midY, midY);
     }
 
     private static ArchitecturePhysicalScene BuildScene(
@@ -446,218 +659,6 @@ public sealed class ReplacementArchitectureRenderer
         return findings;
     }
 
-    private static IReadOnlyList<ArchitectureTerminal> AllocateTerminals(
-        ArchitecturePlacementGraph graph,
-        IReadOnlyDictionary<string, Rect> nodes,
-        DiagramSettings settings)
-    {
-        var terminals = new List<ArchitectureTerminal>();
-        foreach (var group in graph.Links.GroupBy(link => link.SourcePlanningNodeId, StringComparer.Ordinal))
-        {
-            var source = nodes[group.Key];
-            var links = group.OrderBy(link => nodes[link.TargetPlanningNodeId].CenterX).ThenBy(link => link.Order).ToArray();
-            for (var index = 0; index < links.Length; index++)
-                terminals.Add(new ArchitectureTerminal(links[index].Link.Id, group.Key,
-                    new Point(source.X + (index + 1) * source.Width / (links.Length + 1), source.Bottom), true, "source-terminal-allocation"));
-        }
-        foreach (var group in graph.Links.GroupBy(link => link.TargetPlanningNodeId, StringComparer.Ordinal))
-        {
-            var target = nodes[group.Key];
-            var links = group.OrderBy(link => nodes[link.SourcePlanningNodeId].CenterX).ThenBy(link => link.Order).ToArray();
-            for (var index = 0; index < links.Length; index++)
-                terminals.Add(new ArchitectureTerminal(links[index].Link.Id, group.Key,
-                    new Point(target.X + (index + 1) * target.Width / (links.Length + 1), target.Y), false, "target-terminal-allocation"));
-        }
-        return terminals;
-    }
-
-    private static IReadOnlyList<ArchitecturePhysicalRoute> BuildRoutes(
-        ArchitecturePlacementGraph graph,
-        IReadOnlyDictionary<string, Rect> nodes,
-        IReadOnlyList<ArchitectureTerminal> terminals,
-        IReadOnlyDictionary<string, Rect> projects,
-        DiagramSettings settings)
-    {
-        var routes = new List<ArchitecturePhysicalRoute>();
-        foreach (var link in graph.Links.OrderBy(link => link.Order))
-        {
-            var source = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
-            var target = terminals.Single(terminal => terminal.LinkId == link.Link.Id && !terminal.IsSource).Point;
-            var sourceNode = nodes[link.SourcePlanningNodeId];
-            var targetNode = nodes[link.TargetPlanningNodeId];
-            var route = BuildLocalRoute(link, source, target, sourceNode, targetNode, nodes, routes, settings);
-            routes.Add(route);
-        }
-        return routes;
-    }
-
-    private static ArchitecturePhysicalRoute BuildLocalRoute(
-        ArchitecturePlacementLink link,
-        Point source,
-        Point target,
-        Rect sourceNode,
-        Rect targetNode,
-        IReadOnlyDictionary<string, Rect> nodes,
-        IReadOnlyList<ArchitecturePhysicalRoute> existingRoutes,
-        DiagramSettings settings)
-    {
-        var sourceLevels = ChannelLevels(sourceNode.Bottom + settings.Layout.LinkPadding, true, nodes.Values, settings)
-            .Take(8).ToArray();
-        var targetLevels = ChannelLevels(targetNode.Y - settings.Layout.LinkPadding, false, nodes.Values, settings)
-            .Take(8).ToArray();
-        var obstacleArray = nodes.Values.ToArray();
-        var laneSpacing = Math.Max(settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
-        var occupiedLanes = existingRoutes.Select(route => route.LaneX).ToArray();
-        var localExpansionLanes = occupiedLanes.Length == 0
-            ? Array.Empty<int>()
-            : new[]
-            {
-                occupiedLanes.Min() - laneSpacing,
-                occupiedLanes.Max() + laneSpacing
-            }.Concat(occupiedLanes.SelectMany(lane => new[] { lane - laneSpacing, lane + laneSpacing }))
-                .Distinct().ToArray();
-        var lanes = LaneCoordinates(source, target, obstacleArray, settings).Take(16)
-            .Concat(localExpansionLanes)
-            .Concat(new[]
-            {
-                obstacleArray.Select(node => node.X).DefaultIfEmpty(Math.Min(source.X, target.X)).Min() - settings.Layout.HorizontalSpacing,
-                obstacleArray.Select(node => node.Right).DefaultIfEmpty(Math.Max(source.X, target.X)).Max() + settings.Layout.HorizontalSpacing
-            })
-            .Distinct().Take(16).ToArray();
-        var candidates =
-            from laneX in lanes
-            from sourceY in sourceLevels
-            from targetY in targetLevels
-            let points = Normalize(new[]
-            {
-                source,
-                new Point(source.X, sourceY),
-                new Point(laneX, sourceY),
-                new Point(laneX, targetY),
-                new Point(target.X, targetY),
-                target
-            })
-            where IsObstacleSafe(points, nodes, link.SourcePlanningNodeId, link.TargetPlanningNodeId)
-            let length = points.Zip(points.Skip(1), (left, right) => Math.Abs(left.X - right.X) + Math.Abs(left.Y - right.Y)).Sum()
-            let bends = Math.Max(0, points.Count - 2)
-            orderby length, bends, Math.Abs(laneX - source.X), laneX, sourceY, targetY
-            select new ArchitecturePhysicalRoute(link, points, link.Topology,
-                $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, sourceY, targetY);
-
-        // When a node sits immediately below the source terminal column, a
-        // vertical departure is not physically available. Leave along the
-        // source bottom edge, use the local column, and enter along the target
-        // top edge instead.
-        candidates = candidates.Concat(
-            from laneX in lanes
-            let points = Normalize(new[]
-            {
-                source,
-                new Point(laneX, source.Y),
-                new Point(laneX, target.Y),
-                target
-            })
-            where IsObstacleSafe(points, nodes, link.SourcePlanningNodeId, link.TargetPlanningNodeId)
-            let length = points.Zip(points.Skip(1), (left, right) => Math.Abs(left.X - right.X) + Math.Abs(left.Y - right.Y)).Sum()
-            let bends = Math.Max(0, points.Count - 2)
-            select new ArchitecturePhysicalRoute(link, points, link.Topology + ":edge-exit",
-                $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, source.Y, target.Y));
-
-        var selected = candidates.Take(2048).FirstOrDefault(route => IsSharedFree(route, existingRoutes));
-        if (selected is not null) return selected;
-
-        // Normal/diagnostic generation must still produce a connected diagram when
-        // no strict local allocation exists. Validation records the degraded route's
-        // defects and strict mode rejects the same result at the caller boundary.
-        var fallbackLane = Math.Max(sourceNode.Right, targetNode.Right) +
-            settings.Layout.HorizontalSpacing + existingRoutes.Count * settings.Layout.ParallelLaneSpacing;
-        var fallbackPoints = Normalize(new[]
-        {
-            source,
-            new Point(fallbackLane, source.Y),
-            new Point(fallbackLane, target.Y),
-            target
-        });
-        return new ArchitecturePhysicalRoute(link, fallbackPoints, link.Topology + ":degraded-fallback",
-            $"slot:{link.Link.Id}:degraded", $"column:{link.Link.Id}:degraded",
-            fallbackLane, source.Y, target.Y);
-    }
-
-    private static IEnumerable<int> ChannelLevels(
-        int start,
-        bool downward,
-        IEnumerable<Rect> obstacles,
-        DiagramSettings settings)
-    {
-        var padding = Math.Max(settings.Layout.LinkPadding, settings.Layout.ParallelLaneSpacing);
-        var bases = obstacles.SelectMany(obstacle => new[]
-        {
-            obstacle.Y - padding,
-            obstacle.Bottom + padding
-        }).Append(start).Distinct().ToArray();
-        var levels = bases.SelectMany(level => Enumerable.Range(-16, 33)
-            .Select(offset => level + offset * padding))
-            .Distinct()
-            // A channel that lies inside any node row cannot be used by a
-            // horizontal through-segment without relying on a lucky lane x.
-            // Prefer row-clear levels so the lane remains local and predictable.
-            .OrderBy(level => obstacles.Any(obstacle => level > obstacle.Y && level < obstacle.Bottom))
-            .ThenBy(level => Math.Abs(level - start));
-        return downward
-            ? levels.Where(level => level >= start)
-            : levels.Where(level => level <= start);
-    }
-
-    private static IEnumerable<int> LaneCoordinates(
-        Point source,
-        Point target,
-        IEnumerable<Rect> obstacles,
-        DiagramSettings settings)
-    {
-        var spacing = Math.Max(settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
-        var obstacleArray = obstacles.ToArray();
-        var bases = obstacleArray.SelectMany(obstacle => new[]
-        {
-            obstacle.X - spacing,
-            obstacle.Right + spacing
-        }).Append(obstacleArray.Select(obstacle => obstacle.X).DefaultIfEmpty(Math.Min(source.X, target.X)).Min() - spacing)
-            .Append(obstacleArray.Select(obstacle => obstacle.Right).DefaultIfEmpty(Math.Max(source.X, target.X)).Max() + spacing)
-            .Append(source.X - spacing).Append(source.X + spacing).Append(target.X - spacing).Append(target.X + spacing)
-            .Distinct().ToArray();
-        var boundaries = bases.SelectMany(boundary => Enumerable.Range(-16, 33)
-            .Select(offset => boundary + offset * spacing)).Distinct().ToArray();
-        var centre = (source.X + target.X) / 2.0;
-        return boundaries.OrderBy(x => Math.Abs(x - centre)).ThenBy(x => x);
-    }
-
-    private static bool IsObstacleSafe(
-        IReadOnlyList<Point> points,
-        IReadOnlyDictionary<string, Rect> nodes,
-        string sourceNodeId,
-        string targetNodeId)
-    {
-        var segments = points.Zip(points.Skip(1), (start, end) => new Segment(start, end)).ToArray();
-        if (segments.Length == 0 || segments.Any(segment => !segment.IsOrthogonal || segment.Length == 0)) return false;
-        if (segments.Any(segment => nodes.Any(item => item.Key != sourceNodeId && item.Key != targetNodeId &&
-            SegmentIntersectsInterior(segment, item.Value)))) return false;
-        return true;
-    }
-
-    private static bool IsSharedFree(
-        ArchitecturePhysicalRoute route,
-        IReadOnlyList<ArchitecturePhysicalRoute> existingRoutes)
-    {
-        var segments = route.Points.Zip(route.Points.Skip(1), (start, end) => new Segment(start, end)).ToArray();
-        return existingRoutes.All(existingRoute =>
-        {
-            var existingSegments = existingRoute.Points
-                .Zip(existingRoute.Points.Skip(1), (start, end) => new Segment(start, end));
-            return existingSegments.All(existing => segments.All(candidate =>
-                !candidate.IsOrthogonal || !existing.IsOrthogonal ||
-                candidate.IsHorizontal != existing.IsHorizontal || candidate.OverlapLength(existing) == 0));
-        });
-    }
-
     private static Dictionary<string, Rect> PlaceCanonicalUnits(
         ArchitecturePlacementGraph graph,
         DiagramSettings settings)
@@ -836,7 +837,10 @@ public sealed class ReplacementArchitectureRenderer
         var incoming = links.Count(link => link.TargetRenderInstanceId == node.Id);
         var outgoing = links.Count(link => link.SourceRenderInstanceId == node.Id);
         var text = Math.Max(node.DisplayText?.Length ?? 0, node.SemanticTypeIdentity?.Length / 2 ?? 0) * 8 + settings.Layout.LinkNodeWidthPadding;
-        var terminal = Math.Max(incoming, outgoing) * Math.Max(settings.Layout.EdgePortSpacing, settings.Layout.ParallelLaneSpacing) + settings.Layout.LinkNodeWidthPadding;
+        var attachmentSeparation = LinkConnectionDemandCalculator.AttachmentSeparation(
+            settings.Layout.EdgePortSpacing, settings.Layout.ParallelLaneSpacing);
+        var terminal = Math.Max(0, Math.Max(incoming, outgoing) - 1) * attachmentSeparation +
+            settings.Layout.LinkNodeWidthPadding;
         return Math.Max(settings.Layout.NodeWidth, Math.Max(text, terminal));
     }
 
@@ -868,9 +872,6 @@ public sealed class ReplacementArchitectureRenderer
             routes.Select(route => route.LaneX).Distinct().Count(), maximumColumn, widthContributions);
     }
 
-    private static string Topology(ArchitectureRenderLink link, IReadOnlyDictionary<string, int> depths) =>
-        depths[link.TargetRenderInstanceId] > depths[link.SourceRenderInstanceId] ? "downward" : "return";
-
     private static bool IsBaselineNode(ArchitectureRenderNode node, string? pattern) =>
         !string.IsNullOrWhiteSpace(pattern) &&
         (Regex.IsMatch(node.DisplayText ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
@@ -883,6 +884,9 @@ public sealed class ReplacementArchitectureRenderer
             if (result.Count == 0 || result[result.Count - 1] != point) result.Add(point);
         return result;
     }
+
+    private static double Ratio(int x, Rect rect) =>
+        Math.Max(0, Math.Min(1, (x - rect.X) / (double)Math.Max(1, rect.Width)));
 
     private static bool Overlaps(Rect left, Rect right) =>
         left.X < right.Right && right.X < left.Right && left.Y < right.Bottom && right.Y < left.Bottom;

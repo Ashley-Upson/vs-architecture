@@ -101,7 +101,7 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             diagram, page, rendered.PreRepairFindings, rendered.LogicalFindings,
             rendered.PhysicalFindings, rendered.RepairAttempts, rendered.Routes,
             rendered.Timings, manifest, rendered.Eligibility, () => rendered.Diagnostics,
-            repeat, rendered.DevelopmentArtifacts, projected));
+            repeat, rendered.DevelopmentArtifacts, projected, rendered.RoutingEvidence));
     }
 
     private SerializationRepeatResult? Repeat(DrawioPage page, int repeatCount)

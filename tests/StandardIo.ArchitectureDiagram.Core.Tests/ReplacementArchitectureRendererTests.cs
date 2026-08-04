@@ -117,6 +117,19 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Render_uses_collective_topology_terminal_and_slot_allocations()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
+
+        Assert.NotNull(result.RoutingEvidence);
+        Assert.Equal(2, result.RoutingEvidence!.TopologyPlanCount);
+        Assert.Equal(4, result.RoutingEvidence.TerminalCount);
+        Assert.True(result.RoutingEvidence.InterLayerDemandCount > 0);
+        Assert.True(result.RoutingEvidence.InterLayerSlotCount > 0);
+        Assert.Equal(0, result.RoutingEvidence.UnsupportedPlanCount);
+    }
+
+    [Fact]
     public void Render_emits_terminal_ratios_and_semantic_provenance()
     {
         var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());

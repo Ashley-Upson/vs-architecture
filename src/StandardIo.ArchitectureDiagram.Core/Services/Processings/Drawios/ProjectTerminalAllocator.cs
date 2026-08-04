@@ -30,7 +30,60 @@ internal static class ProjectTerminalAllocator
                     new Point(sourceX, source.Bottom), new Point(targetX, target.Y), Array.Empty<Point>(),
                     Ratio(sourceX, source), Ratio(targetX, target));
             }, StringComparer.Ordinal);
-        return SeparateOpposingBoundaryTerminals(graph, nodes, allocated, settings);
+        return SeparateOpposingTerminals(graph, nodes,
+            SeparateOpposingBoundaryTerminals(graph, nodes, allocated, settings), settings);
+    }
+
+    private static IReadOnlyDictionary<string, LinkLayout> SeparateOpposingTerminals(
+        RenderGraph graph,
+        IReadOnlyDictionary<string, NodeLayout> nodes,
+        IReadOnlyDictionary<string, LinkLayout> allocated,
+        DiagramSettings settings)
+    {
+        var separation = Math.Max(settings.Layout.EdgePortSpacing, settings.Layout.ParallelLaneSpacing);
+        if (separation <= 0) return allocated;
+
+        var result = allocated.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var node in nodes.Values.OrderBy(item => item.Node.Order))
+        {
+            var terminals = graph.Links
+                .Where(link => link.SourceId == node.Node.Id || link.TargetId == node.Node.Id)
+                .Select(link => (Link: link, IsSource: link.SourceId == node.Node.Id,
+                    X: link.SourceId == node.Node.Id
+                        ? result[link.Id].SourcePoint.X
+                        : result[link.Id].TargetPoint.X))
+                .OrderBy(item => item.IsSource ? 0 : 1)
+                .ThenBy(item => item.X)
+                .ThenBy(item => item.Link.Order)
+                .ThenBy(item => item.Link.Id, StringComparer.Ordinal)
+                .ToArray();
+            var occupied = new List<int>();
+            foreach (var terminal in terminals)
+            {
+                var coordinate = ClosestAvailable(
+                    terminal.X,
+                    node.Rect.X + settings.Layout.LinkNodeWidthPadding,
+                    node.Rect.Right - settings.Layout.LinkNodeWidthPadding,
+                    separation,
+                    occupied.Select(value => (Id: string.Empty, X: value)).ToArray());
+                occupied.Add(coordinate);
+                if (coordinate == terminal.X) continue;
+
+                var layout = result[terminal.Link.Id];
+                result[terminal.Link.Id] = terminal.IsSource
+                    ? layout with
+                    {
+                        SourcePoint = new Point(coordinate, layout.SourcePoint.Y),
+                        ExitX = Ratio(coordinate, node.Rect)
+                    }
+                    : layout with
+                    {
+                        TargetPoint = new Point(coordinate, layout.TargetPoint.Y),
+                        EntryX = Ratio(coordinate, node.Rect)
+                    };
+            }
+        }
+        return result;
     }
 
     private static IReadOnlyDictionary<string, LinkLayout> SeparateOpposingBoundaryTerminals(

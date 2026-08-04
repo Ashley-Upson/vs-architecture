@@ -169,6 +169,8 @@ public static class Program
             var analysis = analyser.Analyse(architecture);
             var broker = provider.GetRequiredService<IDiagramFileBroker>();
             var projected = architecture.ProjectedGraph;
+            var routing = architecture.RoutingEvidence ?? new ArchitectureRoutingEvidence(
+                0, new Dictionary<string, int>(StringComparer.Ordinal), 0, 0, 0, 0, 0, 0, 0, 0);
             var evidence = new ArchitectureGenerationEvidence(
                 new ArchitectureEvidenceInput(
                     Path.GetFullPath(options.InputPath!),
@@ -188,11 +190,20 @@ public static class Program
                     analysis.Projects,
                     analysis.Nodes),
                 new ArchitectureEvidenceAllocation(
-                    "ProjectTerminalAllocator", "Project-local terminals", DetailedTelemetryIncluded: false),
+                    "ProjectTerminalAllocator", "Project-local terminals", DetailedTelemetryIncluded: true,
+                    routing.TerminalCount),
                 new ArchitectureEvidenceAllocation(
-                    "ProjectInterLayerSlotCompiler", "Project-local bands", DetailedTelemetryIncluded: false),
+                    "ProjectInterLayerSlotCompiler", "Project-local bands", DetailedTelemetryIncluded: true,
+                    routing.InterLayerSlotCount),
                 new ArchitectureEvidenceAllocation(
-                    "Topology-family route compilers", "Project-local and root coordinates", DetailedTelemetryIncluded: false),
+                    "VerticalLinkColumnAllocator", "Ownership-local route columns", DetailedTelemetryIncluded: true,
+                    routing.DestinationColumnCount + routing.ReturnColumnCount),
+                new ArchitectureEvidenceRouting(
+                    routing.TopologyFamilyCounts, routing.TopologyPlanCount,
+                    routing.InterLayerDemandCount, routing.InterLayerSlotCount,
+                    routing.DestinationColumnCount, routing.ReturnColumnCount,
+                    routing.ProjectTransitionCount, routing.UnsupportedPlanCount,
+                    routing.RouteFindingCount),
                 architecture.Routes,
                 new ArchitectureEvidenceOwnership(
                     architecture.Routes.Count,

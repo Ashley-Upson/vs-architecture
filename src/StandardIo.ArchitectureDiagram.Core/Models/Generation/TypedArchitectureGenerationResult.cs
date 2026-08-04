@@ -37,6 +37,18 @@ public sealed record ArchitectureGenerationManifest(
 
 public sealed record ArchitectureEligibilityResult(bool Eligible, IReadOnlyList<string> Reasons);
 
+public sealed record ArchitectureRoutingEvidence(
+    int TopologyPlanCount,
+    IReadOnlyDictionary<string, int> TopologyFamilyCounts,
+    int TerminalCount,
+    int InterLayerDemandCount,
+    int InterLayerSlotCount,
+    int DestinationColumnCount,
+    int ReturnColumnCount,
+    int ProjectTransitionCount,
+    int UnsupportedPlanCount,
+    int RouteFindingCount);
+
 public sealed record SerializationRepeatResult(int RequestedRepeats, bool IsDeterministic, IReadOnlyList<string> DocumentHashes);
 
 public sealed record ArchitectureDevelopmentArtifacts(
@@ -57,7 +69,8 @@ public sealed class ArchitectureRenderResult
         IReadOnlyList<PipelineStageMetric> timings,
         ArchitectureEligibilityResult eligibility,
         Func<DrawioDiagnosticExportResult> diagnosticFactory,
-        ArchitectureDevelopmentArtifacts? developmentArtifacts = null)
+        ArchitectureDevelopmentArtifacts? developmentArtifacts = null,
+        ArchitectureRoutingEvidence? routingEvidence = null)
     {
         Page = page;
         PreRepairFindings = preRepairFindings;
@@ -69,6 +82,7 @@ public sealed class ArchitectureRenderResult
         Eligibility = eligibility;
         diagnostics = new Lazy<DrawioDiagnosticExportResult>(diagnosticFactory, true);
         DevelopmentArtifacts = developmentArtifacts;
+        RoutingEvidence = routingEvidence;
     }
 
     public DrawioPage Page { get; }
@@ -80,6 +94,7 @@ public sealed class ArchitectureRenderResult
     public IReadOnlyList<PipelineStageMetric> Timings { get; }
     public ArchitectureEligibilityResult Eligibility { get; }
     public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
+    public ArchitectureRoutingEvidence? RoutingEvidence { get; }
     public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
     public bool SceneProduced => Page is not null;
     public bool SemanticallyComplete => true;
@@ -106,7 +121,8 @@ public sealed class TypedArchitectureGenerationResult
         Func<DrawioDiagnosticExportResult> diagnosticFactory,
         SerializationRepeatResult? serializationRepeat,
         ArchitectureDevelopmentArtifacts? developmentArtifacts,
-        ArchitectureRenderGraph? projectedGraph = null)
+        ArchitectureRenderGraph? projectedGraph = null,
+        ArchitectureRoutingEvidence? routingEvidence = null)
     {
         Diagram = diagram;
         Page = page;
@@ -122,6 +138,7 @@ public sealed class TypedArchitectureGenerationResult
         SerializationRepeat = serializationRepeat;
         DevelopmentArtifacts = developmentArtifacts;
         ProjectedGraph = projectedGraph;
+        RoutingEvidence = routingEvidence;
     }
 
     public ArchitectureDiagramModel Diagram { get; }
@@ -138,6 +155,7 @@ public sealed class TypedArchitectureGenerationResult
     public SerializationRepeatResult? SerializationRepeat { get; }
     public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
     public ArchitectureRenderGraph? ProjectedGraph { get; }
+    public ArchitectureRoutingEvidence? RoutingEvidence { get; }
     public bool StrictValidationPassed => LogicalFindings.Concat(PhysicalFindings).All(finding => !finding.IsStrictlyEnforced);
     public bool SceneProduced => Page is not null;
     public bool SemanticallyComplete =>

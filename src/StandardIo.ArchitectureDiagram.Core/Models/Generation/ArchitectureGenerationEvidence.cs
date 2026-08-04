@@ -24,7 +24,19 @@ public sealed record ArchitectureEvidencePlacement(
 public sealed record ArchitectureEvidenceAllocation(
     string Authority,
     string CoordinateScope,
-    bool DetailedTelemetryIncluded);
+    bool DetailedTelemetryIncluded,
+    int Count);
+
+public sealed record ArchitectureEvidenceRouting(
+    IReadOnlyDictionary<string, int> TopologyFamilies,
+    int TopologyPlanCount,
+    int InterLayerDemandCount,
+    int InterLayerSlotCount,
+    int DestinationColumnCount,
+    int ReturnColumnCount,
+    int ProjectTransitionCount,
+    int UnsupportedPlanCount,
+    int RouteFindingCount);
 
 public sealed record ArchitectureEvidenceOwnership(
     int LogicalRouteCount,
@@ -49,6 +61,7 @@ public sealed record ArchitectureGenerationEvidence(
     ArchitectureEvidenceAllocation TerminalAllocation,
     ArchitectureEvidenceAllocation HorizontalSlotAllocation,
     ArchitectureEvidenceAllocation VerticalAndReturnColumnAllocation,
+    ArchitectureEvidenceRouting Routing,
     IReadOnlyList<GeneratedRoute> LogicalRoutes,
     ArchitectureEvidenceOwnership PhysicalOwnership,
     ArchitectureEvidenceValidation Validation,
