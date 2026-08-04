@@ -269,6 +269,14 @@ public sealed class ReplacementArchitectureRenderer
         var root = new XElement("root");
         foreach (var cell in page.Cells)
         {
+            if (cell.Id == "0" || cell.Id == "1")
+            {
+                root.Add(cell.Id == "0"
+                    ? new XElement("mxCell", new XAttribute("id", "0"))
+                    : new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")));
+                continue;
+            }
+
             var element = new XElement("mxCell",
                 new XAttribute("id", cell.Id),
                 new XAttribute("parent", cell.ParentId),

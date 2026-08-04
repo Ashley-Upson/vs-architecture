@@ -21,6 +21,11 @@ public sealed class ReplacementArchitectureRendererTests
         Assert.Contains("planning.json", result.DevelopmentArtifacts!.NamedJsonArtifacts.Keys);
         Assert.Contains("scene.json", result.DevelopmentArtifacts.NamedJsonArtifacts.Keys);
         Assert.Contains("page-model.json", result.DevelopmentArtifacts.NamedJsonArtifacts.Keys);
+        var root = result.Page.GraphModel.Element("root")!;
+        Assert.Equal("0", root.Element("mxCell")?.Attribute("id")?.Value);
+        Assert.Null(root.Element("mxCell")?.Attribute("vertex"));
+        Assert.Equal("0", root.Elements("mxCell").Skip(1).First().Attribute("parent")?.Value);
+        Assert.Null(root.Elements("mxCell").Skip(1).First().Attribute("vertex"));
         Assert.Contains(result.Page.GraphModel.Descendants("mxCell"), cell => cell.Attribute("edge")?.Value == "1");
     }
 
