@@ -30,6 +30,22 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Composed_document_preserves_drawio_structural_root_cells()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
+        var document = new DrawioDocumentComposer().Compose(
+            new[] { result.Page }, new DrawioDocumentSettings()).Content;
+        var root = XDocument.Parse(document).Descendants("root").Single();
+        var cells = root.Elements("mxCell").Take(2).ToArray();
+
+        Assert.Equal("0", cells[0].Attribute("id")?.Value);
+        Assert.Null(cells[0].Attribute("vertex"));
+        Assert.Equal("1", cells[1].Attribute("id")?.Value);
+        Assert.Equal("0", cells[1].Attribute("parent")?.Value);
+        Assert.Null(cells[1].Attribute("vertex"));
+    }
+
+    [Fact]
     public void Render_is_deterministic_for_the_same_graph_and_settings()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -74,6 +90,23 @@ public sealed class ReplacementArchitectureRendererTests
         Assert.DoesNotContain(result.LogicalFindings, finding => finding.Category == "NodeOverlap");
     }
 
+    [Fact]
+    public void Render_locks_baseline_nodes_and_places_single_external_below_parent()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        var result = new ReplacementArchitectureRenderer().Render(BaselineGraph(), settings);
+        var cells = result.Page.GraphModel.Descendants("mxCell")
+            .Where(cell => cell.Attribute("vertex")?.Value == "1")
+            .ToDictionary(cell => cell.Attribute("semanticNodeId")?.Value ?? string.Empty, StringComparer.Ordinal);
+        var baselineYs = new[] { cells["root"], cells["baseline"] }
+            .Select(cell => (int)cell.Element("mxGeometry")!.Attribute("y")!).Distinct().ToArray();
+        var rootY = (int)cells["root"].Element("mxGeometry")!.Attribute("y")!;
+        var externalY = (int)cells["external"].Element("mxGeometry")!.Attribute("y")!;
+
+        Assert.Single(baselineYs);
+        Assert.Equal(settings.Layout.NodeHeight + settings.Layout.VerticalSpacing, externalY - rootY);
+    }
+
     private static ArchitectureRenderGraph Graph(bool includeStandalone = false)
     {
         var nodes = new[]
@@ -95,6 +128,23 @@ public sealed class ReplacementArchitectureRendererTests
                 ["child"] = new[] { "child" }
             });
     }
+
+    private static ArchitectureRenderGraph BaselineGraph() => new(
+        new[] { new ArchitectureRenderProject("project", "Project", 0) },
+        new[]
+        {
+            new ArchitectureRenderNode("root", "root", "project", "RootOrchestrationService", "RootOrchestrationService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, null, 0),
+            new ArchitectureRenderNode("external", "external", "project", "ExternalDependency", "ExternalDependency", "External", true, "[External]", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, "root", 1),
+            new ArchitectureRenderNode("baseline", "baseline", "project", "OtherOrchestrationService", "OtherOrchestrationService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, null, 2)
+        },
+        new[] { new ArchitectureRenderLink("root-external", "root-external", "root", "external", "root", "external", "Dependency", 0) },
+        new[] { "root", "baseline" },
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>
+        {
+            ["root"] = new[] { "root" },
+            ["external"] = new[] { "external" },
+            ["baseline"] = new[] { "baseline" }
+        });
 
     private static string RouteSignature(GeneratedRoute route) =>
         route.LogicalRouteId + ":" + string.Join(";", route.Points.Select(point => $"{point.X},{point.Y}"));

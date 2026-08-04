@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
@@ -29,8 +31,13 @@ public sealed class ReplacementArchitectureRenderer
         var pageModel = Measure(timings, "replacement Draw.io page model", () => BuildPageModel(planning, scene, settings));
         var graphModel = Measure(timings, "replacement Draw.io serialization", () => Serialize(pageModel, settings));
         var reconstructed = Measure(timings, "replacement serialized geometry reconstruction", () => Reconstruct(graphModel));
-        var serializationFindings = ValidateReconstruction(pageModel, reconstructed);
+        var serializationFindings = ValidateReconstruction(planning, scene, pageModel, reconstructed);
         var findings = scene.Findings.Concat(serializationFindings).ToArray();
+        var hardFindings = findings.Where(finding => finding.IsStrictlyEnforced).ToArray();
+        if (hardFindings.Length > 0)
+            throw new InvalidOperationException(
+                "Replacement Architecture candidate rejected: " +
+                string.Join("; ", hardFindings.Select(finding => $"{finding.Category} ({finding.LogicalRouteId}, node={finding.OtherNodeId}, otherRoute={finding.OtherRouteId}, {finding.Description})")));
 
         var page = new DrawioPage("Architecture", "architecture", graphModel,
             findings.Select(finding => new DiagramDiagnostic(
@@ -87,9 +94,11 @@ public sealed class ReplacementArchitectureRenderer
         var depths = nodes.ToDictionary(node => node.Id, _ => 0, StringComparer.Ordinal);
         var queue = new Queue<string>(nodes.Where(node => incoming[node.Id] == 0).Select(node => node.Id));
         var remaining = incoming.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var processed = new HashSet<string>(StringComparer.Ordinal);
         while (queue.Count > 0)
         {
             var source = queue.Dequeue();
+            processed.Add(source);
             foreach (var link in outgoing[source].OrderBy(link => link.Order))
             {
                 depths[link.TargetRenderInstanceId] = Math.Max(
@@ -97,6 +106,13 @@ public sealed class ReplacementArchitectureRenderer
                 if (--remaining[link.TargetRenderInstanceId] == 0) queue.Enqueue(link.TargetRenderInstanceId);
             }
         }
+
+        // A residual strongly connected component has no topological entry point. Give its
+        // members deterministic fallback depths so one cycle edge can remain downward while
+        // the return edge is routed through the explicit return-lane policy.
+        var residual = nodes.Where(node => !processed.Contains(node.Id))
+            .OrderBy(node => node.Order).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray();
+        for (var index = 0; index < residual.Length; index++) depths[residual[index].Id] = index;
 
         var widthByNode = nodes.ToDictionary(node => node.Id, node => RequiredWidth(node, links, settings), StringComparer.Ordinal);
         var planningNodes = nodes.Select(node => new ArchitecturePlanningNode(
@@ -160,7 +176,11 @@ public sealed class ReplacementArchitectureRenderer
         }
 
         CenterParents(graph, nodeRects, settings);
-        ResolveHorizontalOverlaps(graph, nodeRects, settings);
+        ApplyBaselineAlignment(graph, nodeRects, settings);
+        PlaceExternalTerminals(graph, nodeRects, settings);
+        ResolveNodeOverlaps(graph, nodeRects, settings);
+        ClearPortColumnObstacles(graph, nodeRects, settings);
+        ResolveNodeOverlaps(graph, nodeRects, settings);
 
         var projectRects = BuildProjectRects(graph, nodeRects, settings);
         var terminals = AllocateTerminals(graph, nodeRects, settings);
@@ -318,7 +338,7 @@ public sealed class ReplacementArchitectureRenderer
 
     private static DrawioPageModel Reconstruct(XElement graphModel)
     {
-        var cells = graphModel.Element("root")?.Elements("mxCell").Select(cell =>
+        var rawCells = graphModel.Element("root")?.Elements("mxCell").Select(cell =>
         {
             var geometry = cell.Element("mxGeometry");
             var isEdge = cell.Attribute("edge")?.Value == "1";
@@ -329,19 +349,83 @@ public sealed class ReplacementArchitectureRenderer
                 int.Parse(point.Attribute("x")!.Value), int.Parse(point.Attribute("y")!.Value))).ToArray() ?? Array.Empty<Point>();
             return new DrawioPageCell(cell.Attribute("id")?.Value ?? string.Empty, cell.Attribute("parent")?.Value ?? string.Empty,
                 cell.Attribute("source")?.Value, cell.Attribute("target")?.Value, cell.Attribute("value")?.Value ?? string.Empty,
-                cell.Attribute("style")?.Value ?? string.Empty, bounds, points, isEdge);
+                cell.Attribute("style")?.Value ?? string.Empty, bounds, points, isEdge,
+                cell.Attribute("semanticSourceId")?.Value, cell.Attribute("semanticTargetId")?.Value,
+                cell.Attribute("semanticNodeId")?.Value,
+                double.TryParse(cell.Attribute("exitX")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var exitX) ? exitX : null,
+                double.TryParse(cell.Attribute("entryX")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var entryX) ? entryX : null);
         }).ToArray() ?? Array.Empty<DrawioPageCell>();
+        var byId = rawCells.ToDictionary(cell => cell.Id, StringComparer.Ordinal);
+        var cells = rawCells.Select(cell => cell with
+        {
+            Bounds = cell.IsEdge || cell.Bounds is null ? cell.Bounds : ResolveAbsoluteBounds(cell, byId, new HashSet<string>(StringComparer.Ordinal))
+        }).ToArray();
         return new DrawioPageModel(cells, new Rect(0, 0, 0, 0), Array.Empty<string>());
     }
 
-    private static IReadOnlyList<ValidationFinding> ValidateReconstruction(DrawioPageModel expected, DrawioPageModel actual)
+    private static IReadOnlyList<ValidationFinding> ValidateReconstruction(
+        ArchitecturePlanningGraph graph,
+        ArchitecturePhysicalScene scene,
+        DrawioPageModel expected,
+        DrawioPageModel actual)
     {
+        var findings = new List<ValidationFinding>();
         var expectedEdges = expected.Cells.Where(cell => cell.IsEdge).ToDictionary(cell => cell.Id, StringComparer.Ordinal);
         var actualEdges = actual.Cells.Where(cell => cell.IsEdge).ToDictionary(cell => cell.Id, StringComparer.Ordinal);
-        return expectedEdges.Where(item => !actualEdges.TryGetValue(item.Key, out var actualEdge) ||
-                !item.Value.Waypoints.SequenceEqual(actualEdge.Waypoints))
-            .Select(item => Finding("SerializationGeometry", item.Key, "Draw.io reconstruction changed or lost route waypoints.", true))
-            .ToArray();
+        foreach (var item in expectedEdges)
+        {
+            if (!actualEdges.TryGetValue(item.Key, out var actualEdge) || !item.Value.Waypoints.SequenceEqual(actualEdge.Waypoints))
+                findings.Add(Finding("SerializationGeometry", item.Key, "Draw.io reconstruction changed or lost route waypoints.", true));
+            else if (actualEdge.SourceId != item.Value.SourceId || actualEdge.TargetId != item.Value.TargetId ||
+                     !SameRatio(actualEdge.ExitX, item.Value.ExitX) || !SameRatio(actualEdge.EntryX, item.Value.EntryX))
+                findings.Add(Finding("OwnershipReconstruction", item.Key,
+                    $"Draw.io reconstruction changed edge ownership or terminal ratios ({item.Value.SourceId}->{item.Value.TargetId}, {item.Value.ExitX}/{item.Value.EntryX} became {actualEdge.SourceId}->{actualEdge.TargetId}, {actualEdge.ExitX}/{actualEdge.EntryX}).", true));
+
+            if (actualEdges.TryGetValue(item.Key, out actualEdge) && actualEdge.SourceId is { } sourceId &&
+                actualEdge.TargetId is { } targetId && actualNodesById(actual, sourceId) is { } source &&
+                actualNodesById(actual, targetId) is { } target && actualEdge.ExitX is double exitX &&
+                actualEdge.EntryX is double entryX)
+            {
+                var reconstructedRoute = new[]
+                {
+                    new Point(source.X + (int)Math.Round(source.Width * exitX), source.Bottom),
+                }.Concat(actualEdge.Waypoints)
+                .Concat(new[] { new Point(target.X + (int)Math.Round(target.Width * entryX), target.Y) })
+                .ToArray();
+                var routeId = item.Key.StartsWith("edge_", StringComparison.Ordinal) ? item.Key.Substring(5) : item.Key;
+                var accepted = scene.Routes.SingleOrDefault(route => route.Link.Link.Id == routeId)?.Points;
+                if (accepted is null || !accepted.SequenceEqual(reconstructedRoute))
+                    findings.Add(Finding("GeometryReconstruction", item.Key, "Reconstructed complete route differs from the accepted physical route.", true));
+            }
+            else
+            {
+                findings.Add(Finding("OwnershipReconstruction", item.Key, "Reconstructed route is missing a source, target, or terminal ratio.", true));
+            }
+        }
+
+        var expectedNodes = expected.Cells.Where(cell => !cell.IsEdge && cell.SemanticNodeId is not null)
+            .ToDictionary(cell => cell.Id, StringComparer.Ordinal);
+        var actualNodes = actual.Cells.Where(cell => !cell.IsEdge && cell.SemanticNodeId is not null)
+            .ToDictionary(cell => cell.Id, StringComparer.Ordinal);
+        foreach (var planning in graph.Nodes)
+        {
+            if (!actualNodes.TryGetValue(planning.Node.Id, out var actualNode) || actualNode.Bounds is null ||
+                !scene.Candidate.NodeRects.TryGetValue(planning.Node.Id, out var expectedBounds) ||
+                actualNode.Bounds.Value != expectedBounds)
+                findings.Add(Finding("GeometryReconstruction", planning.Node.Id, "Reconstructed node bounds differ from the accepted absolute scene.", true));
+            if (expectedNodes.TryGetValue(planning.Node.Id, out var expectedNode) && actualNode.ParentId != expectedNode.ParentId)
+                findings.Add(Finding("OwnershipReconstruction", planning.Node.Id, "Reconstructed node parent ownership changed.", true));
+        }
+        foreach (var project in scene.Candidate.ProjectRects)
+        {
+            var actualProject = actual.Cells.SingleOrDefault(cell => cell.Id == project.Key);
+            if (actualProject?.Bounds is null || actualProject.Bounds.Value != project.Value)
+                findings.Add(Finding("GeometryReconstruction", project.Key, "Reconstructed project bounds differ from the accepted scene.", true));
+        }
+        return findings;
+
+        static Rect? actualNodesById(DrawioPageModel model, string id) =>
+            model.Cells.SingleOrDefault(cell => cell.Id == id && !cell.IsEdge)?.Bounds;
     }
 
     private static IReadOnlyList<ValidationFinding> ValidateScene(
@@ -367,20 +451,31 @@ public sealed class ReplacementArchitectureRenderer
             if (points[0].Y != source.Bottom || points[points.Count - 1].Y != target.Y)
                 findings.Add(Finding("EndpointDirection", route.Link.Link.Id, "Route does not leave the source bottom and arrive at the target top.", true));
             foreach (var node in nodes.Where(node => node.Key != route.Link.Link.SourceRenderInstanceId && node.Key != route.Link.Link.TargetRenderInstanceId))
-                if (points.Zip(points.Skip(1), (a, b) => new Segment(a, b)).Any(segment => segment.Intersects(node.Value)))
-                    findings.Add(Finding("LinkNodeIntersection", route.Link.Link.Id, $"Route intersects node {node.Key}.", true, node.Key));
+            {
+                var offending = points.Zip(points.Skip(1), (a, b) => new Segment(a, b))
+                    .FirstOrDefault(segment => SegmentIntersectsInterior(segment, node.Value));
+                if (offending.Length > 0)
+                    findings.Add(new ValidationFinding("LinkNodeIntersection", route.Link.Link.Id, null, node.Key, 1,
+                        $"Route intersects node {node.Key} at {offending.Start.X},{offending.Start.Y}->{offending.End.X},{offending.End.Y}; node bounds {node.Value.X},{node.Value.Y},{node.Value.Width},{node.Value.Height}.",
+                        new[] { new ValidationPoint(offending.Start.X, offending.Start.Y), new ValidationPoint(offending.End.X, offending.End.Y) },
+                        Array.Empty<ValidationSegment>(), null, null, null, true));
+            }
         }
         foreach (var pair in routes.SelectMany((left, index) => routes.Skip(index + 1)
-                     .Select(right => (left, right))))
+                      .Select(right => (left, right))))
         {
-            var shared = pair.left.Points.Zip(pair.left.Points.Skip(1), (start, end) => new Segment(start, end))
+            var sharedPair = pair.left.Points.Zip(pair.left.Points.Skip(1), (start, end) => new Segment(start, end))
                 .SelectMany(first => pair.right.Points.Zip(pair.right.Points.Skip(1), (start, end) => new Segment(start, end))
                     .Where(second => first.IsHorizontal == second.IsHorizontal && first.IsOrthogonal &&
-                        first.OverlapLength(second) > 0))
+                        first.OverlapLength(second) > 0)
+                    .Select(second => (First: first, Second: second)))
                 .FirstOrDefault();
+            var shared = sharedPair.First;
             if (shared.Length > 0)
-                findings.Add(FindingWithOtherRoute("SharedSegment", pair.left.Link.Link.Id,
-                    pair.right.Link.Link.Id, "Routes share a non-zero collinear segment.", true));
+                findings.Add(new ValidationFinding("SharedSegment", pair.left.Link.Link.Id, pair.right.Link.Link.Id, null, 1,
+                    $"Routes share a non-zero collinear segment ({shared.Start.X},{shared.Start.Y}->{shared.End.X},{shared.End.Y}).",
+                    new[] { new ValidationPoint(shared.Start.X, shared.Start.Y), new ValidationPoint(shared.End.X, shared.End.Y) },
+                    Array.Empty<ValidationSegment>(), null, null, shared.Length, true));
         }
         return findings;
     }
@@ -419,35 +514,77 @@ public sealed class ReplacementArchitectureRenderer
     {
         var routes = new List<ArchitecturePhysicalRoute>();
         var outerX = nodes.Values.Select(node => node.Right).DefaultIfEmpty(0).Max() + settings.Layout.ParallelLaneSpacing;
-        var depthByNodeId = graph.Nodes.ToDictionary(node => node.Node.Id, node => node.Depth, StringComparer.Ordinal);
-        var laneByLinkId = graph.Links
-            .GroupBy(link => (SourceDepth: depthByNodeId[link.SourcePlanningNodeId], TargetDepth: depthByNodeId[link.TargetPlanningNodeId]))
-            .SelectMany(group => group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
-            .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+        var usedChannelY = new HashSet<int>();
         foreach (var link in graph.Links.OrderBy(link => link.Order))
         {
             var source = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
             var target = terminals.Single(terminal => terminal.LinkId == link.Link.Id && !terminal.IsSource).Point;
             var sourceNode = nodes[link.SourcePlanningNodeId];
             var targetNode = nodes[link.TargetPlanningNodeId];
-            IReadOnlyList<Point> points;
-            if (targetNode.Y > sourceNode.Y)
+            var laneX = outerX + routes.Count * settings.Layout.ParallelLaneSpacing;
+            var downward = targetNode.Y > sourceNode.Y;
+            var sourceChannelY = FindChannelY(sourceNode.Bottom + settings.Layout.LinkPadding,
+                downward ? targetNode.Y - settings.Layout.LinkPadding : sourceNode.Bottom + settings.Layout.LinkPadding + 100000,
+                settings.Layout.ParallelLaneSpacing, source.X, laneX, sourceNode.Bottom, nodes,
+                link.SourcePlanningNodeId, link.TargetPlanningNodeId, usedChannelY);
+            var targetChannelY = FindChannelY(targetNode.Y - settings.Layout.LinkPadding,
+                downward ? sourceNode.Bottom + settings.Layout.LinkPadding : targetNode.Y - settings.Layout.LinkPadding - 100000,
+                -settings.Layout.ParallelLaneSpacing, target.X, laneX, targetNode.Y, nodes,
+                link.SourcePlanningNodeId, link.TargetPlanningNodeId, usedChannelY);
+            var points = Normalize(new[]
             {
-                var y = source.Y + settings.Layout.LinkPadding +
-                    laneByLinkId[link.Link.Id] * settings.Layout.ParallelLaneSpacing;
-                points = Normalize(new[] { source, new Point(source.X, y), new Point(target.X, y), target });
-            }
-            else
-            {
-                var laneX = outerX + routes.Count * settings.Layout.ParallelLaneSpacing;
-                var y1 = source.Y + settings.Layout.LinkPadding;
-                var y2 = target.Y - settings.Layout.LinkPadding;
-                points = Normalize(new[] { source, new Point(source.X, y1), new Point(laneX, y1), new Point(laneX, y2), new Point(target.X, y2), target });
-            }
+                source,
+                new Point(source.X, sourceChannelY),
+                new Point(laneX, sourceChannelY),
+                new Point(laneX, targetChannelY),
+                new Point(target.X, targetChannelY),
+                target
+            });
             routes.Add(new ArchitecturePhysicalRoute(link, points, link.Topology,
                 $"slot:{link.Link.Id}", $"column:{link.Link.Id}"));
         }
         return routes;
+    }
+
+    private static int FindChannelY(
+        int start,
+        int limit,
+        int step,
+        int nodeX,
+        int laneX,
+        int stubStartY,
+        IReadOnlyDictionary<string, Rect> nodes,
+        string sourceNodeId,
+        string targetNodeId,
+        ISet<int> usedChannelY)
+    {
+        var direction = Math.Sign(step);
+        var increment = Math.Abs(step);
+        if (increment == 0) increment = 1;
+        for (var y = start; direction > 0 ? y <= limit : y >= limit; y += direction * increment)
+        {
+            if (usedChannelY.Contains(y)) continue;
+            var intersects = nodes.Any(item => item.Key != sourceNodeId && item.Key != targetNodeId &&
+                (SegmentIntersectsInterior(new Segment(new Point(nodeX, stubStartY), new Point(nodeX, y)), item.Value) ||
+                 SegmentIntersectsInterior(new Segment(new Point(nodeX, y), new Point(laneX, y)), item.Value)));
+            if (intersects) continue;
+            usedChannelY.Add(y);
+            return y;
+        }
+        for (var distance = 0; distance <= 100000; distance += increment)
+        {
+            var fallback = stubStartY + direction * distance;
+            if (usedChannelY.Contains(fallback)) continue;
+            var clear = !nodes.Any(item => item.Key != sourceNodeId && item.Key != targetNodeId &&
+                (SegmentIntersectsInterior(new Segment(new Point(nodeX, stubStartY), new Point(nodeX, fallback)), item.Value) ||
+                 SegmentIntersectsInterior(new Segment(new Point(nodeX, fallback), new Point(laneX, fallback)), item.Value)));
+            if (!clear) continue;
+            usedChannelY.Add(fallback);
+            return fallback;
+        }
+
+        usedChannelY.Add(stubStartY);
+        return stubStartY;
     }
 
     private static void CenterParents(ArchitecturePlanningGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
@@ -464,17 +601,115 @@ public sealed class ReplacementArchitectureRenderer
         }
     }
 
-    private static void ResolveHorizontalOverlaps(ArchitecturePlanningGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
+    private static void ApplyBaselineAlignment(
+        ArchitecturePlanningGraph graph,
+        Dictionary<string, Rect> nodes,
+        DiagramSettings settings)
     {
-        foreach (var layer in graph.Nodes.GroupBy(node => node.Depth).OrderBy(layer => layer.Key))
+        if (string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)) return;
+        var pattern = new Regex(settings.Layout.BaselineAlignmentPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var baseline = graph.Nodes.Where(node => pattern.IsMatch(node.Node.DisplayText ?? string.Empty) ||
+                pattern.IsMatch(node.Node.SemanticTypeIdentity ?? string.Empty))
+            .Select(node => nodes[node.Node.Id].Y).DefaultIfEmpty(-1).Min();
+        if (baseline < 0) return;
+        foreach (var node in graph.Nodes.Where(node => pattern.IsMatch(node.Node.DisplayText ?? string.Empty) ||
+                pattern.IsMatch(node.Node.SemanticTypeIdentity ?? string.Empty)))
         {
-            var cursor = settings.Layout.ContainerPadding * 2;
-            foreach (var node in layer.OrderBy(node => nodes[node.Node.Id].X).ThenBy(node => node.Order))
+            var rect = nodes[node.Node.Id];
+            nodes[node.Node.Id] = rect with { Y = baseline };
+        }
+    }
+
+    private static void PlaceExternalTerminals(
+        ArchitecturePlanningGraph graph,
+        Dictionary<string, Rect> nodes,
+        DiagramSettings settings)
+    {
+        foreach (var external in graph.Nodes.Where(node => node.Node.IsExternal))
+        {
+            var parents = graph.Links.Where(link => link.TargetPlanningNodeId == external.Node.Id)
+                .Select(link => nodes[link.SourcePlanningNodeId]).OrderBy(rect => rect.X).ToArray();
+            if (parents.Length != 1) continue;
+            var parent = parents[0];
+            var rect = nodes[external.Node.Id];
+            nodes[external.Node.Id] = rect with
             {
-                var rect = nodes[node.Node.Id];
-                if (rect.X < cursor) rect = rect with { X = cursor };
-                nodes[node.Node.Id] = rect;
-                cursor = rect.Right + settings.Layout.HorizontalSpacing;
+                X = parent.CenterX - rect.Width / 2,
+                Y = parent.Bottom + settings.Layout.VerticalSpacing
+            };
+        }
+    }
+
+    private static void ClearPortColumnObstacles(
+        ArchitecturePlanningGraph graph,
+        Dictionary<string, Rect> nodes,
+        DiagramSettings settings)
+    {
+        if (graph.Links.Count == 0 || nodes.Count == 0) return;
+        for (var pass = 0; pass < 3; pass++)
+        {
+            var moved = false;
+            var terminals = AllocateTerminals(graph, nodes, settings);
+            var outerX = nodes.Values.Max(rect => rect.Right) + settings.Layout.ParallelLaneSpacing;
+            var sourceIndex = graph.Links.GroupBy(link => link.SourcePlanningNodeId).SelectMany(group =>
+                    group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
+                .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+            var targetIndex = graph.Links.GroupBy(link => link.TargetPlanningNodeId).SelectMany(group =>
+                    group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
+                .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+            foreach (var link in graph.Links.OrderBy(link => link.Order))
+            {
+                var sourceTerminal = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
+                var targetTerminal = terminals.Single(terminal => terminal.LinkId == link.Link.Id && !terminal.IsSource).Point;
+                var source = nodes[link.SourcePlanningNodeId];
+                var target = nodes[link.TargetPlanningNodeId];
+                var top = Math.Min(source.Bottom, target.Y);
+                var bottom = Math.Max(source.Bottom, target.Y);
+                foreach (var item in nodes.Where(item => item.Key != link.SourcePlanningNodeId && item.Key != link.TargetPlanningNodeId).ToArray())
+                {
+                    var sourceColumnBlocked = item.Value.X < sourceTerminal.X && sourceTerminal.X < item.Value.Right &&
+                        item.Value.Y < bottom && top < item.Value.Bottom;
+                    var targetColumnBlocked = item.Value.X < targetTerminal.X && targetTerminal.X < item.Value.Right &&
+                        item.Value.Y < bottom && top < item.Value.Bottom;
+                    if (!sourceColumnBlocked && !targetColumnBlocked) continue;
+                    var right = nodes.Values.Max(rect => rect.Right) + settings.Layout.HorizontalSpacing;
+                    nodes[item.Key] = item.Value with { X = right };
+                    moved = true;
+                }
+
+                var sourceChannelY = source.Bottom + settings.Layout.LinkPadding +
+                    sourceIndex[link.Link.Id] * settings.Layout.ParallelLaneSpacing;
+                var targetChannelY = target.Y - settings.Layout.LinkPadding -
+                    targetIndex[link.Link.Id] * settings.Layout.ParallelLaneSpacing;
+                foreach (var item in nodes.Where(item => item.Key != link.SourcePlanningNodeId && item.Key != link.TargetPlanningNodeId).ToArray())
+                {
+                    var sourceChannelBlocked = SegmentIntersectsInterior(
+                        new Segment(new Point(sourceTerminal.X, sourceChannelY), new Point(outerX, sourceChannelY)), item.Value);
+                    var targetChannelBlocked = SegmentIntersectsInterior(
+                        new Segment(new Point(targetTerminal.X, targetChannelY), new Point(outerX, targetChannelY)), item.Value);
+                    if (!sourceChannelBlocked && !targetChannelBlocked) continue;
+                    var right = nodes.Values.Max(rect => rect.Right) + settings.Layout.HorizontalSpacing;
+                    nodes[item.Key] = item.Value with { X = right };
+                    moved = true;
+                }
+            }
+            if (!moved) break;
+        }
+    }
+
+    private static void ResolveNodeOverlaps(ArchitecturePlanningGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
+    {
+        var ordered = graph.Nodes.OrderBy(node => nodes[node.Node.Id].Y)
+            .ThenBy(node => nodes[node.Node.Id].X).ThenBy(node => node.Order).ThenBy(node => node.Node.Id, StringComparer.Ordinal)
+            .ToArray();
+        for (var left = 0; left < ordered.Length; left++)
+        {
+            for (var right = left + 1; right < ordered.Length; right++)
+            {
+                var first = nodes[ordered[left].Node.Id];
+                var second = nodes[ordered[right].Node.Id];
+                if (!Overlaps(first, second)) continue;
+                nodes[ordered[right].Node.Id] = second with { X = first.Right + settings.Layout.HorizontalSpacing };
             }
         }
     }
@@ -515,6 +750,30 @@ public sealed class ReplacementArchitectureRenderer
 
     private static bool Overlaps(Rect left, Rect right) =>
         left.X < right.Right && right.X < left.Right && left.Y < right.Bottom && right.Y < left.Bottom;
+
+    private static bool SegmentIntersectsInterior(Segment segment, Rect rect) =>
+        segment.Start.X == segment.End.X
+            ? segment.Start.X > rect.X && segment.Start.X < rect.Right &&
+              Math.Max(Math.Min(segment.Start.Y, segment.End.Y), rect.Y) <
+              Math.Min(Math.Max(segment.Start.Y, segment.End.Y), rect.Bottom)
+            : segment.Start.Y == segment.End.Y && segment.Start.Y > rect.Y && segment.Start.Y < rect.Bottom &&
+              Math.Max(Math.Min(segment.Start.X, segment.End.X), rect.X) <
+              Math.Min(Math.Max(segment.Start.X, segment.End.X), rect.Right);
+
+    private static bool SameRatio(double? left, double? right) =>
+        left is null && right is null || left is double l && right is double r && Math.Abs(l - r) < 0.000001;
+
+    private static Rect ResolveAbsoluteBounds(
+        DrawioPageCell cell,
+        IReadOnlyDictionary<string, DrawioPageCell> cells,
+        ISet<string> visited)
+    {
+        if (cell.Bounds is not Rect bounds) throw new InvalidOperationException($"Cell {cell.Id} has no geometry.");
+        if (cell.ParentId == "0" || cell.ParentId == "1" || !cells.TryGetValue(cell.ParentId, out var parent) ||
+            parent.Bounds is null || !visited.Add(cell.ParentId)) return bounds;
+        var parentBounds = ResolveAbsoluteBounds(parent, cells, visited);
+        return bounds with { X = bounds.X + parentBounds.X, Y = bounds.Y + parentBounds.Y };
+    }
 
     private static Rect Union(Rect left, Rect right)
     {
