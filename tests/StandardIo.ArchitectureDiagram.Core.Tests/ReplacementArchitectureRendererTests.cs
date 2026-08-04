@@ -21,12 +21,27 @@ public sealed class ReplacementArchitectureRendererTests
         Assert.Contains("planning.json", result.DevelopmentArtifacts!.NamedJsonArtifacts.Keys);
         Assert.Contains("scene.json", result.DevelopmentArtifacts.NamedJsonArtifacts.Keys);
         Assert.Contains("page-model.json", result.DevelopmentArtifacts.NamedJsonArtifacts.Keys);
+        Assert.Contains("expansion", result.DevelopmentArtifacts.NamedJsonArtifacts["planning.json"]);
+        Assert.Contains("longestRoutes", result.DevelopmentArtifacts.NamedJsonArtifacts["planning.json"]);
         var root = result.Page.GraphModel.Element("root")!;
         Assert.Equal("0", root.Element("mxCell")?.Attribute("id")?.Value);
         Assert.Null(root.Element("mxCell")?.Attribute("vertex"));
         Assert.Equal("0", root.Elements("mxCell").Skip(1).First().Attribute("parent")?.Value);
         Assert.Null(root.Elements("mxCell").Skip(1).First().Attribute("vertex"));
         Assert.Contains(result.Page.GraphModel.Descendants("mxCell"), cell => cell.Attribute("edge")?.Value == "1");
+    }
+
+    [Fact]
+    public void Render_rejects_no_diagonal_or_zero_length_route_segments()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(Graph(includeStandalone: true), DiagramSettings.CreateDefault());
+
+        foreach (var route in result.Routes)
+        foreach (var segment in route.Points.Zip(route.Points.Skip(1), (start, end) => (start, end)))
+        {
+            Assert.True(segment.start.X == segment.end.X || segment.start.Y == segment.end.Y);
+            Assert.NotEqual(segment.start, segment.end);
+        }
     }
 
     [Fact]

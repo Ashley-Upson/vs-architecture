@@ -51,7 +51,28 @@ internal sealed record ArchitecturePhysicalRoute(
     IReadOnlyList<Point> Points,
     string Topology,
     string SlotOwner,
-    string ColumnOwner);
+    string ColumnOwner,
+    int LaneX = 0,
+    int SourceChannelY = 0,
+    int TargetChannelY = 0);
+
+internal sealed record ArchitectureExpansionEvent(
+    string Kind,
+    string Owner,
+    string NodeId,
+    int DeltaX,
+    int FromX,
+    int ToX,
+    string Reason);
+
+internal sealed record ArchitectureExpansionDiagnostics(
+    IReadOnlyList<ArchitectureExpansionEvent> Events,
+    IReadOnlyList<object> WidestGaps,
+    int MaximumX,
+    double MedianX,
+    int LocalColumnCount,
+    int MaximumColumnX,
+    IReadOnlyDictionary<string, int> WidthContributions);
 
 internal sealed record ArchitectureCandidatePlan(
     string CandidateId,
@@ -63,7 +84,8 @@ internal sealed record ArchitectureCandidatePlan(
     IReadOnlyList<string> Provenance,
     IReadOnlyList<ValidationFinding> Findings,
     int RouteLength,
-    int BendCount);
+    int BendCount,
+    ArchitectureExpansionDiagnostics ExpansionDiagnostics);
 
 internal sealed record ArchitecturePhysicalScene(
     ArchitectureCandidatePlan Candidate,

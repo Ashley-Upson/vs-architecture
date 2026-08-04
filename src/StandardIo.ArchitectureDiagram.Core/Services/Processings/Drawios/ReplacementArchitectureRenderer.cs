@@ -179,13 +179,15 @@ public sealed class ReplacementArchitectureRenderer
         ApplyBaselineAlignment(graph, nodeRects, settings);
         PlaceExternalTerminals(graph, nodeRects, settings);
         ResolveNodeOverlaps(graph, nodeRects, settings);
-        ClearPortColumnObstacles(graph, nodeRects, settings);
+        var expansionEvents = new List<ArchitectureExpansionEvent>();
+        ClearPortColumnObstacles(graph, nodeRects, settings, expansionEvents);
         ResolveNodeOverlaps(graph, nodeRects, settings);
 
         var projectRects = BuildProjectRects(graph, nodeRects, settings);
         var terminals = AllocateTerminals(graph, nodeRects, settings);
         var routes = BuildRoutes(graph, nodeRects, terminals, projectRects, settings);
         var findings = ValidateScene(graph, nodeRects, projectRects, terminals, routes, settings);
+        var expansionDiagnostics = BuildExpansionDiagnostics(graph, nodeRects, routes, expansionEvents, settings);
         return new ArchitectureCandidatePlan(
             "replacement-001",
             new ReadOnlyDictionary<string, Rect>(nodeRects),
@@ -205,7 +207,8 @@ public sealed class ReplacementArchitectureRenderer
             },
             findings,
             routes.Sum(route => route.Points.Zip(route.Points.Skip(1), (a, b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y)).Sum()),
-            routes.Sum(route => Math.Max(0, route.Points.Count - 2)));
+            routes.Sum(route => Math.Max(0, route.Points.Count - 2)),
+            expansionDiagnostics);
     }
 
     private static ArchitecturePhysicalScene BuildScene(
@@ -513,16 +516,16 @@ public sealed class ReplacementArchitectureRenderer
         DiagramSettings settings)
     {
         var routes = new List<ArchitecturePhysicalRoute>();
-        var outerX = nodes.Values.Select(node => node.Right).DefaultIfEmpty(0).Max() + settings.Layout.ParallelLaneSpacing;
         var usedChannelY = new HashSet<int>();
+        var outerX = nodes.Values.Select(node => node.Right).DefaultIfEmpty(0).Max() + settings.Layout.ParallelLaneSpacing;
         foreach (var link in graph.Links.OrderBy(link => link.Order))
         {
             var source = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
             var target = terminals.Single(terminal => terminal.LinkId == link.Link.Id && !terminal.IsSource).Point;
             var sourceNode = nodes[link.SourcePlanningNodeId];
             var targetNode = nodes[link.TargetPlanningNodeId];
-            var laneX = outerX + routes.Count * settings.Layout.ParallelLaneSpacing;
             var downward = targetNode.Y > sourceNode.Y;
+            var laneX = outerX + routes.Count * settings.Layout.ParallelLaneSpacing;
             var sourceChannelY = FindChannelY(sourceNode.Bottom + settings.Layout.LinkPadding,
                 downward ? targetNode.Y - settings.Layout.LinkPadding : sourceNode.Bottom + settings.Layout.LinkPadding + 100000,
                 settings.Layout.ParallelLaneSpacing, source.X, laneX, sourceNode.Bottom, nodes,
@@ -541,7 +544,7 @@ public sealed class ReplacementArchitectureRenderer
                 target
             });
             routes.Add(new ArchitecturePhysicalRoute(link, points, link.Topology,
-                $"slot:{link.Link.Id}", $"column:{link.Link.Id}"));
+                $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, sourceChannelY, targetChannelY));
         }
         return routes;
     }
@@ -643,14 +646,14 @@ public sealed class ReplacementArchitectureRenderer
     private static void ClearPortColumnObstacles(
         ArchitecturePlanningGraph graph,
         Dictionary<string, Rect> nodes,
-        DiagramSettings settings)
+        DiagramSettings settings,
+        ICollection<ArchitectureExpansionEvent> expansionEvents)
     {
         if (graph.Links.Count == 0 || nodes.Count == 0) return;
         for (var pass = 0; pass < 3; pass++)
         {
             var moved = false;
             var terminals = AllocateTerminals(graph, nodes, settings);
-            var outerX = nodes.Values.Max(rect => rect.Right) + settings.Layout.ParallelLaneSpacing;
             var sourceIndex = graph.Links.GroupBy(link => link.SourcePlanningNodeId).SelectMany(group =>
                     group.OrderBy(link => link.Order).Select((link, index) => new { link.Link.Id, Index = index }))
                 .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
@@ -673,7 +676,11 @@ public sealed class ReplacementArchitectureRenderer
                         item.Value.Y < bottom && top < item.Value.Bottom;
                     if (!sourceColumnBlocked && !targetColumnBlocked) continue;
                     var right = nodes.Values.Max(rect => rect.Right) + settings.Layout.HorizontalSpacing;
+                    var fromX = item.Value.X;
                     nodes[item.Key] = item.Value with { X = right };
+                    expansionEvents.Add(new ArchitectureExpansionEvent("global-node-shift", "port-column-clearance", item.Key,
+                        right - fromX, fromX, right,
+                        sourceColumnBlocked ? $"source-port-column:{link.Link.Id}" : $"target-port-column:{link.Link.Id}"));
                     moved = true;
                 }
 
@@ -684,12 +691,16 @@ public sealed class ReplacementArchitectureRenderer
                 foreach (var item in nodes.Where(item => item.Key != link.SourcePlanningNodeId && item.Key != link.TargetPlanningNodeId).ToArray())
                 {
                     var sourceChannelBlocked = SegmentIntersectsInterior(
-                        new Segment(new Point(sourceTerminal.X, sourceChannelY), new Point(outerX, sourceChannelY)), item.Value);
+                        new Segment(new Point(sourceTerminal.X, sourceChannelY), new Point(Math.Max(source.Right, target.Right) + settings.Layout.HorizontalSpacing, sourceChannelY)), item.Value);
                     var targetChannelBlocked = SegmentIntersectsInterior(
-                        new Segment(new Point(targetTerminal.X, targetChannelY), new Point(outerX, targetChannelY)), item.Value);
+                        new Segment(new Point(targetTerminal.X, targetChannelY), new Point(Math.Max(source.Right, target.Right) + settings.Layout.HorizontalSpacing, targetChannelY)), item.Value);
                     if (!sourceChannelBlocked && !targetChannelBlocked) continue;
                     var right = nodes.Values.Max(rect => rect.Right) + settings.Layout.HorizontalSpacing;
+                    var fromX = item.Value.X;
                     nodes[item.Key] = item.Value with { X = right };
+                    expansionEvents.Add(new ArchitectureExpansionEvent("global-node-shift", "channel-clearance", item.Key,
+                        right - fromX, fromX, right,
+                        sourceChannelBlocked ? $"source-channel:{link.Link.Id}" : $"target-channel:{link.Link.Id}"));
                     moved = true;
                 }
             }
@@ -735,6 +746,34 @@ public sealed class ReplacementArchitectureRenderer
         var text = Math.Max(node.DisplayText?.Length ?? 0, node.SemanticTypeIdentity?.Length / 2 ?? 0) * 8 + settings.Layout.LinkNodeWidthPadding;
         var terminal = Math.Max(incoming, outgoing) * Math.Max(settings.Layout.EdgePortSpacing, settings.Layout.ParallelLaneSpacing) + settings.Layout.LinkNodeWidthPadding;
         return Math.Max(settings.Layout.NodeWidth, Math.Max(text, terminal));
+    }
+
+    private static ArchitectureExpansionDiagnostics BuildExpansionDiagnostics(
+        ArchitecturePlanningGraph graph,
+        IReadOnlyDictionary<string, Rect> nodes,
+        IReadOnlyList<ArchitecturePhysicalRoute> routes,
+        IReadOnlyList<ArchitectureExpansionEvent> events,
+        DiagramSettings settings)
+    {
+        var orderedX = nodes.Values.Select(rect => rect.X).OrderBy(x => x).ToArray();
+        var gaps = nodes.Values.OrderBy(rect => rect.X).Zip(nodes.Values.OrderBy(rect => rect.X).Skip(1),
+                (left, right) => new { FromX = left.Right, ToX = right.X, Gap = right.X - left.Right })
+            .Where(gap => gap.Gap > settings.Layout.HorizontalSpacing)
+            .OrderByDescending(gap => gap.Gap)
+            .Take(10)
+            .Cast<object>()
+            .ToArray();
+        var widthContributions = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["node-layout"] = nodes.Values.Select(rect => rect.Right).DefaultIfEmpty(0).Max(),
+            ["local-node-shifts"] = events.Sum(item => Math.Max(0, item.ToX - item.FromX)),
+            ["route-columns"] = routes.Select(route => route.LaneX).DefaultIfEmpty(0).Max()
+        };
+        var maximumColumn = routes.Select(route => route.LaneX).DefaultIfEmpty(0).Max();
+        return new ArchitectureExpansionDiagnostics(
+            events.ToArray(), gaps, nodes.Values.Select(rect => rect.Right).DefaultIfEmpty(0).Max(),
+            orderedX.Length == 0 ? 0 : orderedX[orderedX.Length / 2],
+            routes.Select(route => route.LaneX).Distinct().Count(), maximumColumn, widthContributions);
     }
 
     private static string Topology(ArchitectureRenderLink link, IReadOnlyDictionary<string, int> depths) =>
@@ -831,8 +870,29 @@ public sealed class ReplacementArchitectureRenderer
             pageBounds = scene.PageBounds,
             routeLength = candidate.RouteLength,
             bendCount = candidate.BendCount,
+            expansion = candidate.ExpansionDiagnostics,
+            longestRoutes = scene.Routes
+                .OrderByDescending(route => route.Points.Zip(route.Points.Skip(1), (a, b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y)).Sum())
+                .Take(20)
+                .Select(route => new
+                {
+                    route.Link.Link.Id,
+                    source = route.Link.Link.SourceSemanticId,
+                    target = route.Link.Link.TargetSemanticId,
+                    route.Topology,
+                    directManhattan = DirectManhattan(route.Points[0], route.Points[route.Points.Count - 1]),
+                    actualLength = route.Points.Zip(route.Points.Skip(1), (a, b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y)).Sum(),
+                    bends = Math.Max(0, route.Points.Count - 2),
+                    route.LaneX,
+                    route.SourceChannelY,
+                    route.TargetChannelY,
+                    maxX = route.Points.Max(point => point.X)
+                }),
             findings = findings.Select(finding => new { finding.Category, finding.LogicalRouteId, finding.Description })
         }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+    private static int DirectManhattan(Point source, Point target) =>
+        Math.Abs(source.X - target.X) + Math.Abs(source.Y - target.Y);
 
     private static string BuildSceneJson(ArchitecturePhysicalScene scene) =>
         System.Text.Json.JsonSerializer.Serialize(scene, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
