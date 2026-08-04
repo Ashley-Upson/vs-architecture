@@ -175,6 +175,36 @@ public sealed class ProjectInterLayerSlotCompilerTests
     }
 
     [Fact]
+    public void Same_side_fanout_puts_farther_targets_above_nearer_targets()
+    {
+        var graph = RenderGraph.From(new DiagramModel(
+            [new ProjectContainer("project", "Project", [Node("source"), Node("far"), Node("near")])],
+            Array.Empty<ExternalDependencyNode>(),
+            [
+                new DependencyEdge("far-link", "source", "far", "Dependency"),
+                new DependencyEdge("near-link", "source", "near", "Dependency")
+            ]));
+        var nodes = new Dictionary<string, NodeLayout>(StringComparer.Ordinal)
+        {
+            ["source"] = Layout(graph, "source", new Rect(300, 0, 120, 60), 0),
+            ["far"] = Layout(graph, "far", new Rect(0, 180, 120, 60), 1),
+            ["near"] = Layout(graph, "near", new Rect(180, 180, 120, 60), 1)
+        };
+        var routes = graph.Links.ToDictionary(link => link.Id, link => new LinkLayout(
+            link,
+            new Point(nodes[link.SourceId].Rect.CenterX, nodes[link.SourceId].Rect.Bottom),
+            new Point(nodes[link.TargetId].Rect.CenterX, nodes[link.TargetId].Rect.Y),
+            Array.Empty<Point>(), 0.5, 0.5), StringComparer.Ordinal);
+        var revision = new LayoutRevision(1);
+        var plans = CanonicalTopologyFamilySelector.Select(graph, nodes, revision).Plans;
+
+        var compiled = ProjectInterLayerSlotCompiler.Compile(
+            plans, nodes, routes, new Dictionary<string, ProjectLabelGeometry>(), revision, 12, 10);
+
+        Assert.True(compiled.Links["far-link"].Points[0].Y < compiled.Links["near-link"].Points[0].Y);
+    }
+
+    [Fact]
     public void Project_slot_skips_a_node_intersecting_only_the_requested_horizontal_span()
     {
         var compiled = CompileObstacleFixture(new Rect(180, 65, 120, 60));

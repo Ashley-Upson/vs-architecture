@@ -325,25 +325,44 @@ internal static class ProjectInterLayerSlotCompiler
                              CanonicalTopologyFamily.LongDownward)
                      .GroupBy(item => plans[item.LogicalRouteId].SourceNodeId, StringComparer.Ordinal))
         {
-            var ordered = group
+            var sourceCenter = nodes[group.Key].Rect.CenterX;
+            var left = group
+                .Where(item => nodes[plans[item.LogicalRouteId].TargetNodeId].Rect.CenterX < sourceCenter)
                 .OrderBy(item => nodes[plans[item.LogicalRouteId].TargetNodeId].Rect.CenterX)
                 .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
                 .ToArray();
-            if (ordered.Length < 2)
+            var right = group
+                .Where(item => nodes[plans[item.LogicalRouteId].TargetNodeId].Rect.CenterX > sourceCenter)
+                .OrderByDescending(item => nodes[plans[item.LogicalRouteId].TargetNodeId].Rect.CenterX)
+                .ThenBy(item => item.LogicalRouteId, StringComparer.Ordinal)
+                .ToArray();
+            var direct = group
+                .Where(item => nodes[plans[item.LogicalRouteId].TargetNodeId].Rect.CenterX == sourceCenter)
+                .OrderBy(item => item.LogicalRouteId, StringComparer.Ordinal)
+                .ToArray();
+            if (left.Length + right.Length + direct.Length < 2)
             {
                 continue;
             }
 
-            var baseSlot = ordered.Min(item => preferred[item.Id].SlotIndex);
-            for (var index = 0; index < ordered.Length; index++)
-            {
-                result[ordered[index].Id] = new FanoutLane(
-                    baseSlot,
-                    Math.Min(index, ordered.Length - 1 - index));
-            }
+            var baseSlot = group.Min(item => preferred[item.Id].SlotIndex);
+            AddLanes(left, baseSlot, result);
+            AddLanes(right, baseSlot, result);
+            AddLanes(direct, baseSlot + Math.Max(left.Length, right.Length), result);
         }
 
         return result;
+
+        static void AddLanes(
+            IReadOnlyList<LinkSegmentDemand> ordered,
+            int baseSlot,
+            IDictionary<string, FanoutLane> result)
+        {
+            for (var index = 0; index < ordered.Count; index++)
+            {
+                result[ordered[index].Id] = new FanoutLane(baseSlot, index);
+            }
+        }
     }
 
     private static bool ProjectSlotBlocked(
