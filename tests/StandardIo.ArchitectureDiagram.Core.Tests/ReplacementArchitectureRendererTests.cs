@@ -101,6 +101,22 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Render_produces_a_page_and_all_routes_when_strict_findings_remain()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.ParallelLaneSpacing = 0;
+        settings.Layout.LinkPadding = 0;
+
+        var result = new ReplacementArchitectureRenderer().Render(DenseFanoutGraph(), settings);
+
+        Assert.True(result.SceneProduced);
+        Assert.True(result.SerializationSucceeded);
+        Assert.Equal(6, result.Routes.Count);
+        Assert.NotNull(result.Page.GraphModel);
+        Assert.NotNull(result.Findings);
+    }
+
+    [Fact]
     public void Render_emits_terminal_ratios_and_semantic_provenance()
     {
         var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
@@ -235,6 +251,29 @@ public sealed class ReplacementArchitectureRendererTests
             ["parent"] = new[] { "parent" },
             ["left"] = new[] { "left" },
             ["right"] = new[] { "right" }
+        });
+
+    private static ArchitectureRenderGraph DenseFanoutGraph() => new(
+        new[] { new ArchitectureRenderProject("project", "Project", 0) },
+        new[]
+        {
+            Node("root", "RootOrchestrationService", null, 0),
+            Node("left", "LeftProcessingService", "root", 1),
+            Node("right", "RightProcessingService", "root", 2)
+        },
+        new[]
+        {
+            Link("root-left", "root", "left", 0),
+            Link("root-right", "root", "right", 1),
+            Link("left-root", "left", "root", 2),
+            Link("right-root", "right", "root", 3),
+            Link("left-right", "left", "right", 4),
+            Link("right-left", "right", "left", 5)
+        },
+        new[] { "root" },
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>
+        {
+            ["root"] = new[] { "root" }, ["left"] = new[] { "left" }, ["right"] = new[] { "right" }
         });
 
     private static Rect Bounds(XElement cell)

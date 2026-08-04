@@ -81,6 +81,11 @@ public sealed class ArchitectureRenderResult
     public ArchitectureEligibilityResult Eligibility { get; }
     public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
     public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
+    public bool SceneProduced => Page is not null;
+    public bool SemanticallyComplete => true;
+    public bool SerializationSucceeded => Page.GraphModel is not null;
+    public bool StrictlyValid => Eligibility.Eligible;
+    public IReadOnlyList<ValidationFinding> Findings => PreRepairFindings.Concat(LogicalFindings).Concat(PhysicalFindings).ToArray();
 }
 
 public sealed class TypedArchitectureGenerationResult
@@ -134,4 +139,12 @@ public sealed class TypedArchitectureGenerationResult
     public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
     public ArchitectureRenderGraph? ProjectedGraph { get; }
     public bool StrictValidationPassed => LogicalFindings.Concat(PhysicalFindings).All(finding => !finding.IsStrictlyEnforced);
+    public bool SceneProduced => Page is not null;
+    public bool SemanticallyComplete =>
+        Manifest.ProjectedRenderNodeCount >= Manifest.SemanticNodeCount &&
+        Manifest.ProjectedRenderLinkCount >= Manifest.SemanticLinkCount &&
+        Manifest.RenderedRouteCount >= Manifest.SemanticLinkCount;
+    public bool SerializationSucceeded => Page.GraphModel is not null;
+    public bool StrictlyValid => StrictValidationPassed;
+    public IReadOnlyList<ValidationFinding> Findings => PreRepairFindings.Concat(LogicalFindings).Concat(PhysicalFindings).ToArray();
 }

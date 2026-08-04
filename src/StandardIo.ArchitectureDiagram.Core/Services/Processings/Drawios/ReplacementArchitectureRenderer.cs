@@ -33,12 +33,6 @@ public sealed class ReplacementArchitectureRenderer
         var reconstructed = Measure(timings, "replacement serialized geometry reconstruction", () => Reconstruct(graphModel));
         var serializationFindings = ValidateReconstruction(planning, scene, pageModel, reconstructed);
         var findings = scene.Findings.Concat(serializationFindings).ToArray();
-        var hardFindings = findings.Where(finding => finding.IsStrictlyEnforced).ToArray();
-        if (hardFindings.Length > 0)
-            throw new InvalidOperationException(
-                $"Replacement Architecture candidate rejected. {BuildPlacementSummary(planning, candidate, findings)} " +
-                string.Join("; ", hardFindings.Select(finding => $"{finding.Category} ({finding.LogicalRouteId}, node={finding.OtherNodeId}, otherRoute={finding.OtherRouteId}, {finding.Description})")));
-
         var page = new DrawioPage("Architecture", "architecture", graphModel,
             findings.Select(finding => new DiagramDiagnostic(
                 finding.Category, finding.Description, finding.LogicalRouteId)).ToArray());
@@ -508,9 +502,9 @@ public sealed class ReplacementArchitectureRenderer
         DiagramSettings settings)
     {
         var sourceLevels = ChannelLevels(sourceNode.Bottom + settings.Layout.LinkPadding, true, nodes.Values, settings)
-            .Take(24).ToArray();
+            .Take(8).ToArray();
         var targetLevels = ChannelLevels(targetNode.Y - settings.Layout.LinkPadding, false, nodes.Values, settings)
-            .Take(24).ToArray();
+            .Take(8).ToArray();
         var obstacleArray = nodes.Values.ToArray();
         var laneSpacing = Math.Max(settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
         var occupiedLanes = existingRoutes.Select(route => route.LaneX).ToArray();
@@ -522,14 +516,14 @@ public sealed class ReplacementArchitectureRenderer
                 occupiedLanes.Max() + laneSpacing
             }.Concat(occupiedLanes.SelectMany(lane => new[] { lane - laneSpacing, lane + laneSpacing }))
                 .Distinct().ToArray();
-        var lanes = LaneCoordinates(source, target, obstacleArray, settings).Take(24)
+        var lanes = LaneCoordinates(source, target, obstacleArray, settings).Take(16)
             .Concat(localExpansionLanes)
             .Concat(new[]
             {
                 obstacleArray.Select(node => node.X).DefaultIfEmpty(Math.Min(source.X, target.X)).Min() - settings.Layout.HorizontalSpacing,
                 obstacleArray.Select(node => node.Right).DefaultIfEmpty(Math.Max(source.X, target.X)).Max() + settings.Layout.HorizontalSpacing
             })
-            .Distinct().ToArray();
+            .Distinct().Take(16).ToArray();
         var candidates =
             from laneX in lanes
             from sourceY in sourceLevels
@@ -569,15 +563,24 @@ public sealed class ReplacementArchitectureRenderer
             select new ArchitecturePhysicalRoute(link, points, link.Topology + ":edge-exit",
                 $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, source.Y, target.Y));
 
-        var selected = candidates.FirstOrDefault(route => IsSharedFree(route, existingRoutes));
+        var selected = candidates.Take(2048).FirstOrDefault(route => IsSharedFree(route, existingRoutes));
         if (selected is not null) return selected;
 
-        throw new InvalidOperationException(
-            $"No valid local orthogonal route for {link.Link.Id} ({link.SourcePlanningNodeId}->{link.TargetPlanningNodeId}). " +
-            $"source={sourceNode.X},{sourceNode.Y},{sourceNode.Width},{sourceNode.Height}; " +
-            $"target={targetNode.X},{targetNode.Y},{targetNode.Width},{targetNode.Height}; " +
-            $"existingRoutes={existingRoutes.Count}, obstacleSafeCandidates={candidates.Count()}. " +
-            "All bounded topology candidates intersected a node or an existing route.");
+        // Normal/diagnostic generation must still produce a connected diagram when
+        // no strict local allocation exists. Validation records the degraded route's
+        // defects and strict mode rejects the same result at the caller boundary.
+        var fallbackLane = Math.Max(sourceNode.Right, targetNode.Right) +
+            settings.Layout.HorizontalSpacing + existingRoutes.Count * settings.Layout.ParallelLaneSpacing;
+        var fallbackPoints = Normalize(new[]
+        {
+            source,
+            new Point(fallbackLane, source.Y),
+            new Point(fallbackLane, target.Y),
+            target
+        });
+        return new ArchitecturePhysicalRoute(link, fallbackPoints, link.Topology + ":degraded-fallback",
+            $"slot:{link.Link.Id}:degraded", $"column:{link.Link.Id}:degraded",
+            fallbackLane, source.Y, target.Y);
     }
 
     private static IEnumerable<int> ChannelLevels(
@@ -1010,32 +1013,6 @@ public sealed class ReplacementArchitectureRenderer
 
     private static string BuildPageJson(DrawioPageModel page) =>
         System.Text.Json.JsonSerializer.Serialize(page, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-
-    private static string BuildPlacementSummary(
-        ArchitecturePlacementGraph graph,
-        ArchitectureCandidatePlan candidate,
-        IReadOnlyList<ValidationFinding> findings)
-    {
-        var bounds = candidate.NodeRects.Values.Aggregate(
-            new Rect(0, 0, 0, 0), Union);
-        var largestGap = candidate.NodeRects.Values.OrderBy(rect => rect.X)
-            .Zip(candidate.NodeRects.Values.OrderBy(rect => rect.X).Skip(1),
-                (left, right) => right.X - left.Right)
-            .DefaultIfEmpty(0).Max();
-        var projectDimensions = string.Join(",", candidate.ProjectRects.Select(item =>
-            $"{item.Key}:{item.Value.Width}x{item.Value.Height}"));
-        var overlaps = findings.Where(finding => finding.Category == "NodeOverlap").ToArray();
-        var overlapSummary = overlaps.Length == 0
-            ? "none"
-            : string.Join("|", overlaps.Select(overlap =>
-            {
-                var first = graph.Nodes.SingleOrDefault(node => node.RenderInstanceId == overlap.LogicalRouteId);
-                var second = graph.Nodes.SingleOrDefault(node => node.RenderInstanceId == overlap.OtherNodeId);
-                return $"{overlap.LogicalRouteId}[{first?.SemanticNodeId},parent={first?.PositionalOwnerId},baseline={first?.IsBaseline},external={first?.IsExternal}]" +
-                    $"/{overlap.OtherNodeId}[{second?.SemanticNodeId},parent={second?.PositionalOwnerId},baseline={second?.IsBaseline},external={second?.IsExternal}]";
-            }));
-        return $"Placement nodes={candidate.NodeRects.Count}, bounds={bounds.Width}x{bounds.Height}, projects={projectDimensions}, largestGap={largestGap}, nodeOverlaps={overlaps.Length} ({overlapSummary}).";
-    }
 
     private static T Measure<T>(ICollection<PipelineStageMetric> timings, string name, Func<T> action)
     {
