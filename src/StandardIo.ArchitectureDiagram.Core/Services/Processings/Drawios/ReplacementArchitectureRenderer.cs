@@ -443,7 +443,9 @@ public sealed class ReplacementArchitectureRenderer
             var shared = sharedPair.First;
             if (shared.Length > 0)
                 findings.Add(new ValidationFinding("SharedSegment", pair.left.Link.Link.Id, pair.right.Link.Link.Id, null, 1,
-                    $"Routes share a non-zero collinear segment ({shared.Start.X},{shared.Start.Y}->{shared.End.X},{shared.End.Y}).",
+                    $"Routes share a non-zero collinear segment ({shared.Start.X},{shared.Start.Y}->{shared.End.X},{shared.End.Y}); " +
+                    $"left channels={pair.left.SourceChannelY}/{pair.left.TargetChannelY}, lane={pair.left.LaneX}; " +
+                    $"right channels={pair.right.SourceChannelY}/{pair.right.TargetChannelY}, lane={pair.right.LaneX}.",
                     new[] { new ValidationPoint(shared.Start.X, shared.Start.Y), new ValidationPoint(shared.End.X, shared.End.Y) },
                     Array.Empty<ValidationSegment>(), null, null, shared.Length, true));
         }
@@ -483,78 +485,174 @@ public sealed class ReplacementArchitectureRenderer
         DiagramSettings settings)
     {
         var routes = new List<ArchitecturePhysicalRoute>();
-        var usedChannelY = new HashSet<int>();
-        var outerX = nodes.Values.Select(node => node.Right).DefaultIfEmpty(0).Max() + settings.Layout.ParallelLaneSpacing;
         foreach (var link in graph.Links.OrderBy(link => link.Order))
         {
             var source = terminals.Single(terminal => terminal.LinkId == link.Link.Id && terminal.IsSource).Point;
             var target = terminals.Single(terminal => terminal.LinkId == link.Link.Id && !terminal.IsSource).Point;
             var sourceNode = nodes[link.SourcePlanningNodeId];
             var targetNode = nodes[link.TargetPlanningNodeId];
-            var downward = targetNode.Y > sourceNode.Y;
-            var laneX = outerX + routes.Count * settings.Layout.ParallelLaneSpacing;
-            var sourceChannelY = FindChannelY(sourceNode.Bottom + settings.Layout.LinkPadding,
-                downward ? targetNode.Y - settings.Layout.LinkPadding : sourceNode.Bottom + settings.Layout.LinkPadding + 100000,
-                settings.Layout.ParallelLaneSpacing, source.X, laneX, sourceNode.Bottom, nodes,
-                link.SourcePlanningNodeId, link.TargetPlanningNodeId, usedChannelY);
-            var targetChannelY = FindChannelY(targetNode.Y - settings.Layout.LinkPadding,
-                downward ? sourceNode.Bottom + settings.Layout.LinkPadding : targetNode.Y - settings.Layout.LinkPadding - 100000,
-                -settings.Layout.ParallelLaneSpacing, target.X, laneX, targetNode.Y, nodes,
-                link.SourcePlanningNodeId, link.TargetPlanningNodeId, usedChannelY);
-            var points = Normalize(new[]
-            {
-                source,
-                new Point(source.X, sourceChannelY),
-                new Point(laneX, sourceChannelY),
-                new Point(laneX, targetChannelY),
-                new Point(target.X, targetChannelY),
-                target
-            });
-            routes.Add(new ArchitecturePhysicalRoute(link, points, link.Topology,
-                $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, sourceChannelY, targetChannelY));
+            var route = BuildLocalRoute(link, source, target, sourceNode, targetNode, nodes, routes, settings);
+            routes.Add(route);
         }
         return routes;
     }
 
-    private static int FindChannelY(
+    private static ArchitecturePhysicalRoute BuildLocalRoute(
+        ArchitecturePlacementLink link,
+        Point source,
+        Point target,
+        Rect sourceNode,
+        Rect targetNode,
+        IReadOnlyDictionary<string, Rect> nodes,
+        IReadOnlyList<ArchitecturePhysicalRoute> existingRoutes,
+        DiagramSettings settings)
+    {
+        var sourceLevels = ChannelLevels(sourceNode.Bottom + settings.Layout.LinkPadding, true, nodes.Values, settings)
+            .Take(24).ToArray();
+        var targetLevels = ChannelLevels(targetNode.Y - settings.Layout.LinkPadding, false, nodes.Values, settings)
+            .Take(24).ToArray();
+        var obstacleArray = nodes.Values.ToArray();
+        var laneSpacing = Math.Max(settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        var occupiedLanes = existingRoutes.Select(route => route.LaneX).ToArray();
+        var localExpansionLanes = occupiedLanes.Length == 0
+            ? Array.Empty<int>()
+            : new[]
+            {
+                occupiedLanes.Min() - laneSpacing,
+                occupiedLanes.Max() + laneSpacing
+            }.Concat(occupiedLanes.SelectMany(lane => new[] { lane - laneSpacing, lane + laneSpacing }))
+                .Distinct().ToArray();
+        var lanes = LaneCoordinates(source, target, obstacleArray, settings).Take(24)
+            .Concat(localExpansionLanes)
+            .Concat(new[]
+            {
+                obstacleArray.Select(node => node.X).DefaultIfEmpty(Math.Min(source.X, target.X)).Min() - settings.Layout.HorizontalSpacing,
+                obstacleArray.Select(node => node.Right).DefaultIfEmpty(Math.Max(source.X, target.X)).Max() + settings.Layout.HorizontalSpacing
+            })
+            .Distinct().ToArray();
+        var candidates =
+            from laneX in lanes
+            from sourceY in sourceLevels
+            from targetY in targetLevels
+            let points = Normalize(new[]
+            {
+                source,
+                new Point(source.X, sourceY),
+                new Point(laneX, sourceY),
+                new Point(laneX, targetY),
+                new Point(target.X, targetY),
+                target
+            })
+            where IsObstacleSafe(points, nodes, link.SourcePlanningNodeId, link.TargetPlanningNodeId)
+            let length = points.Zip(points.Skip(1), (left, right) => Math.Abs(left.X - right.X) + Math.Abs(left.Y - right.Y)).Sum()
+            let bends = Math.Max(0, points.Count - 2)
+            orderby length, bends, Math.Abs(laneX - source.X), laneX, sourceY, targetY
+            select new ArchitecturePhysicalRoute(link, points, link.Topology,
+                $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, sourceY, targetY);
+
+        // When a node sits immediately below the source terminal column, a
+        // vertical departure is not physically available. Leave along the
+        // source bottom edge, use the local column, and enter along the target
+        // top edge instead.
+        candidates = candidates.Concat(
+            from laneX in lanes
+            let points = Normalize(new[]
+            {
+                source,
+                new Point(laneX, source.Y),
+                new Point(laneX, target.Y),
+                target
+            })
+            where IsObstacleSafe(points, nodes, link.SourcePlanningNodeId, link.TargetPlanningNodeId)
+            let length = points.Zip(points.Skip(1), (left, right) => Math.Abs(left.X - right.X) + Math.Abs(left.Y - right.Y)).Sum()
+            let bends = Math.Max(0, points.Count - 2)
+            select new ArchitecturePhysicalRoute(link, points, link.Topology + ":edge-exit",
+                $"slot:{link.Link.Id}", $"column:{link.Link.Id}", laneX, source.Y, target.Y));
+
+        var selected = candidates.FirstOrDefault(route => IsSharedFree(route, existingRoutes));
+        if (selected is not null) return selected;
+
+        throw new InvalidOperationException(
+            $"No valid local orthogonal route for {link.Link.Id} ({link.SourcePlanningNodeId}->{link.TargetPlanningNodeId}). " +
+            $"source={sourceNode.X},{sourceNode.Y},{sourceNode.Width},{sourceNode.Height}; " +
+            $"target={targetNode.X},{targetNode.Y},{targetNode.Width},{targetNode.Height}; " +
+            $"existingRoutes={existingRoutes.Count}, obstacleSafeCandidates={candidates.Count()}. " +
+            "All bounded topology candidates intersected a node or an existing route.");
+    }
+
+    private static IEnumerable<int> ChannelLevels(
         int start,
-        int limit,
-        int step,
-        int nodeX,
-        int laneX,
-        int stubStartY,
+        bool downward,
+        IEnumerable<Rect> obstacles,
+        DiagramSettings settings)
+    {
+        var padding = Math.Max(settings.Layout.LinkPadding, settings.Layout.ParallelLaneSpacing);
+        var bases = obstacles.SelectMany(obstacle => new[]
+        {
+            obstacle.Y - padding,
+            obstacle.Bottom + padding
+        }).Append(start).Distinct().ToArray();
+        var levels = bases.SelectMany(level => Enumerable.Range(-16, 33)
+            .Select(offset => level + offset * padding))
+            .Distinct()
+            // A channel that lies inside any node row cannot be used by a
+            // horizontal through-segment without relying on a lucky lane x.
+            // Prefer row-clear levels so the lane remains local and predictable.
+            .OrderBy(level => obstacles.Any(obstacle => level > obstacle.Y && level < obstacle.Bottom))
+            .ThenBy(level => Math.Abs(level - start));
+        return downward
+            ? levels.Where(level => level >= start)
+            : levels.Where(level => level <= start);
+    }
+
+    private static IEnumerable<int> LaneCoordinates(
+        Point source,
+        Point target,
+        IEnumerable<Rect> obstacles,
+        DiagramSettings settings)
+    {
+        var spacing = Math.Max(settings.Layout.ParallelLaneSpacing, settings.Layout.LinkPadding);
+        var obstacleArray = obstacles.ToArray();
+        var bases = obstacleArray.SelectMany(obstacle => new[]
+        {
+            obstacle.X - spacing,
+            obstacle.Right + spacing
+        }).Append(obstacleArray.Select(obstacle => obstacle.X).DefaultIfEmpty(Math.Min(source.X, target.X)).Min() - spacing)
+            .Append(obstacleArray.Select(obstacle => obstacle.Right).DefaultIfEmpty(Math.Max(source.X, target.X)).Max() + spacing)
+            .Append(source.X - spacing).Append(source.X + spacing).Append(target.X - spacing).Append(target.X + spacing)
+            .Distinct().ToArray();
+        var boundaries = bases.SelectMany(boundary => Enumerable.Range(-16, 33)
+            .Select(offset => boundary + offset * spacing)).Distinct().ToArray();
+        var centre = (source.X + target.X) / 2.0;
+        return boundaries.OrderBy(x => Math.Abs(x - centre)).ThenBy(x => x);
+    }
+
+    private static bool IsObstacleSafe(
+        IReadOnlyList<Point> points,
         IReadOnlyDictionary<string, Rect> nodes,
         string sourceNodeId,
-        string targetNodeId,
-        ISet<int> usedChannelY)
+        string targetNodeId)
     {
-        var direction = Math.Sign(step);
-        var increment = Math.Abs(step);
-        if (increment == 0) increment = 1;
-        for (var y = start; direction > 0 ? y <= limit : y >= limit; y += direction * increment)
-        {
-            if (usedChannelY.Contains(y)) continue;
-            var intersects = nodes.Any(item => item.Key != sourceNodeId && item.Key != targetNodeId &&
-                (SegmentIntersectsInterior(new Segment(new Point(nodeX, stubStartY), new Point(nodeX, y)), item.Value) ||
-                 SegmentIntersectsInterior(new Segment(new Point(nodeX, y), new Point(laneX, y)), item.Value)));
-            if (intersects) continue;
-            usedChannelY.Add(y);
-            return y;
-        }
-        for (var distance = 0; distance <= 100000; distance += increment)
-        {
-            var fallback = stubStartY + direction * distance;
-            if (usedChannelY.Contains(fallback)) continue;
-            var clear = !nodes.Any(item => item.Key != sourceNodeId && item.Key != targetNodeId &&
-                (SegmentIntersectsInterior(new Segment(new Point(nodeX, stubStartY), new Point(nodeX, fallback)), item.Value) ||
-                 SegmentIntersectsInterior(new Segment(new Point(nodeX, fallback), new Point(laneX, fallback)), item.Value)));
-            if (!clear) continue;
-            usedChannelY.Add(fallback);
-            return fallback;
-        }
+        var segments = points.Zip(points.Skip(1), (start, end) => new Segment(start, end)).ToArray();
+        if (segments.Length == 0 || segments.Any(segment => !segment.IsOrthogonal || segment.Length == 0)) return false;
+        if (segments.Any(segment => nodes.Any(item => item.Key != sourceNodeId && item.Key != targetNodeId &&
+            SegmentIntersectsInterior(segment, item.Value)))) return false;
+        return true;
+    }
 
-        usedChannelY.Add(stubStartY);
-        return stubStartY;
+    private static bool IsSharedFree(
+        ArchitecturePhysicalRoute route,
+        IReadOnlyList<ArchitecturePhysicalRoute> existingRoutes)
+    {
+        var segments = route.Points.Zip(route.Points.Skip(1), (start, end) => new Segment(start, end)).ToArray();
+        return existingRoutes.All(existingRoute =>
+        {
+            var existingSegments = existingRoute.Points
+                .Zip(existingRoute.Points.Skip(1), (start, end) => new Segment(start, end));
+            return existingSegments.All(existing => segments.All(candidate =>
+                !candidate.IsOrthogonal || !existing.IsOrthogonal ||
+                candidate.IsHorizontal != existing.IsHorizontal || candidate.OverlapLength(existing) == 0));
+        });
     }
 
     private static Dictionary<string, Rect> PlaceCanonicalUnits(

@@ -30,6 +30,8 @@ public sealed class ReplacementArchitectureRendererTests
         Assert.Equal("0", root.Elements("mxCell").Skip(1).First().Attribute("parent")?.Value);
         Assert.Null(root.Elements("mxCell").Skip(1).First().Attribute("vertex"));
         Assert.Contains(result.Page.GraphModel.Descendants("mxCell"), cell => cell.Attribute("edge")?.Value == "1");
+        Assert.DoesNotContain(result.LogicalFindings, finding => finding.Category == "SharedSegment");
+        Assert.DoesNotContain(result.LogicalFindings, finding => finding.Category == "LinkNodeIntersection");
     }
 
     [Fact]
