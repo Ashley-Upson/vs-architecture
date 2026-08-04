@@ -130,6 +130,34 @@ public sealed class ReplacementArchitectureRendererTests
     }
 
     [Fact]
+    public void Render_classifies_cycle_return_with_the_canonical_upward_family()
+    {
+        var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
+
+        Assert.Equal(1, result.RoutingEvidence!.TopologyFamilyCounts["AdjacentDownward"]);
+        Assert.Equal(1, result.RoutingEvidence.TopologyFamilyCounts["UpwardReturn"]);
+        Assert.Collection(result.Routes, _ => { }, _ => { });
+    }
+
+    [Fact]
+    public void Render_records_cross_project_transition_in_routing_evidence()
+    {
+        var source = new ArchitectureRenderNode("source", "source", "project-a", "SourceService", "SourceService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, null, 0);
+        var target = new ArchitectureRenderNode("target", "target", "project-b", "TargetService", "TargetService", "Class", false, "", InterfaceResolutionStatus.NotApplicable, null, null, 0, ArchitectureRenderNodeOccurrence.Canonical, ArchitectureDuplicationReason.None, null, 1);
+        var graph = new ArchitectureRenderGraph(
+            new[] { new ArchitectureRenderProject("project-a", "Project A", 0), new ArchitectureRenderProject("project-b", "Project B", 1) },
+            new[] { source, target },
+            new[] { new ArchitectureRenderLink("cross", "cross", "source", "target", "source", "target", "Dependency", 0) },
+            new[] { "source" },
+            new Dictionary<string, IReadOnlyList<string>> { ["source"] = new[] { "source" }, ["target"] = new[] { "target" } });
+
+        var result = new ReplacementArchitectureRenderer().Render(graph, DiagramSettings.CreateDefault());
+
+        Assert.Equal(1, result.RoutingEvidence!.ProjectTransitionCount);
+        Assert.Single(result.Routes);
+    }
+
+    [Fact]
     public void Render_emits_terminal_ratios_and_semantic_provenance()
     {
         var result = new ReplacementArchitectureRenderer().Render(Graph(), DiagramSettings.CreateDefault());
