@@ -7,36 +7,58 @@ using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 
-internal sealed record ArchitecturePlanningNode(
+internal sealed record ArchitecturePlacementNode(
     ArchitectureRenderNode Node,
+    string RenderInstanceId,
+    string SemanticNodeId,
+    string? ProjectId,
+    bool IsExternal,
+    ArchitectureRenderNodeOccurrence Occurrence,
+    ArchitectureDuplicationReason DuplicationReason,
     int Order,
+    int DiscoveryOrder,
     int Depth,
     int Width,
     int Height,
-    string PlacementGroup);
+    string PlacementGroup,
+    bool IsBaseline,
+    bool IsRoot,
+    string? PositionalOwnerId,
+    string? PlacementParentRenderId);
 
-internal sealed record ArchitecturePlanningLink(
+internal sealed record ArchitecturePlacementLink(
     ArchitectureRenderLink Link,
     int Order,
     string Topology,
     string SourcePlanningNodeId,
     string TargetPlanningNodeId);
 
-internal sealed class ArchitecturePlanningGraph
+internal sealed class ArchitecturePlacementGraph
 {
-    public ArchitecturePlanningGraph(
+    public ArchitecturePlacementGraph(
         ArchitectureRenderGraph source,
-        IReadOnlyList<ArchitecturePlanningNode> nodes,
-        IReadOnlyList<ArchitecturePlanningLink> links)
+        IReadOnlyList<ArchitecturePlacementNode> nodes,
+        IReadOnlyList<ArchitecturePlacementLink> links)
     {
-        Source = source ?? throw new ArgumentNullException(nameof(source));
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        Projects = Array.AsReadOnly(source.Projects.ToArray());
+        RenderNodes = Array.AsReadOnly(source.Nodes.ToArray());
+        TraversalRootSemanticIds = Array.AsReadOnly(source.TraversalRootSemanticIds.ToArray());
+        RenderInstancesBySemanticNodeId = new ReadOnlyDictionary<string, IReadOnlyList<string>>(
+            source.RenderInstancesBySemanticNodeId.ToDictionary(
+                item => item.Key,
+                item => item.Value,
+                StringComparer.Ordinal));
         Nodes = Array.AsReadOnly(nodes?.ToArray() ?? throw new ArgumentNullException(nameof(nodes)));
         Links = Array.AsReadOnly(links?.ToArray() ?? throw new ArgumentNullException(nameof(links)));
     }
 
-    public ArchitectureRenderGraph Source { get; }
-    public IReadOnlyList<ArchitecturePlanningNode> Nodes { get; }
-    public IReadOnlyList<ArchitecturePlanningLink> Links { get; }
+    public IReadOnlyList<ArchitectureRenderProject> Projects { get; }
+    public IReadOnlyList<ArchitectureRenderNode> RenderNodes { get; }
+    public IReadOnlyList<string> TraversalRootSemanticIds { get; }
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> RenderInstancesBySemanticNodeId { get; }
+    public IReadOnlyList<ArchitecturePlacementNode> Nodes { get; }
+    public IReadOnlyList<ArchitecturePlacementLink> Links { get; }
 }
 
 internal sealed record ArchitectureTerminal(
@@ -47,7 +69,7 @@ internal sealed record ArchitectureTerminal(
     string Owner);
 
 internal sealed record ArchitecturePhysicalRoute(
-    ArchitecturePlanningLink Link,
+    ArchitecturePlacementLink Link,
     IReadOnlyList<Point> Points,
     string Topology,
     string SlotOwner,

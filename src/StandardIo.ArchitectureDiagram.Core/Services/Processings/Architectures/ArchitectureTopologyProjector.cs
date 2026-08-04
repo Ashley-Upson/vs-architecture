@@ -19,21 +19,19 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
         settings ??= new NodeDuplicationSettings();
 
         var policy = DuplicationPolicy.Create(settings);
-        var projects = diagram.Projects.OrderBy(project => project.Id, StringComparer.Ordinal)
+        var projects = diagram.Projects
             .Select((project, order) => new ArchitectureRenderProject(project.Id, project.Name, order)).ToArray();
         var semanticNodes = BuildSemanticNodes(diagram);
         var nodeById = semanticNodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
         var links = diagram.Links.Where(link => nodeById.ContainsKey(link.SourceId) && nodeById.ContainsKey(link.TargetId))
-            .OrderBy(link => link.Id, StringComparer.Ordinal).ToArray();
+            .ToArray();
+        var linkOrder = links.Select((link, index) => new { link.Id, index })
+            .ToDictionary(item => item.Id, item => item.index, StringComparer.Ordinal);
         var outgoing = links.GroupBy(link => link.SourceId, StringComparer.Ordinal).ToDictionary(
             group => group.Key,
-            group => group.OrderBy(link => nodeById[link.TargetId].SemanticTypeIdentity, StringComparer.Ordinal)
-                .ThenBy(link => link.TargetId, StringComparer.Ordinal)
-                .ThenBy(link => link.Id, StringComparer.Ordinal).ToArray(),
+            group => group.ToArray(),
             StringComparer.Ordinal);
         var configuredRoots = diagram.Selection?.Roots.OrderBy(root => root.PatternIndex)
-            .ThenBy(root => root.MatchedCanonicalValue, StringComparer.Ordinal)
-            .ThenBy(root => root.SemanticNodeId, StringComparer.Ordinal)
             .Select(root => root.SemanticNodeId).Where(nodeById.ContainsKey)
             .Distinct(StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
         var roots = configuredRoots.Length > 0
@@ -53,7 +51,7 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
         while (represented.Count < semanticNodes.Count)
         {
             var remaining = semanticNodes.Where(node => !represented.Contains(node.Id))
-                .OrderBy(node => node.Id, StringComparer.Ordinal).First();
+                .OrderBy(node => node.DiscoveryOrder).ThenBy(node => node.Id, StringComparer.Ordinal).First();
             roots.Add(remaining.Id);
             VisitRoot(remaining.Id);
         }
@@ -61,7 +59,7 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
         return new ArchitectureRenderGraph(
             projects,
             nodes,
-            renderLinks,
+            renderLinks.OrderBy(link => link.Order).ToArray(),
             roots,
             instances.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<string>)pair.Value.ToArray(), StringComparer.Ordinal));
 
@@ -130,7 +128,7 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
                 var childId = Visit(link.TargetId, rootId, childPath, renderId, nextAncestors, mayDuplicate);
                 renderLinks.Add(new ArchitectureRenderLink(
                     $"{RenderIdPrefix}{SafeId(rootId)}__{SafeId(path)}__{SafeId(link.Id)}",
-                    link.Id, renderId, childId, link.SourceId, link.TargetId, link.Kind, renderLinks.Count));
+                    link.Id, renderId, childId, link.SourceId, link.TargetId, link.Kind, linkOrder[link.Id]));
             }
 
             return renderId;
@@ -142,30 +140,34 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
         var nodes = diagram.Projects.SelectMany(project => project.Nodes.Select(node => new SemanticNode(
                 node.Id, node.ProjectId, node.Name, node.SemanticTypeIdentity ?? node.FullName, node.Kind,
                 false, string.Empty, node.InterfaceResolution, node.InterfaceIdentity,
-                node.ImplementationIdentity, node.ImplementationCount)))
-            .OrderBy(node => node.Id, StringComparer.Ordinal).ToList();
+                node.ImplementationIdentity, node.ImplementationCount, 0)))
+            .ToList();
+        for (var index = 0; index < nodes.Count; index++)
+            nodes[index] = nodes[index] with { DiscoveryOrder = index };
         var projectByInternalId = nodes.Where(node => node.ProjectId is not null)
             .ToDictionary(node => node.Id, node => node.ProjectId, StringComparer.Ordinal);
-        foreach (var external in diagram.ExternalNodes.OrderBy(node => node.Id, StringComparer.Ordinal))
+        foreach (var external in diagram.ExternalNodes)
         {
             var owners = diagram.Links.Where(link => link.TargetId == external.Id)
                 .Select(link => projectByInternalId.TryGetValue(link.SourceId, out var projectId) ? projectId : null)
                 .Where(projectId => projectId is not null).Distinct(StringComparer.Ordinal).ToArray();
             nodes.Add(new SemanticNode(external.Id, owners.Length == 1 ? owners[0] : null,
                 external.Name, string.IsNullOrWhiteSpace(external.FullName) ? external.Name : external.FullName,
-                "External", true, external.Tag, InterfaceResolutionStatus.NotApplicable, null, null, 0));
+                "External", true, external.Tag, InterfaceResolutionStatus.NotApplicable, null, null, 0, nodes.Count));
         }
-        return nodes.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray();
+        return nodes.ToArray();
     }
 
     private static IReadOnlyList<string> InferRoots(
         IEnumerable<string> nodeIds,
         IReadOnlyList<ArchitectureLink> links)
     {
-        var ids = nodeIds.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var ids = nodeIds.ToArray();
+        var discoveryOrder = ids.Select((id, index) => new { id, index })
+            .ToDictionary(item => item.id, item => item.index, StringComparer.Ordinal);
         var outgoing = links.GroupBy(link => link.SourceId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(link => link.TargetId)
-                .Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+                .Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var index = 0;
         var indexes = new Dictionary<string, int>(StringComparer.Ordinal);
         var low = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -188,8 +190,9 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
         }
         return components.Select((component, componentIndex) => new { component, componentIndex })
             .Where(item => incoming[item.componentIndex] == 0)
-            .Select(item => item.component.OrderBy(id => id, StringComparer.Ordinal).First())
-            .OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            .OrderBy(item => item.component.Min(id => discoveryOrder[id]))
+            .Select(item => item.component.OrderBy(id => discoveryOrder[id]).ThenBy(id => id, StringComparer.Ordinal).First())
+            .ToArray();
 
         void StrongConnect(string node)
         {
@@ -220,7 +223,7 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
                 onStack.Remove(current);
                 component.Add(current);
             } while (!string.Equals(current, node, StringComparison.Ordinal));
-            components.Add(component.OrderBy(id => id, StringComparer.Ordinal).ToArray());
+            components.Add(component.ToArray());
         }
     }
 
@@ -230,7 +233,8 @@ public sealed class ArchitectureTopologyProjector : IArchitectureTopologyProject
     private sealed record SemanticNode(
         string Id, string? ProjectId, string Name, string SemanticTypeIdentity, string Kind,
         bool IsExternal, string ExternalTag, InterfaceResolutionStatus InterfaceResolution,
-        string? InterfaceIdentity, string? ImplementationIdentity, int ImplementationCount);
+        string? InterfaceIdentity, string? ImplementationIdentity, int ImplementationCount,
+        int DiscoveryOrder);
 
     private sealed class DuplicationPolicy
     {

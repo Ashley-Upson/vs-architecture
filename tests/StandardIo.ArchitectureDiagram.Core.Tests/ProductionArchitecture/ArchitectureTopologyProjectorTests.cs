@@ -53,9 +53,9 @@ public sealed class ArchitectureTopologyProjectorTests
     }
 
     [Fact]
-    public void Projection_is_stable_when_nodes_and_links_are_reversed()
+    public void Projection_preserves_discovery_order_and_uses_ids_only_as_tie_breakers()
     {
-        var diagram = Shared(false);
+        var diagram = Diagram([Node("z"), Node("a")], []);
         var reversed = diagram with
         {
             Projects = diagram.Projects.Reverse().Select(project => project with
@@ -65,8 +65,15 @@ public sealed class ArchitectureTopologyProjectorTests
             Links = diagram.Links.Reverse().ToArray()
         };
 
-        Assert.Equal(Signature(Project(diagram, true)), Signature(Project(reversed, true)));
-        Assert.Equal(Signature(Project(diagram, false)), Signature(Project(reversed, false)));
+        var original = Project(diagram, false);
+        var reversedGraph = Project(reversed, false);
+
+        Assert.Equal(new[] { "z", "a" }, original.Nodes.Select(node => node.SemanticNodeId));
+        Assert.Equal(new[] { "a", "z" }, reversedGraph.Nodes.Select(node => node.SemanticNodeId));
+
+        var linked = Project(Shared(false), false);
+        Assert.Equal(new[] { "a_shared", "b_shared", "shared_child" },
+            linked.Links.Select(link => link.SemanticLinkId));
     }
 
     [Fact]
@@ -78,6 +85,47 @@ public sealed class ArchitectureTopologyProjectorTests
 
         Assert.Equal("a", parent.SemanticNodeId);
         Assert.Equal(2, graph.Links.Count(link => link.TargetRenderInstanceId == shared.Id));
+    }
+
+    [Fact]
+    public void Canonical_mode_creates_exactly_one_physical_instance_per_semantic_node()
+    {
+        var graph = Project(Shared(false), false);
+
+        Assert.Equal(graph.Nodes.Select(node => node.SemanticNodeId).Distinct(StringComparer.Ordinal).Count(), graph.Nodes.Count);
+        Assert.All(graph.RenderInstancesBySemanticNodeId, item => Assert.Single(item.Value));
+    }
+
+    [Fact]
+    public void Duplicate_enabled_projection_records_source_and_reason_for_every_extra_instance()
+    {
+        var graph = Project(Shared(false), true);
+
+        foreach (var group in graph.Nodes.GroupBy(node => node.SemanticNodeId, StringComparer.Ordinal))
+        {
+            Assert.NotEmpty(group);
+            Assert.Equal(group.Count(), graph.RenderInstancesBySemanticNodeId[group.Key].Count);
+            Assert.All(group.Skip(1), node =>
+            {
+                Assert.Equal(ArchitectureRenderNodeOccurrence.Duplicated, node.Occurrence);
+                Assert.NotEqual(ArchitectureDuplicationReason.None, node.DuplicationReason);
+                Assert.Equal(group.Key, node.SemanticNodeId);
+            });
+        }
+    }
+
+    [Fact]
+    public void External_projection_preserves_external_tag_and_semantic_identity()
+    {
+        var graph = Project(new ArchitectureDiagramModel(
+            [Project("project", Node("owner"))],
+            [new ArchitectureExternalNode("external", "ILogger", "Logging", "", "Logging.ILogger", "[External]")],
+            [Link("owner_external", "owner", "external")], null), false);
+
+        var external = Assert.Single(graph.Nodes, node => node.SemanticNodeId == "external");
+        Assert.True(external.IsExternal);
+        Assert.Equal("[External]", external.ExternalTag);
+        Assert.Equal("external", external.SemanticNodeId);
     }
 
     [Fact]

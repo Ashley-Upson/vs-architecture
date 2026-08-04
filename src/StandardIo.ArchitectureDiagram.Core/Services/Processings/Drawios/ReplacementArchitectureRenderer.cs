@@ -25,7 +25,7 @@ public sealed class ReplacementArchitectureRenderer
         settings ??= DiagramSettings.CreateDefault();
         var timings = new List<PipelineStageMetric>();
 
-        var planning = Measure(timings, "replacement planning graph", () => BuildPlanningGraph(graph, settings));
+        var planning = Measure(timings, "replacement placement graph", () => BuildPlacementGraph(graph, settings));
         var candidate = Measure(timings, "replacement candidate construction", () => BuildCandidate(planning, settings));
         var scene = Measure(timings, "replacement physical scene", () => BuildScene(planning, candidate, settings));
         var pageModel = Measure(timings, "replacement Draw.io page model", () => BuildPageModel(planning, scene, settings));
@@ -77,7 +77,7 @@ public sealed class ReplacementArchitectureRenderer
                 }));
     }
 
-    private static ArchitecturePlanningGraph BuildPlanningGraph(
+    private static ArchitecturePlacementGraph BuildPlacementGraph(
         ArchitectureRenderGraph graph,
         DiagramSettings settings)
     {
@@ -115,24 +115,35 @@ public sealed class ReplacementArchitectureRenderer
         for (var index = 0; index < residual.Length; index++) depths[residual[index].Id] = index;
 
         var widthByNode = nodes.ToDictionary(node => node.Id, node => RequiredWidth(node, links, settings), StringComparer.Ordinal);
-        var planningNodes = nodes.Select(node => new ArchitecturePlanningNode(
+        var planningNodes = nodes.Select(node => new ArchitecturePlacementNode(
             node,
+            node.Id,
+            node.SemanticNodeId,
+            node.ProjectId,
+            node.IsExternal,
+            node.Occurrence,
+            node.DuplicationReason,
+            node.Order,
             node.Order,
             depths[node.Id],
             widthByNode[node.Id],
             settings.Layout.NodeHeight,
-            node.PlacementParentRenderId ?? node.SemanticNodeId)).ToArray();
-        var planningLinks = links.Select(link => new ArchitecturePlanningLink(
+            node.PlacementParentRenderId ?? node.SemanticNodeId,
+            IsBaselineNode(node, settings.Layout.BaselineAlignmentPattern),
+            graph.TraversalRootSemanticIds.Contains(node.SemanticNodeId, StringComparer.Ordinal),
+            node.PlacementParentRenderId,
+            node.PlacementParentRenderId)).ToArray();
+        var planningLinks = links.Select(link => new ArchitecturePlacementLink(
             link,
             link.Order,
             Topology(link, depths),
             link.SourceRenderInstanceId,
             link.TargetRenderInstanceId)).ToArray();
-        return new ArchitecturePlanningGraph(graph, planningNodes, planningLinks);
+        return new ArchitecturePlacementGraph(graph, planningNodes, planningLinks);
     }
 
     private static ArchitectureCandidatePlan BuildCandidate(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         DiagramSettings settings)
     {
         var nodeRects = new Dictionary<string, Rect>(StringComparer.Ordinal);
@@ -195,8 +206,8 @@ public sealed class ReplacementArchitectureRenderer
             terminals,
             routes,
             routes.SelectMany(route => projectRects.Keys.Where(project =>
-                graph.Source.Nodes.Any(node => node.Id == route.Link.Link.SourceRenderInstanceId && node.ProjectId == project) &&
-                graph.Source.Nodes.Any(node => node.Id == route.Link.Link.TargetRenderInstanceId && node.ProjectId != project)))
+                graph.RenderNodes.Any(node => node.Id == route.Link.Link.SourceRenderInstanceId && node.ProjectId == project) &&
+                graph.RenderNodes.Any(node => node.Id == route.Link.Link.TargetRenderInstanceId && node.ProjectId != project)))
                 .Distinct(StringComparer.Ordinal).ToArray(),
             new[]
             {
@@ -212,7 +223,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static ArchitecturePhysicalScene BuildScene(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         ArchitectureCandidatePlan candidate,
         DiagramSettings settings)
     {
@@ -230,7 +241,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static DrawioPageModel BuildPageModel(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         ArchitecturePhysicalScene scene,
         DiagramSettings settings)
     {
@@ -239,7 +250,7 @@ public sealed class ReplacementArchitectureRenderer
             new("0", "", null, null, string.Empty, string.Empty, null, Array.Empty<Point>(), false),
             new("1", "0", null, null, string.Empty, string.Empty, null, Array.Empty<Point>(), false)
         };
-        foreach (var project in graph.Source.Projects.OrderBy(project => project.Order))
+        foreach (var project in graph.Projects.OrderBy(project => project.Order))
         {
             if (settings.ShowProjectContainers && scene.Candidate.ProjectRects.TryGetValue(project.Id, out var projectRect))
                 cells.Add(new DrawioPageCell(project.Id, "1", null, null, project.Name,
@@ -263,8 +274,8 @@ public sealed class ReplacementArchitectureRenderer
         }
         foreach (var route in scene.Routes.OrderBy(route => route.Link.Link.Order))
         {
-            var source = graph.Source.Nodes.Single(node => node.Id == route.Link.Link.SourceRenderInstanceId);
-            var target = graph.Source.Nodes.Single(node => node.Id == route.Link.Link.TargetRenderInstanceId);
+            var source = graph.RenderNodes.Single(node => node.Id == route.Link.Link.SourceRenderInstanceId);
+            var target = graph.RenderNodes.Single(node => node.Id == route.Link.Link.TargetRenderInstanceId);
             var sourceRect = scene.Candidate.NodeRects[source.Id];
             var targetRect = scene.Candidate.NodeRects[target.Id];
             var sourceTerminal = scene.Candidate.Terminals.Single(terminal => terminal.LinkId == route.Link.Link.Id && terminal.IsSource).Point;
@@ -367,7 +378,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static IReadOnlyList<ValidationFinding> ValidateReconstruction(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         ArchitecturePhysicalScene scene,
         DrawioPageModel expected,
         DrawioPageModel actual)
@@ -432,7 +443,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static IReadOnlyList<ValidationFinding> ValidateScene(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         IReadOnlyDictionary<string, Rect> nodes,
         IReadOnlyDictionary<string, Rect> projects,
         IReadOnlyList<ArchitectureTerminal> terminals,
@@ -484,7 +495,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static IReadOnlyList<ArchitectureTerminal> AllocateTerminals(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         IReadOnlyDictionary<string, Rect> nodes,
         DiagramSettings settings)
     {
@@ -509,7 +520,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static IReadOnlyList<ArchitecturePhysicalRoute> BuildRoutes(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         IReadOnlyDictionary<string, Rect> nodes,
         IReadOnlyList<ArchitectureTerminal> terminals,
         IReadOnlyDictionary<string, Rect> projects,
@@ -590,7 +601,7 @@ public sealed class ReplacementArchitectureRenderer
         return stubStartY;
     }
 
-    private static void CenterParents(ArchitecturePlanningGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
+    private static void CenterParents(ArchitecturePlacementGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
     {
         foreach (var source in graph.Nodes.OrderByDescending(node => node.Depth))
         {
@@ -605,18 +616,14 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static void ApplyBaselineAlignment(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         Dictionary<string, Rect> nodes,
         DiagramSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)) return;
-        var pattern = new Regex(settings.Layout.BaselineAlignmentPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        var baseline = graph.Nodes.Where(node => pattern.IsMatch(node.Node.DisplayText ?? string.Empty) ||
-                pattern.IsMatch(node.Node.SemanticTypeIdentity ?? string.Empty))
+        var baseline = graph.Nodes.Where(node => node.IsBaseline)
             .Select(node => nodes[node.Node.Id].Y).DefaultIfEmpty(-1).Min();
         if (baseline < 0) return;
-        foreach (var node in graph.Nodes.Where(node => pattern.IsMatch(node.Node.DisplayText ?? string.Empty) ||
-                pattern.IsMatch(node.Node.SemanticTypeIdentity ?? string.Empty)))
+        foreach (var node in graph.Nodes.Where(node => node.IsBaseline))
         {
             var rect = nodes[node.Node.Id];
             nodes[node.Node.Id] = rect with { Y = baseline };
@@ -624,7 +631,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static void PlaceExternalTerminals(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         Dictionary<string, Rect> nodes,
         DiagramSettings settings)
     {
@@ -644,7 +651,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static void ClearPortColumnObstacles(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         Dictionary<string, Rect> nodes,
         DiagramSettings settings,
         ICollection<ArchitectureExpansionEvent> expansionEvents)
@@ -708,7 +715,7 @@ public sealed class ReplacementArchitectureRenderer
         }
     }
 
-    private static void ResolveNodeOverlaps(ArchitecturePlanningGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
+    private static void ResolveNodeOverlaps(ArchitecturePlacementGraph graph, Dictionary<string, Rect> nodes, DiagramSettings settings)
     {
         var ordered = graph.Nodes.OrderBy(node => nodes[node.Node.Id].Y)
             .ThenBy(node => nodes[node.Node.Id].X).ThenBy(node => node.Order).ThenBy(node => node.Node.Id, StringComparer.Ordinal)
@@ -725,9 +732,9 @@ public sealed class ReplacementArchitectureRenderer
         }
     }
 
-    private static Dictionary<string, Rect> BuildProjectRects(ArchitecturePlanningGraph graph, IReadOnlyDictionary<string, Rect> nodes, DiagramSettings settings)
+    private static Dictionary<string, Rect> BuildProjectRects(ArchitecturePlacementGraph graph, IReadOnlyDictionary<string, Rect> nodes, DiagramSettings settings)
     {
-        return graph.Source.Projects.Where(project => nodes.Any(node => graph.Nodes.Any(planning => planning.Node.Id == node.Key && planning.Node.ProjectId == project.Id)))
+        return graph.Projects.Where(project => nodes.Any(node => graph.Nodes.Any(planning => planning.RenderInstanceId == node.Key && planning.ProjectId == project.Id)))
             .ToDictionary(project => project.Id, project =>
             {
                 var projectNodes = graph.Nodes.Where(node => node.Node.ProjectId == project.Id).Select(node => nodes[node.Node.Id]).ToArray();
@@ -749,7 +756,7 @@ public sealed class ReplacementArchitectureRenderer
     }
 
     private static ArchitectureExpansionDiagnostics BuildExpansionDiagnostics(
-        ArchitecturePlanningGraph graph,
+        ArchitecturePlacementGraph graph,
         IReadOnlyDictionary<string, Rect> nodes,
         IReadOnlyList<ArchitecturePhysicalRoute> routes,
         IReadOnlyList<ArchitectureExpansionEvent> events,
@@ -778,6 +785,11 @@ public sealed class ReplacementArchitectureRenderer
 
     private static string Topology(ArchitectureRenderLink link, IReadOnlyDictionary<string, int> depths) =>
         depths[link.TargetRenderInstanceId] > depths[link.SourceRenderInstanceId] ? "downward" : "return";
+
+    private static bool IsBaselineNode(ArchitectureRenderNode node, string? pattern) =>
+        !string.IsNullOrWhiteSpace(pattern) &&
+        (Regex.IsMatch(node.DisplayText ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+         Regex.IsMatch(node.SemanticTypeIdentity ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
 
     private static IReadOnlyList<Point> Normalize(IEnumerable<Point> points)
     {
@@ -857,7 +869,7 @@ public sealed class ReplacementArchitectureRenderer
 
     private static string FormatRatio(double value) => value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
 
-    private static string BuildProvenanceJson(ArchitecturePlanningGraph graph, ArchitectureCandidatePlan candidate,
+    private static string BuildProvenanceJson(ArchitecturePlacementGraph graph, ArchitectureCandidatePlan candidate,
         ArchitecturePhysicalScene scene, DrawioPageModel page, IReadOnlyList<ValidationFinding> findings) =>
         System.Text.Json.JsonSerializer.Serialize(new
         {

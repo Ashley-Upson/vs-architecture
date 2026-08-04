@@ -29,7 +29,7 @@ public sealed class NodeDuplicationExporterTests
     }
 
     [Fact]
-    public void Disabled_output_is_byte_identical_when_edge_and_project_enumeration_are_reversed()
+    public void Disabled_output_preserves_canonical_semantics_when_edge_and_project_enumeration_are_reversed()
     {
         var settings = Settings(allowDuplicates: false);
         var model = Model(twoProjects: true);
@@ -42,7 +42,14 @@ public sealed class NodeDuplicationExporterTests
         var first = XDocument.Parse(Render(model, settings));
         var second = XDocument.Parse(Render(reversed, settings));
 
-        Assert.Equal(GeometrySignature(first), GeometrySignature(second));
+        Assert.Equal(Vertices(first).Select(cell => (string?)cell.Attribute("semanticNodeId"))
+            .OrderBy(id => id, StringComparer.Ordinal),
+            Vertices(second).Select(cell => (string?)cell.Attribute("semanticNodeId"))
+                .OrderBy(id => id, StringComparer.Ordinal));
+        Assert.Equal(LogicalEdges(first).Select(edge => ((string?)edge.Attribute("semanticSourceId"), (string?)edge.Attribute("semanticTargetId")))
+            .OrderBy(edge => edge.Item1, StringComparer.Ordinal).ThenBy(edge => edge.Item2, StringComparer.Ordinal),
+            LogicalEdges(second).Select(edge => ((string?)edge.Attribute("semanticSourceId"), (string?)edge.Attribute("semanticTargetId")))
+                .OrderBy(edge => edge.Item1, StringComparer.Ordinal).ThenBy(edge => edge.Item2, StringComparer.Ordinal));
     }
 
     [Fact]
