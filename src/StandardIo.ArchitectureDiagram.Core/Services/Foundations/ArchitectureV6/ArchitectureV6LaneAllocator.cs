@@ -244,11 +244,18 @@ internal sealed class ArchitectureV6LaneAllocator
                 group.Count(), $"destination approach lanes:{string.Join(",", group.Select(item => item.PhysicalLinkId))}", group.Key));
         foreach (var turn in turns)
         {
-            var turnGrid = routes.Single(route => route.PhysicalLinkId == turn.RouteId).Steps.Single(step => step.CellId.ToString() == turn.CellId).GridId;
-            constraints.Add(new GridTrackConstraint(TrackConstraintKind.TurnClearance, turnGrid, Array.Empty<PlanningGridRowId>(), Array.Empty<PlanningGridColumnId>(), 1, turn.Provenance, turn.RouteId));
+            var turnStep = routes.Single(route => route.PhysicalLinkId == turn.RouteId).Steps.Single(step => step.CellId.ToString() == turn.CellId);
+            constraints.Add(new GridTrackConstraint(TrackConstraintKind.TurnClearance, turnStep.GridId,
+                new[] { turnStep.CellId.RowId }, new[] { turnStep.CellId.ColumnId }, 1, turn.Provenance, turn.RouteId));
         }
         foreach (var transition in transitions)
-            constraints.Add(new GridTrackConstraint(TrackConstraintKind.ProjectFootprint, transition.SourceGridId, Array.Empty<PlanningGridRowId>(), Array.Empty<PlanningGridColumnId>(), transition.Ordinal + 1, transition.Provenance, transition.PhysicalLinkId));
+        {
+            var transitionCells = routes.Single(route => route.PhysicalLinkId == transition.PhysicalLinkId).Steps
+                .Where(step => step.GridId.Equals(transition.SourceGridId)).Select(step => step.CellId).ToArray();
+            constraints.Add(new GridTrackConstraint(TrackConstraintKind.ProjectFootprint, transition.SourceGridId,
+                transitionCells.Select(cell => cell.RowId).Distinct().ToArray(), transitionCells.Select(cell => cell.ColumnId).Distinct().ToArray(),
+                transition.Ordinal + 1, transition.Provenance, transition.PhysicalLinkId));
+        }
         foreach (var item in expansion)
             constraints.Add(new GridTrackConstraint(TrackConstraintKind.MultiColumnSpanMinimum, placements.Single(placement => placement.PhysicalNodeId == item.PhysicalNodeId).GridId,
                 Array.Empty<PlanningGridRowId>(), placements.Single(placement => placement.PhysicalNodeId == item.PhysicalNodeId).Footprint.Select(cell => cell.ColumnId).ToArray(), item.RequiredOddSpan, item.Reason, item.PhysicalNodeId));

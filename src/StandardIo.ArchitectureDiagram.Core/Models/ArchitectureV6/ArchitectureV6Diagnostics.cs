@@ -70,7 +70,15 @@ public sealed record ArchitecturePlanningMetrics(
     IReadOnlyDictionary<string, string>? ExpandedNodeSpans = null,
     int InvalidatedRouteCount = 0,
     int RebuiltReservationCount = 0,
-    int ShiftedRegionCount = 0);
+    int ShiftedRegionCount = 0,
+    IReadOnlyDictionary<string, int>? SizingConstraintCounts = null,
+    IReadOnlyDictionary<string, int>? SizingContributionExtents = null,
+    int SizingSolverIterations = 0,
+    bool SizingIdempotent = false,
+    int LargestRowExtent = 0,
+    int LargestColumnExtent = 0,
+    int LargestSpanMinimum = 0,
+    int UnsatisfiedSizingConstraintCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

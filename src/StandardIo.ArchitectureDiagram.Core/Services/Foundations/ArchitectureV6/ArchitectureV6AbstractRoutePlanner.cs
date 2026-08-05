@@ -268,6 +268,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         public MutableGrid(PlanningGridId id) => Id = id;
         public PlanningGridId Id { get; }
         public Dictionary<PlanningGridCellId, PlanningGridCell> Cells { get; } = new();
+        public List<PlanningGridRowId> RowOrder { get; } = new();
+        public List<PlanningGridColumnId> ColumnOrder { get; } = new();
         public IReadOnlyList<SubtreeReservation> Reservations { get; private set; } = Array.Empty<SubtreeReservation>();
         public string? ProjectId { get; private set; }
         public IReadOnlyList<string> OwnedPhysicalNodeIds { get; private set; } = Array.Empty<string>();
@@ -281,19 +283,23 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 OwnedPhysicalNodeIds = project.OwnedPhysicalNodeIds,
                 OwnedExternalNodeIds = project.OwnedExternalNodeIds
             };
+            result.RowOrder.AddRange(project.Grid.Rows.OrderBy(item => item.LogicalOrder).Select(item => item.Id));
+            result.ColumnOrder.AddRange(project.Grid.Columns.OrderBy(item => item.LogicalOrder).Select(item => item.Id));
             foreach (var cell in project.Grid.Cells) result.Cells[cell.Key] = cell.Value;
             return result;
         }
         public PlanningGridCellId Add(string rowToken, int column, CellOccupancy occupancy)
         {
             var cell = new PlanningGridCellId(Id, new PlanningGridRowId(rowToken.StartsWith("row:", StringComparison.Ordinal) ? rowToken : $"route-row:{rowToken}"), new PlanningGridColumnId($"column:{column}"));
+            if (!RowOrder.Contains(cell.RowId)) RowOrder.Add(cell.RowId);
+            if (!ColumnOrder.Contains(cell.ColumnId)) ColumnOrder.Add(cell.ColumnId);
             if (!Cells.ContainsKey(cell)) Cells[cell] = new PlanningGridCell(cell, CellCapability.RoutingAllowed | CellCapability.NodeAllowed, occupancy, Array.Empty<string>());
             return cell;
         }
         public PlanningGrid ToGrid()
         {
-            var rows = Cells.Keys.Select(item => item.RowId).Distinct().OrderBy(item => item.Value, StringComparer.Ordinal).Select((id, index) => new PlanningGridRow(id, index, 1, 1, 1, index, index)).ToArray();
-            var columns = Cells.Keys.Select(item => item.ColumnId).Distinct().OrderBy(item => item.Value, StringComparer.Ordinal).Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index)).ToArray();
+            var rows = RowOrder.Distinct().Select((id, index) => new PlanningGridRow(id, index, 1, 1, 1, index, index)).ToArray();
+            var columns = ColumnOrder.Distinct().Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index)).ToArray();
             return new PlanningGrid(Id, rows, columns, new Dictionary<PlanningGridCellId, PlanningGridCell>(Cells), new GridTransform(Id, new RelativePoint(0, 0)));
         }
         public ProjectRoutingGrid ToProjectGrid(IEnumerable<PlannedPhysicalNode> owned) => new(ProjectId ?? owned.FirstOrDefault()?.ProjectId ?? Id.Value.Substring("project:".Length), ToGrid(), Reservations, null,

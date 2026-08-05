@@ -66,7 +66,18 @@ public sealed record GridTrackSizingPlan(
     IReadOnlyList<PlanningGridRow> Rows,
     IReadOnlyList<PlanningGridColumn> Columns,
     IReadOnlyList<GridTrackConstraint> Constraints,
-    RelativeRectangle? DiagramBounds);
+    RelativeRectangle? DiagramBounds,
+    IReadOnlyList<GridTrackProvenance>? Provenance = null);
+
+public sealed record GridTrackContribution(TrackConstraintKind Kind, string? OwnerId, int Extent);
+
+public sealed record GridTrackProvenance(
+    PlanningGridId GridId,
+    string Axis,
+    string TrackId,
+    int MinimumExtent,
+    int FinalExtent,
+    IReadOnlyList<GridTrackContribution> Contributions);
 
 public sealed record PlannedPhysicalNodeGeometry(
     string PhysicalNodeId,
