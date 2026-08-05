@@ -17,7 +17,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var projection = new ProjectionBuilder(request).Build();
         var placement = new LogicalPlacementBuilder(request, projection).Build();
         var geometry = new ArchitectureV6GeometryBuilder(request, projection.PhysicalNodes, placement.NodePlacements, placement.NodeMetadata, placement.SubtreeReservations, placement.ProjectGrids).Build();
-        var diagnostics = projection.Diagnostics.Concat(placement.Diagnostics).Concat(geometry.Findings).ToArray();
+        var routes = ArchitectureV6RouteBuilder.Build(request, projection.PhysicalLinks, geometry.Geometry);
+        geometry = geometry with { Geometry = geometry.Geometry.WithRoutes(routes) };
+        var routeFindings = routes.SelectMany(route => RouteFindings(route)).ToArray();
+        var diagnostics = projection.Diagnostics.Concat(placement.Diagnostics).Concat(geometry.Findings).Concat(routeFindings).ToArray();
         var plan = CreatePlan(request, projection, placement, geometry, diagnostics);
         var validation = new ArchitectureDiagramV6Validator().Validate(plan);
         if (validation.IsValid) return plan;
@@ -41,18 +44,30 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             geometry.DiagramGrid,
             geometry.ProjectGrids,
             placement.NodePlacements,
-            Array.Empty<PlannedGridRoute>(),
+            geometry.Geometry.Routes.Select(route => new PlannedGridRoute(route.PhysicalLinkId,
+                new NodeEndpoint(projection.PhysicalLinks.First(link => link.PhysicalLinkId == route.PhysicalLinkId).SourcePhysicalNodeId, GridSide.Bottom, $"source:{route.PhysicalLinkId}", 0),
+                Array.Empty<PlannedGridRouteStep>(), Array.Empty<GridTransition>(),
+                new NodeEndpoint(projection.PhysicalLinks.First(link => link.PhysicalLinkId == route.PhysicalLinkId).DestinationPhysicalNodeId, GridSide.Top, $"target:{route.PhysicalLinkId}", 0), route.TopologyFamily,
+                projection.PhysicalLinks.First(link => link.PhysicalLinkId == route.PhysicalLinkId).SourceProjectId,
+                projection.PhysicalLinks.First(link => link.PhysicalLinkId == route.PhysicalLinkId).DestinationProjectId)).ToArray(),
             geometry.Sizing,
             planDiagnostics,
             projection,
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, false, false, true, true))
+            new ArchitecturePlanningStageStatus(true, true, false, false, false, true, true))
         {
             Geometry = geometry.Geometry
         };
         return plan;
+    }
+
+    private static IEnumerable<ArchitecturePlanningDiagnostic> RouteFindings(PlannedPhysicalRoute route)
+    {
+        if (route.HasNodeIntersection) yield return new ArchitecturePlanningDiagnostic("RouteNodeIntersection", "A route intersects an unrelated node.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId);
+        if (route.HasSharedSegment) yield return new ArchitecturePlanningDiagnostic("RouteSharedSegment", "A route shares a non-zero segment with an earlier route.", PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId);
+        if (route.Segments.Any(segment => segment.Start == segment.End)) yield return new ArchitecturePlanningDiagnostic("RouteZeroLengthSegment", "A route contains a zero-length segment.", PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId);
     }
 
     private static ArchitecturePlanningMetrics BuildMetrics(
@@ -66,6 +81,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             item => item.Key, item => item.Value.Count, StringComparer.Ordinal);
         var layers = placement.NodeMetadata.Select(item => item.LogicalLayer).Distinct().Count();
         var footprintCells = placement.NodePlacements.Sum(item => item.Footprint.Count);
+        var routes = geometry.Geometry.Routes;
+        var topologyCounts = routes.GroupBy(route => route.TopologyFamily.ToString(), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         return new ArchitecturePlanningMetrics(
             projection.SemanticNodeToPhysicalNodeIds.Count,
             projection.SemanticLinkToPhysicalLinkIds.Count,
@@ -75,9 +93,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.ProjectGrids.Sum(item => item.Grid.Rows.Count),
             placement.ProjectGrids.Sum(item => item.Grid.Columns.Count),
             geometry.ProjectGrids.Sum(item => item.Grid.Cells.Count),
-            0,
-            new Dictionary<string, int>(StringComparer.Ordinal),
-             0, 0, 0, geometry.Geometry.DiagramBounds, diagnostics.Count,
+            routes.Sum(route => route.Segments.Count),
+            topologyCounts,
+            routes.Sum(route => route.Segments.Count), routes.Sum(route => route.BendCount), routes.SelectMany(route => route.Segments).Select(segment => segment.Lane).Distinct().Count(), geometry.Geometry.DiagramBounds, diagnostics.Count,
              duplicates,
             projection.RootPhysicalNodeIds.Count,
             projection.ExternalPhysicalNodeIds.Count,
@@ -185,7 +203,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 targetUseCount[link.TargetId] = targetUseCount.TryGetValue(link.TargetId, out var count) ? count + 1 : 1;
                 physicalLinks.Add(new PlannedPhysicalLink(
                     $"physical-link:{link.Id}:{physicalLinks.Count}", link.Id, source.PhysicalNodeId, target.PhysicalNodeId,
-                    source.ProjectId, target.ProjectId));
+                    source.ProjectId, target.ProjectId) { Kind = link.Kind });
             }
 
             var rootsPhysical = roots.Select(id => physicalBySemantic[id].PhysicalNodeId).ToArray();

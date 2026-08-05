@@ -23,6 +23,21 @@ public sealed record PlannedPhysicalRouteSegment(
     LaneId Lane,
     RouteTopologyFamily TopologyFamily);
 
+public sealed record PlannedPhysicalRoute(
+    string PhysicalLinkId,
+    string SemanticLinkId,
+    string SourceSemanticNodeId,
+    string DestinationSemanticNodeId,
+    string SourceProjection,
+    string DestinationProjection,
+    RouteTopologyFamily TopologyFamily,
+    IReadOnlyList<PlannedPhysicalRouteSegment> Segments,
+    int BendCount,
+    int RouteLength,
+    bool HasNodeIntersection,
+    bool HasSharedSegment,
+    bool HasCrossing);
+
 public enum TrackConstraintKind
 {
     SingleRowMinimum,
@@ -98,7 +113,8 @@ public sealed class PlannedArchitectureGeometry
         IReadOnlyList<PlannedGridGeometry> grids,
         IReadOnlyList<PlannedSubtreeGeometry> subtrees,
         RelativeRectangle diagramBounds,
-        AbsoluteRectangle absoluteDiagramBounds)
+        AbsoluteRectangle absoluteDiagramBounds,
+        IReadOnlyList<PlannedPhysicalRoute>? routes = null)
     {
         Nodes = Array.AsReadOnly((nodes ?? throw new ArgumentNullException(nameof(nodes))).ToArray());
         Projects = Array.AsReadOnly((projects ?? throw new ArgumentNullException(nameof(projects))).ToArray());
@@ -108,6 +124,7 @@ public sealed class PlannedArchitectureGeometry
         if (absoluteDiagramBounds.Width <= 0 || absoluteDiagramBounds.Height <= 0) throw new ArgumentException("Diagram bounds must be positive.", nameof(absoluteDiagramBounds));
         DiagramBounds = diagramBounds;
         AbsoluteDiagramBounds = absoluteDiagramBounds;
+        Routes = Array.AsReadOnly((routes ?? Array.Empty<PlannedPhysicalRoute>()).ToArray());
     }
 
     public IReadOnlyList<PlannedPhysicalNodeGeometry> Nodes { get; }
@@ -116,4 +133,8 @@ public sealed class PlannedArchitectureGeometry
     public IReadOnlyList<PlannedSubtreeGeometry> Subtrees { get; }
     public RelativeRectangle DiagramBounds { get; }
     public AbsoluteRectangle AbsoluteDiagramBounds { get; }
+    public IReadOnlyList<PlannedPhysicalRoute> Routes { get; }
+
+    public PlannedArchitectureGeometry WithRoutes(IReadOnlyList<PlannedPhysicalRoute> routes) =>
+        new(Nodes, Projects, Grids, Subtrees, DiagramBounds, AbsoluteDiagramBounds, routes);
 }

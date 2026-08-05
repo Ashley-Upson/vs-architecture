@@ -30,7 +30,7 @@ public sealed class DiagramPathGenerationCoordinationServiceTests
         var document = XDocument.Parse(result.Content);
 
         Assert.Equal("drawio", result.RendererId);
-        Assert.Equal(5, document.Descendants("mxCell").Count());
+        Assert.Equal(6, document.Descendants("mxCell").Count());
     }
 
     [Fact]

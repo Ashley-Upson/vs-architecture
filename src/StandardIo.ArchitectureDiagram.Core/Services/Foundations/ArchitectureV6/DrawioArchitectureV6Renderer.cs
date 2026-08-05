@@ -67,10 +67,27 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             if (!emitted.Contains(node.PhysicalNodeId) && !geometryById.ContainsKey(node.PhysicalNodeId))
                 diagnostics.Add(new DiagramDiagnostic("V6SkippedNode", "A planned physical node was not emitted.", node.SemanticNodeId));
 
+        var emittedEdges = 0;
+        foreach (var route in geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>())
+        {
+            var link = diagram.PhysicalLinks.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId);
+            if (link is null) continue;
+            root.Add(EdgeCell(link, route, diagram.Request));
+            emittedEdges++;
+        }
+
         var expected = diagram.PhysicalNodes.Count;
         if (emitted.Count != expected)
             diagnostics.Add(new DiagramDiagnostic("V6VertexCountMismatch", $"Expected {expected} physical node vertices but emitted {emitted.Count}.", null));
         diagnostics.Add(new DiagramDiagnostic("V6VertexCount", emitted.Count.ToString(CultureInfo.InvariantCulture), null));
+        diagnostics.Add(new DiagramDiagnostic("V6SemanticLinkCount", diagram.Projection?.SemanticLinkToPhysicalLinkIds.Count.ToString(CultureInfo.InvariantCulture) ?? "0", null));
+        diagnostics.Add(new DiagramDiagnostic("V6ArchitectureEdgeCount", emittedEdges.ToString(CultureInfo.InvariantCulture), null));
+        diagnostics.Add(new DiagramDiagnostic("V6UnresolvedLinkCount", Math.Max(0, diagram.PhysicalLinks.Count - emittedEdges).ToString(CultureInfo.InvariantCulture), null));
+        foreach (var routeGroup in (geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).GroupBy(route => route.TopologyFamily).OrderBy(group => group.Key))
+            diagnostics.Add(new DiagramDiagnostic("V6RouteClassification", $"route={routeGroup.Key};count={routeGroup.Count()};bends={routeGroup.Sum(route => route.BendCount)}", null));
+        diagnostics.Add(new DiagramDiagnostic("V6RouteLength", $"total={((geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).Sum(route => route.RouteLength))};average={((geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).Select(route => route.RouteLength).DefaultIfEmpty(0).Average()):0.##};max={((geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).Select(route => route.RouteLength).DefaultIfEmpty(0).Max())}", null));
+        diagnostics.Add(new DiagramDiagnostic("V6RouteIntersections", $"nodes={(geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).Count(route => route.HasNodeIntersection)};shared={(geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).Count(route => route.HasSharedSegment)};crossings={(geometry?.Routes ?? Array.Empty<PlannedPhysicalRoute>()).Count(route => route.HasCrossing)}", null));
+        diagnostics.Add(new DiagramDiagnostic("V6LinkStyleUsage", $"count={emittedEdges};style={(diagram.Request.ConnectorStyle is null ? "fallback" : "configured")}", null));
         diagnostics.Add(new DiagramDiagnostic("V6SkippedNodeCount", skippedCount.ToString(CultureInfo.InvariantCulture), null));
         diagnostics.Add(new DiagramDiagnostic("V6StyleFallbackCount", fallbackCount.ToString(CultureInfo.InvariantCulture), null));
         foreach (var usage in styleUsage.OrderBy(item => item.Key, StringComparer.Ordinal))
@@ -111,6 +128,27 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             new XAttribute("projectId", project.ProjectId),
             new XElement("mxGeometry", new XAttribute("x", project.AbsoluteBounds.X), new XAttribute("y", project.AbsoluteBounds.Y),
                 new XAttribute("width", project.AbsoluteBounds.Width), new XAttribute("height", project.AbsoluteBounds.Height), new XAttribute("as", "geometry")));
+
+    private static XElement EdgeCell(PlannedPhysicalLink link, PlannedPhysicalRoute route, ArchitecturePlanningRequest request)
+    {
+        var connector = request.ConnectorStyle ?? new ArchitectureV6ConnectorStyle("#ffffff", 2, false);
+        var style = $"edgeStyle=none;orthogonal=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={connector.StrokeColor};strokeWidth={connector.StrokeWidth};endArrow=block;endFill=1;";
+        var geometry = new XElement("mxGeometry", new XAttribute("relative", "0"), new XAttribute("as", "geometry"));
+        foreach (var point in route.Segments.Take(Math.Max(0, route.Segments.Count - 1)).Select(segment => segment.End))
+            geometry.Add(new XElement("mxPoint", new XAttribute("x", point.X.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", point.Y.ToString(CultureInfo.InvariantCulture)), new XAttribute("as", "waypoint")));
+        return new XElement("mxCell",
+            new XAttribute("id", EdgeCellId(link.PhysicalLinkId)),
+            new XAttribute("value", link.Kind ?? link.SemanticLinkId),
+            new XAttribute("style", style),
+            new XAttribute("edge", "1"), new XAttribute("parent", "1"),
+            new XAttribute("source", CellId(link.SourcePhysicalNodeId)),
+            new XAttribute("target", CellId(link.DestinationPhysicalNodeId)),
+            new XAttribute("physicalLinkId", link.PhysicalLinkId),
+            new XAttribute("semanticLinkId", link.SemanticLinkId),
+            new XAttribute("sourceProjection", route.SourceProjection),
+            new XAttribute("destinationProjection", route.DestinationProjection),
+            new XAttribute("routeTopology", route.TopologyFamily.ToString()), geometry);
+    }
 
     private static XElement NodeCell(
         PlannedPhysicalNode node,
@@ -232,6 +270,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     private static int ParseColumn(PlanningGridColumnId id) => int.Parse(id.Value.Substring(id.Value.LastIndexOf(':') + 1), CultureInfo.InvariantCulture);
 
     private static string CellId(string physicalNodeId) => StableId.From("architecture_v6_node", physicalNodeId);
+    private static string EdgeCellId(string physicalLinkId) => StableId.From("architecture_v6_edge", physicalLinkId);
     private static string ProjectCellId(string projectId) => StableId.From("architecture_v6_project", projectId);
     private sealed record ResolvedStyle(ArchitectureV6StyleRule Rule, bool IsFallback, string? MatchedSelector);
 }

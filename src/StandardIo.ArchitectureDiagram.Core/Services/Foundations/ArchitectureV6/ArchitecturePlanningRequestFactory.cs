@@ -55,6 +55,7 @@ public static class ArchitecturePlanningRequestFactory
             rendering.StyleRules.Select(rule => new ArchitectureV6StyleRule(rule.Match, rule.Style.FillColor, rule.Style.StrokeColor, rule.Style.FontColor, rule.Style.Shape, rule.Style.Shadow, rule.Style.ExtraStyle)).ToArray(),
             rendering.Overrides.Select(item => new ArchitectureV6StyleOverride(item.FullName, new ArchitectureV6StyleRule(item.FullName, item.Style.FillColor, item.Style.StrokeColor, item.Style.FontColor, item.Style.Shape, item.Style.Shadow, item.Style.ExtraStyle))).ToArray(),
             new ArchitectureV6StyleRule("<project>", rendering.ProjectContainerStyle.FillColor, rendering.ProjectContainerStyle.StrokeColor, rendering.ProjectContainerStyle.FontColor, rendering.ProjectContainerStyle.Shape, rendering.ProjectContainerStyle.Shadow, rendering.ProjectContainerStyle.ExtraStyle),
-            new ArchitectureV6StyleRule("<external>", rendering.ExternalDependencyStyle.FillColor, rendering.ExternalDependencyStyle.StrokeColor, rendering.ExternalDependencyStyle.FontColor, rendering.ExternalDependencyStyle.Shape, rendering.ExternalDependencyStyle.Shadow, rendering.ExternalDependencyStyle.ExtraStyle));
+            new ArchitectureV6StyleRule("<external>", rendering.ExternalDependencyStyle.FillColor, rendering.ExternalDependencyStyle.StrokeColor, rendering.ExternalDependencyStyle.FontColor, rendering.ExternalDependencyStyle.Shape, rendering.ExternalDependencyStyle.Shadow, rendering.ExternalDependencyStyle.ExtraStyle),
+            new ArchitectureV6ConnectorStyle(rendering.Connector.StrokeColor, rendering.Connector.StrokeWidth, rendering.Connector.Rounded));
     }
 }

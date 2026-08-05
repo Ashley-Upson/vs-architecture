@@ -76,7 +76,7 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Single(empty.PhysicalNodes);
         Assert.True(plan.StageStatus.ProjectionCompleted);
         Assert.True(plan.StageStatus.LogicalPlacementCompleted);
-        Assert.True(plan.StageStatus.RoutingDeferred);
+        Assert.False(plan.StageStatus.RoutingDeferred);
     }
 
     [Fact]
@@ -103,6 +103,22 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(0, root.PhysicalRow);
         Assert.True(child.PhysicalRow > root.PhysicalRow);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "GeometryCollision");
+    }
+
+    [Fact]
+    public void Routing_emits_one_orthogonal_edge_per_physical_link_with_node_terminals()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+        Assert.NotNull(plan.Geometry);
+        var routes = plan.Geometry!.Routes;
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var edges = page.GraphModel.Descendants("mxCell").Where(cell => (string?)cell.Attribute("edge") == "1").ToArray();
+
+        Assert.Equal(plan.PhysicalLinks.Count, routes.Count);
+        Assert.Equal(routes.Count, edges.Length);
+        Assert.All(routes, route => Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
+        Assert.All(edges, edge => Assert.NotNull(edge.Attribute("source")));
+        Assert.All(edges, edge => Assert.NotNull(edge.Attribute("target")));
     }
 
     [Fact]
@@ -309,7 +325,7 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains(vertices, cell => cell.Attribute("id")!.Value == special.Attribute("parent")!.Value && (string?)cell.Attribute("projectId") == "project:p");
         Assert.Equal("physical:special", special.Attribute("physicalNodeId")!.Value);
         Assert.Contains("A&amp;B &lt;Service&gt;", page.GraphModel.ToString());
-        Assert.DoesNotContain(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("edge") == "1");
+        Assert.Contains(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("edge") == "1");
     }
 
     [Fact]

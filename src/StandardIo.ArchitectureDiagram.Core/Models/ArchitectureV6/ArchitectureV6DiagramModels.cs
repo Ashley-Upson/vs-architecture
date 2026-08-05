@@ -57,7 +57,10 @@ public sealed record PlannedPhysicalLink(
     string SourcePhysicalNodeId,
     string DestinationPhysicalNodeId,
     string? SourceProjectId,
-    string? DestinationProjectId);
+    string? DestinationProjectId)
+{
+    public string Kind { get; init; } = string.Empty;
+}
 
 public sealed record PlannedPhysicalLinkMetadata(
     string PhysicalLinkId,

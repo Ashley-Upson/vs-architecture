@@ -71,6 +71,8 @@ public sealed record ArchitectureGenerationSettingsSnapshot(
     IReadOnlyList<string> ExcludedNamespaces,
     IReadOnlyList<string> ExcludedNames);
 
+public sealed record ArchitectureV6ConnectorStyle(string StrokeColor, int StrokeWidth, bool Rounded);
+
 public sealed record ArchitectureV6StyleRule(
     string Match,
     string FillColor,
@@ -97,4 +99,5 @@ public sealed record ArchitecturePlanningRequest(
     IReadOnlyList<ArchitectureV6StyleRule>? StylePolicies = null,
     IReadOnlyList<ArchitectureV6StyleOverride>? StyleOverridesWithValues = null,
     ArchitectureV6StyleRule? ProjectContainerStyle = null,
-    ArchitectureV6StyleRule? ExternalDependencyStyle = null);
+    ArchitectureV6StyleRule? ExternalDependencyStyle = null,
+    ArchitectureV6ConnectorStyle? ConnectorStyle = null);

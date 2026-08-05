@@ -7,7 +7,8 @@ Roslyn semantic analysis
     -> ArchitecturePlanningRequest
     -> IArchitectureDiagramPlanner
     -> PlannedArchitectureDiagram
-    -> V6 Draw.io vertex projection
+    -> V6 orthogonal route planning
+    -> V6 Draw.io vertex and edge projection
     -> IArchitectureDiagramRenderer<DrawioPage>
     -> Draw.io document composition
 ```
@@ -25,14 +26,14 @@ Roslyn semantic analysis
 - `DiagramRoutingGrid` owns project footprints and cross-project transitions. `ProjectRoutingGrid` owns project-local reservations and label reservations.
 - Planning rows, columns and sparse cells are independent. Cell capability, occupancy and reservations are separate properties.
 - A physical node has one anchor cell and an odd-width logical footprint. Initial spans are logical requirements derived from node text and link degree; final physical sizing is deferred.
-- Abstract routes retain physical endpoints, route steps, topology family and grid transitions. Straight runs, turns, crossings and endpoint demands retain future lane continuity without assigning pixels.
+- Abstract routes retain physical endpoints, route steps, topology family and grid transitions. `ArchitectureV6RouteBuilder` now compiles deterministic orthogonal physical segments from the completed node geometry, choosing local lane candidates and rejecting candidates that pass through unrelated node rectangles.
 - Track constraints represent single-track, span, lane, clearance, node and project requirements. Solving is deferred.
 - `ArchitectureV6GeometryBuilder` converts logical rows and columns into deterministic track extents and offsets. Node rectangles are sized from the node label, minimum node policy and grid sizing inputs; project regions include padding and reserved header space.
 - Logical columns inside a node footprint are contiguous. Empty logical separator columns carry the normal horizontal spacing policy; spacing is not added after every footprint column. A final same-row reconciliation preserves the explicit normal gap between adjacent visible node rectangles while retaining larger project-section gaps.
 - `PlannedPhysicalNodeGeometry`, `PlannedProjectGeometry`, `PlannedGridGeometry` and `PlannedSubtreeGeometry` preserve physical projection identity, positional ownership and project ownership through local and absolute bounds. The project grids are laid out in selected-project order followed by remaining projects in discovery order.
 - Geometry validation checks positive dimensions, node collision, project containment, page bounds and one geometry record per physical node. `DrawioArchitectureV6Renderer` projects each planned physical node exactly once into a deterministic vertex cell, using absolute geometry for page-level nodes and project-relative geometry for nodes under project containers.
 - Vertex metadata retains physical and semantic identity, full name, projection mode, project ownership, positional ownership and duplicate provenance. Labels are XML-escaped by `XElement` serialization. Project geometry is emitted as a swimlane-style boundary cell when containers are enabled.
-- Renderer diagnostics report style-rule usage, fallback count, unmatched selectors, unused exact overrides, final node gaps and project-section gaps. Style resolution is first-match for configured rules, after exact full-name overrides and before the deterministic fallback.
+- Renderer diagnostics report style-rule usage, fallback count, unmatched selectors, unused exact overrides, final node gaps and project-section gaps. Route diagnostics report semantic/planned/emitted edge counts, topology families, length, bends, shared segments and node intersections. Style resolution is first-match for configured rules, after exact full-name overrides and before the deterministic fallback.
 
 ## Validation and diagnostics
 
@@ -42,7 +43,7 @@ The V6 renderer emits a valid Draw.io page containing planned project boundaries
 
 ## Deferred logic
 
-Topology classification, terminal allocation, inter-layer slot allocation, destination/return column allocation, route materialisation, route-aware physical validation, Draw.io edge projection and reconstruction are intentionally not implemented. Logical node projection, layer assignment, positional ownership, anchor placement, nested subtree reservations, track sizing, relative-to-absolute geometry compilation and physical vertex projection are active.
+Collective terminal/slot allocation, full lane optimisation, crossing elimination, route-aware reconstruction validation and advanced project-transition routing remain deferred. The active route stage classifies adjacent/long downward, same-layer, upward, external and cross-project links, emits orthogonal waypoints, records endpoint projection provenance and reports hard route conflicts. Logical node projection, layer assignment, positional ownership, anchor placement, nested subtree reservations, track sizing, relative-to-absolute geometry compilation and physical vertex/edge projection are active.
 
 The generic `DiagramModel` Draw.io renderer remains for non-Architecture diagram workflows. Architecture generation resolves only `DrawioArchitectureV6Renderer`.
 
