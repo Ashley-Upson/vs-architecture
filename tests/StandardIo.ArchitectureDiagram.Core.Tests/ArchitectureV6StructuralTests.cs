@@ -91,10 +91,92 @@ public sealed class ArchitectureV6StructuralTests
         var footprintColumns = plan.ProjectGrids.Single().Grid.Columns
             .Where(column => column.Role == PlanningGridTrackRole.NodeFootprint).ToArray();
 
-        Assert.True(footprintColumns.Length < nodes.Length * 3);
-        Assert.True(plan.NodePlacements.Select(placement => placement.CentreColumnId).Distinct().Count() < nodes.Length);
+        Assert.Equal(3, footprintColumns.Length);
+        Assert.Single(plan.NodePlacements.Select(placement => placement.CentreColumnId).Distinct());
+        Assert.Equal(3, plan.SubtreeReservations.Max(reservation => reservation.OccupiedRowIntervals.Max(interval => interval.Columns.Count)));
         Assert.Equal(plan.Diagnostics.Metrics.StructuralColumnCountBeforeRouting,
             plan.Diagnostics.Metrics.StructuralColumnCountAfterRouting);
+    }
+
+    [Fact]
+    public void Planner_composes_same_row_children_using_exact_profile_width()
+    {
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(new[]
+            {
+                new ArchitectureProject("project:p", "Project", new[]
+                {
+                    new ArchitectureNode("root", "project:p", "Root", "Project.Root", "Class", "root", Array.Empty<string>()),
+                    new ArchitectureNode("left", "project:p", "Left", "Project.Left", "Class", "left", Array.Empty<string>()),
+                    new ArchitectureNode("right", "project:p", "Right", "Project.Right", "Class", "right", Array.Empty<string>())
+                }, "project:p")
+            }, Array.Empty<ArchitectureExternalNode>(), new[]
+            {
+                new ArchitectureLink("root-left", "root", "left", "internal"),
+                new ArchitectureLink("root-right", "root", "right", "internal")
+            }, null)
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal(7, plan.ProjectGrids.Single().Grid.Columns.Count(column => column.Role == PlanningGridTrackRole.NodeFootprint));
+        Assert.Equal(7, plan.NodePlacements.Max(placement => placement.Footprint.Max(cell => int.Parse(cell.ColumnId.Value.Split(':').Last())) + 1));
+    }
+
+    [Fact]
+    public void Planner_reuses_compatible_columns_between_independent_vertical_chains()
+    {
+        var nodes = new[]
+        {
+            new ArchitectureNode("root-a", "project:p", "RootA", "Project.RootA", "Class", "root-a", Array.Empty<string>()),
+            new ArchitectureNode("child-a", "project:p", "ChildA", "Project.ChildA", "Class", "child-a", Array.Empty<string>()),
+            new ArchitectureNode("root-b", "project:p", "RootB", "Project.RootB", "Class", "root-b", Array.Empty<string>()),
+            new ArchitectureNode("child-b", "project:p", "ChildB", "Project.ChildB", "Class", "child-b", Array.Empty<string>())
+        };
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
+                Array.Empty<ArchitectureExternalNode>(), new[]
+                {
+                    new ArchitectureLink("a", "root-a", "child-a", "internal"),
+                    new ArchitectureLink("b", "root-b", "child-b", "internal")
+                }, null)
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal(6, plan.ProjectGrids.Single().Grid.Columns.Count(column => column.Role == PlanningGridTrackRole.NodeFootprint));
+        Assert.Equal(9, plan.ProjectGrids.Single().Grid.Columns.Count);
+    }
+
+    [Fact]
+    public void Planner_keeps_canonical_multi_parent_node_in_one_profile_interval()
+    {
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(new[]
+            {
+                new ArchitectureProject("project:p", "Project", new[]
+                {
+                    new ArchitectureNode("left", "project:p", "Left", "Project.Left", "Class", "left", Array.Empty<string>()),
+                    new ArchitectureNode("right", "project:p", "Right", "Project.Right", "Class", "right", Array.Empty<string>()),
+                    new ArchitectureNode("shared", "project:p", "Shared", "Project.Shared", "Class", "shared", Array.Empty<string>())
+                }, "project:p")
+            }, Array.Empty<ArchitectureExternalNode>(), new[]
+            {
+                new ArchitectureLink("left-shared", "left", "shared", "internal"),
+                new ArchitectureLink("right-shared", "right", "shared", "internal")
+            }, null)
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Single(plan.PhysicalNodes.Where(node => node.SemanticNodeId == "shared"));
+        Assert.Equal(2, plan.PhysicalLinks.Count);
+        var sharedPlacement = plan.NodePlacements.Single(node => node.PhysicalNodeId.Contains("shared", StringComparison.Ordinal));
+        Assert.Equal(3, plan.PhysicalNodes.Count);
+        Assert.Equal(sharedPlacement.Footprint.Count, sharedPlacement.Footprint.Select(cell => cell.ColumnId).Distinct().Count());
     }
 
     [Fact]
@@ -102,9 +184,12 @@ public sealed class ArchitectureV6StructuralTests
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
         var roles = plan.ProjectGrids.SelectMany(grid => grid.Grid.Columns).Select(column => column.Role).ToArray();
+        var columns = plan.ProjectGrids.SelectMany(grid => grid.Grid.Columns).ToArray();
 
         Assert.Contains(PlanningGridTrackRole.DestinationApproach, roles);
         Assert.Contains(PlanningGridTrackRole.OwnershipLocalReturn, roles);
+        Assert.All(columns.Where(column => column.Role == PlanningGridTrackRole.DestinationApproach ||
+            column.Role == PlanningGridTrackRole.OwnershipLocalReturn), column => Assert.False(string.IsNullOrWhiteSpace(column.OwnerId)));
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "MissingStructuralRegion");
     }
 

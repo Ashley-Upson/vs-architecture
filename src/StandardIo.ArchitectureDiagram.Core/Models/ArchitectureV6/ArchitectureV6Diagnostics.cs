@@ -105,7 +105,14 @@ public sealed record ArchitecturePlanningMetrics(
     int VerticalLaneCount = 0,
     int MaximumHorizontalLanesInDomain = 0,
     int MaximumVerticalLanesInDomain = 0,
-    IReadOnlyList<ArchitectureNodeGridEvidence>? NodeGridEvidence = null);
+    IReadOnlyList<ArchitectureNodeGridEvidence>? NodeGridEvidence = null,
+    long ProfileComputationMilliseconds = 0,
+    long ProfileCompositionMilliseconds = 0,
+    long ColumnMaterializationMilliseconds = 0,
+    long ReservationConstructionMilliseconds = 0,
+    int SubtreeProfileCacheHits = 0,
+    int SubtreeProfileCacheMisses = 0,
+    long IntervalCompatibilityChecks = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

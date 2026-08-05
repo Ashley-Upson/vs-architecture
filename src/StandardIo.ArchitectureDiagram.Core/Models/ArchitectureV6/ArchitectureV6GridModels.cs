@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 
@@ -136,4 +137,13 @@ public sealed record SubtreeReservation(
     string? PositionalOwnerId,
     PlanningGridId GridId,
     IReadOnlyList<PlanningGridCellId> Cells,
-    string? AncestorReservationId);
+    string? AncestorReservationId,
+    IReadOnlyList<SubtreeReservationRowInterval>? RowIntervals = null)
+{
+    public IReadOnlyList<SubtreeReservationRowInterval> OccupiedRowIntervals { get; } =
+        Array.AsReadOnly((RowIntervals ?? Array.Empty<SubtreeReservationRowInterval>()).ToArray());
+}
+
+public sealed record SubtreeReservationRowInterval(
+    PlanningGridRowId RowId,
+    IReadOnlyList<PlanningGridColumnId> Columns);

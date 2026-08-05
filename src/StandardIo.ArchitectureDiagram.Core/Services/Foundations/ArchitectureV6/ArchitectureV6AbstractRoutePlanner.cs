@@ -115,7 +115,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         {
             var gridId = GridOf(node);
             var cell = UseCell(gridId, placements[node.PhysicalNodeId].AnchorCellId.RowId,
-                placements[node.PhysicalNodeId].AnchorCellId.ColumnId, CellOccupancy.Empty);
+                ColumnForOwnerRole(gridId, PlanningGridTrackRole.DestinationApproach, node.PhysicalNodeId,
+                    placements[node.PhysicalNodeId].AnchorCellId.ColumnId), CellOccupancy.Empty);
             var linkIds = links.Where(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId)
                 .OrderBy(link => link.PhysicalLinkId, StringComparer.Ordinal).Select(link => link.PhysicalLinkId).ToArray();
             return new DestinationApproachReservation($"approach:{node.PhysicalNodeId}", node.PhysicalNodeId, gridId,
@@ -158,8 +159,12 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         }
         else
         {
+            var departureColumn = topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn
+                ? ColumnForOwnerRole(sourceGrid, PlanningGridTrackRole.OwnershipLocalReturn, source.PhysicalNodeId,
+                    ColumnAt(sourceGrid, DepartureColumn(source, destination)))
+                : ColumnAt(sourceGrid, DepartureColumn(source, destination));
             var departure = UseCell(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
-                ColumnAt(sourceGrid, DepartureColumn(source, destination)), CellOccupancy.Empty);
+                departureColumn, CellOccupancy.Empty);
             var routeRow = UseCell(sourceGrid, RoutingRow(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
                 placements[destination.PhysicalNodeId].AnchorCellId.RowId), ColumnId(destination), CellOccupancy.Empty);
             steps.Add(Step(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId, GridSide.Top, topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn ? GridSide.Right : GridSide.Bottom,
@@ -271,7 +276,14 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private PlanningGridColumnId ColumnForRole(PlanningGridId gridId, PlanningGridTrackRole role, PlanningGridColumnId fallback)
     {
         var grid = grids[gridId];
-        return grid.Columns.Values.OrderBy(column => column.LogicalOrder).FirstOrDefault(column => column.Role == role)?.Id ?? fallback;
+            return grid.Columns.Values.OrderBy(column => column.LogicalOrder).FirstOrDefault(column => column.Role == role)?.Id ?? fallback;
+    }
+    private PlanningGridColumnId ColumnForOwnerRole(PlanningGridId gridId, PlanningGridTrackRole role, string ownerId,
+        PlanningGridColumnId fallback)
+    {
+        var grid = grids[gridId];
+        return grid.Columns.Values.OrderBy(column => column.LogicalOrder)
+            .FirstOrDefault(column => column.Role == role && string.Equals(column.OwnerId, ownerId, StringComparison.Ordinal))?.Id ?? fallback;
     }
     private PlanningGridColumnId ColumnAt(PlanningGridId gridId, int requested)
     {

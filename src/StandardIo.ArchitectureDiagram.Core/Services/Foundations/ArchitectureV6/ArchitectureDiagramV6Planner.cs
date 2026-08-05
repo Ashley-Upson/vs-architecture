@@ -155,6 +155,13 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              VerticalLaneCount: allocation.VerticalLanes.Count,
              MaximumHorizontalLanesInDomain: allocation.HorizontalLanes.GroupBy(lane => lane.DomainId).Select(group => group.Count()).DefaultIfEmpty(0).Max(),
              MaximumVerticalLanesInDomain: allocation.VerticalLanes.GroupBy(lane => lane.DomainId).Select(group => group.Count()).DefaultIfEmpty(0).Max(),
+             ProfileComputationMilliseconds: placement.Performance.ProfileComputationMilliseconds,
+             ProfileCompositionMilliseconds: placement.Performance.ProfileCompositionMilliseconds,
+             ColumnMaterializationMilliseconds: placement.Performance.ColumnMaterializationMilliseconds,
+             ReservationConstructionMilliseconds: placement.Performance.ReservationConstructionMilliseconds,
+             SubtreeProfileCacheHits: placement.Performance.ProfileCacheHits,
+             SubtreeProfileCacheMisses: placement.Performance.ProfileCacheMisses,
+             IntervalCompatibilityChecks: placement.Performance.IntervalCompatibilityChecks,
              NodeGridEvidence: placement.NodePlacements.OrderBy(item => item.PhysicalNodeId, StringComparer.Ordinal).Select(item =>
              {
                  var metadata = placement.NodeMetadata.Single(value => value.PhysicalNodeId == item.PhysicalNodeId);

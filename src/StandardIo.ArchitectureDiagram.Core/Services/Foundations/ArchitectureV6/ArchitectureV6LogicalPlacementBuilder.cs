@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
@@ -22,10 +23,18 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, int> depthByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> rowRoleByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, GridSlot> slotByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SubtreeHorizontalProfile> profileByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, LogicalProjectGrid> gridsByProject = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> spanByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> spanReasonByNode = new(StringComparer.Ordinal);
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
+    private long profileComputationMilliseconds;
+    private long profileCompositionMilliseconds;
+    private long columnMaterializationMilliseconds;
+    private long reservationConstructionMilliseconds;
+    private int profileCacheHits;
+    private int profileCacheMisses;
+    private long intervalCompatibilityChecks;
 
     public ArchitectureV6LogicalPlacementBuilder(ArchitecturePlanningRequest request, ArchitectureProjectionResult projection,
         IReadOnlyDictionary<string, int>? requiredSpans = null)
@@ -54,25 +63,34 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var roots = projectNodes.Where(node => ownerByNode[node.PhysicalNodeId] is null).ToArray();
             var logicalGrid = new LogicalProjectGrid(new PlanningGridId($"project:{projectId}"));
             gridsByProject[projectId] = logicalGrid;
+            var occupied = new List<ProfileInterval>();
             foreach (var root in roots.Where(node => !node.IsStandalone))
             {
-                var region = logicalGrid.ReserveSubtreeRegion(SubtreeColumnSpan(root.PhysicalNodeId));
-                PlaceSubtree(root.PhysicalNodeId, region);
+                var profile = BuildProfile(root.PhysicalNodeId);
+                var shift = FindCompatibleShift(profile.Intervals, occupied);
+                MaterializeProfile(logicalGrid, profile, shift, occupied);
             }
 
-            PlaceStandaloneRegion(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray());
+            PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);
+            logicalGrid.EnsureColumns(occupied.Count == 0 ? 0 : occupied.Max(interval => interval.End + 1));
             var placements = projectNodes.Select(BuildPlacement).OrderBy(item => order[item.PhysicalNodeId]).ToArray();
             projectPlacements[projectId] = placements.ToList();
         }
 
+        var reservationTimer = Stopwatch.StartNew();
         var reservations = BuildReservations();
+        reservationTimer.Stop();
+        reservationConstructionMilliseconds += reservationTimer.ElapsedMilliseconds;
         var projectGrids = BuildProjectGrids(projectPlacements, reservations);
         var diagramGrid = BuildDiagramGrid(projectGrids);
         ValidatePlacement(projectPlacements.Values.SelectMany(items => items).ToArray(), reservations, projectGrids);
         var nodeMetadata = BuildNodeMetadata(reservations);
         var linkMetadata = BuildLinkMetadata();
         return new LogicalPlacementResult(projectGrids, diagramGrid, nodeMetadata, linkMetadata, reservations, diagnostics,
-            projectPlacements.Values.SelectMany(items => items).ToArray());
+            projectPlacements.Values.SelectMany(items => items).ToArray(),
+            new PlacementPerformance(profileComputationMilliseconds, profileCompositionMilliseconds,
+                columnMaterializationMilliseconds, reservationConstructionMilliseconds, profileCacheHits,
+                profileCacheMisses, intervalCompatibilityChecks));
     }
 
     private void ValidatePlacement(
@@ -216,76 +234,122 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
     }
 
-    private int SubtreeColumnSpan(string id)
+    private SubtreeHorizontalProfile BuildProfile(string id)
     {
-        var children = childrenByNode[id].Where(child => !nodes[child].IsStandalone).ToArray();
-        if (children.Length == 0) return spanByNode[id];
-        var demandByRow = new Dictionary<string, int>(StringComparer.Ordinal)
+        if (profileByNode.TryGetValue(id, out var cached))
         {
-            [rowRoleByNode[id]] = spanByNode[id]
-        };
-        foreach (var child in children)
-        {
-            var childDemand = SubtreeDemandByRow(child);
-            foreach (var demand in childDemand)
-                demandByRow[demand.Key] = demandByRow.TryGetValue(demand.Key, out var existing)
-                    ? existing + demand.Value + LogicalGap
-                    : demand.Value;
+            profileCacheHits++;
+            return cached;
         }
-        var result = demandByRow.Values.DefaultIfEmpty(spanByNode[id]).Max();
-        return result % 2 == 0 ? result + 1 : result;
-    }
+        profileCacheMisses++;
+        var profileTimer = Stopwatch.StartNew();
 
-    private IReadOnlyDictionary<string, int> SubtreeDemandByRow(string id)
-    {
-        var demand = new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            [rowRoleByNode[id]] = spanByNode[id]
-        };
+        var intervals = new List<ProfileInterval>();
         foreach (var child in childrenByNode[id].Where(child => !nodes[child].IsStandalone))
-            foreach (var item in SubtreeDemandByRow(child))
-                demand[item.Key] = demand.TryGetValue(item.Key, out var existing)
-                    ? existing + item.Value + LogicalGap
-                    : item.Value;
-        return demand;
-    }
-
-    private IReadOnlyList<string> SubtreeRows(string id) => SubtreeMembers(id)
-        .Select(member => rowRoleByNode[member]).Distinct(StringComparer.Ordinal).ToArray();
-
-    private void PlaceSubtree(string id, LogicalRegion region)
-    {
-        if (slotByNode.ContainsKey(id)) return;
-        var grid = gridsByProject[ProjectOf(nodes[id])];
-        var children = childrenByNode[id].Where(child => !nodes[child].IsStandalone).ToArray();
-        var rowId = grid.EnsureRow(rowRoleByNode[id]);
-        slotByNode[id] = grid.ReserveNodeFootprint(region, rowId, spanByNode[id], spanReasonByNode[id]);
-        var childRows = children.Select(child => grid.EnsureRow(rowRoleByNode[child])).ToArray();
-        var childRegions = grid.ReserveSiblingRegions(region, children.Select(SubtreeColumnSpan).ToArray(), childRows,
-            children.Select(SubtreeRows).ToArray(), rowRoleByNode[id], spanByNode[id]);
-        for (var index = 0; index < children.Length; index++)
         {
-            PlaceSubtree(children[index], childRegions[index]);
+            var childProfile = BuildProfile(child);
+            var compositionTimer = Stopwatch.StartNew();
+            var shift = FindCompatibleShift(childProfile.Intervals, intervals);
+            intervals.AddRange(childProfile.Intervals.Select(interval => interval with
+            {
+                Start = interval.Start + shift,
+                End = interval.End + shift
+            }));
+            compositionTimer.Stop();
+            profileCompositionMilliseconds += compositionTimer.ElapsedMilliseconds;
         }
+
+        var childStart = intervals.Count == 0 ? 0 : intervals.Min(interval => interval.Start);
+        var childEnd = intervals.Count == 0 ? spanByNode[id] - 1 : intervals.Max(interval => interval.End);
+        var parentStart = intervals.Count == 0
+            ? 0
+            : childStart + Math.Max(0, ((childEnd - childStart + 1) - spanByNode[id]) / 2);
+        var parent = new ProfileInterval(rowRoleByNode[id], parentStart, parentStart + spanByNode[id] - 1,
+            id, "node", spanByNode[id]);
+        while (intervals.Any(interval => interval.RowRole == parent.RowRole &&
+            Intersects(interval.Start, interval.End, parent.Start, parent.End)))
+        {
+            parent = parent with { Start = parent.Start + parent.Width + LogicalGap,
+                End = parent.End + parent.Width + LogicalGap };
+        }
+        intervals.Add(parent);
+
+        var minimum = intervals.Min(interval => interval.Start);
+        if (minimum != 0)
+            intervals = intervals.Select(interval => interval with
+            {
+                Start = interval.Start - minimum,
+                End = interval.End - minimum
+            }).ToList();
+
+        var profile = new SubtreeHorizontalProfile($"subtree:{id}", id, intervals);
+        profileByNode[id] = profile;
+        profileTimer.Stop();
+        profileComputationMilliseconds += profileTimer.ElapsedMilliseconds;
+        return profile;
     }
 
-    private void PlaceStandaloneRegion(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> standalone)
+    private void MaterializeProfile(LogicalProjectGrid grid, SubtreeHorizontalProfile profile, int shift,
+        ICollection<ProfileInterval> occupied)
+    {
+        var materializationTimer = Stopwatch.StartNew();
+        foreach (var interval in profile.Intervals)
+        {
+            var shiftedStart = interval.Start + shift;
+            var row = grid.EnsureRow(interval.RowRole);
+            grid.ReserveNodeFootprintAt(row, shiftedStart, interval.Width, spanReasonByNode[interval.OwnerId]);
+            slotByNode[interval.OwnerId] = new GridSlot(row,
+                grid.Columns.Skip(shiftedStart).Take(interval.Width).ToArray());
+            occupied.Add(interval with { Start = shiftedStart, End = interval.End + shift });
+        }
+        materializationTimer.Stop();
+        columnMaterializationMilliseconds += materializationTimer.ElapsedMilliseconds;
+    }
+
+    private void PlaceStandaloneProfiles(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> standalone,
+        ICollection<ProfileInterval> occupied)
     {
         if (standalone.Count == 0) return;
         var columnsPerRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalone.Count)));
-        var region = grid.ReserveStandaloneRegion(standalone.Sum(node => spanByNode[node.PhysicalNodeId]) + Math.Max(0, columnsPerRow - 1) * LogicalGap);
-        var standaloneRow = grid.Rows.Count + LogicalGap;
+        var rowCursors = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var index = 0; index < standalone.Count; index++)
         {
-            var node = standalone[index];
-            var row = standaloneRow + index / columnsPerRow;
-            var rowId = grid.EnsureRow($"standalone:{row}");
-            slotByNode[node.PhysicalNodeId] = grid.ReserveNodeFootprint(
-                grid.ReserveStandaloneFootprint(region, rowId, spanByNode[node.PhysicalNodeId]),
-                rowId,
-                spanByNode[node.PhysicalNodeId], spanReasonByNode[node.PhysicalNodeId]);
+            var rowRole = $"standalone:{index / columnsPerRow}";
+            var start = rowCursors.TryGetValue(rowRole, out var cursor) ? cursor : 0;
+            var interval = new ProfileInterval(rowRole, start, start + spanByNode[standalone[index].PhysicalNodeId] - 1,
+                standalone[index].PhysicalNodeId, "standalone", spanByNode[standalone[index].PhysicalNodeId]);
+            rowCursors[rowRole] = interval.End + LogicalGap;
+            var profile = new SubtreeHorizontalProfile($"standalone:{standalone[index].PhysicalNodeId}",
+                standalone[index].PhysicalNodeId, new[] { interval });
+            var shift = FindCompatibleShift(profile.Intervals, occupied);
+            MaterializeProfile(grid, profile, shift, occupied);
         }
     }
+
+    private int FindCompatibleShift(IReadOnlyList<ProfileInterval> candidate,
+        IEnumerable<ProfileInterval> occupied)
+    {
+        var shift = 0;
+        while (true)
+        {
+            var conflict = occupied.FirstOrDefault(existing => candidate.Any(item =>
+                item.RowRole == existing.RowRole &&
+                CountsAsConflict(item, existing, shift)));
+            if (conflict is null) return shift;
+            var conflicting = candidate.First(item => item.RowRole == conflict.RowRole &&
+                CountsAsConflict(item, conflict, shift));
+            shift = conflict.End + LogicalGap + 1 - conflicting.Start;
+        }
+    }
+
+    private bool CountsAsConflict(ProfileInterval candidate, ProfileInterval existing, int shift)
+    {
+        intervalCompatibilityChecks++;
+        return Intersects(candidate.Start + shift, candidate.End + shift, existing.Start, existing.End, LogicalGap);
+    }
+
+    private static bool Intersects(int leftStart, int leftEnd, int rightStart, int rightEnd, int gap = 0) =>
+        leftStart <= rightEnd + gap && rightStart <= leftEnd + gap;
 
     private PlannedNodePlacement BuildPlacement(PlannedPhysicalNode node)
     {
@@ -306,14 +370,16 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var members = SubtreeMembers(node.PhysicalNodeId).Where(slotByNode.ContainsKey).ToArray();
             if (members.Length == 0) continue;
             var grid = gridsByProject[ProjectOf(node)];
-            var columns = members.SelectMany(id => slotByNode[id].Columns).Distinct().OrderBy(grid.ColumnOrder).ToArray();
-            var rows = members.Select(id => slotByNode[id].RowId).Distinct().ToArray();
-            var cells = rows.SelectMany(row => columns
-                .Select(column => new PlanningGridCellId(grid.Id, row, column)))
+            var rowIntervals = members.GroupBy(id => slotByNode[id].RowId)
+                .Select(group => new SubtreeReservationRowInterval(group.Key,
+                    group.SelectMany(id => slotByNode[id].Columns).Distinct().OrderBy(grid.ColumnOrder).ToArray()))
+                .OrderBy(interval => grid.RowOrder(interval.RowId))
                 .ToArray();
+            var cells = rowIntervals.SelectMany(interval => interval.Columns
+                .Select(column => new PlanningGridCellId(grid.Id, interval.RowId, column))).ToArray();
             var owner = ownerByNode[node.PhysicalNodeId];
             result.Add(new SubtreeReservation($"subtree:{node.PhysicalNodeId}", node.PhysicalNodeId, grid.Id, cells,
-                owner is null ? null : $"subtree:{owner}"));
+                owner is null ? null : $"subtree:{owner}", rowIntervals));
         }
         return result;
     }
@@ -362,14 +428,17 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 "placement", logicalGrid.NodeFootprintColumns.Contains(id) ? "node footprint" : "sibling gap", projectId)).ToList();
             var placementByNode = placements.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
             var projectLinks = projection.PhysicalLinks.Where(link => link.SourceProjectId == projectId || link.DestinationProjectId == projectId).ToArray();
-            var hasDestinationApproach = projectLinks.Any(link => link.DestinationProjectId == projectId);
-            var hasLocalReturn = projectLinks.Any(link => link.SourceProjectId == projectId && link.DestinationProjectId == projectId &&
-                placementByNode.TryGetValue(link.SourcePhysicalNodeId, out var source) && placementByNode.TryGetValue(link.DestinationPhysicalNodeId, out var destination) &&
-                destination.AnchorCellId.RowId != source.AnchorCellId.RowId);
             var hasProjectTransition = projectLinks.Any(link => link.SourceProjectId != link.DestinationProjectId);
-            AddRegionColumn(columns, PlanningGridTrackRole.DestinationApproach, "region:destination-approach", hasDestinationApproach, projectId);
-            AddRegionColumn(columns, PlanningGridTrackRole.OwnershipLocalReturn, "region:ownership-local-return", hasLocalReturn, projectId);
-            AddRegionColumn(columns, PlanningGridTrackRole.ProjectBoundaryTransition, "region:project-boundary-transition", hasProjectTransition, projectId);
+            foreach (var destination in projectLinks.Where(link => link.DestinationProjectId == projectId)
+                .Select(link => link.DestinationPhysicalNodeId).Distinct(StringComparer.Ordinal).OrderBy(id => order[id]))
+                AddRegionColumn(columns, PlanningGridTrackRole.DestinationApproach, $"region:destination-approach:{destination}", destination, projectId);
+            foreach (var source in projectLinks.Where(link => link.SourceProjectId == projectId && link.DestinationProjectId == projectId)
+                .Where(link => placementByNode.TryGetValue(link.SourcePhysicalNodeId, out var sourcePlacement) &&
+                    placementByNode.TryGetValue(link.DestinationPhysicalNodeId, out var destinationPlacement) &&
+                    ParseLogicalOrder(destinationPlacement.AnchorCellId.RowId.Value) <= ParseLogicalOrder(sourcePlacement.AnchorCellId.RowId.Value))
+                .Select(link => link.SourcePhysicalNodeId).Distinct(StringComparer.Ordinal).OrderBy(id => order[id]))
+                AddRegionColumn(columns, PlanningGridTrackRole.OwnershipLocalReturn, $"region:ownership-local-return:{source}", source, projectId);
+            AddRegionColumn(columns, PlanningGridTrackRole.ProjectBoundaryTransition, "region:project-boundary-transition", projectId, projectId, hasProjectTransition);
             var grid = new PlanningGrid(gridId, rows, columns, cells, new GridTransform(gridId, new RelativePoint(0, 0)));
             var owned = projectNodes.Select(node => node.PhysicalNodeId).ToArray();
             return new ProjectRoutingGrid(projectId, grid, reservations.Where(item => item.GridId.Equals(gridId)).ToArray(), null,
@@ -377,13 +446,13 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }).ToArray();
     }
 
-    private static void AddRegionColumn(List<PlanningGridColumn> columns, PlanningGridTrackRole role, string id, bool required, string projectId)
+    private static void AddRegionColumn(List<PlanningGridColumn> columns, PlanningGridTrackRole role, string id, string ownerId, string projectId, bool required = true)
     {
-        if (!required || columns.Any(column => column.Role == role)) return;
+        if (!required || columns.Any(column => column.Id.Value == id)) return;
         var index = columns.Count;
         var columnId = new PlanningGridColumnId(id);
         columns.Add(new PlanningGridColumn(columnId, index, 1, 1, 1, index, index, role,
-            "placement", "shared structural routing region", projectId));
+            "placement", "ownership-scoped structural routing region", ownerId));
     }
 
     private static PlanningGridCell Cell(PlanningGridCellId id, PlanningGridCell? existing, string? reservationId,
@@ -478,105 +547,32 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         private readonly List<PlanningGridColumnId> columns = new();
         private readonly List<PlanningGridRowId> rows = new();
         private readonly HashSet<PlanningGridCellId> occupiedNodeCells = new();
-        public IReadOnlyCollection<PlanningGridColumnId> NodeFootprintColumns => columns.Where(column => occupiedNodeCells.Any(cell => cell.ColumnId.Equals(column))).Distinct().ToArray();
+        private readonly HashSet<PlanningGridColumnId> occupiedNodeColumns = new();
+        public IReadOnlyCollection<PlanningGridColumnId> NodeFootprintColumns => occupiedNodeColumns;
 
         public LogicalProjectGrid(PlanningGridId id) => Id = id;
         public PlanningGridId Id { get; }
         public IReadOnlyList<PlanningGridColumnId> Columns => columns;
         public IReadOnlyList<PlanningGridRowId> Rows => rows;
 
-        public LogicalRegion ReserveSubtreeRegion(int count)
+        public void EnsureColumns(int count)
         {
-            if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
-            if (count % 2 == 0) count++;
-            return InsertRegion(count, "subtree");
+            if (count <= columns.Count) return;
+            var start = columns.Count == 0 ? 0 : ParseLogicalOrder(columns[columns.Count - 1].Value) + LogicalGap;
+            var existingCount = columns.Count;
+            for (var index = existingCount; index < count; index++)
+                columns.Add(new PlanningGridColumnId($"column:{start + index - existingCount}"));
         }
 
-        public LogicalRegion ReserveStandaloneRegion(int count)
+        public void ReserveNodeFootprintAt(PlanningGridRowId row, int start, int span, string reason)
         {
-            return InsertRegion(count, "standalone");
-        }
-
-        public IReadOnlyList<LogicalRegion> ReserveSiblingRegions(LogicalRegion parent, IReadOnlyList<int> widths, IReadOnlyList<PlanningGridRowId> rowsForChildren,
-            IReadOnlyList<IReadOnlyList<string>> rowRolesForChildren, string parentRowRole, int parentSpan)
-        {
-            if (widths.Count == 0) return Array.Empty<LogicalRegion>();
-            if (widths.Count != rowsForChildren.Count) throw new ArgumentException("Sibling row allocation must match sibling widths.", nameof(rowsForChildren));
-            var result = new List<LogicalRegion>();
-            var allocated = new List<RegionReservation>();
-            var parentStart = Math.Max(0, (parent.Columns.Count - parentSpan) / 2);
-            allocated.Add(new RegionReservation(new LogicalRegion(parent.Columns.Skip(parentStart).Take(parentSpan).ToArray()), new[] { parentRowRole }));
-            for (var index = 0; index < widths.Count; index++)
-            {
-                var width = widths[index];
-                if (width <= 0) throw new ArgumentOutOfRangeException(nameof(widths));
-                var candidate = Enumerable.Range(0, Math.Max(1, parent.Columns.Count - width + 1))
-                    .FirstOrDefault(start => allocated.All(existing => !Overlaps(existing,
-                        parent.Columns.Skip(start).Take(width).ToArray(), rowRolesForChildren[index])));
-                if (candidate + width > parent.Columns.Count || allocated.Any(existing => Overlaps(existing,
-                    parent.Columns.Skip(candidate).Take(width).ToArray(), rowRolesForChildren[index])))
-                {
-                    var expansion = CreateColumns(width + LogicalGap);
-                    columns.AddRange(expansion);
-                    parent.Columns = parent.Columns.Concat(expansion).ToArray();
-                    candidate = parent.Columns.Count - width;
-                }
-                var region = new LogicalRegion(parent.Columns.Skip(candidate).Take(width).ToArray());
-                allocated.Add(new RegionReservation(region, rowRolesForChildren[index]));
-                result.Add(region);
-            }
-            return result;
-        }
-
-        private static bool Overlaps(RegionReservation existing, IReadOnlyList<PlanningGridColumnId> candidate,
-            IReadOnlyList<string> candidateRows)
-        {
-            if (!existing.RowRoles.Intersect(candidateRows, StringComparer.Ordinal).Any()) return false;
-            var existingIndexes = existing.Region.Columns.Select(column => ParseLogicalOrder(column.Value)).ToArray();
-            var candidateIndexes = candidate.Select(column => ParseLogicalOrder(column.Value)).ToArray();
-            return existingIndexes.Any(left => candidateIndexes.Any(right => Math.Abs(left - right) <= LogicalGap));
-        }
-
-        public GridSlot ReserveNodeFootprint(LogicalRegion region, PlanningGridRowId row, int span, string reason)
-        {
-            if (span <= 0 || span % 2 == 0) throw new ArgumentException("Node footprint spans must be positive and odd.", nameof(span));
-            if (span > region.Columns.Count) throw new InvalidOperationException("Node footprint exceeds its reserved grid region.");
-            var start = (region.Columns.Count - span) / 2;
-            var cells = region.Columns.Skip(start).Take(span)
-                .Select(column => new PlanningGridCellId(Id, row, column)).ToArray();
+            if (start < 0 || span <= 0 || span % 2 == 0) throw new ArgumentException("Node footprint spans must be positive and odd.", nameof(span));
+            EnsureColumns(start + span);
+            var cells = columns.Skip(start).Take(span).Select(column => new PlanningGridCellId(Id, row, column)).ToArray();
             if (cells.Any(occupiedNodeCells.Contains))
                 throw new InvalidOperationException($"A logical node footprint conflicts with an existing node footprint in grid {Id}, row {row}, span {span}.");
             occupiedNodeCells.UnionWith(cells);
-            return new GridSlot(row, region.Columns.Skip(start).Take(span).ToArray());
-        }
-
-        public LogicalRegion ReserveStandaloneFootprint(LogicalRegion region, PlanningGridRowId row, int span)
-        {
-            for (var start = 0; start + span <= region.Columns.Count; start++)
-            {
-                var columnsForNode = region.Columns.Skip(start).Take(span).ToArray();
-                if (!columnsForNode.Any(column => occupiedNodeCells.Contains(new PlanningGridCellId(Id, row, column))))
-                    return new LogicalRegion(columnsForNode);
-            }
-            var expansion = CreateColumns(span + LogicalGap);
-            columns.AddRange(expansion);
-            region.Columns = region.Columns.Concat(expansion).ToArray();
-            return new LogicalRegion(expansion.Take(span).ToArray());
-        }
-
-        private LogicalRegion InsertRegion(int count, string reason)
-        {
-            if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
-            if (count % 2 == 0) count++;
-            var region = CreateColumns(count, columns.Count == 0);
-            columns.AddRange(region);
-            return new LogicalRegion(region);
-        }
-
-        private PlanningGridColumnId[] CreateColumns(int count, bool first = false)
-        {
-            var start = columns.Select(column => ParseLogicalOrder(column.Value)).DefaultIfEmpty(-1).Max() + (first ? 0 : LogicalGap);
-            return Enumerable.Range(start, count).Select(index => new PlanningGridColumnId($"column:{index}")).ToArray();
+            foreach (var cell in cells) occupiedNodeColumns.Add(cell.ColumnId);
         }
 
         public PlanningGridRowId EnsureRow(string role)
@@ -587,16 +583,13 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
 
         public int ColumnOrder(PlanningGridColumnId id) => columns.IndexOf(id);
+        public int RowOrder(PlanningGridRowId id) => rows.IndexOf(id);
     }
 
-    private sealed class LogicalRegion
-    {
-        public LogicalRegion(IReadOnlyList<PlanningGridColumnId> columns) => Columns = columns;
-        public IReadOnlyList<PlanningGridColumnId> Columns { get; set; }
-        public int Count => Columns.Count;
-    }
+    private sealed record ProfileInterval(string RowRole, int Start, int End, string OwnerId, string Role, int Width);
 
-    private sealed record RegionReservation(LogicalRegion Region, IReadOnlyList<string> RowRoles);
+    private sealed record SubtreeHorizontalProfile(string SubtreeId, string RootNodeId,
+        IReadOnlyList<ProfileInterval> Intervals);
 }
 
 internal sealed record LogicalPlacementResult(
@@ -606,4 +599,14 @@ internal sealed record LogicalPlacementResult(
     IReadOnlyList<PlannedPhysicalLinkMetadata> LinkMetadata,
     IReadOnlyList<SubtreeReservation> SubtreeReservations,
     IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics,
-    IReadOnlyList<PlannedNodePlacement> NodePlacements);
+    IReadOnlyList<PlannedNodePlacement> NodePlacements,
+    PlacementPerformance Performance);
+
+internal sealed record PlacementPerformance(
+    long ProfileComputationMilliseconds,
+    long ProfileCompositionMilliseconds,
+    long ColumnMaterializationMilliseconds,
+    long ReservationConstructionMilliseconds,
+    int ProfileCacheHits,
+    int ProfileCacheMisses,
+    long IntervalCompatibilityChecks);
