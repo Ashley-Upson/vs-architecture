@@ -38,6 +38,99 @@ public sealed record PlannedPhysicalRoute(
     bool HasSharedSegment,
     bool HasCrossing);
 
+public sealed record PlannedPhysicalTerminal(
+    string TerminalId,
+    string PhysicalLinkId,
+    string PhysicalNodeId,
+    GridSide Side,
+    AbsolutePoint Point,
+    int Ordinal,
+    string DomainId,
+    string Provenance);
+
+public sealed record PlannedPhysicalTurn(
+    string BendIdentity,
+    string PhysicalLinkId,
+    PlanningGridId GridId,
+    PlanningGridCellId CellId,
+    AbsolutePoint Point,
+    string? HorizontalRunId,
+    string? VerticalRunId,
+    string Provenance);
+
+public sealed record PlannedPhysicalCrossing(
+    string PhysicalLinkId,
+    string OtherPhysicalLinkId,
+    PlanningGridId GridId,
+    PlanningGridCellId CellId,
+    AbsolutePoint Point,
+    string Provenance);
+
+public sealed record PlannedPhysicalTransition(
+    string PhysicalLinkId,
+    PlanningGridId SourceGridId,
+    PlanningGridId DestinationGridId,
+    AbsolutePoint SourcePoint,
+    AbsolutePoint DestinationPoint,
+    string OwnershipTransition,
+    string Provenance);
+
+public sealed record PlannedPhysicalSceneMetrics(
+    int AbsoluteNodeCount,
+    int TerminalCount,
+    int PhysicalRouteCount,
+    int SegmentCount,
+    int BendCount,
+    int CleanCrossingCount,
+    int TransitionCount,
+    int TotalRouteLength,
+    int MaximumRouteLength,
+    int NodeOverlapCount,
+    int RouteNodeIntersectionCount,
+    int SharedCollinearSegmentCount,
+    int SharedBendCount,
+    int InvalidCrossingCount,
+    int TerminalFindingCount,
+    int OwnershipFindingCount,
+    int LabelGeometryUnavailableCount,
+    IReadOnlyDictionary<string, int> TopologyCounts,
+    IReadOnlyDictionary<string, long> StageTimingsMilliseconds);
+
+public sealed class PlannedArchitecturePhysicalScene
+{
+    public PlannedArchitecturePhysicalScene(
+        PlannedArchitectureGeometry geometry,
+        IReadOnlyList<GridTransform> transforms,
+        IReadOnlyList<PlannedPhysicalTerminal> terminals,
+        IReadOnlyList<PlannedPhysicalTurn> turns,
+        IReadOnlyList<PlannedPhysicalCrossing> crossings,
+        IReadOnlyList<PlannedPhysicalTransition> transitions,
+        IReadOnlyList<PlannedSubtreeGeometry> reservations,
+        IReadOnlyList<ArchitecturePlanningDiagnostic> diagnostics,
+        PlannedPhysicalSceneMetrics metrics)
+    {
+        Geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
+        Transforms = Array.AsReadOnly((transforms ?? throw new ArgumentNullException(nameof(transforms))).ToArray());
+        Terminals = Array.AsReadOnly((terminals ?? throw new ArgumentNullException(nameof(terminals))).ToArray());
+        Turns = Array.AsReadOnly((turns ?? throw new ArgumentNullException(nameof(turns))).ToArray());
+        Crossings = Array.AsReadOnly((crossings ?? throw new ArgumentNullException(nameof(crossings))).ToArray());
+        Transitions = Array.AsReadOnly((transitions ?? throw new ArgumentNullException(nameof(transitions))).ToArray());
+        Reservations = Array.AsReadOnly((reservations ?? throw new ArgumentNullException(nameof(reservations))).ToArray());
+        Diagnostics = Array.AsReadOnly((diagnostics ?? throw new ArgumentNullException(nameof(diagnostics))).ToArray());
+        Metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+    }
+
+    public PlannedArchitectureGeometry Geometry { get; }
+    public IReadOnlyList<GridTransform> Transforms { get; }
+    public IReadOnlyList<PlannedPhysicalTerminal> Terminals { get; }
+    public IReadOnlyList<PlannedPhysicalTurn> Turns { get; }
+    public IReadOnlyList<PlannedPhysicalCrossing> Crossings { get; }
+    public IReadOnlyList<PlannedPhysicalTransition> Transitions { get; }
+    public IReadOnlyList<PlannedSubtreeGeometry> Reservations { get; }
+    public IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics { get; }
+    public PlannedPhysicalSceneMetrics Metrics { get; }
+}
+
 public enum TrackConstraintKind
 {
     SingleRowMinimum,

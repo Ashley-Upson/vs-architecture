@@ -52,18 +52,18 @@ cardinality is frozen before the first route is planned.
 
 ## Explicitly deferred
 
-The following stages are not active and must not be inferred from metadata:
-
-- absolute geometry compilation;
-- physical-scene validation of a completed geometry;
-- Draw.io node/container/edge emission.
+Draw.io node/container/edge emission remains deferred. Absolute physical-scene
+compilation and validation are active and consume the accepted relative plan;
+they report allocation and geometry findings without repair.
 
 Logical node placement, topology classification, abstract grid routes,
 destination approaches, project transitions, straight-run compilation,
 collective demand, logical lane allocation and routing-capacity constraints are
 complete. Track sizing and relative geometry consume those existing structures
 without creating tracks, routes, lanes or coordinates of their own. Absolute
-route geometry and rendering are not active.
+transforms, node envelopes, terminals, lane coordinates, turns, transitions,
+routes and sparse reservation geometry are compiled into an immutable physical
+scene. The compiler does not select paths, resize tracks or repair findings.
 
 The previous coordinate-first route builder, candidate scoring, rectangle-derived
 lane selection, sequential route reservation and degraded fallback route have been
@@ -87,9 +87,11 @@ CLI and VSIX continue to resolve the V6 Architecture planner/renderer boundary.
 for completed plans. Relative sizing validation checks track positivity,
 constraint satisfaction, structural cardinality, grid bounds, node accounting,
 footprint-envelope equality, project containment, sparse reservation intervals
-and relative node overlap. Missing measured project-label input is reported
+and relative node overlap. Physical-scene validation additionally checks node
+envelopes, terminals, orthogonality, route/node intersections, shared segments,
+turns and transitions. Missing measured project-label input is reported
 explicitly; configured header height is not presented as a measured label
-obstruction. Absolute geometry validation remains deferred.
+obstruction.
 Track sizing starts from explicit role-specific structural minima rather than a
 global cell-width or cell-height minimum. Node width and height are span
 constraints over the node footprint only; routing-only destination, return and
@@ -97,15 +99,16 @@ transition tracks receive their own policy minima and grow only for lane,
 turn, clearance or other explicit constraints. Project padding is applied once
 around the summed project-grid extents. Every raised extent records the
 constraint that caused it in track provenance.
-The planner reports `V6AbsoluteGeometryDeferred`; logical placement, abstract
-routing, lane allocation, physical track sizing and relative geometry are
-complete.
+The planner reports physical-scene metrics and stage timings; logical placement,
+abstract routing, lane allocation, physical track sizing, relative geometry and
+absolute geometry are complete. Findings such as shared segments or route/node
+intersections remain diagnostics for the owning earlier stage.
 The renderer reports logical-placement and abstract-route completion, the
 minimal-page state and deferred link emission.
 
 ## Next implementation boundary
 
-The next implementation boundary is absolute geometry compilation. It should
-consume relative geometry and preserve grid ownership; it should not introduce
-route-owned tracks, coordinate-first route candidates or renderer layout
+The next implementation boundary is Draw.io projection. It should consume the
+completed physical scene and preserve its geometry and provenance; it should
+not introduce route-owned tracks, coordinate-first route candidates or layout
 decisions.

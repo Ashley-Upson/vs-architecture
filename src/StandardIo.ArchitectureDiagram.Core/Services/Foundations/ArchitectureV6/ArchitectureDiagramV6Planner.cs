@@ -75,13 +75,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.NodePlacements, placement.NodeMetadata, projectGrids, placement.SubtreeReservations,
             allocation.Sizing.Constraints, diagramGrid).Build());
         var sizedPlan = sizing.Sizing;
+        PlannedArchitecturePhysicalScene physicalScene = null!;
+        TimeStage("absoluteGeometry", () => physicalScene = new ArchitectureV6PhysicalSceneCompiler(request, projection.PhysicalNodes,
+            projection.PhysicalLinks, diagramGrid, projectGrids, placement.NodePlacements, allocation.Routes, sizedPlan,
+            sizing.RelativeGeometry, allocation, placement.SubtreeReservations).Compile());
         var cardinalityFindings = structuralRowsBeforeRouting != structuralRowsAfterRouting || structuralColumnsBeforeRouting != structuralColumnsAfterRouting
             ? new[] { Deferred("StructuralGridCardinalityChanged", PlanningDiagnosticSubject.Grid, "Abstract routing changed structural row or column cardinality.") }
             : Array.Empty<ArchitecturePlanningDiagnostic>();
-        var findings = projection.Diagnostics.Concat(cardinalityFindings).Concat(new[]
-        {
-            Deferred("V6AbsoluteGeometryDeferred", PlanningDiagnosticSubject.Grid, "Absolute geometry compilation remains deferred until a later stage.")
-        }).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(sizing.Diagnostics).ToArray();
+        var findings = projection.Diagnostics.Concat(cardinalityFindings)
+            .Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(sizing.Diagnostics).Concat(physicalScene.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(
             request.SemanticModel.Projects.Sum(project => project.Nodes.Count) + request.SemanticModel.ExternalNodes.Count,
@@ -114,7 +116,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              GeometryGridCount: sizing.RelativeGeometry.Grids.Count,
              GeometryWidth: sizing.DiagramWidth,
              GeometryHeight: sizing.DiagramHeight,
-             GeometryCollisionCount: sizing.Diagnostics.Count(item => item.Code == "RelativeNodeOverlap"),
+             GeometryCollisionCount: physicalScene.Metrics.NodeOverlapCount,
              InvalidDimensionCount: sizing.Diagnostics.Count(item => item.Code == "SizingInvalidTrack" || item.Code == "RelativeInvalidDimension"),
              UnplacedNodeCount: projection.PhysicalNodes.Count - placement.NodePlacements.Count,
              OverlappingFootprintCount: placement.Diagnostics.Count(item => item.Code == "LogicalPlacementFootprintOverlap"),
@@ -187,7 +189,26 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                      item.AnchorCellId.RowId.Value, item.AnchorCellId.ColumnId.Value,
                      item.Footprint.Select(cell => cell.ColumnId.Value).ToArray(), metadata.PositionalOwnerId,
                      metadata.PositionalChildIds, metadata.SubtreeId);
-             }).ToArray());
+              }).ToArray(),
+              AbsoluteNodeCount: physicalScene.Metrics.AbsoluteNodeCount,
+              AbsoluteTerminalCount: physicalScene.Metrics.TerminalCount,
+              PhysicalRouteCount: physicalScene.Metrics.PhysicalRouteCount,
+              PhysicalSegmentCount: physicalScene.Metrics.SegmentCount,
+              PhysicalBendCount: physicalScene.Metrics.BendCount,
+              PhysicalCleanCrossingCount: physicalScene.Metrics.CleanCrossingCount,
+              PhysicalTransitionCount: physicalScene.Metrics.TransitionCount,
+              TotalRouteLength: physicalScene.Metrics.TotalRouteLength,
+              MaximumRouteLength: physicalScene.Metrics.MaximumRouteLength,
+              PhysicalNodeOverlapCount: physicalScene.Metrics.NodeOverlapCount,
+              RouteNodeIntersectionCount: physicalScene.Metrics.RouteNodeIntersectionCount,
+              SharedCollinearSegmentCount: physicalScene.Metrics.SharedCollinearSegmentCount,
+              SharedBendCount: physicalScene.Metrics.SharedBendCount,
+              InvalidCrossingCount: physicalScene.Metrics.InvalidCrossingCount,
+              TerminalFindingCount: physicalScene.Metrics.TerminalFindingCount,
+              OwnershipTransformFindingCount: physicalScene.Metrics.OwnershipFindingCount,
+              LabelGeometryUnavailableCount: physicalScene.Metrics.LabelGeometryUnavailableCount,
+              PhysicalTopologyCounts: physicalScene.Metrics.TopologyCounts,
+              PhysicalStageTimingMilliseconds: physicalScene.Metrics.StageTimingsMilliseconds);
 
         return new PlannedArchitectureDiagram(
             request,
@@ -203,13 +224,17 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-             new ArchitecturePlanningStageStatus(true, true, true, false, false, true, true, false, true, false),
+            new ArchitecturePlanningStageStatus(true, true, true, false, false, false, true, true, true, false),
             routing.DestinationApproaches,
             allocation.StraightRuns,
             routing.TurnDemands,
             routing.EndpointDemands,
              allocation,
-             sizing.RelativeGeometry);
+             sizing.RelativeGeometry)
+        {
+            Geometry = physicalScene.Geometry,
+            PhysicalScene = physicalScene
+        };
     }
 
     private static ArchitecturePlanningDiagnostic Deferred(string code, PlanningDiagnosticSubject subject, string message) =>

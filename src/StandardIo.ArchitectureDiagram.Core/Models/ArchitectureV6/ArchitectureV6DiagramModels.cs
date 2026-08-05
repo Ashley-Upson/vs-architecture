@@ -214,6 +214,7 @@ public sealed class PlannedArchitectureDiagram
     public ArchitectureLaneAllocationResult? LaneAllocation { get; }
     public PlannedArchitectureRelativeGeometry? RelativeGeometry { get; }
     public PlannedArchitectureGeometry? Geometry { get; init; }
+    public PlannedArchitecturePhysicalScene? PhysicalScene { get; init; }
 }
 
 public sealed class ArchitectureDiagramPlanningState

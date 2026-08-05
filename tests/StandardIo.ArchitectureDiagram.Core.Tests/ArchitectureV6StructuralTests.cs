@@ -362,12 +362,69 @@ public sealed class ArchitectureV6StructuralTests
         Assert.True(plan.StageStatus.SizingCompleted);
         Assert.True(plan.StageStatus.CapacityConstraintsCompleted);
         Assert.False(plan.StageStatus.PhysicalSizingDeferred);
-        Assert.True(plan.StageStatus.AbsoluteGeometryDeferred);
-        Assert.False(plan.StageStatus.AbsoluteGeometryCompleted);
+        Assert.False(plan.StageStatus.AbsoluteGeometryDeferred);
+        Assert.True(plan.StageStatus.AbsoluteGeometryCompleted);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6AbsoluteGeometryDeferred");
+        Assert.NotNull(plan.PhysicalScene);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalScene!.Metrics.AbsoluteNodeCount);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Metrics.PhysicalRouteCount);
         Assert.NotNull(plan.RelativeGeometry);
+    }
+
+    [Fact]
+    public void Planner_compiles_absolute_nodes_from_the_relative_grid_envelope()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        Assert.NotNull(plan.PhysicalScene);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalScene!.Geometry.Nodes.Count);
+        foreach (var node in plan.PhysicalScene.Geometry.Nodes)
+        {
+            var transform = plan.PhysicalScene.Transforms.Single(item => item.GridId.Equals(node.GridId));
+            var relative = plan.RelativeGeometry!.Nodes.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
+            Assert.Equal(relative.Bounds.X + transform.Origin.X, node.AbsoluteBounds.X);
+            Assert.Equal(relative.Bounds.Y + transform.Origin.Y, node.AbsoluteBounds.Y);
+            Assert.Equal(relative.Bounds.Width, node.AbsoluteBounds.Width);
+            Assert.Equal(relative.Bounds.Height, node.AbsoluteBounds.Height);
+        }
+    }
+
+    [Fact]
+    public void Planner_materialises_one_route_and_two_terminals_per_physical_link()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        Assert.NotNull(plan.PhysicalScene);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene!.Metrics.PhysicalRouteCount);
+        Assert.Equal(plan.PhysicalLinks.Count * 2, plan.PhysicalScene.Terminals.Count);
+        Assert.All(plan.PhysicalScene.Terminals, terminal =>
+        {
+            var node = plan.PhysicalScene.Geometry.Nodes.Single(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
+            Assert.Equal(terminal.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y, terminal.Point.Y);
+        });
+    }
+
+    [Fact]
+    public void Planner_repeated_physical_compilation_is_deterministic()
+    {
+        var first = new ArchitectureDiagramV6Planner().Plan(Request());
+        var second = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        Assert.Equal(first.PhysicalScene!.Geometry.Nodes, second.PhysicalScene!.Geometry.Nodes);
+        foreach (var route in first.PhysicalScene.Geometry.Routes)
+        {
+            var other = second.PhysicalScene.Geometry.Routes.Single(item => item.PhysicalLinkId == route.PhysicalLinkId);
+            Assert.Equal(route.RouteLength, other.RouteLength);
+            Assert.Equal(route.Segments.Select(segment => (segment.Start, segment.End, segment.Axis)),
+                other.Segments.Select(segment => (segment.Start, segment.End, segment.Axis)));
+        }
+        Assert.Equal(first.PhysicalScene.Terminals, second.PhysicalScene.Terminals);
+        Assert.Equal(first.PhysicalScene.Metrics.AbsoluteNodeCount, second.PhysicalScene.Metrics.AbsoluteNodeCount);
+        Assert.Equal(first.PhysicalScene.Metrics.TerminalCount, second.PhysicalScene.Metrics.TerminalCount);
+        Assert.Equal(first.PhysicalScene.Metrics.SegmentCount, second.PhysicalScene.Metrics.SegmentCount);
+        Assert.Equal(first.PhysicalScene.Metrics.TotalRouteLength, second.PhysicalScene.Metrics.TotalRouteLength);
+        Assert.Equal(first.PhysicalScene.Metrics.TopologyCounts, second.PhysicalScene.Metrics.TopologyCounts);
     }
 
     [Fact]

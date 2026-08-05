@@ -128,7 +128,26 @@ public sealed record ArchitecturePlanningMetrics(
     long SizingNodeEnvelopeMilliseconds = 0,
     long SizingReservationEnvelopeMilliseconds = 0,
     long SizingValidationMilliseconds = 0,
-    long SizingEvidenceSerializationMilliseconds = 0);
+    long SizingEvidenceSerializationMilliseconds = 0,
+    int AbsoluteNodeCount = 0,
+    int AbsoluteTerminalCount = 0,
+    int PhysicalRouteCount = 0,
+    int PhysicalSegmentCount = 0,
+    int PhysicalBendCount = 0,
+    int PhysicalCleanCrossingCount = 0,
+    int PhysicalTransitionCount = 0,
+    int TotalRouteLength = 0,
+    int MaximumRouteLength = 0,
+    int PhysicalNodeOverlapCount = 0,
+    int RouteNodeIntersectionCount = 0,
+    int SharedCollinearSegmentCount = 0,
+    int SharedBendCount = 0,
+    int InvalidCrossingCount = 0,
+    int TerminalFindingCount = 0,
+    int OwnershipTransformFindingCount = 0,
+    int LabelGeometryUnavailableCount = 0,
+    IReadOnlyDictionary<string, int>? PhysicalTopologyCounts = null,
+    IReadOnlyDictionary<string, long>? PhysicalStageTimingMilliseconds = null);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,
