@@ -15,6 +15,8 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
         var occupied = new Dictionary<PlanningGridCellId, string>();
         var nodesById = diagram.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         var gridsById = diagram.ProjectGrids.ToDictionary(grid => grid.Grid.Id.Value, StringComparer.Ordinal);
+        var allGridsById = diagram.ProjectGrids.Select(item => item.Grid).Concat(new[] { diagram.DiagramGrid.Grid })
+            .ToDictionary(grid => grid.Id.Value, StringComparer.Ordinal);
         foreach (var placement in diagram.NodePlacements)
         {
             if (!nodesById.ContainsKey(placement.PhysicalNodeId))
@@ -36,8 +38,38 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
                 findings.Add(new ArchitecturePlanningDiagnostic("UnknownProjectGrid", "A node placement references a project grid that does not exist.", PlanningDiagnosticSubject.Grid, placement.GridId.Value));
         }
         foreach (var route in diagram.Routes)
+        {
             if (!diagram.PhysicalLinks.Any(link => link.PhysicalLinkId == route.PhysicalLinkId))
                 findings.Add(new ArchitecturePlanningDiagnostic("UnknownPhysicalLink", "A planned route does not reference a physical link.", PlanningDiagnosticSubject.RouteStep, route.PhysicalLinkId));
+            if (route.Source.Side != GridSide.Bottom || route.Destination.Side != GridSide.Top)
+                findings.Add(new ArchitecturePlanningDiagnostic("InvalidRouteEndpointSide", "Abstract routes must leave node bottoms and enter node tops.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+            var previousOrder = -1;
+            foreach (var step in route.Steps)
+            {
+                if (step.EntrySide == step.ExitSide)
+                    findings.Add(new ArchitecturePlanningDiagnostic("InvalidRouteStepSides", "A route step must change direction or represent a valid turn.", PlanningDiagnosticSubject.RouteStep, route.PhysicalLinkId));
+                if (step.Order <= previousOrder)
+                    findings.Add(new ArchitecturePlanningDiagnostic("UnorderedRouteSteps", "Route steps must have deterministic increasing order.", PlanningDiagnosticSubject.RouteStep, route.PhysicalLinkId));
+                previousOrder = step.Order;
+                if (!allGridsById.TryGetValue(step.GridId.Value, out var grid) || !grid.Cells.TryGetValue(step.CellId, out var cell))
+                    findings.Add(new ArchitecturePlanningDiagnostic("UnknownRouteCell", "A route step must reference an existing grid cell.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
+                else
+                {
+                    if ((cell.Capabilities & CellCapability.RoutingAllowed) == 0)
+                        findings.Add(new ArchitecturePlanningDiagnostic("RouteCellNotRoutable", "A route step uses a cell without routing capability.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
+                    if (cell.FootprintOwnerId is not null && cell.FootprintOwnerId != route.Source.PhysicalNodeId && cell.FootprintOwnerId != route.Destination.PhysicalNodeId)
+                        findings.Add(new ArchitecturePlanningDiagnostic("RouteEntersUnrelatedFootprint", "A route may not pass through an unrelated node footprint.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
+                }
+            }
+            var physicalLink = diagram.PhysicalLinks.SingleOrDefault(link => link.PhysicalLinkId == route.PhysicalLinkId);
+            if (physicalLink is not null && physicalLink.SourceProjectId == physicalLink.DestinationProjectId && route.Steps.Any(step => step.GridId.Value == diagram.DiagramGrid.Grid.Id.Value))
+                findings.Add(new ArchitecturePlanningDiagnostic("LocalRouteEnteredDiagramGrid", "Project-local routes must remain within their project grid.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+            if (physicalLink is not null && physicalLink.SourceProjectId != physicalLink.DestinationProjectId && route.Transitions.Count == 0)
+                findings.Add(new ArchitecturePlanningDiagnostic("MissingProjectTransition", "Cross-project routes require explicit grid transitions.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+        }
+        foreach (var link in diagram.PhysicalLinks)
+            if (diagram.Routes.Count(route => route.PhysicalLinkId == link.PhysicalLinkId) != 1)
+                findings.Add(new ArchitecturePlanningDiagnostic("PhysicalLinkRouteCount", "Every physical link must have exactly one abstract route or explicit unsupported result.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
         foreach (var link in diagram.PhysicalLinks)
         {
             if (!nodesById.ContainsKey(link.SourcePhysicalNodeId) || !nodesById.ContainsKey(link.DestinationPhysicalNodeId))

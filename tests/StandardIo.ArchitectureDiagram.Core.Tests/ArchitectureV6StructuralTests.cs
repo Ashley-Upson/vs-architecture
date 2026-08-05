@@ -51,11 +51,12 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.True(plan.StageStatus.ProjectionCompleted);
         Assert.True(plan.StageStatus.LogicalPlacementCompleted);
-        Assert.True(plan.StageStatus.RoutingDeferred);
+        Assert.True(plan.StageStatus.AbstractRoutingCompleted);
+        Assert.True(plan.StageStatus.LaneAllocationDeferred);
         Assert.True(plan.StageStatus.SizingDeferred);
         Assert.True(plan.StageStatus.AbsoluteGeometryDeferred);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6SizingDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6GeometryDeferred");
     }
@@ -80,7 +81,7 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(3, plan.PhysicalNodes.Count);
         Assert.Equal(2, plan.PhysicalLinks.Count);
         Assert.NotEmpty(plan.Projection!.CycleSemanticNodeIds);
-        Assert.Empty(plan.Routes);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.Routes.Count);
         Assert.Equal(plan.PhysicalNodes.Count, plan.NodePlacements.Count);
     }
 
@@ -201,6 +202,65 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_compiles_topology_owned_routes_and_collective_approaches()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        Assert.True(plan.StageStatus.AbstractRoutingCompleted);
+        Assert.True(plan.StageStatus.LaneAllocationDeferred);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.Routes.Count);
+        Assert.All(plan.Routes, route =>
+        {
+            Assert.Equal(GridSide.Bottom, route.Source.Side);
+            Assert.Equal(GridSide.Top, route.Destination.Side);
+            Assert.NotEmpty(route.Steps);
+            Assert.True(route.IsStructurallySupported);
+            Assert.NotEmpty(route.Provenance);
+            Assert.NotNull(route.DestinationApproachReservationId);
+        });
+        Assert.Equal(plan.PhysicalNodes.Count, plan.DestinationApproaches.Count);
+        Assert.NotEmpty(plan.StraightRuns);
+        Assert.Equal(plan.Routes.Count * 2, plan.EndpointDemands.Count);
+        Assert.Equal(plan.SubtreeReservations.Count, plan.ProjectGrids.SelectMany(grid => grid.SubtreeReservations).Count());
+    }
+
+    [Fact]
+    public void Planner_classifies_external_and_cross_project_routes_without_pixel_geometry()
+    {
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(
+                new[]
+                {
+                    new ArchitectureProject("project:a", "A", new[]
+                    {
+                        new ArchitectureNode("source", "project:a", "Source", "A.Source", "Class", "source", Array.Empty<string>())
+                    }, "project:a"),
+                    new ArchitectureProject("project:b", "B", new[]
+                    {
+                        new ArchitectureNode("target", "project:b", "Target", "B.Target", "Class", "target", Array.Empty<string>())
+                    }, "project:b")
+                },
+                Array.Empty<ArchitectureExternalNode>(),
+                new[] { new ArchitectureLink("cross", "source", "target", "cross-project") },
+                null),
+            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "project:a", "project:b" }, Array.Empty<string>())
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var route = Assert.Single(plan.Routes);
+
+        Assert.Equal(RouteTopologyFamily.CrossProject, route.TopologyFamily);
+        Assert.Equal(2, route.Transitions.Count);
+        Assert.Contains(route.Steps, step => step.Role == RouteStepRole.ProjectExit);
+        Assert.Contains(route.Steps, step => step.Role == RouteStepRole.DiagramGridPassage);
+        Assert.Contains(route.Steps, step => step.Role == RouteStepRole.ProjectEntry);
+        Assert.NotEmpty(plan.DiagramGrid.Grid.Cells);
+        Assert.DoesNotContain(plan.ProjectGrids.SelectMany(grid => grid.Grid.Cells.Keys), cell => cell.GridId.Value == "diagram");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "UnsupportedAbstractRoute");
+    }
+
+    [Fact]
     public void Renderer_emits_only_minimal_page_shell()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
@@ -212,7 +272,7 @@ public sealed class ArchitectureV6StructuralTests
         Assert.DoesNotContain(cells, cell => (string?)cell.Attribute("vertex") == "1");
         Assert.DoesNotContain(cells, cell => (string?)cell.Attribute("edge") == "1");
         Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6MinimalPage");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6RoutingDeferred");
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6LinkEmissionDeferred");
     }
 
     [Fact]

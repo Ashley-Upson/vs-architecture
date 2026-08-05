@@ -22,7 +22,10 @@ public enum RouteStepRole
     SourceExit,
     DestinationEntry,
     ProjectTransition,
-    CleanCrossing
+    CleanCrossing,
+    ProjectExit,
+    DiagramGridPassage,
+    ProjectEntry
 }
 
 public enum GridSide
@@ -33,14 +36,25 @@ public enum GridSide
     Right
 }
 
-public sealed record NodeEndpoint(string PhysicalNodeId, GridSide Side, string TerminalId, int Order);
+public sealed record NodeEndpoint(
+    string PhysicalNodeId,
+    GridSide Side,
+    string TerminalId,
+    int Order,
+    PlanningGridId? GridId = null,
+    PlanningGridColumnId? PreferredTrack = null,
+    int MinimumStraightDistance = 1,
+    string OrderingKey = "");
 
 public sealed record PlannedGridRouteStep(
     PlanningGridId GridId,
     PlanningGridCellId CellId,
     GridSide EntrySide,
     GridSide ExitSide,
-    RouteStepRole Role);
+    RouteStepRole Role,
+    int Order = 0,
+    string TopologyProvenance = "",
+    string? EndpointRelationship = null);
 
 public sealed record GridTransition(
     PlanningGridId SourceGridId,
@@ -48,7 +62,12 @@ public sealed record GridTransition(
     PlanningGridId DestinationGridId,
     PlanningGridCellId DestinationBoundaryCellId,
     string OwnershipTransition,
-    string SemanticLinkId);
+    string SemanticLinkId,
+    string Direction = "",
+    string? SourceProjectId = null,
+    string? DestinationProjectId = null,
+    bool ProjectLabelsPermit = true,
+    bool ProjectContainersVisible = true);
 
 public sealed record PlannedGridRoute(
     string PhysicalLinkId,
@@ -58,7 +77,11 @@ public sealed record PlannedGridRoute(
     NodeEndpoint Destination,
     RouteTopologyFamily TopologyFamily,
     string? SourceProjectId,
-    string? DestinationProjectId);
+    string? DestinationProjectId,
+    string Provenance = "",
+    string? DestinationApproachReservationId = null,
+    bool IsStructurallySupported = true,
+    string? UnsupportedReason = null);
 
 public enum RouteAxis
 {
@@ -98,4 +121,6 @@ public sealed record DestinationApproachReservation(
     string ReservationId,
     string PhysicalNodeId,
     PlanningGridId GridId,
-    IReadOnlyList<PlanningGridCellId> Cells);
+    IReadOnlyList<PlanningGridCellId> Cells,
+    IReadOnlyList<string>? PhysicalLinkIds = null,
+    string ApproachMode = "direct");

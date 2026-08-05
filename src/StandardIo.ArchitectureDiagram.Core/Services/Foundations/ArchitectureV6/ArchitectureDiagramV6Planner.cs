@@ -15,14 +15,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
 
         var projection = new ProjectionBuilder(request).Build();
         var placement = new ArchitectureV6LogicalPlacementBuilder(request, projection).Build();
-        var projectGrids = placement.ProjectGrids;
-        var diagramGrid = EmptyDiagramGrid();
+        var routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
+            placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids).Build();
+        var projectGrids = routing.ProjectGrids;
+        var diagramGrid = routing.DiagramGrid;
         var findings = projection.Diagnostics.Concat(new[]
         {
-            Deferred("V6RoutePlanningDeferred", PlanningDiagnosticSubject.RouteStep, "Abstract grid-route planning is deferred; no coordinate route is generated."),
             Deferred("V6SizingDeferred", PlanningDiagnosticSubject.TrackConstraint, "Row and column sizing is deferred until route demand exists."),
             Deferred("V6GeometryDeferred", PlanningDiagnosticSubject.Grid, "Relative and absolute geometry compilation is deferred."),
-        }).ToArray();
+        }).Concat(routing.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(
             request.SemanticModel.Projects.Sum(project => project.Nodes.Count) + request.SemanticModel.ExternalNodes.Count,
@@ -33,11 +34,11 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projectGrids.Sum(grid => grid.Grid.Rows.Count),
             projectGrids.Sum(grid => grid.Grid.Columns.Count),
             projectGrids.Sum(grid => grid.Grid.Cells.Count(item => item.Value.Occupancy == CellOccupancy.NodeAnchor)),
-            0,
-            new Dictionary<string, int>(),
-            0,
-            0,
-            0,
+            routing.Routes.SelectMany(route => route.Steps).Select(step => step.CellId).Distinct().Count(),
+            routing.Routes.GroupBy(route => route.TopologyFamily).ToDictionary(group => group.Key.ToString(), group => group.Count(), StringComparer.Ordinal),
+            routing.Routes.Sum(route => route.Steps.Count),
+            routing.StraightRuns.Count,
+            routing.StraightRuns.Select(run => run.Lane).Distinct().Count(),
             null,
             findings.Length,
             projection.SemanticNodeToPhysicalNodeIds.ToDictionary(item => item.Key, item => item.Value.Count, StringComparer.Ordinal),
@@ -58,14 +59,18 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             diagramGrid,
             projectGrids,
             placement.NodePlacements,
-            Array.Empty<PlannedGridRoute>(),
+            routing.Routes,
             new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(), Array.Empty<GridTrackConstraint>(), null),
             new ArchitecturePlanningDiagnostics(findings, metrics),
             projection,
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, true, true, false, false));
+            new ArchitecturePlanningStageStatus(true, true, true, true, true, true, false, false),
+            routing.DestinationApproaches,
+            routing.StraightRuns,
+            routing.TurnDemands,
+            routing.EndpointDemands);
     }
 
     private static ArchitecturePlanningDiagnostic Deferred(string code, PlanningDiagnosticSubject subject, string message) =>

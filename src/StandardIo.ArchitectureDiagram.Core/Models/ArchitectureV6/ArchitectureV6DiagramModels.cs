@@ -101,7 +101,8 @@ public sealed record ArchitectureProjectionResult(
 public sealed record ArchitecturePlanningStageStatus(
     bool ProjectionCompleted,
     bool LogicalPlacementCompleted,
-    bool RoutingDeferred,
+    bool AbstractRoutingCompleted,
+    bool LaneAllocationDeferred,
     bool SizingDeferred,
     bool AbsoluteGeometryDeferred,
     bool SizingCompleted = false,
@@ -160,7 +161,11 @@ public sealed class PlannedArchitectureDiagram
         IReadOnlyList<PhysicalNodePlacementMetadata>? nodeMetadata = null,
         IReadOnlyList<PlannedPhysicalLinkMetadata>? linkMetadata = null,
         IReadOnlyList<SubtreeReservation>? subtreeReservations = null,
-    ArchitecturePlanningStageStatus? stageStatus = null)
+        ArchitecturePlanningStageStatus? stageStatus = null,
+        IReadOnlyList<DestinationApproachReservation>? destinationApproaches = null,
+        IReadOnlyList<PlannedStraightRun>? straightRuns = null,
+        IReadOnlyList<TurnDemand>? turnDemands = null,
+        IReadOnlyList<NodeEndpointDemand>? endpointDemands = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -175,7 +180,11 @@ public sealed class PlannedArchitectureDiagram
         NodeMetadata = Array.AsReadOnly((nodeMetadata ?? Array.Empty<PhysicalNodePlacementMetadata>()).ToArray());
         LinkMetadata = Array.AsReadOnly((linkMetadata ?? Array.Empty<PlannedPhysicalLinkMetadata>()).ToArray());
         SubtreeReservations = Array.AsReadOnly((subtreeReservations ?? Array.Empty<SubtreeReservation>()).ToArray());
-        StageStatus = stageStatus ?? new ArchitecturePlanningStageStatus(false, false, true, true, true);
+        StageStatus = stageStatus ?? new ArchitecturePlanningStageStatus(false, false, false, true, true, true);
+        DestinationApproaches = Array.AsReadOnly((destinationApproaches ?? Array.Empty<DestinationApproachReservation>()).ToArray());
+        StraightRuns = Array.AsReadOnly((straightRuns ?? Array.Empty<PlannedStraightRun>()).ToArray());
+        TurnDemands = Array.AsReadOnly((turnDemands ?? Array.Empty<TurnDemand>()).ToArray());
+        EndpointDemands = Array.AsReadOnly((endpointDemands ?? Array.Empty<NodeEndpointDemand>()).ToArray());
     }
 
     public ArchitecturePlanningRequest Request { get; }
@@ -192,6 +201,10 @@ public sealed class PlannedArchitectureDiagram
     public IReadOnlyList<PlannedPhysicalLinkMetadata> LinkMetadata { get; }
     public IReadOnlyList<SubtreeReservation> SubtreeReservations { get; }
     public ArchitecturePlanningStageStatus StageStatus { get; }
+    public IReadOnlyList<DestinationApproachReservation> DestinationApproaches { get; }
+    public IReadOnlyList<PlannedStraightRun> StraightRuns { get; }
+    public IReadOnlyList<TurnDemand> TurnDemands { get; }
+    public IReadOnlyList<NodeEndpointDemand> EndpointDemands { get; }
     public PlannedArchitectureGeometry? Geometry { get; init; }
 }
 

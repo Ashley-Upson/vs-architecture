@@ -7,8 +7,8 @@ Roslyn semantic analysis
     -> semantic/physical projection
     -> logical project grids
     -> logical grid node placement
-    -> abstract grid routes (deferred)
-    -> straight runs and collective lane demand (deferred)
+    -> topology classification and abstract grid routes
+    -> straight runs and collective structural demand
     -> row/column sizing and relative/absolute geometry (deferred)
     -> PlannedArchitectureDiagram
     -> IArchitectureDiagramRenderer<DrawioPage>
@@ -27,28 +27,28 @@ Roslyn semantic analysis
   footprints and nested subtree reservations, plus an empty diagram grid;
 - deterministic positional ownership, depth metadata, baseline rows, external
   placement and compact standalone regions;
+- topology-owned abstract routes, destination approaches, project transitions,
+  provisional straight runs and collective endpoint/turn demand;
 - immutable `PlannedArchitectureDiagram`, request/policy contracts and diagnostics.
 
-The abstract grid route, route-step, endpoint, transition, straight-run, lane,
-track-constraint, reservation and relative/absolute geometry models remain
-renderer-independent contracts for the next planner. They are not populated by
-the current structural planner.
+The route-step, endpoint, transition, straight-run, lane and demand models are
+populated structurally. They contain logical cells only; no lane ordinals,
+pixel sizes or coordinates are assigned.
 
 ## Explicitly deferred
 
 The following stages are not active and must not be inferred from metadata:
 
-- topology classification;
-- terminal allocation;
-- abstract routes through grid cells;
-- straight-run compilation and collective lane demand;
+- final terminal allocation;
+- lane allocation;
 - row/column sizing;
 - relative and absolute geometry compilation;
 - physical-scene validation of a completed geometry;
 - Draw.io node/container/edge emission.
 
-Logical node placement, depth/subdepth metadata, odd logical footprints and
-subtree reservation envelopes are active. Pixel sizing, route planning and
+Logical node placement, topology classification, abstract grid routes,
+destination approaches, project transitions, straight-run compilation and
+collective structural demand are active. Pixel sizing, lane allocation and
 rendering are not.
 
 The previous coordinate-first route builder, candidate scoring, rectangle-derived
@@ -72,12 +72,12 @@ CLI and VSIX continue to resolve the V6 Architecture planner/renderer boundary.
 `IPlannedArchitectureDiagramValidator` and immutable diagnostics remain available
 for completed plans. The intentionally incomplete structural plan is not passed
 through completed-geometry validation because it has no placements or geometry.
-The planner reports `V6RoutePlanningDeferred`, `V6SizingDeferred` and
+The planner reports `V6SizingDeferred` and
 `V6GeometryDeferred`; the renderer reports logical-placement completion, the
-minimal-page state and deferred emission/routing.
+abstract-route completion, the minimal-page state and deferred link emission.
 
 ## Next implementation boundary
 
-The next tranche should classify topology and allocate abstract routes against
-the retained grid/cell/reservation contracts. It should not revive the deleted
-rectangle router or introduce coordinate-first route candidates.
+The next tranche should allocate lanes and size logical rows/columns against the
+retained demand and route structures. It should not introduce coordinate-first
+route candidates or physical geometry into the route planner.
