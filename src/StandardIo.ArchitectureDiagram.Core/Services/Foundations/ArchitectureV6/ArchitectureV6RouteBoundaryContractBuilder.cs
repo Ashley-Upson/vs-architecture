@@ -48,21 +48,21 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
             null, GridSide.Bottom, null, null, null, Ownership(route.Source), route.PhysicalLinkId + ":source-departure", null,
             "allocated source endpoint"));
 
-        var first = ordered.FirstOrDefault();
+        var routeComponents = ordered.Where(IsOrdinaryRouteStep).ToArray();
+        var first = routeComponents.FirstOrDefault();
         var firstEntry = first is null ? null : StepBoundary(first, first.EntrySide, first.AllocatedLane, "source-departure-entry");
         var departureId = route.PhysicalLinkId + ":source-departure";
         components.Add(new PlannedRouteComponentContract(departureId, route.PhysicalLinkId,
-            PlannedRouteComponentKind.SourceDeparture, 0, first is null ? Array.Empty<PlanningGridCellId>() : new[] { first.CellId },
+            PlannedRouteComponentKind.SourceDeparture, 0, ordered.TakeWhile(step => !IsOrdinaryRouteStep(step)).Select(step => step.CellId).ToArray(),
             sourceBoundary, firstEntry, GridSide.Bottom, first?.EntrySide, first?.AllocatedLane, null, null,
             Ownership(route.Source), sourceTerminalId, null, "derived from source endpoint and first route cell"));
         if (first is null)
             Add(routeFindings, route, "MissingFirstRouteStep", departureId, null, "A source departure has no first routing component.", null, null);
-        else if (first.EntrySide != GridSide.Bottom)
+        else if (sourceBoundary is null || sourceBoundary.Side != GridSide.Bottom)
             Add(routeFindings, route, "SourceDepartureNotBottomFacing", departureId, null,
-                "The selected first route step enters from the top, so the frozen route does not provide a bottom-facing departure boundary.",
-                sourceBoundary, firstEntry);
+                "The source departure does not expose the required bottom-facing node boundary.", sourceBoundary, firstEntry);
 
-        var groups = GroupSteps(ordered);
+        var groups = GroupSteps(routeComponents);
         PlannedRouteComponentContract? previousRun = null;
         foreach (var group in groups)
         {
@@ -72,7 +72,7 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 previousRun = component;
         }
 
-        var last = ordered.LastOrDefault();
+        var last = routeComponents.LastOrDefault();
         var lastExit = last is null ? null : StepBoundary(last, last.ExitSide, last.AllocatedLane, "destination-approach-entry");
         var approachId = route.PhysicalLinkId + ":destination-approach";
         components.Add(new PlannedRouteComponentContract(approachId, route.PhysicalLinkId,
@@ -83,9 +83,9 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
             "derived from destination approach and terminal endpoint"));
         if (last is null)
             Add(routeFindings, route, "MissingDestinationApproach", approachId, null, "A destination approach has no final route step.", null, null);
-        else if (last.ExitSide != GridSide.Top)
+        else if (destinationBoundary is null || destinationBoundary.Side != GridSide.Top)
             Add(routeFindings, route, "DestinationApproachNotTopFacing", approachId, null,
-                "The selected final route step does not expose a top-facing terminal approach boundary.", lastExit, destinationBoundary);
+                "The destination approach does not expose the required top-facing node boundary.", lastExit, destinationBoundary);
 
         var destinationTerminalId = route.PhysicalLinkId + ":destination-terminal";
         components.Add(new PlannedRouteComponentContract(destinationTerminalId, route.PhysicalLinkId,
@@ -112,10 +112,15 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 Add(routeFindings, route, "MissingComponentBoundary", before.ComponentId, after.ComponentId,
                     "Adjacent components do not both expose an authoritative boundary.", before.ExitBoundary, after.EntryBoundary);
             }
-            else if (before.ExitBoundary != after.EntryBoundary)
+            else if (TryCanonicalize(before.ExitBoundary, after.EntryBoundary, out var canonical))
             {
-                Add(routeFindings, route, "ComponentBoundaryMismatch", before.ComponentId, after.ComponentId,
-                    "Adjacent components do not reference the same logical boundary identity.", before.ExitBoundary, after.EntryBoundary);
+                components[index] = before with { ExitBoundary = canonical };
+                components[index + 1] = after with { EntryBoundary = canonical };
+            }
+            else
+            {
+                Add(routeFindings, route, "GenuineBoundaryDiscontinuity", before.ComponentId, after.ComponentId,
+                    "Adjacent components do not expose adjacent cells with compatible sides, lanes and ownership.", before.ExitBoundary, after.EntryBoundary);
             }
         }
 
@@ -142,7 +147,12 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         if (turn is not null)
         {
             entryLane = turn.HorizontalRunId is null ? null : LaneForRun(turn.HorizontalRunId);
-            exitLane = turn.VerticalRunId is null ? null : LaneForRun(turn.VerticalRunId);
+            var followingVertical = route.Steps.OrderBy(step => step.Order)
+                .SkipWhile(step => step.Order <= first.Order)
+                .FirstOrDefault(step => IsVertical(step) && step.AllocatedLane is not null);
+            exitLane = turn.VerticalRunId is null
+                ? followingVertical?.AllocatedLane
+                : LaneForRun(turn.VerticalRunId);
             if (entryLane is null || exitLane is null)
                 Add(routeFindings, route, "IncompleteTurnAllocation", route.PhysicalLinkId + ":turn:" + first.Order, null,
                     "An allocated turn does not bind both horizontal and vertical lanes.", null, null);
@@ -171,7 +181,11 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
     }
 
     private LaneId? LaneForRun(string runId) => allocation.HorizontalLanes.Concat(allocation.VerticalLanes)
-        .SingleOrDefault(item => item.RunId == runId)?.Lane;
+        .Where(item => item.RunId == runId)
+        .OrderBy(item => item.Axis)
+        .ThenBy(item => item.Lane.Value, StringComparer.Ordinal)
+        .Select(item => (LaneId?)item.Lane)
+        .FirstOrDefault();
 
     private static IReadOnlyList<IReadOnlyList<PlannedGridRouteStep>> GroupSteps(IReadOnlyList<PlannedGridRouteStep> steps)
     {
@@ -190,6 +204,27 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
 
     private GridBoundaryIdentity? StepBoundary(PlannedGridRouteStep step, GridSide side, LaneId? lane, string authority) =>
         new(step.GridId, step.CellId, side, lane, step.GridId.Value, authority);
+
+    private static bool IsOrdinaryRouteStep(PlannedGridRouteStep step) =>
+        step.Role is RouteStepRole.HorizontalPassThrough or RouteStepRole.VerticalPassThrough or RouteStepRole.Turn;
+
+    private static bool IsVertical(PlannedGridRouteStep step) =>
+        step.EntrySide is GridSide.Top or GridSide.Bottom && step.ExitSide is GridSide.Top or GridSide.Bottom;
+
+    private static bool TryCanonicalize(GridBoundaryIdentity? before, GridBoundaryIdentity? after,
+        out GridBoundaryIdentity? canonical)
+    {
+        canonical = null;
+        if (before is null || after is null || before.GridId != after.GridId || before.OwnershipScope != after.OwnershipScope || before.Lane != after.Lane)
+            return false;
+        if (before.CellId == after.CellId && before.Side == after.Side)
+        {
+            canonical = new GridBoundaryIdentity(before.GridId, before.CellId, before.Side, before.Lane,
+                before.OwnershipScope, "canonical-cell-boundary");
+            return true;
+        }
+        return GridBoundaryIdentity.TryCreateShared(before, after, out canonical);
+    }
 
     private GridBoundaryIdentity? EndpointBoundary(PlannedGridRoute route, NodeEndpoint endpoint, GridSide side, string authority)
     {

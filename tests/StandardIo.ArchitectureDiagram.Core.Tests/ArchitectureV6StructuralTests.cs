@@ -471,34 +471,71 @@ public sealed class ArchitectureV6StructuralTests
             Assert.All(pairs.Where(pair => pair.before.ExitBoundary == pair.after.EntryBoundary), pair =>
                 Assert.Equal(pair.before.ExitBoundary, pair.after.EntryBoundary));
         });
-        Assert.Contains(validation.Findings, finding => finding.Code == "SourceDepartureNotBottomFacing");
-        Assert.Contains(validation.Findings, finding => finding.Code == "DestinationApproachNotTopFacing");
+        Assert.DoesNotContain(validation.Findings, finding => finding.Code == "SourceDepartureNotBottomFacing");
+        Assert.DoesNotContain(validation.Findings, finding => finding.Code == "DestinationApproachNotTopFacing");
     }
 
     [Fact]
-    public void Planner_does_not_treat_equal_coordinates_as_boundary_identity()
+    public void Boundary_authority_ids_do_not_change_structural_identity()
     {
         var first = new GridBoundaryIdentity(new PlanningGridId("project:p"),
             new PlanningGridCellId(new PlanningGridId("project:p"), new PlanningGridRowId("row:1"), new PlanningGridColumnId("column:1")),
             GridSide.Top, new LaneId("lane:a"), "project:p", "first");
-        var second = first with { AuthorityId = "second" };
+        var second = new GridBoundaryIdentity(first.GridId, first.CellId, first.Side, first.Lane,
+            first.OwnershipScope, "second");
 
-        Assert.Equal(first with { AuthorityId = "first" }, first);
-        Assert.NotEqual(first, second);
-        Assert.NotEqual(first.ToString(), second.ToString());
+        Assert.Equal(first, second);
+        Assert.Equal(first.ToString(), second.ToString());
     }
 
     [Fact]
-    public void Planner_reports_incomplete_turn_bindings_without_selecting_a_replacement_lane()
+    public void Shared_boundary_identity_requires_adjacent_complementary_cells()
+    {
+        var grid = new PlanningGridId("project:p");
+        var row = new PlanningGridRowId("row:1");
+        var left = new PlanningGridCellId(grid, row, new PlanningGridColumnId("column:1"));
+        var right = new PlanningGridCellId(grid, row, new PlanningGridColumnId("column:2"));
+        var distant = new PlanningGridCellId(grid, row, new PlanningGridColumnId("column:4"));
+        var first = new GridBoundaryIdentity(grid, left, GridSide.Right, new LaneId("lane:a"), "project:p", "one");
+        var second = new GridBoundaryIdentity(grid, right, GridSide.Left, new LaneId("lane:a"), "project:p", "two");
+        var nonAdjacent = new GridBoundaryIdentity(grid, distant, GridSide.Left, new LaneId("lane:a"), "project:p", "three");
+
+        Assert.True(GridBoundaryIdentity.TryCreateShared(first, second, out var shared));
+        Assert.NotNull(shared);
+        Assert.Equal(shared, GridBoundaryIdentity.TryCreateShared(second, first, out var reverse) ? reverse : null);
+        Assert.False(GridBoundaryIdentity.TryCreateShared(first, nonAdjacent, out _));
+    }
+
+    [Fact]
+    public void Shared_horizontal_boundary_identity_requires_complementary_row_sides()
+    {
+        var grid = new PlanningGridId("project:p");
+        var column = new PlanningGridColumnId("column:1");
+        var upper = new GridBoundaryIdentity(grid,
+            new PlanningGridCellId(grid, new PlanningGridRowId("row:1"), column), GridSide.Bottom,
+            new LaneId("lane:a"), "project:p", "upper");
+        var lower = new GridBoundaryIdentity(grid,
+            new PlanningGridCellId(grid, new PlanningGridRowId("row:2"), column), GridSide.Top,
+            new LaneId("lane:a"), "project:p", "lower");
+
+        Assert.True(GridBoundaryIdentity.TryCreateShared(upper, lower, out var shared));
+        Assert.NotNull(shared);
+        Assert.False(shared!.IsExterior);
+    }
+
+    [Fact]
+    public void Planner_binds_turns_to_both_adjoining_run_lanes()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
         var validation = plan.LaneAllocation!.BoundaryValidation!;
 
-        Assert.Contains(validation.Findings, finding => finding.Code == "IncompleteTurnAllocation");
+        Assert.DoesNotContain(validation.Findings, finding => finding.Code == "IncompleteTurnAllocation");
         Assert.All(validation.Routes.SelectMany(route => route.Components.Where(component => component.Kind == PlannedRouteComponentKind.Turn)), turn =>
         {
             Assert.NotNull(turn.EntryBoundary);
             Assert.NotNull(turn.ExitBoundary);
+            Assert.NotNull(turn.EntryBoundary!.Lane);
+            Assert.NotNull(turn.ExitBoundary!.Lane);
         });
     }
 
