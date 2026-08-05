@@ -16,48 +16,50 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
 
         var projection = new ProjectionBuilder(request).Build();
         var placement = new LogicalPlacementBuilder(request, projection).Build();
-        var diagnostics = projection.Diagnostics.Concat(placement.Diagnostics).ToArray();
-        var metrics = BuildMetrics(request, projection, placement, diagnostics);
+        var geometry = new ArchitectureV6GeometryBuilder(request, projection.PhysicalNodes, placement.NodePlacements, placement.NodeMetadata, placement.SubtreeReservations, placement.ProjectGrids).Build();
+        var diagnostics = projection.Diagnostics.Concat(placement.Diagnostics).Concat(geometry.Findings).ToArray();
+        var plan = CreatePlan(request, projection, placement, geometry, diagnostics);
+        var validation = new ArchitectureDiagramV6Validator().Validate(plan);
+        if (validation.IsValid) return plan;
+        var validatedDiagnostics = diagnostics.Concat(validation.Findings).ToArray();
+        return CreatePlan(request, projection, placement, geometry, validatedDiagnostics);
+    }
+
+    private static PlannedArchitectureDiagram CreatePlan(
+        ArchitecturePlanningRequest request,
+        ArchitectureProjectionResult projection,
+        PlacementResult placement,
+        ArchitectureV6GeometryBuilder.GeometryBuildResult geometry,
+        IReadOnlyList<ArchitecturePlanningDiagnostic> diagnostics)
+    {
+        var metrics = BuildMetrics(request, projection, placement, geometry, diagnostics);
         var planDiagnostics = new ArchitecturePlanningDiagnostics(diagnostics, metrics);
         var plan = new PlannedArchitectureDiagram(
             request,
             projection.PhysicalNodes,
             projection.PhysicalLinks,
-            placement.DiagramGrid,
-            placement.ProjectGrids,
+            geometry.DiagramGrid,
+            geometry.ProjectGrids,
             placement.NodePlacements,
             Array.Empty<PlannedGridRoute>(),
-            new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(), Array.Empty<GridTrackConstraint>(), null),
+            geometry.Sizing,
             planDiagnostics,
             projection,
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, true, true));
-        var validation = new ArchitectureDiagramV6Validator().Validate(plan);
-        if (validation.IsValid) return plan;
-        var validatedDiagnostics = diagnostics.Concat(validation.Findings).ToArray();
-        return new PlannedArchitectureDiagram(
-            request,
-            projection.PhysicalNodes,
-            projection.PhysicalLinks,
-            placement.DiagramGrid,
-            placement.ProjectGrids,
-            placement.NodePlacements,
-            Array.Empty<PlannedGridRoute>(),
-            new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(), Array.Empty<GridTrackConstraint>(), null),
-            new ArchitecturePlanningDiagnostics(validatedDiagnostics, BuildMetrics(request, projection, placement, validatedDiagnostics)),
-            projection,
-            placement.NodeMetadata,
-            placement.LinkMetadata,
-            placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, true, true));
+            new ArchitecturePlanningStageStatus(true, true, true, false, false, true, true))
+        {
+            Geometry = geometry.Geometry
+        };
+        return plan;
     }
 
     private static ArchitecturePlanningMetrics BuildMetrics(
         ArchitecturePlanningRequest request,
         ArchitectureProjectionResult projection,
         PlacementResult placement,
+        ArchitectureV6GeometryBuilder.GeometryBuildResult geometry,
         IReadOnlyList<ArchitecturePlanningDiagnostic> diagnostics)
     {
         var duplicates = projection.SemanticNodeToPhysicalNodeIds.ToDictionary(
@@ -72,10 +74,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.ProjectGrids.Count,
             placement.ProjectGrids.Sum(item => item.Grid.Rows.Count),
             placement.ProjectGrids.Sum(item => item.Grid.Columns.Count),
-            placement.ProjectGrids.Sum(item => item.Grid.Cells.Count),
+            geometry.ProjectGrids.Sum(item => item.Grid.Cells.Count),
             0,
             new Dictionary<string, int>(StringComparer.Ordinal),
-             0, 0, 0, null, diagnostics.Count,
+             0, 0, 0, geometry.Geometry.DiagramBounds, diagnostics.Count,
              duplicates,
             projection.RootPhysicalNodeIds.Count,
             projection.ExternalPhysicalNodeIds.Count,
@@ -88,7 +90,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.NodeMetadata.Count(item => item.PositionalOwnerId is not null),
             placement.NodePlacements.Count(item => !placement.PlacedNodeIds.Contains(item.PhysicalNodeId)),
             placement.Diagnostics.Count(item => item.Code == "LogicalFootprintOverlap"),
-            placement.Diagnostics.Count(item => item.Code == "IncompatibleSubtreeReservation"));
+            placement.Diagnostics.Count(item => item.Code == "IncompatibleSubtreeReservation"),
+            geometry.Geometry.Nodes.Count,
+            geometry.Geometry.Projects.Count,
+            geometry.Geometry.Grids.Count,
+            geometry.Geometry.AbsoluteDiagramBounds.Width,
+            geometry.Geometry.AbsoluteDiagramBounds.Height,
+            geometry.Findings.Count(item => item.Code == "GeometryCollision"),
+            geometry.Findings.Count(item => item.Code == "GeometryContainmentViolation"),
+            geometry.Findings.Count(item => item.Code == "InvalidGeometryDimension"));
     }
 
     private sealed class ProjectionBuilder

@@ -82,7 +82,9 @@ public sealed record ArchitecturePlanningStageStatus(
     bool LogicalPlacementCompleted,
     bool RoutingDeferred,
     bool SizingDeferred,
-    bool AbsoluteGeometryDeferred);
+    bool AbsoluteGeometryDeferred,
+    bool SizingCompleted = false,
+    bool AbsoluteGeometryCompleted = false);
 
 public sealed class PlannedNodePlacement
 {
@@ -132,7 +134,7 @@ public sealed class PlannedArchitectureDiagram
         IReadOnlyList<PhysicalNodePlacementMetadata>? nodeMetadata = null,
         IReadOnlyList<PlannedPhysicalLinkMetadata>? linkMetadata = null,
         IReadOnlyList<SubtreeReservation>? subtreeReservations = null,
-        ArchitecturePlanningStageStatus? stageStatus = null)
+    ArchitecturePlanningStageStatus? stageStatus = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -164,6 +166,7 @@ public sealed class PlannedArchitectureDiagram
     public IReadOnlyList<PlannedPhysicalLinkMetadata> LinkMetadata { get; }
     public IReadOnlyList<SubtreeReservation> SubtreeReservations { get; }
     public ArchitecturePlanningStageStatus StageStatus { get; }
+    public PlannedArchitectureGeometry? Geometry { get; init; }
 }
 
 public sealed class ArchitectureDiagramPlanningState

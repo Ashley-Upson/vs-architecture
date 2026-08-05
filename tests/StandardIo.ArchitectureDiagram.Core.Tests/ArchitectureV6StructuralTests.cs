@@ -198,6 +198,69 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(firstSignature, secondSignature);
     }
 
+    [Fact]
+    public void Planner_compiles_positive_absolute_geometry_and_bounds_metrics()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+
+        Assert.NotNull(plan.Geometry);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.Geometry!.Nodes.Count);
+        Assert.Equal(plan.Geometry.AbsoluteDiagramBounds.Width, plan.Diagnostics.Metrics.GeometryWidth);
+        Assert.Equal(plan.Geometry.AbsoluteDiagramBounds.Height, plan.Diagnostics.Metrics.GeometryHeight);
+        Assert.True(plan.Geometry.AbsoluteDiagramBounds.Width > 0);
+        Assert.True(plan.Geometry.AbsoluteDiagramBounds.Height > 0);
+        Assert.All(plan.Geometry.Nodes, node =>
+        {
+            Assert.True(node.RelativeBounds.Width > 0);
+            Assert.True(node.RelativeBounds.Height > 0);
+            Assert.True(node.AbsoluteBounds.Width > 0);
+            Assert.True(node.AbsoluteBounds.Height > 0);
+        });
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code.StartsWith("Geometry", StringComparison.Ordinal) || finding.Code.StartsWith("InvalidGeometry", StringComparison.Ordinal));
+        Assert.True(plan.StageStatus.SizingCompleted);
+        Assert.True(plan.StageStatus.AbsoluteGeometryCompleted);
+        Assert.False(plan.StageStatus.SizingDeferred);
+        Assert.False(plan.StageStatus.AbsoluteGeometryDeferred);
+    }
+
+    [Fact]
+    public void Geometry_preserves_duplicate_physical_identity_and_is_repeatable()
+    {
+        var request = GraphRequest(NodeProjectionMode.DuplicateBranches) with
+        {
+            NodeProjection = new NodeProjectionPolicy(NodeProjectionMode.DuplicateBranches, new[] { "Shared" })
+        };
+        var first = new ArchitectureDiagramV6Planner().Plan(request);
+        var second = new ArchitectureDiagramV6Planner().Plan(request);
+        var firstSignature = string.Join("|", first.Geometry!.Nodes.Select(node => $"{node.PhysicalNodeId}:{node.SemanticNodeId}:{node.AbsoluteBounds}"));
+        var secondSignature = string.Join("|", second.Geometry!.Nodes.Select(node => $"{node.PhysicalNodeId}:{node.SemanticNodeId}:{node.AbsoluteBounds}"));
+
+        Assert.Equal(firstSignature, secondSignature);
+        Assert.Equal(2, first.Geometry.Nodes.Count(node => node.SemanticNodeId == "shared"));
+        Assert.All(first.Geometry.Nodes.Where(node => node.SemanticNodeId == "shared"), node => Assert.Contains(node.PhysicalNodeId, first.PhysicalNodes.Select(item => item.PhysicalNodeId)));
+    }
+
+    [Fact]
+    public void Geometry_keeps_nodes_inside_project_bounds_without_collisions()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+
+        foreach (var project in plan.Geometry!.Projects)
+        {
+            var owned = plan.Geometry.Nodes.Where(node => node.ProjectId == project.ProjectId).ToArray();
+            Assert.All(owned, node =>
+                Assert.True(node.RelativeBounds.X >= project.RelativeBounds.X && node.RelativeBounds.Y >= project.RelativeBounds.Y &&
+                    node.RelativeBounds.X + node.RelativeBounds.Width <= project.RelativeBounds.X + project.RelativeBounds.Width &&
+                    node.RelativeBounds.Y + node.RelativeBounds.Height <= project.RelativeBounds.Y + project.RelativeBounds.Height));
+            for (var left = 0; left < owned.Length; left++)
+                for (var right = left + 1; right < owned.Length; right++)
+                    Assert.False(Intersects(owned[left].RelativeBounds, owned[right].RelativeBounds));
+        }
+    }
+
+    private static bool Intersects(RelativeRectangle left, RelativeRectangle right) =>
+        left.X < right.X + right.Width && right.X < left.X + left.Width && left.Y < right.Y + right.Height && right.Y < left.Y + left.Height;
+
     private static ArchitecturePlanningRequest Request(NodeProjectionMode mode) => new(
         new ArchitectureDiagramModel(Array.Empty<ArchitectureProject>(), Array.Empty<ArchitectureExternalNode>(), Array.Empty<ArchitectureLink>(), null),
         new ArchitectureSelectionScope("SelectedProjects", Array.Empty<string>(), Array.Empty<string>()),

@@ -95,9 +95,9 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             .ToArray();
         return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, findings, manifest,
-            new ArchitectureEligibilityResult(false, new[] { "V6 logical placement is complete; routing, sizing and absolute geometry are deferred." }),
+            new ArchitectureEligibilityResult(false, new[] { "V6 planning is complete through absolute geometry; routing and Architecture node/link emission are deferred." }),
             () => new DrawioDiagnosticExportResult(page.GraphModel.ToString(),
-                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"routingDeferred\":true,\"sizingDeferred\":true,\"absoluteGeometryDeferred\":true}",
+                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"sizingCompleted\":true,\"absoluteGeometryCompleted\":true,\"routingDeferred\":true,\"sizingDeferred\":false,\"absoluteGeometryDeferred\":false}",
                 new Dictionary<string, string>(), 0, 0),
             repeat, planned.Diagnostics.Metrics));
     }

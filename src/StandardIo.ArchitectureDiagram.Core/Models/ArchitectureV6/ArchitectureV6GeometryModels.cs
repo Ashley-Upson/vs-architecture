@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 
@@ -51,3 +52,68 @@ public sealed record GridTrackSizingPlan(
     IReadOnlyList<PlanningGridColumn> Columns,
     IReadOnlyList<GridTrackConstraint> Constraints,
     RelativeRectangle? DiagramBounds);
+
+public sealed record PlannedPhysicalNodeGeometry(
+    string PhysicalNodeId,
+    string SemanticNodeId,
+    string? ProjectId,
+    RelativeRectangle RelativeBounds,
+    AbsoluteRectangle AbsoluteBounds,
+    PlanningGridId GridId,
+    PlanningGridCellId AnchorCellId,
+    string? PositionalOwnerId,
+    PhysicalNodeProjectionMode ProjectionMode,
+    bool IsExternal,
+    bool IsStandalone);
+
+public sealed record PlannedProjectGeometry(
+    string ProjectId,
+    RelativeRectangle RelativeBounds,
+    AbsoluteRectangle AbsoluteBounds,
+    RelativeRectangle? RelativeLabelBounds,
+    AbsoluteRectangle? AbsoluteLabelBounds,
+    IReadOnlyList<string> PhysicalNodeIds);
+
+public sealed record PlannedGridGeometry(
+    PlanningGridId GridId,
+    RelativeRectangle RelativeBounds,
+    AbsoluteRectangle AbsoluteBounds,
+    GridTransform Transform,
+    IReadOnlyList<PlanningGridRow> Rows,
+    IReadOnlyList<PlanningGridColumn> Columns);
+
+public sealed record PlannedSubtreeGeometry(
+    string SubtreeId,
+    string? PositionalOwnerId,
+    PlanningGridId GridId,
+    RelativeRectangle RelativeBounds,
+    AbsoluteRectangle AbsoluteBounds,
+    string? AncestorSubtreeId);
+
+public sealed class PlannedArchitectureGeometry
+{
+    public PlannedArchitectureGeometry(
+        IReadOnlyList<PlannedPhysicalNodeGeometry> nodes,
+        IReadOnlyList<PlannedProjectGeometry> projects,
+        IReadOnlyList<PlannedGridGeometry> grids,
+        IReadOnlyList<PlannedSubtreeGeometry> subtrees,
+        RelativeRectangle diagramBounds,
+        AbsoluteRectangle absoluteDiagramBounds)
+    {
+        Nodes = Array.AsReadOnly((nodes ?? throw new ArgumentNullException(nameof(nodes))).ToArray());
+        Projects = Array.AsReadOnly((projects ?? throw new ArgumentNullException(nameof(projects))).ToArray());
+        Grids = Array.AsReadOnly((grids ?? throw new ArgumentNullException(nameof(grids))).ToArray());
+        Subtrees = Array.AsReadOnly((subtrees ?? throw new ArgumentNullException(nameof(subtrees))).ToArray());
+        if (diagramBounds.Width <= 0 || diagramBounds.Height <= 0) throw new ArgumentException("Diagram bounds must be positive.", nameof(diagramBounds));
+        if (absoluteDiagramBounds.Width <= 0 || absoluteDiagramBounds.Height <= 0) throw new ArgumentException("Diagram bounds must be positive.", nameof(absoluteDiagramBounds));
+        DiagramBounds = diagramBounds;
+        AbsoluteDiagramBounds = absoluteDiagramBounds;
+    }
+
+    public IReadOnlyList<PlannedPhysicalNodeGeometry> Nodes { get; }
+    public IReadOnlyList<PlannedProjectGeometry> Projects { get; }
+    public IReadOnlyList<PlannedGridGeometry> Grids { get; }
+    public IReadOnlyList<PlannedSubtreeGeometry> Subtrees { get; }
+    public RelativeRectangle DiagramBounds { get; }
+    public AbsoluteRectangle AbsoluteDiagramBounds { get; }
+}

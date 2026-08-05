@@ -11,7 +11,7 @@ Roslyn semantic analysis
     -> Draw.io document composition
 ```
 
-`ArchitectureDiagramV6Planner` now projects the semantic graph into canonical or configured duplicate physical instances, assigns deterministic logical layers and positional ownership, and places every physical node into a sparse project grid. It intentionally does not classify final topology, allocate terminals or lanes, size tracks, route links, or calculate physical coordinates.
+`ArchitectureDiagramV6Planner` now projects the semantic graph into canonical or configured duplicate physical instances, assigns deterministic logical layers and positional ownership, places every physical node into a sparse project grid, sizes logical tracks, and compiles immutable relative and absolute geometry. It intentionally does not classify final topology, allocate terminals or lanes, route links, or emit Architecture nodes and links.
 
 ## Structural model
 
@@ -26,16 +26,18 @@ Roslyn semantic analysis
 - A physical node has one anchor cell and an odd-width logical footprint. Initial spans are logical requirements derived from node text and link degree; final physical sizing is deferred.
 - Abstract routes retain physical endpoints, route steps, topology family and grid transitions. Straight runs, turns, crossings and endpoint demands retain future lane continuity without assigning pixels.
 - Track constraints represent single-track, span, lane, clearance, node and project requirements. Solving is deferred.
-- Relative and absolute geometry types exist for future grid compilation. Draw.io XML emission owns no planning decisions.
+- `ArchitectureV6GeometryBuilder` converts logical rows and columns into deterministic track extents and offsets. Node rectangles are sized from the node label, minimum node policy and grid sizing inputs; project regions include padding and reserved header space.
+- `PlannedPhysicalNodeGeometry`, `PlannedProjectGeometry`, `PlannedGridGeometry` and `PlannedSubtreeGeometry` preserve physical projection identity, positional ownership and project ownership through local and absolute bounds. The project grids are laid out in selected-project order followed by remaining projects in discovery order.
+- Geometry validation checks positive dimensions, node collision, project containment, page bounds and one geometry record per physical node. The renderer receives this immutable geometry but does not make layout decisions.
 
 ## Validation and diagnostics
 
-`IPlannedArchitectureDiagramValidator` is the boundary for planning-model, physical-scene and renderer-reconstruction validation. The active structural validator checks node placement, footprint ownership, physical link endpoints, canonical cardinality and duplicate provenance. Diagnostics and metrics are renderer-independent and can attribute future findings to semantic, physical, grid, cell, route, lane, constraint and segment identities.
+`IPlannedArchitectureDiagramValidator` is the boundary for planning-model, physical-scene and renderer-reconstruction validation. The active validator checks node placement, footprint ownership, physical link endpoints, canonical cardinality, duplicate provenance, geometry dimensions, containment, bounds and collisions. Diagnostics and metrics are renderer-independent and can attribute future findings to semantic, physical, grid, cell, route, lane, constraint and segment identities.
 
-The V6 renderer emits a minimal valid Draw.io page while routing and physical geometry are deferred. This is an explicit deferred state, not a fallback architecture diagram.
+The V6 renderer emits a minimal valid Draw.io page while route planning and Architecture node/link emission are deferred. This is an explicit deferred state, not a fallback architecture diagram. Geometry is available in the completed plan and in CLI planning metrics.
 
 ## Deferred logic
 
-Topology classification, terminal allocation, inter-layer slot allocation, destination/return column allocation, track sizing, route materialisation, physical validation, Draw.io projection and reconstruction are intentionally not implemented in this tranche. Logical node projection, layer assignment, positional ownership, anchor placement and nested subtree reservations are active.
+Topology classification, terminal allocation, inter-layer slot allocation, destination/return column allocation, route materialisation, route-aware physical validation, Draw.io node/link projection and reconstruction are intentionally not implemented. Logical node projection, layer assignment, positional ownership, anchor placement, nested subtree reservations, track sizing and relative-to-absolute geometry compilation are active.
 
 The generic `DiagramModel` Draw.io renderer remains for non-Architecture diagram workflows. Architecture generation resolves only `DrawioArchitectureV6Renderer`.

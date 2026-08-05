@@ -53,7 +53,15 @@ public sealed record ArchitecturePlanningMetrics(
     int PositionalOwnerCount = 0,
     int UnplacedNodeCount = 0,
     int OverlappingFootprintCount = 0,
-    int IncompatibleReservationCount = 0);
+    int IncompatibleReservationCount = 0,
+    int SizedNodeCount = 0,
+    int GeometryProjectCount = 0,
+    int GeometryGridCount = 0,
+    int GeometryWidth = 0,
+    int GeometryHeight = 0,
+    int GeometryCollisionCount = 0,
+    int GeometryContainmentViolationCount = 0,
+    int InvalidDimensionCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,
