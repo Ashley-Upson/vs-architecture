@@ -95,10 +95,11 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             .ToArray();
         return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, findings, manifest,
-            new ArchitectureEligibilityResult(false, new[] { "V6 planning is structural only; physical Architecture rendering is deferred." }),
+            new ArchitectureEligibilityResult(false, new[] { "V6 logical placement is complete; routing, sizing and absolute geometry are deferred." }),
             () => new DrawioDiagnosticExportResult(page.GraphModel.ToString(),
-                "{\"code\":\"V6PlanningNotImplemented\"}", new Dictionary<string, string>(), 0, 0),
-            repeat));
+                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"routingDeferred\":true,\"sizingDeferred\":true,\"absoluteGeometryDeferred\":true}",
+                new Dictionary<string, string>(), 0, 0),
+            repeat, planned.Diagnostics.Metrics));
     }
 
     private SerializationRepeatResult? Repeat(DrawioPage page, int repeatCount)

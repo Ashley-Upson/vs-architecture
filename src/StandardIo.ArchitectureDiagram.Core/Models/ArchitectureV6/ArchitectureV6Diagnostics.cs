@@ -40,7 +40,20 @@ public sealed record ArchitecturePlanningMetrics(
     int StraightRunCount,
     int LaneCount,
     RelativeRectangle? DiagramBounds,
-    int ValidationFindingCount);
+    int ValidationFindingCount,
+    IReadOnlyDictionary<string, int>? DuplicateCountsBySemanticNode = null,
+    int RootCount = 0,
+    int ExternalNodeCount = 0,
+    int StandaloneNodeCount = 0,
+    int CycleCount = 0,
+    int LogicalLayerCount = 0,
+    int AnchorCellCount = 0,
+    int FootprintCellCount = 0,
+    int SubtreeReservationCount = 0,
+    int PositionalOwnerCount = 0,
+    int UnplacedNodeCount = 0,
+    int OverlappingFootprintCount = 0,
+    int IncompatibleReservationCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

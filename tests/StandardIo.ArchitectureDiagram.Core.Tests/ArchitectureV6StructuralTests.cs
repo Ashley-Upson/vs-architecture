@@ -74,7 +74,9 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Empty(plan.PhysicalNodes);
         Assert.NotSame(source, empty.PhysicalNodes);
         Assert.Single(empty.PhysicalNodes);
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6PlanningNotImplemented");
+        Assert.True(plan.StageStatus.ProjectionCompleted);
+        Assert.True(plan.StageStatus.LogicalPlacementCompleted);
+        Assert.True(plan.StageStatus.RoutingDeferred);
     }
 
     [Fact]
@@ -103,12 +105,130 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.Equal("architecture", page.StablePageKey);
         Assert.Equal("mxGraphModel", page.GraphModel.Name.LocalName);
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6PlanningNotImplemented");
+        Assert.Empty(page.Diagnostics);
+    }
+
+    [Fact]
+    public void Planner_canonical_mode_preserves_shared_and_external_relationships()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+        var validator = new ArchitectureDiagramV6Validator().Validate(plan);
+
+        Assert.True(validator.IsValid, string.Join("; ", validator.Findings.Select(finding => finding.Message)) + " placements=" + string.Join(",", plan.NodePlacements.Select(item => $"{item.PhysicalNodeId}:{item.AnchorCellId}")));
+        Assert.Equal(6, plan.PhysicalNodes.Count);
+        Assert.Equal(4, plan.PhysicalLinks.Count);
+        Assert.Single(plan.Projection!.SemanticNodeToPhysicalNodeIds["shared"]);
+        Assert.Single(plan.Projection.ExternalPhysicalNodeIds);
+        Assert.Empty(plan.Projection.UnaccountedSemanticLinkIds);
+        Assert.Contains(plan.NodeMetadata, node => node.IsExternal && node.PositionalOwnerId is not null);
+        Assert.Single(plan.ProjectGrids);
+        Assert.All(plan.NodePlacements, placement =>
+        {
+            Assert.True(placement.ColumnSpan >= 3);
+            Assert.True(placement.ColumnSpan % 2 == 1);
+            Assert.Contains(placement.AnchorCellId, placement.Footprint);
+        });
+        Assert.Contains(plan.SubtreeReservations, reservation => reservation.AncestorReservationId is not null);
+        Assert.Contains(plan.ProjectGrids.Single().Grid.Cells.Values, cell => cell.Occupancy == CellOccupancy.Empty && cell.Capabilities.HasFlag(CellCapability.RoutingAllowed));
+        var rootLayer = plan.NodeMetadata.Single(node => node.SemanticNodeId == "root").LogicalLayer;
+        var childLayer = plan.NodeMetadata.Single(node => node.SemanticNodeId == "child").LogicalLayer;
+        Assert.True(childLayer > rootLayer);
+    }
+
+    [Fact]
+    public void Planner_duplicate_mode_creates_deterministic_branch_instances_with_provenance()
+    {
+        var request = GraphRequest(NodeProjectionMode.DuplicateBranches) with
+        {
+            NodeProjection = new NodeProjectionPolicy(NodeProjectionMode.DuplicateBranches, new[] { "Shared" })
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var shared = plan.PhysicalNodes.Where(node => node.SemanticNodeId == "shared").ToArray();
+
+        Assert.Equal(2, shared.Length);
+        Assert.All(shared.Where(node => node.ProjectionMode == PhysicalNodeProjectionMode.DuplicateBranch), node =>
+        {
+            Assert.NotNull(node.DuplicationProvenance);
+            Assert.Contains("Originating link", node.DuplicationProvenance!.Reason);
+        });
+        var validation = new ArchitectureDiagramV6Validator().Validate(plan);
+        Assert.True(validation.IsValid, string.Join("; ", validation.Findings.Select(finding => finding.Message)));
+    }
+
+    [Fact]
+    public void Planner_cycles_terminate_and_receive_finite_positional_ownership()
+    {
+        var request = GraphRequest(NodeProjectionMode.Canonical, new[] {
+            new ArchitectureLink("cycle-root-child", "root", "child", "internal"),
+            new ArchitectureLink("cycle-child-root", "child", "root", "internal")
+        });
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal(6, plan.PhysicalNodes.Count);
+        Assert.Equal(2, plan.PhysicalLinks.Count);
+        Assert.NotEmpty(plan.Projection!.CycleSemanticNodeIds);
+        Assert.True(plan.NodePlacements.Count == 6, string.Join(",", plan.NodePlacements.Select(placement => placement.PhysicalNodeId)));
+        var cycleValidation = new ArchitectureDiagramV6Validator().Validate(plan);
+        Assert.True(cycleValidation.IsValid, string.Join("; ", cycleValidation.Findings.Select(finding => finding.Message)));
+    }
+
+    [Fact]
+    public void Planner_assigns_baseline_nodes_to_one_logical_row_and_keeps_standalones_separate()
+    {
+        var request = GraphRequest(NodeProjectionMode.Canonical) with
+        {
+            NodePlacement = new NodePlacementPolicy("*OrchestrationService", 120, 60, 20, 40)
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var baselineRows = plan.NodeMetadata.Where(node => node.IsBaseline).Select(node => node.LogicalLayer).Distinct().ToArray();
+
+        Assert.Single(baselineRows);
+        Assert.Contains(plan.Projection!.StandalonePhysicalNodeIds, id => plan.NodeMetadata.Single(node => node.PhysicalNodeId == id).PositionalOwnerId is null);
+        Assert.All(plan.NodePlacements, placement => Assert.Equal(1, placement.RowSpan));
+    }
+
+    [Fact]
+    public void Planner_output_is_deterministic_for_repeated_requests()
+    {
+        var first = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+        var second = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+        var firstSignature = string.Join("|", first.NodePlacements.Select(placement => $"{placement.PhysicalNodeId}:{placement.AnchorCellId}"));
+        var secondSignature = string.Join("|", second.NodePlacements.Select(placement => $"{placement.PhysicalNodeId}:{placement.AnchorCellId}"));
+
+        Assert.Equal(firstSignature, secondSignature);
     }
 
     private static ArchitecturePlanningRequest Request(NodeProjectionMode mode) => new(
         new ArchitectureDiagramModel(Array.Empty<ArchitectureProject>(), Array.Empty<ArchitectureExternalNode>(), Array.Empty<ArchitectureLink>(), null),
         new ArchitectureSelectionScope("SelectedProjects", Array.Empty<string>(), Array.Empty<string>()),
+        new ArchitectureGenerationSettingsSnapshot("drawio", "[External]", Array.Empty<string>(), Array.Empty<string>()),
+        new NodeProjectionPolicy(mode, Array.Empty<string>()),
+        new ProjectPlacementPolicy(true, "border"),
+        new NodePlacementPolicy("*OrchestrationService", 120, 60, 20, 40),
+        new RoutePlanningPolicy(12, 8, "[External]"),
+        new GridSizingPolicy(20, 20, 20, 30),
+        new ValidationPolicy(ArchitectureValidationMode.Normal),
+        Array.Empty<string>(), Array.Empty<string>());
+
+    private static ArchitecturePlanningRequest GraphRequest(NodeProjectionMode mode, IReadOnlyList<ArchitectureLink>? links = null) => new(
+        new ArchitectureDiagramModel(
+            new[] { new ArchitectureProject("project:p", "Project", new[]
+            {
+                new ArchitectureNode("root", "project:p", "RootOrchestrationService", "Project.RootOrchestrationService", "Class", "root", Array.Empty<string>()),
+                new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>()),
+                new ArchitectureNode("other", "project:p", "OtherService", "Project.OtherService", "Class", "other", Array.Empty<string>()),
+                new ArchitectureNode("shared", "project:p", "Shared", "Project.Shared", "Class", "shared", Array.Empty<string>()),
+                new ArchitectureNode("standalone", "project:p", "Standalone", "Project.Standalone", "Class", "standalone", Array.Empty<string>())
+            }, "project:p") },
+            new[] { new ArchitectureExternalNode("external", "IEventHub", "External", "external", "External.IEventHub", "[External]") },
+            links?.ToArray() ?? new[]
+            {
+                new ArchitectureLink("root-child", "root", "child", "internal"),
+                new ArchitectureLink("root-shared", "root", "shared", "internal"),
+                new ArchitectureLink("other-shared", "other", "shared", "internal"),
+                new ArchitectureLink("child-external", "child", "external", "external")
+            }, null),
+        new ArchitectureSelectionScope("SelectedProjects", new[] { "project:p" }, Array.Empty<string>()),
         new ArchitectureGenerationSettingsSnapshot("drawio", "[External]", Array.Empty<string>(), Array.Empty<string>()),
         new NodeProjectionPolicy(mode, Array.Empty<string>()),
         new ProjectPlacementPolicy(true, "border"),

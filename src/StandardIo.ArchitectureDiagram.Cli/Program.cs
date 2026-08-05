@@ -172,6 +172,7 @@ public static class Program
                     architecture.Manifest,
                     architecture.Eligibility,
                     architecture.Findings,
+                    architecture.PlanningMetrics,
                     Diagnostics = architecture.Diagnostics.ReportJson
                 }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");

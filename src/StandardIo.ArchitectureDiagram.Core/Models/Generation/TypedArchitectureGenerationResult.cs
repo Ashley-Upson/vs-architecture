@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models.Generation;
@@ -61,7 +62,8 @@ public sealed class TypedArchitectureGenerationResult
         ArchitectureGenerationManifest manifest,
         ArchitectureEligibilityResult eligibility,
         Func<DrawioDiagnosticExportResult> diagnosticFactory,
-        SerializationRepeatResult? serializationRepeat)
+        SerializationRepeatResult? serializationRepeat,
+        ArchitecturePlanningMetrics? planningMetrics = null)
     {
         Diagram = diagram ?? throw new ArgumentNullException(nameof(diagram));
         Page = page ?? throw new ArgumentNullException(nameof(page));
@@ -70,6 +72,7 @@ public sealed class TypedArchitectureGenerationResult
         Eligibility = eligibility ?? throw new ArgumentNullException(nameof(eligibility));
         diagnostics = new Lazy<DrawioDiagnosticExportResult>(diagnosticFactory ?? throw new ArgumentNullException(nameof(diagnosticFactory)), true);
         SerializationRepeat = serializationRepeat;
+        PlanningMetrics = planningMetrics;
     }
 
     public ArchitectureDiagramModel Diagram { get; }
@@ -79,6 +82,7 @@ public sealed class TypedArchitectureGenerationResult
     public ArchitectureEligibilityResult Eligibility { get; }
     public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
     public SerializationRepeatResult? SerializationRepeat { get; }
+    public ArchitecturePlanningMetrics? PlanningMetrics { get; }
     public bool StrictValidationPassed => Eligibility.Eligible;
     public bool SceneProduced => Page is not null;
     public bool SemanticallyComplete => Manifest.ProjectedRenderNodeCount >= Manifest.SemanticNodeCount &&

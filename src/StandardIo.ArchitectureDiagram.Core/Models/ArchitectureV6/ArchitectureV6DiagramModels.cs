@@ -12,6 +12,22 @@ public enum PhysicalNodeProjectionMode
 
 public sealed record DuplicationProvenance(string SemanticNodeId, string Reason, string? ParentPhysicalNodeId);
 
+public sealed record PhysicalNodePlacementMetadata(
+    string PhysicalNodeId,
+    string SemanticNodeId,
+    string? PositionalOwnerId,
+    IReadOnlyList<string> PositionalChildIds,
+    IReadOnlyList<string> SemanticParentIds,
+    IReadOnlyList<string> SemanticChildIds,
+    string SubtreeId,
+    IReadOnlyList<string> SubtreeAncestorIds,
+    string? ProjectId,
+    int LogicalLayer,
+    bool IsBaseline,
+    bool IsExternal,
+    bool IsStandalone,
+    string PlacementReason);
+
 public sealed record PlannedPhysicalNode(
     string PhysicalNodeId,
     string SemanticNodeId,
@@ -20,7 +36,10 @@ public sealed record PlannedPhysicalNode(
     string? ProjectId,
     DuplicationProvenance? DuplicationProvenance,
     bool IsExternal,
-    bool IsStandalone);
+    bool IsStandalone)
+{
+    public string SemanticName { get; init; } = string.Empty;
+}
 
 public sealed record PlannedPhysicalLink(
     string PhysicalLinkId,
@@ -29,6 +48,41 @@ public sealed record PlannedPhysicalLink(
     string DestinationPhysicalNodeId,
     string? SourceProjectId,
     string? DestinationProjectId);
+
+public sealed record PlannedPhysicalLinkMetadata(
+    string PhysicalLinkId,
+    string SemanticLinkId,
+    string SourcePhysicalNodeId,
+    string DestinationPhysicalNodeId,
+    string? SourceProjectId,
+    string? DestinationProjectId,
+    int SourceLayer,
+    int DestinationLayer,
+    string RelativeDirection,
+    bool IsCrossProject,
+    bool IsExternal);
+
+public sealed record ArchitectureProjectionResult(
+    IReadOnlyList<PlannedPhysicalNode> PhysicalNodes,
+    IReadOnlyList<PlannedPhysicalLink> PhysicalLinks,
+    IReadOnlyList<PhysicalNodePlacementMetadata> NodeMetadata,
+    IReadOnlyList<PlannedPhysicalLinkMetadata> LinkMetadata,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> SemanticNodeToPhysicalNodeIds,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> SemanticLinkToPhysicalLinkIds,
+    IReadOnlyList<string> RootPhysicalNodeIds,
+    IReadOnlyList<string> ExternalPhysicalNodeIds,
+    IReadOnlyList<string> StandalonePhysicalNodeIds,
+    IReadOnlyList<string> CycleSemanticNodeIds,
+    IReadOnlyList<string> UnaccountedSemanticNodeIds,
+    IReadOnlyList<string> UnaccountedSemanticLinkIds,
+    IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics);
+
+public sealed record ArchitecturePlanningStageStatus(
+    bool ProjectionCompleted,
+    bool LogicalPlacementCompleted,
+    bool RoutingDeferred,
+    bool SizingDeferred,
+    bool AbsoluteGeometryDeferred);
 
 public sealed class PlannedNodePlacement
 {
@@ -73,7 +127,12 @@ public sealed class PlannedArchitectureDiagram
         IReadOnlyList<PlannedNodePlacement> nodePlacements,
         IReadOnlyList<PlannedGridRoute> routes,
         GridTrackSizingPlan sizing,
-        ArchitecturePlanningDiagnostics diagnostics)
+        ArchitecturePlanningDiagnostics diagnostics,
+        ArchitectureProjectionResult? projection = null,
+        IReadOnlyList<PhysicalNodePlacementMetadata>? nodeMetadata = null,
+        IReadOnlyList<PlannedPhysicalLinkMetadata>? linkMetadata = null,
+        IReadOnlyList<SubtreeReservation>? subtreeReservations = null,
+        ArchitecturePlanningStageStatus? stageStatus = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -84,6 +143,11 @@ public sealed class PlannedArchitectureDiagram
         Routes = Array.AsReadOnly((routes ?? throw new ArgumentNullException(nameof(routes))).ToArray());
         Sizing = sizing ?? throw new ArgumentNullException(nameof(sizing));
         Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        Projection = projection;
+        NodeMetadata = Array.AsReadOnly((nodeMetadata ?? Array.Empty<PhysicalNodePlacementMetadata>()).ToArray());
+        LinkMetadata = Array.AsReadOnly((linkMetadata ?? Array.Empty<PlannedPhysicalLinkMetadata>()).ToArray());
+        SubtreeReservations = Array.AsReadOnly((subtreeReservations ?? Array.Empty<SubtreeReservation>()).ToArray());
+        StageStatus = stageStatus ?? new ArchitecturePlanningStageStatus(false, false, true, true, true);
     }
 
     public ArchitecturePlanningRequest Request { get; }
@@ -95,6 +159,11 @@ public sealed class PlannedArchitectureDiagram
     public IReadOnlyList<PlannedGridRoute> Routes { get; }
     public GridTrackSizingPlan Sizing { get; }
     public ArchitecturePlanningDiagnostics Diagnostics { get; }
+    public ArchitectureProjectionResult? Projection { get; }
+    public IReadOnlyList<PhysicalNodePlacementMetadata> NodeMetadata { get; }
+    public IReadOnlyList<PlannedPhysicalLinkMetadata> LinkMetadata { get; }
+    public IReadOnlyList<SubtreeReservation> SubtreeReservations { get; }
+    public ArchitecturePlanningStageStatus StageStatus { get; }
 }
 
 public sealed class ArchitectureDiagramPlanningState

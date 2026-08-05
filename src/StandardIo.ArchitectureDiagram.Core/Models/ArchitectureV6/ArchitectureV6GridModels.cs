@@ -95,7 +95,14 @@ public sealed record ProjectRoutingGrid(
     string ProjectId,
     PlanningGrid Grid,
     IReadOnlyList<SubtreeReservation> SubtreeReservations,
-    RelativeRectangle? ProjectLabelReservation);
+    RelativeRectangle? ProjectLabelReservation,
+    IReadOnlyList<string>? PhysicalNodeIds = null,
+    IReadOnlyList<string>? ExternalNodeIds = null,
+    string BoundaryOwnership = "project")
+{
+    public IReadOnlyList<string> OwnedPhysicalNodeIds => PhysicalNodeIds ?? Array.Empty<string>();
+    public IReadOnlyList<string> OwnedExternalNodeIds => ExternalNodeIds ?? Array.Empty<string>();
+}
 
 public sealed record SubtreeReservation(
     string SubtreeId,
