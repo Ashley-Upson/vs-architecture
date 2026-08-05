@@ -97,14 +97,37 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     {
         var result = new Dictionary<PlanningGridId, GridTransform>();
         result[diagramGrid.Grid.Id] = diagramGrid.Grid.Transform;
-        var footprints = diagramGrid.ProjectFootprints.OrderBy(item => item.X).ThenBy(item => item.Y).ToArray();
-        foreach (var project in projects.OrderBy(item => item.ProjectId, StringComparer.Ordinal).Select((item, index) => (item, index)))
+
+        // Project origins are owned by the sized diagram grid. Its project-placement
+        // columns carry the project owner and their compiled offsets, so this remains
+        // a cumulative track transform rather than a second packing algorithm.
+        var sizedDiagram = relative.Grids.SingleOrDefault(item => item.GridId.Equals(diagramGrid.Grid.Id));
+        var placementRows = sizedDiagram?.Rows
+            .Where(item => item.Role == PlanningGridTrackRole.DiagramProjectPlacement)
+            .OrderBy(item => item.LogicalOrder)
+            .ToArray() ?? Array.Empty<PlanningGridRow>();
+        var placementColumns = sizedDiagram?.Columns
+            .Where(item => item.Role == PlanningGridTrackRole.DiagramProjectPlacement && item.OwnerId is not null)
+            .OrderBy(item => item.LogicalOrder)
+            .ToArray() ?? Array.Empty<PlanningGridColumn>();
+
+        foreach (var project in projects.OrderBy(item => item.ProjectId, StringComparer.Ordinal))
         {
-            var footprint = project.index < footprints.Length ? footprints[project.index] : new RelativeRectangle(0, 0, 0, 0);
-            var origin = new RelativePoint(footprint.X, footprint.Y);
-            result[project.item.Grid.Id] = new GridTransform(project.item.Grid.Id, origin);
-            if (project.item.ProjectLabelReservation is null)
-                findings.Add(new ArchitecturePlanningDiagnostic("LabelGeometryUnavailable", "Project label measurement is unavailable.", PlanningDiagnosticSubject.Grid, project.item.ProjectId));
+            var column = placementColumns.SingleOrDefault(item => string.Equals(item.OwnerId, project.ProjectId, StringComparison.Ordinal));
+            var row = placementRows.FirstOrDefault();
+            if (column is null || row is null)
+            {
+                findings.Add(new ArchitecturePlanningDiagnostic("MissingDiagramProjectTransform",
+                    "The project has no sized diagram-grid placement track.", PlanningDiagnosticSubject.Grid, project.ProjectId));
+                continue;
+            }
+
+            var origin = new RelativePoint(
+                diagramGrid.Grid.Transform.Origin.X + column.RelativeOffset,
+                diagramGrid.Grid.Transform.Origin.Y + row.RelativeOffset);
+            result[project.Grid.Id] = new GridTransform(project.Grid.Id, origin);
+            if (project.ProjectLabelReservation is null)
+                findings.Add(new ArchitecturePlanningDiagnostic("LabelGeometryUnavailable", "Project label measurement is unavailable.", PlanningDiagnosticSubject.Grid, project.ProjectId));
         }
         return result;
     }

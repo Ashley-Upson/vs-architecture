@@ -388,6 +388,10 @@ public sealed class ArchitectureV6StructuralTests
             Assert.Equal(relative.Bounds.Width, node.AbsoluteBounds.Width);
             Assert.Equal(relative.Bounds.Height, node.AbsoluteBounds.Height);
         }
+
+        var projectTransform = Assert.Single(plan.PhysicalScene.Transforms,
+            transform => transform.GridId.Equals(plan.ProjectGrids[0].Grid.Id));
+        Assert.Equal(new RelativePoint(0, 0), projectTransform.Origin);
     }
 
     [Fact]
@@ -716,7 +720,75 @@ public sealed class ArchitectureV6StructuralTests
         Assert.NotEmpty(plan.DiagramGrid.Grid.Cells);
         Assert.DoesNotContain(plan.ProjectGrids.SelectMany(grid => grid.Grid.Cells.Keys), cell => cell.GridId.Value == "diagram");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "UnsupportedAbstractRoute");
+
+        var diagram = Assert.Single(plan.RelativeGeometry!.Grids,
+            grid => grid.GridId.Equals(plan.DiagramGrid.Grid.Id));
+        var projectTransforms = plan.PhysicalScene!.Transforms
+            .Where(transform => transform.GridId != plan.DiagramGrid.Grid.Id)
+            .OrderBy(transform => transform.GridId.Value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(2, projectTransforms.Length);
+        Assert.NotEqual(projectTransforms[0].Origin, projectTransforms[1].Origin);
+        foreach (var project in plan.ProjectGrids)
+        {
+            var column = Assert.Single(diagram.Columns,
+                item => string.Equals(item.OwnerId, project.ProjectId, StringComparison.Ordinal));
+            var row = Assert.Single(diagram.Rows,
+                item => item.Role == PlanningGridTrackRole.DiagramProjectPlacement);
+            var transform = Assert.Single(projectTransforms,
+                item => item.GridId.Equals(project.Grid.Id));
+            Assert.Equal(new RelativePoint(column.RelativeOffset, row.RelativeOffset), transform.Origin);
+        }
+
+        var projectGeometry = plan.PhysicalScene.Geometry.Projects;
+        Assert.Equal(2, projectGeometry.Count);
+        Assert.Empty(projectGeometry.SelectMany((left, index) => projectGeometry.Skip(index + 1)
+            .Where(right => Intersects(left.AbsoluteBounds, right.AbsoluteBounds))));
+        Assert.Equal(0, plan.PhysicalScene.Metrics.NodeOverlapCount);
     }
+
+    [Fact]
+    public void Planner_project_transforms_are_deterministic_and_preserve_local_dimensions()
+    {
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(
+                new[]
+                {
+                    new ArchitectureProject("project:a", "A", new[]
+                    {
+                        new ArchitectureNode("a", "project:a", "A", "A.A", "Class", "a", Array.Empty<string>())
+                    }, "project:a"),
+                    new ArchitectureProject("project:b", "B", new[]
+                    {
+                        new ArchitectureNode("b", "project:b", "B", "B.B", "Class", "b", Array.Empty<string>())
+                    }, "project:b")
+                },
+                Array.Empty<ArchitectureExternalNode>(),
+                Array.Empty<ArchitectureLink>(),
+                null),
+            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "project:a", "project:b" }, Array.Empty<string>())
+        };
+
+        var first = new ArchitectureDiagramV6Planner().Plan(request);
+        var second = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal(first.PhysicalScene!.Transforms, second.PhysicalScene!.Transforms);
+        Assert.Equal(
+            first.PhysicalScene.Geometry.Projects.Select(project => (project.ProjectId, project.RelativeBounds, project.AbsoluteBounds)),
+            second.PhysicalScene.Geometry.Projects.Select(project => (project.ProjectId, project.RelativeBounds, project.AbsoluteBounds)));
+        foreach (var node in first.PhysicalScene.Geometry.Nodes)
+        {
+            var relative = first.RelativeGeometry!.Nodes.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
+            Assert.Equal(relative.Bounds.Width, node.AbsoluteBounds.Width);
+            Assert.Equal(relative.Bounds.Height, node.AbsoluteBounds.Height);
+        }
+        Assert.Equal(0, first.PhysicalScene.Metrics.NodeOverlapCount);
+    }
+
+    private static bool Intersects(AbsoluteRectangle left, AbsoluteRectangle right) =>
+        left.X < right.X + right.Width && left.X + left.Width > right.X &&
+        left.Y < right.Y + right.Height && left.Y + left.Height > right.Y;
 
     [Fact]
     public void Planner_keeps_external_departure_outside_an_expanded_source_footprint()
