@@ -248,6 +248,68 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_does_not_apply_node_content_width_to_routing_columns()
+    {
+        var request = Request() with
+        {
+            GridSizing = new GridSizingPolicy(200, 80, 40, 30)
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var routingColumns = plan.RelativeGeometry!.Grids.Single(grid => grid.GridId.Equals(plan.ProjectGrids.Single().Grid.Id)).Columns
+            .Where(column => column.Role is PlanningGridTrackRole.DestinationApproach or PlanningGridTrackRole.OwnershipLocalReturn)
+            .ToArray();
+
+        Assert.NotEmpty(routingColumns);
+        Assert.Contains(routingColumns, column => column.FinalExtent < request.GridSizing.CellWidth);
+        Assert.All(routingColumns, column => Assert.Equal(1, column.MinimumExtent));
+    }
+
+    [Fact]
+    public void Planner_distributes_node_width_across_footprint_span_only()
+    {
+        var request = Request() with
+        {
+            NodePlacement = new NodePlacementPolicy("*OrchestrationService", 200, 60, 20, 40),
+            GridSizing = new GridSizingPolicy(200, 80, 40, 30)
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var placement = plan.NodePlacements.First(item => item.ColumnSpan == 3);
+        var grid = plan.RelativeGeometry!.Grids.Single(item => item.GridId.Equals(placement.GridId));
+        var footprintColumns = placement.Footprint.Select(cell => grid.Columns.Single(column => column.Id.Equals(cell.ColumnId))).ToArray();
+
+        Assert.True(footprintColumns.Sum(column => column.FinalExtent) >= 200);
+        Assert.All(footprintColumns, column => Assert.True(column.FinalExtent < 200));
+        Assert.Contains(plan.Sizing.Provenance!, item => item.DominantConstraint == TrackConstraintKind.NodeFootprint);
+        Assert.DoesNotContain(grid.Columns.Where(column => !placement.Footprint.Any(cell => cell.ColumnId.Equals(column.Id))),
+            column => column.FinalExtent >= 200);
+    }
+
+    [Fact]
+    public void Planner_records_real_structural_and_capacity_contributions()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var provenance = plan.Sizing.Provenance!;
+
+        Assert.Contains(provenance, item => item.Contributions.Any(contribution => contribution.Kind == TrackConstraintKind.SingleColumnMinimum));
+        Assert.Contains(provenance, item => item.Contributions.Any(contribution => contribution.Kind == TrackConstraintKind.SingleRowMinimum));
+        Assert.Contains(provenance, item => item.Contributions.Any(contribution => contribution.Kind == TrackConstraintKind.NodeFootprint));
+        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.VerticalLaneEnvelope);
+        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.TurnClearance);
+    }
+
+    [Fact]
+    public void Planner_adds_project_padding_once_outside_project_grid_tracks()
+    {
+        var request = Request() with { GridSizing = new GridSizingPolicy(40, 80, 40, 30) };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var project = Assert.Single(plan.RelativeGeometry!.Projects);
+        var grid = Assert.Single(plan.RelativeGeometry.Grids, item => item.GridId.Equals(plan.ProjectGrids.Single().Grid.Id));
+
+        Assert.Equal(grid.Columns.Sum(column => column.FinalExtent) + request.GridSizing.ContainerPadding * 2, project.Bounds.Width);
+        Assert.Equal(grid.Rows.Sum(row => row.FinalExtent) + request.GridSizing.ContainerPadding * 2 + request.GridSizing.ProjectHeaderHeight, project.Bounds.Height);
+    }
+
+    [Fact]
     public void Planner_relative_node_bounds_are_exact_complete_footprint_envelopes()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

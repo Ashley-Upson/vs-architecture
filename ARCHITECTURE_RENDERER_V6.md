@@ -90,6 +90,13 @@ footprint-envelope equality, project containment, sparse reservation intervals
 and relative node overlap. Missing measured project-label input is reported
 explicitly; configured header height is not presented as a measured label
 obstruction. Absolute geometry validation remains deferred.
+Track sizing starts from explicit role-specific structural minima rather than a
+global cell-width or cell-height minimum. Node width and height are span
+constraints over the node footprint only; routing-only destination, return and
+transition tracks receive their own policy minima and grow only for lane,
+turn, clearance or other explicit constraints. Project padding is applied once
+around the summed project-grid extents. Every raised extent records the
+constraint that caused it in track provenance.
 The planner reports `V6AbsoluteGeometryDeferred`; logical placement, abstract
 routing, lane allocation, physical track sizing and relative geometry are
 complete.

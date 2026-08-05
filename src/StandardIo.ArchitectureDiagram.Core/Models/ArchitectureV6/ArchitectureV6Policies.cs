@@ -61,7 +61,18 @@ public sealed record GridSizingPolicy(
     int CellWidth,
     int CellHeight,
     int ContainerPadding,
-    int ProjectHeaderHeight);
+    int ProjectHeaderHeight)
+{
+    public int NodeFootprintColumnMinimum { get; init; } = 1;
+    public int DestinationApproachColumnMinimum { get; init; } = 1;
+    public int OwnershipLocalReturnColumnMinimum { get; init; } = 1;
+    public int ProjectTransitionColumnMinimum { get; init; } = 1;
+    public int DiagramRoutingColumnMinimum { get; init; } = 1;
+    public int StructuralColumnMinimum { get; init; } = 1;
+    public int NodeBearingRowMinimum { get; init; } = 1;
+    public int RoutingRowMinimum { get; init; } = 1;
+    public int ProjectTransitionRowMinimum { get; init; } = 1;
+}
 
 public sealed record ValidationPolicy(ArchitectureValidationMode Mode);
 

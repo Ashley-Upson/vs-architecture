@@ -53,6 +53,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var relativeSubtrees = new List<PlannedRelativeSubtreeGeometry>();
         var sizingRows = new List<PlanningGridRow>();
         var sizingColumns = new List<PlanningGridColumn>();
+        var sizingConstraints = new List<GridTrackConstraint>();
         var provenance = new List<GridTrackProvenance>();
         var projectWidths = new Dictionary<string, int>(StringComparer.Ordinal);
         var projectHeights = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -66,6 +67,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
             idempotent &= SameTracks(sized, SizeGrid(project.Grid));
             sizingRows.AddRange(sized.Rows);
             sizingColumns.AddRange(sized.Columns);
+            sizingConstraints.AddRange(sized.Constraints);
             provenance.AddRange(sized.Provenance(project.Grid.Id));
             grids.Add(ToGridGeometry(project.Grid.Id, sized));
 
@@ -117,13 +119,14 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         idempotent &= SameTracks(diagramSized, SizeGrid(diagramSource));
         sizingRows.AddRange(diagramSized.Rows);
         sizingColumns.AddRange(diagramSized.Columns);
+        sizingConstraints.AddRange(diagramSized.Constraints);
         provenance.AddRange(diagramSized.Provenance(diagramSource.Id));
         grids.Add(ToGridGeometry(diagramSource.Id, diagramSized));
         var diagramWidth = Math.Max(1, diagramSized.Columns.Sum(item => item.FinalExtent));
         var diagramHeight = Math.Max(1, diagramSized.Rows.Sum(item => item.FinalExtent));
         var diagramBounds = new RelativeRectangle(0, 0, diagramWidth, diagramHeight);
         var relative = new PlannedArchitectureRelativeGeometry(relativeNodes, relativeProjects, grids, relativeSubtrees, diagramBounds);
-        var sizing = new GridTrackSizingPlan(sizingRows, sizingColumns, constraintsForSizing, diagramBounds, provenance);
+        var sizing = new GridTrackSizingPlan(sizingRows, sizingColumns, sizingConstraints, diagramBounds, provenance);
         var validationTimer = Stopwatch.StartNew();
         Validate(relative, projectGrids, diagramSized);
         validationTimer.Stop();
@@ -151,8 +154,8 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     {
         var rows = grid.Rows.OrderBy(item => item.LogicalOrder).ToArray();
         var columns = grid.Columns.OrderBy(item => item.LogicalOrder).ToArray();
-        var rowExtents = rows.ToDictionary(item => item.Id, item => Math.Max(request.GridSizing.CellHeight, item.MinimumExtent));
-        var columnExtents = columns.ToDictionary(item => item.Id, item => Math.Max(request.GridSizing.CellWidth, item.MinimumExtent));
+        var rowExtents = rows.ToDictionary(item => item.Id, item => 0);
+        var columnExtents = columns.ToDictionary(item => item.Id, item => 0);
         var rowContributions = new Dictionary<PlanningGridRowId, List<GridTrackContribution>>();
         var columnContributions = new Dictionary<PlanningGridColumnId, List<GridTrackContribution>>();
 
@@ -204,10 +207,10 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var projectIds = projectWidths.Keys.OrderBy(item => item, StringComparer.Ordinal).ToArray();
         var gridId = diagramGrid.Grid.Id;
         var rowId = new PlanningGridRowId("diagram:row:projects");
-        var rows = new[] { new PlanningGridRow(rowId, 0, request.GridSizing.CellHeight, request.GridSizing.CellHeight,
-            request.GridSizing.CellHeight, 0, 0) };
+        var rows = new[] { new PlanningGridRow(rowId, 0, 1, 1, 1, 0, 0,
+            PlanningGridTrackRole.DiagramProjectPlacement, "sizing", "diagram project placement", "diagram") };
         var columns = projectIds.Select((projectId, index) => new PlanningGridColumn(new PlanningGridColumnId($"diagram:column:{index}"), index,
-            request.GridSizing.CellWidth, request.GridSizing.CellWidth, request.GridSizing.CellWidth, 0, 0)).ToArray();
+            1, 1, 1, 0, 0, PlanningGridTrackRole.DiagramProjectPlacement, "sizing", "diagram project placement", projectId)).ToArray();
         var cells = new Dictionary<PlanningGridCellId, PlanningGridCell>();
         for (var index = 0; index < columns.Length; index++)
         {
@@ -230,6 +233,14 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var rowIds = new HashSet<PlanningGridRowId>(rows.Select(item => item.Id));
         var columnIds = new HashSet<PlanningGridColumnId>(columns.Select(item => item.Id));
         var result = new List<GridTrackConstraint>();
+        foreach (var row in rows)
+            result.Add(new GridTrackConstraint(TrackConstraintKind.SingleRowMinimum, grid.Id,
+                new[] { row.Id }, Array.Empty<PlanningGridColumnId>(), InitialRowMinimum(row),
+                $"structural row minimum:{row.Role}", row.Id.Value));
+        foreach (var column in columns)
+            result.Add(new GridTrackConstraint(TrackConstraintKind.SingleColumnMinimum, grid.Id,
+                Array.Empty<PlanningGridRowId>(), new[] { column.Id }, InitialColumnMinimum(column),
+                $"structural column minimum:{column.Role}", column.Id.Value));
         foreach (var constraint in constraintsForSizing.Where(item => item.GridId.Equals(grid.Id)))
         {
             var missingRows = constraint.Rows.Where(row => !rowIds.Contains(row)).ToArray();
@@ -246,18 +257,40 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         }
         foreach (var placement in placements.Where(item => item.GridId.Equals(grid.Id)))
         {
+            var placementRows = placement.Footprint.Select(item => item.RowId).Distinct().Where(rowIds.Contains).ToArray();
+            var placementColumns = placement.Footprint.Select(item => item.ColumnId).Distinct().Where(columnIds.Contains).ToArray();
             result.Add(new GridTrackConstraint(TrackConstraintKind.NodeFootprint, grid.Id,
-                placement.Footprint.Select(item => item.RowId).Distinct().Where(rowIds.Contains).ToArray(),
-                placement.Footprint.Select(item => item.ColumnId).Distinct().Where(columnIds.Contains).ToArray(),
-                request.NodePlacement.MinimumNodeWidth, "node minimum footprint", placement.PhysicalNodeId));
+                Array.Empty<PlanningGridRowId>(), placementColumns, request.NodePlacement.MinimumNodeWidth,
+                "node minimum footprint width", placement.PhysicalNodeId + ":columns"));
+            result.Add(new GridTrackConstraint(TrackConstraintKind.NodeFootprint, grid.Id,
+                placementRows, Array.Empty<PlanningGridColumnId>(), request.NodePlacement.MinimumNodeHeight,
+                "node minimum footprint height", placement.PhysicalNodeId + ":rows"));
         }
         return result;
     }
 
+    private int InitialRowMinimum(PlanningGridRow row) => row.Role switch
+    {
+        PlanningGridTrackRole.NodeBearing or PlanningGridTrackRole.BaselineNode or
+        PlanningGridTrackRole.ExternalRegion or PlanningGridTrackRole.StandaloneRegion => request.GridSizing.NodeBearingRowMinimum,
+        PlanningGridTrackRole.ProjectBoundaryTransition or PlanningGridTrackRole.DiagramProjectPlacement => request.GridSizing.ProjectTransitionRowMinimum,
+        _ => request.GridSizing.RoutingRowMinimum
+    };
+
+    private int InitialColumnMinimum(PlanningGridColumn column) => column.Role switch
+    {
+        PlanningGridTrackRole.NodeFootprint => request.GridSizing.NodeFootprintColumnMinimum,
+        PlanningGridTrackRole.DestinationApproach => request.GridSizing.DestinationApproachColumnMinimum,
+        PlanningGridTrackRole.OwnershipLocalReturn => request.GridSizing.OwnershipLocalReturnColumnMinimum,
+        PlanningGridTrackRole.ProjectBoundaryTransition => request.GridSizing.ProjectTransitionColumnMinimum,
+        PlanningGridTrackRole.DiagramCrossProjectRouting or PlanningGridTrackRole.DiagramProjectPlacement => request.GridSizing.DiagramRoutingColumnMinimum,
+        _ => request.GridSizing.StructuralColumnMinimum
+    };
+
     private int RequiredExtent(GridTrackConstraint constraint)
     {
         if (constraint.Kind == TrackConstraintKind.HorizontalLaneEnvelope || constraint.Kind == TrackConstraintKind.VerticalLaneEnvelope)
-            return Math.Max(request.GridSizing.CellHeight, checked(constraint.MinimumExtent * request.RoutePlanning.MinimumParallelSpacing));
+            return Math.Max(1, checked(constraint.MinimumExtent * request.RoutePlanning.MinimumParallelSpacing));
         return Math.Max(1, constraint.MinimumExtent);
     }
 
