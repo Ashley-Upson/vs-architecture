@@ -48,11 +48,13 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var projectWidths = new Dictionary<string, int>(StringComparer.Ordinal);
         var projectHeights = new Dictionary<string, int>(StringComparer.Ordinal);
         var solverIterations = 0;
+        var idempotent = true;
 
         foreach (var project in projectGrids.OrderBy(item => item.ProjectId, StringComparer.Ordinal))
         {
             var sized = SizeGrid(project.Grid);
             solverIterations += sized.Iterations;
+            idempotent &= SameTracks(sized, SizeGrid(project.Grid));
             sizingRows.AddRange(sized.Rows);
             sizingColumns.AddRange(sized.Columns);
             provenance.AddRange(sized.Provenance(project.Grid.Id));
@@ -91,6 +93,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
             : diagramGrid.Grid;
         var diagramSized = SizeGrid(diagramSource);
         solverIterations += diagramSized.Iterations;
+        idempotent &= SameTracks(diagramSized, SizeGrid(diagramSource));
         sizingRows.AddRange(diagramSized.Rows);
         sizingColumns.AddRange(diagramSized.Columns);
         provenance.AddRange(diagramSized.Provenance(diagramSource.Id));
@@ -102,7 +105,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var sizing = new GridTrackSizingPlan(sizingRows, sizingColumns, constraintsForSizing, diagramBounds, provenance);
         Validate(relative, projectGrids, diagramSized);
         return new PhysicalSizingResult(sizing, relative, diagnostics, solverIterations, projectWidths, projectHeights,
-            sizingRows.Count + sizingColumns.Count, diagramWidth, diagramHeight);
+            sizingRows.Count + sizingColumns.Count, diagramWidth, diagramHeight, idempotent);
     }
 
     private SizedGrid SizeGrid(PlanningGrid grid)
@@ -298,6 +301,10 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         return false;
     }
 
+    private static bool SameTracks(SizedGrid left, SizedGrid right) =>
+        left.Rows.Select(item => (item.Id, item.FinalExtent, item.RelativeOffset)).SequenceEqual(right.Rows.Select(item => (item.Id, item.FinalExtent, item.RelativeOffset))) &&
+        left.Columns.Select(item => (item.Id, item.FinalExtent, item.RelativeOffset)).SequenceEqual(right.Columns.Select(item => (item.Id, item.FinalExtent, item.RelativeOffset)));
+
     private static IEnumerable<(PlannedRelativeNodeGeometry Left, PlannedRelativeNodeGeometry Right)> Overlaps(IReadOnlyList<PlannedRelativeNodeGeometry> nodes)
     {
         for (var index = 0; index < nodes.Count; index++)
@@ -331,4 +338,5 @@ internal sealed record PhysicalSizingResult(
     IReadOnlyDictionary<string, int> ProjectHeights,
     int SizedTrackCount,
     int DiagramWidth,
-    int DiagramHeight);
+    int DiagramHeight,
+    bool SizingIdempotent);

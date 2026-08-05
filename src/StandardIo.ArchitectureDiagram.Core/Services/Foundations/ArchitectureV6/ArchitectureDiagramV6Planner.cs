@@ -111,7 +111,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              SizingContributionExtents: physicalSizing.Sizing.Provenance!.SelectMany(item => item.Contributions)
                  .GroupBy(item => item.Kind.ToString()).ToDictionary(group => group.Key, group => group.Sum(item => item.Extent), StringComparer.Ordinal),
              SizingSolverIterations: physicalSizing.ReconciliationIterations,
-             SizingIdempotent: true,
+             SizingIdempotent: physicalSizing.SizingIdempotent,
              LargestRowExtent: physicalSizing.Sizing.Rows.Count == 0 ? 0 : physicalSizing.Sizing.Rows.Max(item => item.FinalExtent),
              LargestColumnExtent: physicalSizing.Sizing.Columns.Count == 0 ? 0 : physicalSizing.Sizing.Columns.Max(item => item.FinalExtent),
              LargestSpanMinimum: physicalSizing.Sizing.Constraints.Where(item => item.Rows.Count > 1 || item.Columns.Count > 1)
