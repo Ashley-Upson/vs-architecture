@@ -8,12 +8,12 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
+using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV6;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
-using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
-using StandardIo.ArchitectureDiagram.Core.Services.Processings.Architectures;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
@@ -21,28 +21,20 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 public sealed class ArchitectureGenerationService : IArchitectureGenerationService
 {
     private readonly IArchitectureAnalyser analyser;
-    private readonly IArchitectureTopologyProjector projector;
-    private readonly IArchitectureDiagnosticRenderer renderer;
+    private readonly IArchitectureDiagramPlanner planner;
+    private readonly IArchitectureDiagramRenderer<DrawioPage> renderer;
     private readonly IDrawioDocumentComposer composer;
 
     public ArchitectureGenerationService(
         IArchitectureAnalyser analyser,
-        IArchitectureTopologyProjector projector,
-        IArchitectureDiagnosticRenderer renderer,
+        IArchitectureDiagramPlanner planner,
+        IArchitectureDiagramRenderer<DrawioPage> renderer,
         IDrawioDocumentComposer composer)
     {
         this.analyser = analyser ?? throw new ArgumentNullException(nameof(analyser));
-        this.projector = projector ?? throw new ArgumentNullException(nameof(projector));
+        this.planner = planner ?? throw new ArgumentNullException(nameof(planner));
         this.renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
         this.composer = composer ?? throw new ArgumentNullException(nameof(composer));
-    }
-
-    public ArchitectureGenerationService(
-        IArchitectureAnalyser analyser,
-        IArchitectureDiagnosticRenderer renderer,
-        IDrawioDocumentComposer composer)
-        : this(analyser, new ArchitectureTopologyProjector(), renderer, composer)
-    {
     }
 
     public async Task<TypedArchitectureGenerationResult> GenerateAsync(
@@ -63,24 +55,20 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
         int serializationRepeatCount = 0,
         CancellationToken cancellationToken = default)
     {
-        var projected = projector.Project(diagram, job.Rendering.NodeDuplication);
-        var rendered = renderer.RenderWithDiagnostics(projected, job.Rendering, mode, cancellationToken);
-        var page = string.IsNullOrWhiteSpace(job.PageNameHint)
-            ? rendered.Page
-            : rendered.Page with { SuggestedName = job.PageNameHint!.Trim() };
+        var planningRequest = ArchitecturePlanningRequestFactory.Create(diagram, job, mode);
+        var planned = planner.Plan(planningRequest);
+        var page = renderer.Render(planned, new ArchitectureRenderRequest(
+            planningRequest.Validation.Mode, planningRequest.GenerationSettings.OutputRenderer, true));
+        if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() };
         var repeat = Repeat(page, serializationRepeatCount);
         var semanticNodes = diagram.Projects.SelectMany(project => project.Nodes).ToArray();
-        var instanceCounts = projected.Nodes.GroupBy(node => node.SemanticNodeId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        var incomingParents = projected.Links.GroupBy(link => link.TargetSemanticId, StringComparer.Ordinal)
-            .Count(group => group.Select(link => link.SourceSemanticId).Distinct(StringComparer.Ordinal).Skip(1).Any());
         var manifest = new ArchitectureGenerationManifest(
             diagram.Projects.Count,
             semanticNodes.Length + diagram.ExternalNodes.Count,
             diagram.Links.Count,
-            rendered.Routes.Count,
-            rendered.LogicalFindings.Count,
-            rendered.PhysicalFindings.Count,
+            planned.Routes.Count,
+            planned.Diagnostics.Findings.Count,
+            0,
             page.StablePageKey)
         {
             SemanticClassCount = semanticNodes.Count(node => node.Kind == "Class"),
@@ -88,20 +76,29 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             UniqueInterfaceResolutionCount = semanticNodes.Count(node => node.InterfaceResolution == InterfaceResolutionStatus.Unique),
             UnresolvedInterfaceCount = semanticNodes.Count(node => node.InterfaceResolution == InterfaceResolutionStatus.Unresolved),
             MultipleInterfaceResolutionCount = semanticNodes.Count(node => node.InterfaceResolution == InterfaceResolutionStatus.Multiple),
-            ProjectedRenderNodeCount = projected.Nodes.Count,
-            ProjectedRenderLinkCount = projected.Links.Count,
-            DuplicatedInstanceCount = projected.Nodes.Count(node => node.Occurrence == ArchitectureRenderNodeOccurrence.Duplicated),
-            CanonicalSharedNodeCount = instanceCounts.Count(pair => pair.Value == 1 &&
-                projected.Links.Count(link => link.TargetSemanticId == pair.Key) > 1),
-            ExceptionAuthorisedDuplicateCount = projected.Nodes.Count(node =>
-                node.DuplicationReason == ArchitectureDuplicationReason.ExceptionPattern),
-            MultiParentNodeCount = incomingParents
+            ProjectedRenderNodeCount = planned.PhysicalNodes.Count,
+            ProjectedRenderLinkCount = planned.PhysicalLinks.Count,
+            DuplicatedInstanceCount = planned.PhysicalNodes.Count(node => node.ProjectionMode == PhysicalNodeProjectionMode.DuplicateBranch),
+            CanonicalSharedNodeCount = planned.PhysicalNodes.Count(node => node.ProjectionMode == PhysicalNodeProjectionMode.Canonical),
+            ExceptionAuthorisedDuplicateCount = planned.PhysicalNodes.Count(node => node.DuplicationProvenance is not null),
+            MultiParentNodeCount = 0
         };
+        var findings = planned.Diagnostics.Findings
+            .Select(finding => new ValidationFinding(
+                finding.Code,
+                finding.SubjectId ?? "v6-planning",
+                finding.SubjectId,
+                null,
+                1,
+                finding.Message,
+                false))
+            .ToArray();
         return Task.FromResult(new TypedArchitectureGenerationResult(
-            diagram, page, rendered.PreRepairFindings, rendered.LogicalFindings,
-            rendered.PhysicalFindings, rendered.RepairAttempts, rendered.Routes,
-            rendered.Timings, manifest, rendered.Eligibility, () => rendered.Diagnostics,
-            repeat, rendered.DevelopmentArtifacts, projected, rendered.RoutingEvidence));
+            diagram, page, findings, manifest,
+            new ArchitectureEligibilityResult(false, new[] { "V6 planning is structural only; physical Architecture rendering is deferred." }),
+            () => new DrawioDiagnosticExportResult(page.GraphModel.ToString(),
+                "{\"code\":\"V6PlanningNotImplemented\"}", new Dictionary<string, string>(), 0, 0),
+            repeat));
     }
 
     private SerializationRepeatResult? Repeat(DrawioPage page, int repeatCount)

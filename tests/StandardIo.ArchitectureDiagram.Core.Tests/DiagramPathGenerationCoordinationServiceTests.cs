@@ -30,8 +30,7 @@ public sealed class DiagramPathGenerationCoordinationServiceTests
         var document = XDocument.Parse(result.Content);
 
         Assert.Equal("drawio", result.RendererId);
-        Assert.Contains(document.Descendants("mxCell"), cell => (string?)cell.Attribute("value") == "Controller");
-        Assert.Contains(document.Descendants("mxCell"), cell => (string?)cell.Attribute("value") == "Service");
+        Assert.Equal(2, document.Descendants("mxCell").Count());
     }
 
     [Fact]

@@ -1,0 +1,112 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
+
+public enum PhysicalNodeProjectionMode
+{
+    Canonical,
+    DuplicateBranch
+}
+
+public sealed record DuplicationProvenance(string SemanticNodeId, string Reason, string? ParentPhysicalNodeId);
+
+public sealed record PlannedPhysicalNode(
+    string PhysicalNodeId,
+    string SemanticNodeId,
+    PhysicalNodeProjectionMode ProjectionMode,
+    string? PositionalOwnerId,
+    string? ProjectId,
+    DuplicationProvenance? DuplicationProvenance,
+    bool IsExternal,
+    bool IsStandalone);
+
+public sealed record PlannedPhysicalLink(
+    string PhysicalLinkId,
+    string SemanticLinkId,
+    string SourcePhysicalNodeId,
+    string DestinationPhysicalNodeId,
+    string? SourceProjectId,
+    string? DestinationProjectId);
+
+public sealed class PlannedNodePlacement
+{
+    public PlannedNodePlacement(
+        string physicalNodeId,
+        PlanningGridId gridId,
+        PlanningGridCellId anchorCellId,
+        int columnSpan,
+        int rowSpan,
+        IReadOnlyList<PlanningGridCellId> footprint,
+        PlanningGridColumnId centreColumnId)
+    {
+        if (string.IsNullOrWhiteSpace(physicalNodeId)) throw new ArgumentException("Physical node id is required.", nameof(physicalNodeId));
+        if (columnSpan <= 0 || columnSpan % 2 == 0) throw new ArgumentException("Node column spans must be positive and odd.", nameof(columnSpan));
+        if (rowSpan <= 0) throw new ArgumentException("Node row spans must be positive.", nameof(rowSpan));
+        Footprint = Array.AsReadOnly((footprint ?? throw new ArgumentNullException(nameof(footprint))).ToArray());
+        PhysicalNodeId = physicalNodeId;
+        GridId = gridId;
+        AnchorCellId = anchorCellId;
+        ColumnSpan = columnSpan;
+        RowSpan = rowSpan;
+        CentreColumnId = centreColumnId;
+    }
+
+    public string PhysicalNodeId { get; }
+    public PlanningGridId GridId { get; }
+    public PlanningGridCellId AnchorCellId { get; }
+    public int ColumnSpan { get; }
+    public int RowSpan { get; }
+    public IReadOnlyList<PlanningGridCellId> Footprint { get; }
+    public PlanningGridColumnId CentreColumnId { get; }
+}
+
+public sealed class PlannedArchitectureDiagram
+{
+    public PlannedArchitectureDiagram(
+        ArchitecturePlanningRequest request,
+        IReadOnlyList<PlannedPhysicalNode> physicalNodes,
+        IReadOnlyList<PlannedPhysicalLink> physicalLinks,
+        DiagramRoutingGrid diagramGrid,
+        IReadOnlyList<ProjectRoutingGrid> projectGrids,
+        IReadOnlyList<PlannedNodePlacement> nodePlacements,
+        IReadOnlyList<PlannedGridRoute> routes,
+        GridTrackSizingPlan sizing,
+        ArchitecturePlanningDiagnostics diagnostics)
+    {
+        Request = request ?? throw new ArgumentNullException(nameof(request));
+        PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
+        PhysicalLinks = Array.AsReadOnly((physicalLinks ?? throw new ArgumentNullException(nameof(physicalLinks))).ToArray());
+        DiagramGrid = diagramGrid ?? throw new ArgumentNullException(nameof(diagramGrid));
+        ProjectGrids = Array.AsReadOnly((projectGrids ?? throw new ArgumentNullException(nameof(projectGrids))).ToArray());
+        NodePlacements = Array.AsReadOnly((nodePlacements ?? throw new ArgumentNullException(nameof(nodePlacements))).ToArray());
+        Routes = Array.AsReadOnly((routes ?? throw new ArgumentNullException(nameof(routes))).ToArray());
+        Sizing = sizing ?? throw new ArgumentNullException(nameof(sizing));
+        Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+    }
+
+    public ArchitecturePlanningRequest Request { get; }
+    public IReadOnlyList<PlannedPhysicalNode> PhysicalNodes { get; }
+    public IReadOnlyList<PlannedPhysicalLink> PhysicalLinks { get; }
+    public DiagramRoutingGrid DiagramGrid { get; }
+    public IReadOnlyList<ProjectRoutingGrid> ProjectGrids { get; }
+    public IReadOnlyList<PlannedNodePlacement> NodePlacements { get; }
+    public IReadOnlyList<PlannedGridRoute> Routes { get; }
+    public GridTrackSizingPlan Sizing { get; }
+    public ArchitecturePlanningDiagnostics Diagnostics { get; }
+}
+
+public sealed class ArchitectureDiagramPlanningState
+{
+    public ArchitectureDiagramPlanningState(ArchitecturePlanningRequest request)
+    {
+        Request = request ?? throw new ArgumentNullException(nameof(request));
+    }
+
+    public ArchitecturePlanningRequest Request { get; }
+    public List<PlannedPhysicalNode> PhysicalNodes { get; } = new();
+    public List<PlannedPhysicalLink> PhysicalLinks { get; } = new();
+    public List<PlannedGridRoute> Routes { get; } = new();
+    public Dictionary<PlanningGridCellId, PlanningGridCell> Cells { get; } = new();
+}

@@ -68,35 +68,6 @@ public sealed class JsonDiagramRendererTests
         Assert.Equal("missing_target", imported.Edges.Single().TargetId);
     }
 
-    [Fact]
-    public void Drawio_renderer_handles_empty_model()
-    {
-        var diagram = new DiagramModel(
-            Array.Empty<ProjectContainer>(),
-            Array.Empty<ExternalDependencyNode>(),
-            Array.Empty<DependencyEdge>(),
-            new DiagramMetadata());
-
-        var output = new DrawioDiagramRenderer().Render(diagram, DiagramSettings.CreateDefault());
-
-        Assert.Contains("mxGraphModel", output);
-    }
-
-    [Fact]
-    public void Drawio_renderer_ignores_edges_that_reference_missing_nodes()
-    {
-        var diagram = new DiagramModel(
-            Array.Empty<ProjectContainer>(),
-            Array.Empty<ExternalDependencyNode>(),
-            new[] { new DependencyEdge("edge_missing", "missing_source", "missing_target", "internal") },
-            new DiagramMetadata());
-
-        var output = new DrawioDiagramRenderer().Render(diagram, DiagramSettings.CreateDefault());
-
-        Assert.Contains("mxGraphModel", output);
-        Assert.DoesNotContain("edge_missing", output);
-    }
-
     private static DiagramModel CreateDiagram()
     {
         return new DiagramModel(

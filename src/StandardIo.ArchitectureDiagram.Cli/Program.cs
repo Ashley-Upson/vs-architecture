@@ -15,7 +15,6 @@ using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Settings;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.DataModels;
 using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
-using StandardIo.ArchitectureDiagram.Core.Services.Processings.Drawios;
 
 namespace StandardIo.ArchitectureDiagram.Cli;
 
@@ -165,70 +164,16 @@ public static class Program
         {
             var directory = Path.GetFullPath(options.ArchitectureAnalysisOutputDirectory);
             Directory.CreateDirectory(directory);
-            var analyser = provider.GetRequiredService<IArchitectureGeometryAnalyser>();
-            var analysis = analyser.Analyse(architecture);
             var broker = provider.GetRequiredService<IDiagramFileBroker>();
-            var projected = architecture.ProjectedGraph;
-            var routing = architecture.RoutingEvidence ?? new ArchitectureRoutingEvidence(
-                0, new Dictionary<string, int>(StringComparer.Ordinal), 0, 0, 0, 0, 0, 0, 0, 0);
-            var evidence = new ArchitectureGenerationEvidence(
-                new ArchitectureEvidenceInput(
-                    Path.GetFullPath(options.InputPath!),
-                    TryReadGitRevision(options.InputPath!),
-                    typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown",
-                    JsonSerializer.Deserialize<JsonElement>(SettingsSerializer.Export(settings)),
-                    architecture.Diagram.Selection?.ScopePolicy ?? "FullInput",
-                    architecture.Diagram.Selection?.Roots.Select(root => root.SemanticNodeId).ToArray()
-                        ?? Array.Empty<string>(),
-                    projected?.TraversalRootSemanticIds ?? Array.Empty<string>()),
-                architecture.Manifest,
-                new ArchitectureEvidenceTopology(
-                    architecture.Manifest,
-                    projected?.RenderInstancesBySemanticNodeId),
-                new ArchitectureEvidencePlacement(
-                    analysis.Summary.PageBounds,
-                    analysis.Projects,
-                    analysis.Nodes),
-                new ArchitectureEvidenceAllocation(
-                    "ProjectTerminalAllocator", "Project-local terminals", DetailedTelemetryIncluded: true,
-                    routing.TerminalCount),
-                new ArchitectureEvidenceAllocation(
-                    "ProjectInterLayerSlotCompiler", "Project-local bands", DetailedTelemetryIncluded: true,
-                    routing.InterLayerSlotCount),
-                new ArchitectureEvidenceAllocation(
-                    "VerticalLinkColumnAllocator", "Ownership-local route columns", DetailedTelemetryIncluded: true,
-                    routing.DestinationColumnCount + routing.ReturnColumnCount),
-                new ArchitectureEvidenceRouting(
-                    routing.TopologyFamilyCounts, routing.TopologyPlanCount,
-                    routing.InterLayerDemandCount, routing.InterLayerSlotCount,
-                    routing.DestinationColumnCount, routing.ReturnColumnCount,
-                    routing.ProjectTransitionCount, routing.UnsupportedPlanCount,
-                    routing.RouteFindingCount),
-                architecture.Routes,
-                new ArchitectureEvidenceOwnership(
-                    architecture.Routes.Count,
-                    analysis.Summary.PhysicalEdgeCellCount,
-                    "Logical routes split into deterministic project-owned and root-owned Draw.io edge segments."),
-                new ArchitectureEvidenceValidation(
-                    architecture.LogicalFindings,
-                    architecture.PhysicalFindings,
-                    analysis.Findings),
-                new ArchitectureEvidenceDeterminism(
-                    analysis.Summary.PageSha256,
-                    analysis.Summary.AnalysisSha256,
-                    architecture.SerializationRepeat),
-                architecture.Timings);
             await broker.WriteTextAsync(
                 Path.Combine(directory, "architecture-evidence.json"),
-                JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            if (architecture.DevelopmentArtifacts?.NamedJsonArtifacts.TryGetValue(
-                    "semantic-layer-report.json", out var semanticLayerReport) == true)
-                await broker.WriteTextAsync(
-                    Path.Combine(directory, "semantic-layer-report.json"), semanticLayerReport).ConfigureAwait(false);
-            if (architecture.DevelopmentArtifacts?.NamedJsonArtifacts.TryGetValue(
-                    "placement-authority-report.json", out var placementAuthorityReport) == true)
-                await broker.WriteTextAsync(
-                    Path.Combine(directory, "placement-authority-report.json"), placementAuthorityReport).ConfigureAwait(false);
+                JsonSerializer.Serialize(new
+                {
+                    architecture.Manifest,
+                    architecture.Eligibility,
+                    architecture.Findings,
+                    Diagnostics = architecture.Diagnostics.ReportJson
+                }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 
@@ -241,23 +186,11 @@ public static class Program
                 .WriteTextAsync(diagnosticsPath, architecture.Diagnostics.ReportJson).ConfigureAwait(false);
             Console.WriteLine($"Diagnostics: {diagnosticsPath}");
         }
-        if (architecture?.DevelopmentArtifacts is not null && !string.IsNullOrWhiteSpace(options.ProjectRegionDirectory))
-        {
-            var directory = Path.GetFullPath(options.ProjectRegionDirectory);
-            Directory.CreateDirectory(directory);
-            foreach (var artifact in architecture.DevelopmentArtifacts.NamedJsonArtifacts)
-                await provider.GetRequiredService<IDiagramFileBroker>()
-                    .WriteTextAsync(Path.Combine(directory, artifact.Key), artifact.Value).ConfigureAwait(false);
-            await provider.GetRequiredService<IDiagramFileBroker>()
-                .WriteTextAsync(Path.Combine(directory, "common-after.drawio"), document.Content).ConfigureAwait(false);
-            Console.WriteLine($"Project region evidence: {directory}");
-        }
         Console.WriteLine($"Output: {outputPath}");
         Console.WriteLine($"Pages: {string.Join(", ", document.PageNames)}");
         if (options.StrictValidation && architecture is { StrictValidationPassed: false })
         {
-            var enforced = architecture.LogicalFindings.Concat(architecture.PhysicalFindings)
-                .Where(finding => finding.IsStrictlyEnforced).ToArray();
+            var enforced = architecture.Findings.Where(finding => finding.IsStrictlyEnforced).ToArray();
             Console.Error.WriteLine($"Strict validation failed with {enforced.Length} finding(s); the diagram was still written.");
             foreach (var category in enforced.GroupBy(finding => finding.Category).OrderBy(group => group.Key, StringComparer.Ordinal))
                 Console.Error.WriteLine($"  {category.Key}: {category.Count()}");

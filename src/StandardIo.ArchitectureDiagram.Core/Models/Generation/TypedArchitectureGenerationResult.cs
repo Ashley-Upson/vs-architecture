@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
@@ -37,71 +36,19 @@ public sealed record ArchitectureGenerationManifest(
 
 public sealed record ArchitectureEligibilityResult(bool Eligible, IReadOnlyList<string> Reasons);
 
-public sealed record ArchitectureRoutingEvidence(
-    int TopologyPlanCount,
-    IReadOnlyDictionary<string, int> TopologyFamilyCounts,
-    int TerminalCount,
-    int InterLayerDemandCount,
-    int InterLayerSlotCount,
-    int DestinationColumnCount,
-    int ReturnColumnCount,
-    int ProjectTransitionCount,
-    int UnsupportedPlanCount,
-    int RouteFindingCount);
+public sealed record SerializationRepeatResult(
+    int RequestedRepeats,
+    bool IsDeterministic,
+    IReadOnlyList<string> DocumentHashes);
 
-public sealed record SerializationRepeatResult(int RequestedRepeats, bool IsDeterministic, IReadOnlyList<string> DocumentHashes);
-
-public sealed record ArchitectureDevelopmentArtifacts(
-    string InvariantJson,
-    IReadOnlyDictionary<string, string> NamedJsonArtifacts);
-
-public sealed class ArchitectureRenderResult
-{
-    private readonly Lazy<DrawioDiagnosticExportResult> diagnostics;
-
-    public ArchitectureRenderResult(
-        DrawioPage page,
-        IReadOnlyList<ValidationFinding> preRepairFindings,
-        IReadOnlyList<ValidationFinding> logicalFindings,
-        IReadOnlyList<ValidationFinding> physicalFindings,
-        IReadOnlyList<RouteRepairAttempt> repairAttempts,
-        IReadOnlyList<GeneratedRoute> routes,
-        IReadOnlyList<PipelineStageMetric> timings,
-        ArchitectureEligibilityResult eligibility,
-        Func<DrawioDiagnosticExportResult> diagnosticFactory,
-        ArchitectureDevelopmentArtifacts? developmentArtifacts = null,
-        ArchitectureRoutingEvidence? routingEvidence = null)
-    {
-        Page = page;
-        PreRepairFindings = preRepairFindings;
-        LogicalFindings = logicalFindings;
-        PhysicalFindings = physicalFindings;
-        RepairAttempts = repairAttempts;
-        Routes = routes;
-        Timings = timings;
-        Eligibility = eligibility;
-        diagnostics = new Lazy<DrawioDiagnosticExportResult>(diagnosticFactory, true);
-        DevelopmentArtifacts = developmentArtifacts;
-        RoutingEvidence = routingEvidence;
-    }
-
-    public DrawioPage Page { get; }
-    public IReadOnlyList<ValidationFinding> PreRepairFindings { get; }
-    public IReadOnlyList<ValidationFinding> LogicalFindings { get; }
-    public IReadOnlyList<ValidationFinding> PhysicalFindings { get; }
-    public IReadOnlyList<RouteRepairAttempt> RepairAttempts { get; }
-    public IReadOnlyList<GeneratedRoute> Routes { get; }
-    public IReadOnlyList<PipelineStageMetric> Timings { get; }
-    public ArchitectureEligibilityResult Eligibility { get; }
-    public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
-    public ArchitectureRoutingEvidence? RoutingEvidence { get; }
-    public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
-    public bool SceneProduced => Page is not null;
-    public bool SemanticallyComplete => true;
-    public bool SerializationSucceeded => Page.GraphModel is not null;
-    public bool StrictlyValid => Eligibility.Eligible;
-    public IReadOnlyList<ValidationFinding> Findings => PreRepairFindings.Concat(LogicalFindings).Concat(PhysicalFindings).ToArray();
-}
+public sealed record ValidationFinding(
+    string Category,
+    string LogicalRouteId,
+    string? OtherRouteId,
+    string? OtherNodeId,
+    int Magnitude,
+    string Description,
+    bool IsStrictlyEnforced);
 
 public sealed class TypedArchitectureGenerationResult
 {
@@ -110,59 +57,55 @@ public sealed class TypedArchitectureGenerationResult
     public TypedArchitectureGenerationResult(
         ArchitectureDiagramModel diagram,
         DrawioPage page,
-        IReadOnlyList<ValidationFinding> preRepairFindings,
-        IReadOnlyList<ValidationFinding> logicalFindings,
-        IReadOnlyList<ValidationFinding> physicalFindings,
-        IReadOnlyList<RouteRepairAttempt> repairAttempts,
-        IReadOnlyList<GeneratedRoute> routes,
-        IReadOnlyList<PipelineStageMetric> timings,
+        IReadOnlyList<ValidationFinding> findings,
         ArchitectureGenerationManifest manifest,
         ArchitectureEligibilityResult eligibility,
         Func<DrawioDiagnosticExportResult> diagnosticFactory,
-        SerializationRepeatResult? serializationRepeat,
-        ArchitectureDevelopmentArtifacts? developmentArtifacts,
-        ArchitectureRenderGraph? projectedGraph = null,
-        ArchitectureRoutingEvidence? routingEvidence = null)
+        SerializationRepeatResult? serializationRepeat)
     {
-        Diagram = diagram;
-        Page = page;
-        PreRepairFindings = preRepairFindings;
-        LogicalFindings = logicalFindings;
-        PhysicalFindings = physicalFindings;
-        RepairAttempts = repairAttempts;
-        Routes = routes;
-        Timings = timings;
-        Manifest = manifest;
-        Eligibility = eligibility;
-        diagnostics = new Lazy<DrawioDiagnosticExportResult>(diagnosticFactory, true);
+        Diagram = diagram ?? throw new ArgumentNullException(nameof(diagram));
+        Page = page ?? throw new ArgumentNullException(nameof(page));
+        Findings = findings ?? throw new ArgumentNullException(nameof(findings));
+        Manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
+        Eligibility = eligibility ?? throw new ArgumentNullException(nameof(eligibility));
+        diagnostics = new Lazy<DrawioDiagnosticExportResult>(diagnosticFactory ?? throw new ArgumentNullException(nameof(diagnosticFactory)), true);
         SerializationRepeat = serializationRepeat;
-        DevelopmentArtifacts = developmentArtifacts;
-        ProjectedGraph = projectedGraph;
-        RoutingEvidence = routingEvidence;
     }
 
     public ArchitectureDiagramModel Diagram { get; }
     public DrawioPage Page { get; }
-    public IReadOnlyList<ValidationFinding> PreRepairFindings { get; }
-    public IReadOnlyList<ValidationFinding> LogicalFindings { get; }
-    public IReadOnlyList<ValidationFinding> PhysicalFindings { get; }
-    public IReadOnlyList<RouteRepairAttempt> RepairAttempts { get; }
-    public IReadOnlyList<GeneratedRoute> Routes { get; }
-    public IReadOnlyList<PipelineStageMetric> Timings { get; }
+    public IReadOnlyList<ValidationFinding> Findings { get; }
     public ArchitectureGenerationManifest Manifest { get; }
     public ArchitectureEligibilityResult Eligibility { get; }
     public DrawioDiagnosticExportResult Diagnostics => diagnostics.Value;
     public SerializationRepeatResult? SerializationRepeat { get; }
-    public ArchitectureDevelopmentArtifacts? DevelopmentArtifacts { get; }
-    public ArchitectureRenderGraph? ProjectedGraph { get; }
-    public ArchitectureRoutingEvidence? RoutingEvidence { get; }
-    public bool StrictValidationPassed => LogicalFindings.Concat(PhysicalFindings).All(finding => !finding.IsStrictlyEnforced);
+    public bool StrictValidationPassed => Eligibility.Eligible;
     public bool SceneProduced => Page is not null;
-    public bool SemanticallyComplete =>
-        Manifest.ProjectedRenderNodeCount >= Manifest.SemanticNodeCount &&
-        Manifest.ProjectedRenderLinkCount >= Manifest.SemanticLinkCount &&
-        Manifest.RenderedRouteCount >= Manifest.SemanticLinkCount;
+    public bool SemanticallyComplete => Manifest.ProjectedRenderNodeCount >= Manifest.SemanticNodeCount &&
+                                        Manifest.ProjectedRenderLinkCount >= Manifest.SemanticLinkCount;
     public bool SerializationSucceeded => Page.GraphModel is not null;
     public bool StrictlyValid => StrictValidationPassed;
-    public IReadOnlyList<ValidationFinding> Findings => PreRepairFindings.Concat(LogicalFindings).Concat(PhysicalFindings).ToArray();
+}
+
+public sealed class DrawioDiagnosticExportResult
+{
+    public DrawioDiagnosticExportResult(
+        string content,
+        string reportJson,
+        IReadOnlyDictionary<string, string> focusedOutputs,
+        int enforcedFindingCount,
+        int uniqueRejectedRouteCount)
+    {
+        Content = content;
+        ReportJson = reportJson;
+        FocusedOutputs = focusedOutputs;
+        EnforcedFindingCount = enforcedFindingCount;
+        UniqueRejectedRouteCount = uniqueRejectedRouteCount;
+    }
+
+    public string Content { get; }
+    public string ReportJson { get; }
+    public IReadOnlyDictionary<string, string> FocusedOutputs { get; }
+    public int EnforcedFindingCount { get; }
+    public int UniqueRejectedRouteCount { get; }
 }

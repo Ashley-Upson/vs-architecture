@@ -1,0 +1,49 @@
+using System;
+using System.Linq;
+using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
+using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
+using ArchitectureSemanticModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
+
+namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV6;
+
+public static class ArchitecturePlanningRequestFactory
+{
+    public static ArchitecturePlanningRequest Create(
+        ArchitectureSemanticModel diagram,
+        ArchitectureGenerationJob job,
+        ArchitectureRenderingMode mode)
+    {
+        if (diagram is null) throw new ArgumentNullException(nameof(diagram));
+        if (job is null) throw new ArgumentNullException(nameof(job));
+        var rendering = job.Rendering ?? new ArchitectureRenderSettings();
+        var analysis = job.Analysis ?? new ArchitectureAnalysisSettings();
+        var layout = rendering.Layout ?? new LayoutSettings();
+        var duplication = rendering.NodeDuplication ?? new NodeDuplicationSettings();
+        var selection = diagram.Selection;
+        var scope = new ArchitectureSelectionScope(
+            selection?.ScopePolicy ?? "FullInput",
+            diagram.Projects.Select(project => project.Id).ToArray(),
+            selection?.Roots.Select(root => root.SemanticNodeId).ToArray() ?? Array.Empty<string>());
+        var projection = duplication.AllowDuplicateNodes
+            ? NodeProjectionMode.DuplicateBranches
+            : NodeProjectionMode.Canonical;
+        return new ArchitecturePlanningRequest(
+            diagram,
+            scope,
+            new ArchitectureGenerationSettingsSnapshot(
+                rendering.OutputRenderer, analysis.ExternalDependencyTag, analysis.ExcludedNamespaces.ToArray(), analysis.ExcludedNames.ToArray()),
+            new NodeProjectionPolicy(projection, layout.DuplicateHighNoiseNodePatterns.ToArray()),
+            new ProjectPlacementPolicy(rendering.ShowProjectContainers, rendering.ProjectContainerStyle.Shape),
+            new NodePlacementPolicy(layout.BaselineAlignmentPattern, layout.NodeWidth, layout.NodeHeight,
+                layout.HorizontalSpacing, layout.VerticalSpacing),
+            new RoutePlanningPolicy(layout.ParallelLaneSpacing, layout.EdgePortSpacing, analysis.ExternalDependencyTag),
+            new GridSizingPolicy(layout.NodeWidth, layout.NodeHeight, layout.ContainerPadding, layout.ProjectHeaderHeight),
+            new ValidationPolicy(mode == ArchitectureRenderingMode.Production
+                ? ArchitectureValidationMode.Normal
+                : ArchitectureValidationMode.Diagnostic),
+            rendering.StyleRules.Select(rule => rule.Match).ToArray(),
+            rendering.Overrides.Select(item => item.FullName).ToArray());
+    }
+}

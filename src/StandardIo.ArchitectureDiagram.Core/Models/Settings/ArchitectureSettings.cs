@@ -12,6 +12,7 @@ public sealed class ArchitectureAnalysisSettings
 
 public sealed class ArchitectureRenderSettings
 {
+    public string OutputRenderer { get; set; } = "drawio";
     public CanvasSettings Canvas { get; set; } = new();
     public LayoutSettings Layout { get; set; } = new();
     public List<StyleRule> StyleRules { get; set; } = new();

@@ -17,6 +17,7 @@ public static class LegacyDiagramSettingsAdapter
 
     public static ArchitectureRenderSettings ToArchitectureRendering(DiagramSettings settings) => new()
     {
+        OutputRenderer = settings.OutputRenderer,
         Canvas = settings.Canvas,
         Layout = settings.Layout,
         StyleRules = settings.StyleRules.ToList(),

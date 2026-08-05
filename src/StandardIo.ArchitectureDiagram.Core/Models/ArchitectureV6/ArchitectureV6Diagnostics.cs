@@ -1,0 +1,51 @@
+using System.Collections.Generic;
+
+namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
+
+public enum PlanningDiagnosticSubject
+{
+    SemanticNode,
+    SemanticLink,
+    PhysicalNode,
+    PhysicalLink,
+    Grid,
+    Cell,
+    Row,
+    Column,
+    RouteStep,
+    StraightRun,
+    Lane,
+    TrackConstraint,
+    PhysicalSegment
+}
+
+public sealed record ArchitecturePlanningDiagnostic(
+    string Code,
+    string Message,
+    PlanningDiagnosticSubject Subject,
+    string? SubjectId);
+
+public sealed record ArchitecturePlanningMetrics(
+    int SemanticNodeCount,
+    int SemanticLinkCount,
+    int PhysicalNodeCount,
+    int PhysicalLinkCount,
+    int ProjectGridCount,
+    int GridRowCount,
+    int GridColumnCount,
+    int OccupiedCellCount,
+    int RouteUsedCellCount,
+    IReadOnlyDictionary<string, int> TopologyFamilyCounts,
+    int RouteStepCount,
+    int StraightRunCount,
+    int LaneCount,
+    RelativeRectangle? DiagramBounds,
+    int ValidationFindingCount);
+
+public sealed record ArchitecturePlanningDiagnostics(
+    IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,
+    ArchitecturePlanningMetrics Metrics);
+
+public sealed record PlannedArchitectureValidationResult(
+    bool IsValid,
+    IReadOnlyList<ArchitecturePlanningDiagnostic> Findings);
