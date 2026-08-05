@@ -83,7 +83,11 @@ Architecture links are planned after node geometry and are emitted as explicit
 `mxCell` edges. The route planner records physical and semantic link identity,
 endpoint projection mode, topology family, orthogonal segments, bends and route
 conflicts. The XML emitter uses absolute waypoint geometry under the page parent,
-fixed bottom-source/top-destination terminal constraints, `edgeStyle=none`, and
+the standard mxGraph `mxGeometry` `Array as="points"` representation, fixed
+bottom-source/top-destination terminal constraints, and
+`edgeStyle=orthogonalEdgeStyle` with explicit orthogonal routing enabled. This
+keeps the planned route shape visible to Draw.io instead of allowing a straight
+edge fallback when the waypoint collection is ignored.
 disables automatic orthogonal-loop/jetty behavior so Draw.io does not invent a
 different primary path. Edge values are empty by default; relationship kinds stay
 custom metadata and are never shown as labels unless an explicit label policy is

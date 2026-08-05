@@ -132,12 +132,19 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     private static XElement EdgeCell(PlannedPhysicalLink link, PlannedPhysicalRoute route, ArchitecturePlanningRequest request)
     {
         var connector = request.ConnectorStyle ?? new ArchitectureV6ConnectorStyle("#ffffff", 2, false);
-        var style = $"edgeStyle=none;orthogonal=0;orthogonalLoop=0;jettySize=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={connector.StrokeColor};strokeWidth={connector.StrokeWidth};dashed={(connector.Dashed ? "1" : "0")};" +
+        var style = $"edgeStyle=orthogonalEdgeStyle;orthogonal=1;orthogonalLoop=0;jettySize=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={connector.StrokeColor};strokeWidth={connector.StrokeWidth};dashed={(connector.Dashed ? "1" : "0")};" +
             (string.IsNullOrWhiteSpace(connector.DashPattern) ? string.Empty : $"dashPattern={connector.DashPattern};") +
             $"startArrow={connector.StartArrow};endArrow={connector.EndArrow};startFill=1;endFill=1;arrowSize={connector.ArrowSize};opacity={connector.Opacity};fontColor={connector.FontColor};exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;";
-        var geometry = new XElement("mxGeometry", new XAttribute("relative", "0"), new XAttribute("as", "geometry"));
-        foreach (var point in route.Segments.Take(Math.Max(0, route.Segments.Count - 1)).Select(segment => segment.End))
-            geometry.Add(new XElement("mxPoint", new XAttribute("x", point.X.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", point.Y.ToString(CultureInfo.InvariantCulture)), new XAttribute("as", "waypoint")));
+        var waypoints = route.Segments
+            .Take(Math.Max(0, route.Segments.Count - 1))
+            .Select(segment => segment.End)
+            .Select(point => new XElement("mxPoint",
+                new XAttribute("x", point.X.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("y", point.Y.ToString(CultureInfo.InvariantCulture))));
+        var geometry = new XElement("mxGeometry",
+            new XAttribute("relative", "1"),
+            new XAttribute("as", "geometry"),
+            new XElement("Array", new XAttribute("as", "points"), waypoints));
         return new XElement("mxCell",
             new XAttribute("id", EdgeCellId(link.PhysicalLinkId)),
             new XAttribute("value", connector.ShowLabels ? link.DisplayLabel ?? string.Empty : string.Empty),

@@ -121,11 +121,24 @@ public sealed class ArchitectureV6StructuralTests
         Assert.All(edges, edge => Assert.NotNull(edge.Attribute("target")));
         Assert.All(edges, edge =>
         {
-            Assert.Contains("edgeStyle=none", edge.Attribute("style")!.Value);
-            Assert.Contains("orthogonal=0", edge.Attribute("style")!.Value);
+            Assert.Contains("edgeStyle=orthogonalEdgeStyle", edge.Attribute("style")!.Value);
+            Assert.Contains("orthogonal=1", edge.Attribute("style")!.Value);
             Assert.Contains("exitX=0.5", edge.Attribute("style")!.Value);
             Assert.Contains("entryY=0", edge.Attribute("style")!.Value);
             Assert.Equal(string.Empty, edge.Attribute("value")!.Value);
+            var geometry = edge.Element("mxGeometry");
+            Assert.NotNull(geometry);
+            Assert.Equal("1", geometry!.Attribute("relative")!.Value);
+            var points = geometry.Element("Array");
+            Assert.NotNull(points);
+            Assert.Equal("points", points!.Attribute("as")!.Value);
+            Assert.All(points.Elements("mxPoint"), point =>
+            {
+                Assert.NotNull(point.Attribute("x"));
+                Assert.NotNull(point.Attribute("y"));
+                Assert.Null(point.Attribute("as"));
+            });
+            Assert.Empty(geometry.Elements("mxPoint"));
         });
     }
 
