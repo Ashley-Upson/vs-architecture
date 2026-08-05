@@ -72,7 +72,9 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         {
             var link = diagram.PhysicalLinks.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId);
             if (link is null) continue;
-            root.Add(EdgeCell(link, route, diagram.Request));
+            var target = diagram.PhysicalNodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
+            var targetStyle = target is null ? null : ResolveStyle(diagram.Request, target).Rule;
+            root.Add(EdgeCell(link, route, diagram.Request, targetStyle));
             emittedEdges++;
         }
 
@@ -129,10 +131,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             new XElement("mxGeometry", new XAttribute("x", project.AbsoluteBounds.X), new XAttribute("y", project.AbsoluteBounds.Y),
                 new XAttribute("width", project.AbsoluteBounds.Width), new XAttribute("height", project.AbsoluteBounds.Height), new XAttribute("as", "geometry")));
 
-    private static XElement EdgeCell(PlannedPhysicalLink link, PlannedPhysicalRoute route, ArchitecturePlanningRequest request)
+    private static XElement EdgeCell(PlannedPhysicalLink link, PlannedPhysicalRoute route, ArchitecturePlanningRequest request, ArchitectureV6StyleRule? targetStyle)
     {
         var connector = request.ConnectorStyle ?? new ArchitectureV6ConnectorStyle("#ffffff", 2, false);
-        var style = $"edgeStyle=orthogonalEdgeStyle;orthogonal=1;orthogonalLoop=0;jettySize=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={connector.StrokeColor};strokeWidth={connector.StrokeWidth};dashed={(connector.Dashed ? "1" : "0")};" +
+        var strokeColor = IsColour(targetStyle?.FillColor) ? targetStyle!.FillColor : connector.StrokeColor;
+        var style = $"edgeStyle=orthogonalEdgeStyle;orthogonal=1;orthogonalLoop=0;jettySize=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={strokeColor};strokeWidth={connector.StrokeWidth};dashed={(connector.Dashed ? "1" : "0")};" +
             (string.IsNullOrWhiteSpace(connector.DashPattern) ? string.Empty : $"dashPattern={connector.DashPattern};") +
             $"startArrow={connector.StartArrow};endArrow={connector.EndArrow};startFill=1;endFill=1;arrowSize={connector.ArrowSize};opacity={connector.Opacity};fontColor={connector.FontColor};exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;";
         var waypoints = route.Segments
@@ -239,6 +242,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
 
     private static string StyleString(ArchitectureV6StyleRule style) =>
         $"shape={style.Shape};whiteSpace=wrap;html=1;rounded={(style.Shape == "rounded" ? "1" : "0")};shadow={(style.Shadow ? "1" : "0")};fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};{style.ExtraStyle}";
+
+    private static bool IsColour(string? value) =>
+        value is not null && !string.IsNullOrWhiteSpace(value) &&
+        (value.Length == 7 || value.Length == 9) && value[0] == '#' &&
+        value.Skip(1).All(Uri.IsHexDigit);
 
     private static void AddGapDiagnostics(PlannedArchitectureDiagram diagram, PlannedArchitectureGeometry geometry, ICollection<DiagramDiagnostic> diagnostics)
     {
