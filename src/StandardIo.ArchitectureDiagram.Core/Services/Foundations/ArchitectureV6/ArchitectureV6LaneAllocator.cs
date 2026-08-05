@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 
@@ -17,6 +18,7 @@ internal sealed class ArchitectureV6LaneAllocator
     private readonly IReadOnlyList<DestinationApproachReservation> approaches;
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
     private readonly List<LaneAllocationConflict> conflicts = new();
+    private long intervalComparisons;
 
     public ArchitectureV6LaneAllocator(
         ArchitecturePlanningRequest request,
@@ -40,19 +42,27 @@ internal sealed class ArchitectureV6LaneAllocator
 
     public ArchitectureLaneAllocationResult Build()
     {
+        var timer = Stopwatch.StartNew();
         var horizontal = new List<PlannedLaneAllocation>();
         var vertical = new List<PlannedLaneAllocation>();
         var allocatedRuns = new List<PlannedStraightRun>();
         var runIds = new Dictionary<PlannedStraightRun, string>();
         var runAllocations = new Dictionary<PlannedStraightRun, PlannedLaneAllocation>();
         var groupedRuns = runs.GroupBy(run => run.Axis).ToArray();
+        var domainCount = 0;
+        var orderingEdgeCount = 0;
         foreach (var group in groupedRuns)
         {
             var domains = group.GroupBy(run => Domain(run)).OrderBy(group => group.Key, StringComparer.Ordinal);
             foreach (var domain in domains)
             {
+                domainCount++;
+                var orderedRuns = domain.OrderBy(run => RouteOrder(run.RouteId)).ThenBy(run => run.RouteId, StringComparer.Ordinal).ToArray();
+                for (var left = 0; left < orderedRuns.Length; left++)
+                    for (var right = left + 1; right < orderedRuns.Length; right++)
+                        if (RawIntervalsOverlap(Interval(orderedRuns[left]), Interval(orderedRuns[right]))) orderingEdgeCount++;
                 var domainAllocations = new List<PlannedLaneAllocation>();
-                foreach (var run in domain.OrderBy(run => RouteOrder(run.RouteId)).ThenBy(run => run.RouteId, StringComparer.Ordinal))
+                foreach (var run in orderedRuns)
                 {
                     var runId = RunId(run);
                     runIds[run] = runId;
@@ -82,11 +92,17 @@ internal sealed class ArchitectureV6LaneAllocator
         Validate(horizontal, vertical, endpointAllocations, approachAllocations, turns, crossings, transitions, updatedRoutes);
         foreach (var conflict in conflicts)
             diagnostics.Add(new ArchitecturePlanningDiagnostic("LaneAllocationConflict", conflict.Message, PlanningDiagnosticSubject.Lane, conflict.OwnerId));
+        timer.Stop();
+        var turnCellGroups = updatedRoutes.SelectMany(route => route.Steps.Where(step => step.Role == RouteStepRole.Turn)
+            .Select(step => step.CellId)).GroupBy(cell => cell).ToArray();
         var rows = updatedRoutes.SelectMany(route => route.Steps).Select(step => step.CellId.RowId).Distinct().Select(id => new PlanningGridRow(id, 0, 1, 1, 1, 0, 0)).ToArray();
         var columns = updatedRoutes.SelectMany(route => route.Steps).Select(step => step.CellId.ColumnId).Distinct().Select(id => new PlanningGridColumn(id, 0, 1, 1, 1, 0, 0)).ToArray();
         var sizing = new GridTrackSizingPlan(rows, columns, constraints, null);
         return new ArchitectureLaneAllocationResult(updatedRoutes, allocatedRuns, horizontal, vertical, endpointAllocations,
-            approachAllocations, turns, crossings, transitions, conflicts, expansion, sizing, diagnostics);
+            approachAllocations, turns, crossings, transitions, conflicts, expansion, sizing, diagnostics,
+            new LaneAllocationPerformance(timer.ElapsedMilliseconds, domainCount, runs.Count, orderingEdgeCount, 0,
+                turnCellGroups.Length, turnCellGroups.Select(group => group.Count()).DefaultIfEmpty(0).Max(),
+                intervalComparisons, turns.Count));
     }
 
     private IReadOnlyList<PlannedEndpointAllocation> AllocateEndpoints()
@@ -143,15 +159,17 @@ internal sealed class ArchitectureV6LaneAllocator
         foreach (var route in updatedRoutes)
             foreach (var step in route.Steps.Where(step => step.Role == RouteStepRole.Turn))
             {
-                var identity = step.GridId.Value + ":" + step.CellId;
+                var horizontal = runs.FirstOrDefault(run => run.RouteId == route.PhysicalLinkId && run.Axis == RouteAxis.Horizontal && run.Cells.Contains(step.CellId));
+                var vertical = runs.FirstOrDefault(run => run.RouteId == route.PhysicalLinkId && run.Axis == RouteAxis.Vertical && run.Cells.Contains(step.CellId));
+                var horizontalId = horizontal is null ? "none" : runAllocations[horizontal].Lane.Value;
+                var verticalId = vertical is null ? "none" : runAllocations[vertical].Lane.Value;
+                var identity = step.GridId.Value + ":" + step.CellId + ":" + horizontalId + ":" + verticalId;
                 if (!identities.Add(identity))
                 {
                     conflicts.Add(new LaneAllocationConflict(LaneAllocationConflictKind.TurnCongestion, identity, 2,
                         "Two turns require the same logical bend identity.", new[] { route.PhysicalLinkId }));
                     continue;
                 }
-                var horizontal = runs.FirstOrDefault(run => run.RouteId == route.PhysicalLinkId && run.Axis == RouteAxis.Horizontal && run.Cells.Contains(step.CellId));
-                var vertical = runs.FirstOrDefault(run => run.RouteId == route.PhysicalLinkId && run.Axis == RouteAxis.Vertical && run.Cells.Contains(step.CellId));
                 result.Add(new PlannedTurnAllocation(route.PhysicalLinkId, step.CellId.ToString(), step.EntrySide, step.ExitSide,
                     horizontal is null ? null : runAllocations[horizontal].RunId, vertical is null ? null : runAllocations[vertical].RunId, identity, 0,
                     $"turn:{identity}:{route.PhysicalLinkId}"));
@@ -173,10 +191,7 @@ internal sealed class ArchitectureV6LaneAllocator
                 {
                     var hStep = updatedRoutes.Single(route => route.PhysicalLinkId == h.RouteId).Steps.Single(step => step.CellId.Equals(cell.Key));
                     var vStep = updatedRoutes.Single(route => route.PhysicalLinkId == v.RouteId).Steps.Single(step => step.CellId.Equals(cell.Key));
-                    if (hStep.Role == RouteStepRole.Turn || vStep.Role == RouteStepRole.Turn)
-                        conflicts.Add(new LaneAllocationConflict(LaneAllocationConflictKind.IncompatibleLaneOrdering, cell.Key.ToString(), 1,
-                            "A turn cannot share a logical intersection with another straight run.", new[] { h.RouteId, v.RouteId }));
-                    else
+                    if (hStep.Role != RouteStepRole.Turn && vStep.Role != RouteStepRole.Turn)
                         result.Add(new PlannedCleanCrossing(cell.Key.ToString(), runAllocations[h].RunId, runAllocations[v].RunId, $"crossing:{cell.Key}"));
                 }
         }
@@ -307,5 +322,11 @@ internal sealed class ArchitectureV6LaneAllocator
             return hash & int.MaxValue;
         }
     }
-    private static bool Overlaps(PlannedLaneAllocation existing, (int Start, int End) interval) => interval.Start <= existing.IntervalEnd + 1 && existing.IntervalStart <= interval.End + 1;
+    private bool Overlaps(PlannedLaneAllocation existing, (int Start, int End) interval)
+    {
+        intervalComparisons++;
+        return RawIntervalsOverlap((existing.IntervalStart, existing.IntervalEnd), interval);
+    }
+    private static bool RawIntervalsOverlap((int Start, int End) left, (int Start, int End) right) =>
+        left.Start <= right.End + 1 && right.Start <= left.End + 1;
 }

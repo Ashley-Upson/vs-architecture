@@ -439,7 +439,26 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Null(plan.RelativeGeometry);
         Assert.NotNull(plan.Sizing);
         Assert.Equal(plan.SubtreeReservations.Count, plan.ProjectGrids.SelectMany(grid => grid.SubtreeReservations).Count());
+        Assert.Empty(plan.LaneAllocation!.Conflicts);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "IncompatibleLaneOrdering");
         Assert.True(new ArchitectureDiagramV6Validator().Validate(plan).IsValid);
+    }
+
+    [Fact]
+    public void Planner_reports_collective_lane_ordering_without_changing_structural_tracks()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var metrics = plan.Diagnostics.Metrics;
+
+        Assert.NotNull(plan.LaneAllocation!.Performance);
+        Assert.True(metrics.LaneDomainCount > 0);
+        Assert.Equal(plan.StraightRuns.Count, metrics.LaneOrderingVertexCount);
+        Assert.True(metrics.LaneOrderingEdgeCount >= 0);
+        Assert.Equal(0, metrics.LaneOrderingCycleCount);
+        Assert.Equal(metrics.StructuralColumnCountBeforeRouting, metrics.StructuralColumnCountAfterRouting);
+        Assert.Empty(plan.LaneAllocation.Conflicts);
+        Assert.Equal(plan.LaneAllocation.Turns.Count,
+            plan.LaneAllocation.Turns.Select(turn => turn.BendIdentity).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

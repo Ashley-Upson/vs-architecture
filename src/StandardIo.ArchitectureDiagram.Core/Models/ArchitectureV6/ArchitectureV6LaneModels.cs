@@ -104,4 +104,16 @@ public sealed record ArchitectureLaneAllocationResult(
     IReadOnlyList<LaneAllocationConflict> Conflicts,
     IReadOnlyList<NodeFootprintExpansionRequirement> FootprintExpansionRequirements,
     GridTrackSizingPlan Sizing,
-    IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics);
+    IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics,
+    LaneAllocationPerformance? Performance = null);
+
+public sealed record LaneAllocationPerformance(
+    long ElapsedMilliseconds,
+    int DomainCount,
+    int OrderingVertexCount,
+    int OrderingEdgeCount,
+    int OrderingCycleCount,
+    int TurnCellCount,
+    int MaximumTurnsInCell,
+    long IntervalComparisons,
+    int CapacityRequirementCount);

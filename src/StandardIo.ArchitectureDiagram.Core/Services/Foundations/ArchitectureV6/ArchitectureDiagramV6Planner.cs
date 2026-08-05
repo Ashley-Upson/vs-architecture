@@ -162,6 +162,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              SubtreeProfileCacheHits: placement.Performance.ProfileCacheHits,
              SubtreeProfileCacheMisses: placement.Performance.ProfileCacheMisses,
              IntervalCompatibilityChecks: placement.Performance.IntervalCompatibilityChecks,
+             LaneAllocationMilliseconds: allocation.Performance?.ElapsedMilliseconds ?? 0,
+             LaneDomainCount: allocation.Performance?.DomainCount ?? 0,
+             LaneOrderingVertexCount: allocation.Performance?.OrderingVertexCount ?? 0,
+             LaneOrderingEdgeCount: allocation.Performance?.OrderingEdgeCount ?? 0,
+             LaneOrderingCycleCount: allocation.Performance?.OrderingCycleCount ?? 0,
+             TurnCellCount: allocation.Performance?.TurnCellCount ?? 0,
+             MaximumTurnsInCell: allocation.Performance?.MaximumTurnsInCell ?? 0,
+             LaneIntervalComparisons: allocation.Performance?.IntervalComparisons ?? 0,
+             LaneCapacityRequirementCount: allocation.Performance?.CapacityRequirementCount ?? 0,
              NodeGridEvidence: placement.NodePlacements.OrderBy(item => item.PhysicalNodeId, StringComparer.Ordinal).Select(item =>
              {
                  var metadata = placement.NodeMetadata.Single(value => value.PhysicalNodeId == item.PhysicalNodeId);

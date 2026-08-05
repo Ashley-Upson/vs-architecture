@@ -112,7 +112,16 @@ public sealed record ArchitecturePlanningMetrics(
     long ReservationConstructionMilliseconds = 0,
     int SubtreeProfileCacheHits = 0,
     int SubtreeProfileCacheMisses = 0,
-    long IntervalCompatibilityChecks = 0);
+    long IntervalCompatibilityChecks = 0,
+    long LaneAllocationMilliseconds = 0,
+    int LaneDomainCount = 0,
+    int LaneOrderingVertexCount = 0,
+    int LaneOrderingEdgeCount = 0,
+    int LaneOrderingCycleCount = 0,
+    int TurnCellCount = 0,
+    int MaximumTurnsInCell = 0,
+    long LaneIntervalComparisons = 0,
+    int LaneCapacityRequirementCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,
