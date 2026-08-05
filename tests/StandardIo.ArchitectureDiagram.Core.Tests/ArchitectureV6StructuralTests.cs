@@ -406,6 +406,36 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_preserves_ordered_route_components_and_segment_provenance()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        Assert.NotNull(plan.PhysicalScene);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "MissingPhysicalTurnForDirectionChange");
+        Assert.All(plan.PhysicalScene!.Geometry.Routes, route =>
+        {
+            Assert.NotNull(route.RawPoints);
+            Assert.NotNull(route.Components);
+            Assert.NotEmpty(route.Components!);
+            Assert.Equal(route.RawPoints!.Count, route.NormalizedPointCount);
+            Assert.All(route.Components!, component =>
+            {
+                Assert.NotEmpty(component.ComponentId);
+                Assert.NotEmpty(component.Points);
+                Assert.All(component.Points, point => Assert.Equal(component.ComponentId, point.ComponentId));
+            });
+            Assert.All(route.Segments, segment =>
+            {
+                Assert.NotEmpty(segment.ComponentId);
+                Assert.NotEmpty(segment.StartProvenance);
+                Assert.NotEmpty(segment.EndProvenance);
+                Assert.NotNull(segment.RelativeStart);
+                Assert.NotNull(segment.RelativeEnd);
+            });
+        });
+    }
+
+    [Fact]
     public void Planner_repeated_physical_compilation_is_deterministic()
     {
         var first = new ArchitectureDiagramV6Planner().Plan(Request());

@@ -242,57 +242,125 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 findings.Add(new ArchitecturePlanningDiagnostic("RouteTerminalMissing", "Route could not be materialised without both terminals.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
                 continue;
             }
-            var points = new List<(AbsolutePoint Point, PlanningGridId GridId, RouteStepRole Role, LaneId Lane)>();
-            var fallbackLane = new LaneId("terminal:" + route.PhysicalLinkId);
-            points.Add((sourceTerminal.Point, sourceTerminal.Point.Equals(destinationTerminal.Point) ? route.Steps.FirstOrDefault()?.GridId ?? new PlanningGridId("unknown") : route.Steps.FirstOrDefault()?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.SourceExit, fallbackLane));
-            foreach (var step in route.Steps.OrderBy(item => item.Order))
-            {
-                if (!transforms.TryGetValue(step.GridId, out var transform)) continue;
-                points.Add((step.Role == RouteStepRole.Turn ? TurnPoint(route, step, transform) : CellPoint(step, route, transform), step.GridId,
-                    step.Role, step.AllocatedLane ?? fallbackLane));
-            }
-            points.Add((destinationTerminal.Point, route.Steps.LastOrDefault()?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.DestinationEntry, fallbackLane));
-            points = OrthogonalizeConnections(points, route.PhysicalLinkId);
+            var components = BuildComponents(route, sourceTerminal, destinationTerminal, transforms);
+            var rawPoints = components.SelectMany(component => component.Points).ToArray();
+            var pointEntries = components.SelectMany(component => component.Points.Select(point => (Point: point, Component: component))).ToArray();
             var segments = new List<PlannedPhysicalRouteSegment>();
-            for (var index = 1; index < points.Count; index++)
+            for (var index = 1; index < pointEntries.Length; index++)
             {
-                var before = points[index - 1];
-                var after = points[index];
-                if (before.Point == after.Point) continue;
-                var axis = before.Point.X == after.Point.X ? RouteAxis.Vertical : after.Point.Y == before.Point.Y ? RouteAxis.Horizontal : RouteAxis.Horizontal;
-                if (before.Point.X != after.Point.X && before.Point.Y != after.Point.Y)
-                    findings.Add(new ArchitecturePlanningDiagnostic("NonOrthogonalPhysicalRoute", "A route segment is not orthogonal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
-                segments.Add(new PlannedPhysicalRouteSegment(route.PhysicalLinkId, null, null, before.Point, after.Point, after.GridId, axis, after.Role, after.Lane, route.TopologyFamily));
+                var before = pointEntries[index - 1];
+                var after = pointEntries[index];
+                if (before.Point.Point == after.Point.Point) continue;
+                var axis = before.Point.Point.X == after.Point.Point.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
+                if (before.Point.Point.X != after.Point.Point.X && before.Point.Point.Y != after.Point.Point.Y)
+                    findings.Add(new ArchitecturePlanningDiagnostic("DiagonalComponentConnection", "Adjacent accepted route components do not connect orthogonally.", PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId));
+                var component = after.Component;
+                segments.Add(new PlannedPhysicalRouteSegment(route.PhysicalLinkId, RelativePointFor(before.Point.Point, before.Point.GridId, transforms), RelativePointFor(after.Point.Point, after.Point.GridId, transforms), before.Point.Point, after.Point.Point,
+                    after.Point.GridId, axis, after.Point.Role, component.Lane ?? new LaneId("component:" + component.ComponentId), route.TopologyFamily,
+                    component.ComponentId, component.RouteStepOrder, component.StraightRunId, component.LaneDomainId, component.AllocatedCells,
+                    component.AllocatedCells.Select(cell => cell.RowId).Distinct().Count() == 1 ? component.AllocatedCells.Select(cell => cell.RowId).Distinct().First() : null,
+                    component.AllocatedCells.Select(cell => cell.ColumnId).Distinct().Count() == 1 ? component.AllocatedCells.Select(cell => cell.ColumnId).Distinct().First() : null,
+                    before.Point.Provenance, after.Point.Provenance));
             }
             var length = segments.Sum(segment => Math.Abs(segment.End.X - segment.Start.X) + Math.Abs(segment.End.Y - segment.Start.Y));
             result.Add(new PlannedPhysicalRoute(route.PhysicalLinkId, links.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId)?.SemanticLinkId ?? string.Empty,
                 route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId, route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId,
-                route.TopologyFamily, segments, Math.Max(0, segments.Count - 1), length, false, false, false));
+                route.TopologyFamily, segments, components.Count(component => component.Role == RouteStepRole.Turn), length, false, false, false,
+                rawPoints, components, rawPoints.Length, 0, 0));
         }
         return result;
     }
 
-    private List<(AbsolutePoint Point, PlanningGridId GridId, RouteStepRole Role, LaneId Lane)> OrthogonalizeConnections(
-        IReadOnlyList<(AbsolutePoint Point, PlanningGridId GridId, RouteStepRole Role, LaneId Lane)> source, string routeId)
+    private IReadOnlyList<PlannedPhysicalRouteComponent> BuildComponents(PlannedGridRoute route,
+        PlannedPhysicalTerminal sourceTerminal, PlannedPhysicalTerminal destinationTerminal,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
-        var result = new List<(AbsolutePoint Point, PlanningGridId GridId, RouteStepRole Role, LaneId Lane)>();
-        for (var index = 0; index < source.Count; index++)
+        var result = new List<PlannedPhysicalRouteComponent>();
+        var ordered = route.Steps.OrderBy(step => step.Order).ToArray();
+        var groups = new List<IReadOnlyList<PlannedGridRouteStep>>();
+        foreach (var step in ordered)
         {
-            var current = source[index];
-            if (result.Count > 0)
+            var lastGroupIndex = groups.Count - 1;
+            if (step.Role != RouteStepRole.Turn && groups.Count > 0 && groups[lastGroupIndex].Count > 0 &&
+                groups[lastGroupIndex][groups[lastGroupIndex].Count - 1].Role != RouteStepRole.Turn &&
+                groups[lastGroupIndex][groups[lastGroupIndex].Count - 1].StraightRunId == step.StraightRunId && step.StraightRunId is not null)
             {
-                var previous = result[result.Count - 1];
-                if (previous.Point.X != current.Point.X && previous.Point.Y != current.Point.Y)
-                {
-                    findings.Add(new ArchitecturePlanningDiagnostic("MissingPhysicalTurnForDirectionChange",
-                        "Accepted route steps changed direction without a materialised turn coordinate.", PlanningDiagnosticSubject.PhysicalLink, routeId));
-                    result.Add((new AbsolutePoint(current.Point.X, previous.Point.Y), current.GridId, RouteStepRole.Turn, current.Lane));
-                }
+                groups[lastGroupIndex] = groups[lastGroupIndex].Concat(new[] { step }).ToArray();
             }
-            result.Add(current);
+            else groups.Add(new[] { step });
         }
+        var firstStep = ordered.FirstOrDefault();
+        var firstPoint = firstStep is null || !transforms.TryGetValue(firstStep.GridId, out var firstTransform)
+            ? sourceTerminal.Point : PointForStep(route, firstStep, firstTransform);
+        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":source-terminal", route.PhysicalLinkId, RouteStepRole.SourceExit, -1, null, null, null,
+            Array.Empty<PlanningGridCellId>(), new[] { Point(route, route.Steps.FirstOrDefault()?.GridId ?? new PlanningGridId("unknown"), sourceTerminal.Point, RouteStepRole.SourceExit, route.PhysicalLinkId + ":source-terminal", -1, null, null, null, "source terminal", route.PhysicalLinkId + ":source-terminal") }, null, null, route.SourceProjectId ?? "diagram", "source terminal"));
+        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":source-stub", route.PhysicalLinkId, RouteStepRole.SourceExit, -1, null, null, null,
+            Array.Empty<PlanningGridCellId>(), StubPoints(route, sourceTerminal.Point, firstPoint, firstStep?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.SourceExit, route.PhysicalLinkId + ":source-stub", "source stub"), null, null, route.SourceProjectId ?? "diagram", "source stub"));
+        foreach (var group in groups)
+        {
+            var first = group[0];
+            if (!transforms.TryGetValue(first.GridId, out var transform)) continue;
+            var componentId = route.PhysicalLinkId + ":component:" + first.Order;
+            var allocatedTurn = first.Role == RouteStepRole.Turn
+                ? allocation.Turns.SingleOrDefault(turn => turn.RouteId == route.PhysicalLinkId && turn.CellId == first.CellId.ToString())
+                : null;
+            if (first.Role == RouteStepRole.Turn && allocatedTurn is null)
+                findings.Add(new ArchitecturePlanningDiagnostic("MissingAllocatedTurn", "A turn route step has no allocated turn identity and cannot be materialised as an owned turn.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+            var points = group[0].Role == RouteStepRole.Turn
+                ? new[] { Point(route, first.GridId, TurnPoint(route, first, transform), RouteStepRole.Turn, componentId + ":turn", first.Order, first.StraightRunId, allocatedTurn?.BendIdentity, first.CellId, "allocated turn", componentId) }
+                : group.Select(step => Point(route, step.GridId, CellPoint(step, route, transform), step.Role, componentId + ":cell:" + step.Order, step.Order, step.StraightRunId, null, step.CellId, "allocated straight-run cell", componentId)).ToArray();
+            var lane = first.AllocatedLane;
+            var allocationForLane = lane is null ? null : allocation.HorizontalLanes.Concat(allocation.VerticalLanes).FirstOrDefault(item => item.Lane.Value == lane.Value.Value);
+            result.Add(new PlannedPhysicalRouteComponent(componentId, route.PhysicalLinkId, first.Role, first.Order,
+                first.StraightRunId, allocationForLane?.DomainId, lane, group.Select(step => step.CellId).ToArray(), points,
+                allocatedTurn?.BendIdentity,
+                null, first.GridId.Value, "ordered route-step component"));
+        }
+        foreach (var transition in route.Transitions.OrderBy(item => item.SourceGridId.Value, StringComparer.Ordinal).ThenBy(item => item.DestinationGridId.Value, StringComparer.Ordinal))
+        {
+            var representedByRouteSteps = route.Steps.Any(step => step.CellId.Equals(transition.SourceBoundaryCellId) || step.CellId.Equals(transition.DestinationBoundaryCellId));
+            if (representedByRouteSteps)
+                continue;
+            if (!transforms.TryGetValue(transition.SourceGridId, out var sourceTransform) || !transforms.TryGetValue(transition.DestinationGridId, out var destinationTransform))
+                continue;
+            var componentId = route.PhysicalLinkId + ":transition:" + transition.SourceGridId.Value + ":" + transition.DestinationGridId.Value;
+            var points = new[]
+            {
+                Point(route, transition.SourceGridId, CellCentre(transition.SourceBoundaryCellId, sourceTransform), RouteStepRole.ProjectTransition, componentId + ":source", int.MaxValue - 1, null, transition.OwnershipTransition, transition.SourceBoundaryCellId, "source project transition", componentId),
+                Point(route, transition.DestinationGridId, CellCentre(transition.DestinationBoundaryCellId, destinationTransform), RouteStepRole.ProjectTransition, componentId + ":destination", int.MaxValue - 1, null, transition.OwnershipTransition, transition.DestinationBoundaryCellId, "destination project transition", componentId)
+            };
+            result.Add(new PlannedPhysicalRouteComponent(componentId, route.PhysicalLinkId, RouteStepRole.ProjectTransition, int.MaxValue - 1,
+                null, null, null, new[] { transition.SourceBoundaryCellId, transition.DestinationBoundaryCellId }, points,
+                null, transition.OwnershipTransition, transition.DestinationGridId.Value, "explicit grid transition"));
+        }
+        var last = ordered.LastOrDefault();
+        var lastPoint = last is null || !transforms.TryGetValue(last.GridId, out var lastTransform) ? destinationTerminal.Point : PointForStep(route, last, lastTransform);
+        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":destination-stub", route.PhysicalLinkId, RouteStepRole.DestinationEntry, int.MaxValue, null, null, null,
+            Array.Empty<PlanningGridCellId>(), StubPoints(route, lastPoint, destinationTerminal.Point, last?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.DestinationEntry, route.PhysicalLinkId + ":destination-stub", "destination stub"), null, null, route.DestinationProjectId ?? "diagram", "destination stub"));
+        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":destination-terminal", route.PhysicalLinkId, RouteStepRole.DestinationEntry, int.MaxValue, null, null, null,
+            Array.Empty<PlanningGridCellId>(), new[] { Point(route, route.Steps.LastOrDefault()?.GridId ?? new PlanningGridId("unknown"), destinationTerminal.Point, RouteStepRole.DestinationEntry, route.PhysicalLinkId + ":destination-terminal", int.MaxValue, null, null, null, "destination terminal", route.PhysicalLinkId + ":destination-terminal") }, null, null, route.DestinationProjectId ?? "diagram", "destination terminal"));
         return result;
     }
+
+    private PlannedPhysicalRoutePoint[] StubPoints(PlannedGridRoute route, AbsolutePoint start, AbsolutePoint end, PlanningGridId gridId, RouteStepRole role, string componentId, string provenance)
+    {
+        var points = new List<PlannedPhysicalRoutePoint> { Point(route, gridId, start, role, componentId + ":start", -1, null, null, null, provenance + " start", componentId) };
+        points.Add(Point(route, gridId, end, role, componentId + ":end", -1, null, null, null, provenance + " end", componentId));
+        return points.ToArray();
+    }
+
+    private PlannedPhysicalRoutePoint Point(PlannedGridRoute route, PlanningGridId gridId, AbsolutePoint point, RouteStepRole role, string pointId, int order, string? runId, string? turnId, PlanningGridCellId? cellId, string provenance, string? componentIdentity = null)
+    {
+        var separator = pointId.LastIndexOf(':');
+        var derivedComponentId = separator < 0 ? pointId : pointId.Substring(0, separator);
+        return new PlannedPhysicalRoutePoint(pointId, route.PhysicalLinkId, gridId, point, role, componentIdentity ?? derivedComponentId, order, runId, turnId, null, cellId, provenance);
+    }
+
+    private RelativePoint? RelativePointFor(AbsolutePoint point, PlanningGridId gridId, IReadOnlyDictionary<PlanningGridId, GridTransform> transforms) =>
+        transforms.TryGetValue(gridId, out var transform) ? new RelativePoint(point.X - transform.Origin.X, point.Y - transform.Origin.Y) : (RelativePoint?)null;
+
+    private AbsolutePoint PointForStep(PlannedGridRoute route, PlannedGridRouteStep step, GridTransform transform) =>
+        step.Role == RouteStepRole.Turn ? TurnPoint(route, step, transform) : CellPoint(step, route, transform);
 
     private AbsolutePoint CellPoint(PlannedGridRouteStep step, PlannedGridRoute route, GridTransform transform)
     {
@@ -325,11 +393,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         return new AbsolutePoint(transform.Origin.X + x, transform.Origin.Y + y);
     }
 
-    private static int LaneCoordinate(int offset, int extent, IReadOnlyList<PlannedLaneAllocation> lanes, string laneId)
+    private int LaneCoordinate(int offset, int extent, IReadOnlyList<PlannedLaneAllocation> lanes, string laneId)
     {
         var ordinal = lanes.Where(item => item.Lane.Value == laneId).Select(item => item.Ordinal).DefaultIfEmpty(0).First();
-        var spacing = Math.Max(1, lanes.Where(item => item.Lane.Value == laneId).Select(item => Math.Max(1, item.IntervalEnd - item.IntervalStart + 1)).DefaultIfEmpty(1).First());
-        return offset + Math.Min(Math.Max(0, extent - 1), Math.Max(0, (ordinal + 1) * spacing));
+        var spacing = Math.Max(1, request.RoutePlanning.MinimumParallelSpacing);
+        var coordinate = offset + request.RoutePlanning.MinimumPortSpacing + ordinal * spacing;
+        if (coordinate < offset || coordinate > offset + extent)
+            findings.Add(new ArchitecturePlanningDiagnostic("LaneCoordinateOutsideTrack", "Allocated lane coordinate falls outside its sized track; materialisation was not clamped.", PlanningDiagnosticSubject.PhysicalSegment, laneId));
+        return coordinate;
     }
     private AbsolutePoint CellCentre(PlanningGridCellId cell, GridTransform transform)
     {

@@ -21,7 +21,46 @@ public sealed record PlannedPhysicalRouteSegment(
     RouteAxis Axis,
     RouteStepRole Role,
     LaneId Lane,
-    RouteTopologyFamily TopologyFamily);
+    RouteTopologyFamily TopologyFamily,
+    string ComponentId = "",
+    int RouteStepOrder = -1,
+    string? StraightRunId = null,
+    string? LaneDomainId = null,
+    IReadOnlyList<PlanningGridCellId>? AllocatedCells = null,
+    PlanningGridRowId? OwningRowId = null,
+    PlanningGridColumnId? OwningColumnId = null,
+    string StartProvenance = "",
+    string EndProvenance = "");
+
+public sealed record PlannedPhysicalRoutePoint(
+    string PointId,
+    string PhysicalLinkId,
+    PlanningGridId GridId,
+    AbsolutePoint Point,
+    RouteStepRole Role,
+    string ComponentId,
+    int RouteStepOrder,
+    string? StraightRunId,
+    string? TurnIdentity,
+    string? TransitionIdentity,
+    PlanningGridCellId? CellId,
+    string Provenance,
+    RelativePoint? RelativePoint = null);
+
+public sealed record PlannedPhysicalRouteComponent(
+    string ComponentId,
+    string PhysicalLinkId,
+    RouteStepRole Role,
+    int RouteStepOrder,
+    string? StraightRunId,
+    string? LaneDomainId,
+    LaneId? Lane,
+    IReadOnlyList<PlanningGridCellId> AllocatedCells,
+    IReadOnlyList<PlannedPhysicalRoutePoint> Points,
+    string? TurnIdentity,
+    string? TransitionIdentity,
+    string OwnershipScope,
+    string Provenance);
 
 public sealed record PlannedPhysicalRoute(
     string PhysicalLinkId,
@@ -36,7 +75,12 @@ public sealed record PlannedPhysicalRoute(
     int RouteLength,
     bool HasNodeIntersection,
     bool HasSharedSegment,
-    bool HasCrossing);
+    bool HasCrossing,
+    IReadOnlyList<PlannedPhysicalRoutePoint>? RawPoints = null,
+    IReadOnlyList<PlannedPhysicalRouteComponent>? Components = null,
+    int NormalizedPointCount = 0,
+    int RemovedDuplicatePointCount = 0,
+    int MergedCollinearSegmentCount = 0);
 
 public sealed record PlannedPhysicalTerminal(
     string TerminalId,
