@@ -498,6 +498,40 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_keeps_external_departure_outside_an_expanded_source_footprint()
+    {
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(
+                new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("source", "project:p", "SourceWithAnIntentionallyLongName", "Project.SourceWithAnIntentionallyLongName", "Class", "source", Array.Empty<string>())
+                    }, "project:p")
+                },
+                new[]
+                {
+                    new ArchitectureExternalNode("external", "ExternalDependency", "External.Assembly", "external", "External.ExternalDependency", "[External]")
+                },
+                new[] { new ArchitectureLink("source-external", "source", "external", "external") },
+                null)
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var route = Assert.Single(plan.Routes);
+        var sourcePlacement = Assert.Single(plan.NodePlacements.Where(item => item.PhysicalNodeId == route.Source.PhysicalNodeId));
+        var sourceGrid = Assert.Single(plan.ProjectGrids.Where(grid => grid.Grid.Id.Equals(sourcePlacement.GridId)));
+        var departure = route.Steps[1];
+
+        Assert.True(route.IsStructurallySupported);
+        Assert.DoesNotContain(sourcePlacement.Footprint, cell => cell.ColumnId.Equals(departure.CellId.ColumnId));
+        Assert.Null(sourceGrid.Grid.Cells[departure.CellId].FootprintOwnerId);
+        Assert.Empty(plan.LaneAllocation!.Conflicts);
+        Assert.Equal(0, plan.Diagnostics.Metrics.UnsupportedRouteCount);
+    }
+
+    [Fact]
     public void Renderer_emits_only_minimal_page_shell()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

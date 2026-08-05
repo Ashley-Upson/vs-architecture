@@ -180,8 +180,9 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 steps.Count, topology));
         }
 
-        var supported = ValidateSteps(steps, link, topology);
-        var unsupportedReason = supported ? null : "Topology-specific structural route could not be represented without entering an unrelated node footprint.";
+        var legality = ValidateSteps(steps, link, topology);
+        var supported = legality.IsSupported;
+        var unsupportedReason = supported ? null : legality.Message;
         if (!supported)
             diagnostics.Add(new ArchitecturePlanningDiagnostic("UnsupportedAbstractRoute", unsupportedReason!, PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
         return new PlannedGridRoute(link.PhysicalLinkId, sourceEndpoint, steps, transitions.Where(item => item.SemanticLinkId == link.SemanticLinkId).ToArray(),
@@ -189,18 +190,45 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             $"{topology}: deterministic topology-owned route", approach.ReservationId, supported, unsupportedReason);
     }
 
-    private bool ValidateSteps(IReadOnlyList<PlannedGridRouteStep> steps, PlannedPhysicalLink link, RouteTopologyFamily topology)
+    private RouteLegalityResult ValidateSteps(IReadOnlyList<PlannedGridRouteStep> steps, PlannedPhysicalLink link, RouteTopologyFamily topology)
     {
-        if (steps.Count == 0) return false;
+        if (steps.Count == 0) return new RouteLegalityResult(false, "No route steps were produced.");
         foreach (var step in steps)
         {
-            if (!grids.TryGetValue(step.GridId, out var grid) && step.GridId.Value != "diagram") return false;
-            if (step.EntrySide == step.ExitSide) return false;
+            if (!grids.TryGetValue(step.GridId, out var grid) && step.GridId.Value != "diagram")
+                return new RouteLegalityResult(false, Trace(link, topology, steps, step, "missing grid"));
+            if (step.EntrySide == step.ExitSide)
+                return new RouteLegalityResult(false, Trace(link, topology, steps, step, "entry and exit sides are identical"));
             if (step.Role != RouteStepRole.SourceExit && step.Role != RouteStepRole.DestinationEntry &&
                 grid!.Cells.TryGetValue(step.CellId, out var cell) && cell.FootprintOwnerId is not null)
-                return false;
+                return new RouteLegalityResult(false, Trace(link, topology, steps, step,
+                    $"unrelated node footprint owner '{cell.FootprintOwnerId}'"));
         }
-        return steps[0].Role == RouteStepRole.SourceExit && steps[steps.Count - 1].Role == RouteStepRole.DestinationEntry;
+        if (steps[0].Role != RouteStepRole.SourceExit || steps[steps.Count - 1].Role != RouteStepRole.DestinationEntry)
+            return new RouteLegalityResult(false, Trace(link, topology, steps, null, "invalid route terminals"));
+        return new RouteLegalityResult(true, null);
+    }
+
+    private string Trace(PlannedPhysicalLink link, RouteTopologyFamily topology, IReadOnlyList<PlannedGridRouteStep> steps,
+        PlannedGridRouteStep? rejectedStep, string reason)
+    {
+        var source = nodes.Single(node => node.PhysicalNodeId == link.SourcePhysicalNodeId);
+        var destination = nodes.Single(node => node.PhysicalNodeId == link.DestinationPhysicalNodeId);
+        var sourcePlacement = placements[source.PhysicalNodeId];
+        var destinationPlacement = placements[destination.PhysicalNodeId];
+        var stepText = string.Join(" | ", steps.Select(step =>
+            $"{step.Order}:{step.GridId.Value}:{step.CellId.RowId.Value}/{step.CellId.ColumnId.Value}:{step.Role}:{step.EntrySide}->{step.ExitSide}"));
+        var sourceFootprint = string.Join(",", sourcePlacement.Footprint.Select(cell => cell.ColumnId.Value).Distinct(StringComparer.Ordinal));
+        var destinationFootprint = string.Join(",", destinationPlacement.Footprint.Select(cell => cell.ColumnId.Value).Distinct(StringComparer.Ordinal));
+        var rejected = rejectedStep is null ? "none" : $"{rejectedStep.GridId.Value}:{rejectedStep.CellId}";
+        return $"Unsupported route trace; link={link.PhysicalLinkId}; semantic={link.SemanticLinkId}; " +
+            $"source={source.PhysicalNodeId}/{source.SemanticNodeId}; destination={destination.PhysicalNodeId}/{destination.SemanticNodeId}; " +
+            $"projects={source.ProjectId}->{destination.ProjectId}; rows={sourcePlacement.AnchorCellId.RowId.Value}->{destinationPlacement.AnchorCellId.RowId.Value}; " +
+            $"anchors={sourcePlacement.AnchorCellId.ColumnId.Value}->{destinationPlacement.AnchorCellId.ColumnId.Value}; " +
+            $"sourceFootprint=[{sourceFootprint}]; destinationFootprint=[{destinationFootprint}]; " +
+            $"sourceOwner={metadata[source.PhysicalNodeId].PositionalOwnerId}; destinationOwner={metadata[destination.PhysicalNodeId].PositionalOwnerId}; " +
+            $"sourceSubtree={metadata[source.PhysicalNodeId].SubtreeId}; destinationSubtree={metadata[destination.PhysicalNodeId].SubtreeId}; " +
+            $"topology={topology}; rejected={rejected}; reason={reason}; steps={stepText}";
     }
 
     private IReadOnlyList<PlannedStraightRun> CompileStraightRuns(IReadOnlyList<PlannedGridRoute> routes)
@@ -299,9 +327,27 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             .FirstOrDefault();
         return preferred?.Id ?? destination;
     }
-    private int DepartureColumn(PlannedPhysicalNode source, PlannedPhysicalNode destination) => Column(source) <= Column(destination)
-        ? Column(source) + placements[source.PhysicalNodeId].ColumnSpan / 2 + 1
-        : Column(source) - placements[source.PhysicalNodeId].ColumnSpan / 2 - 1;
+    private int DepartureColumn(PlannedPhysicalNode source, PlannedPhysicalNode destination)
+    {
+        var grid = grids[GridOf(source)];
+        var footprintColumns = placements[source.PhysicalNodeId].Footprint
+            .Select(cell => grid.Columns[cell.ColumnId].LogicalOrder)
+            .Distinct()
+            .OrderBy(value => value)
+            .ToArray();
+        var minimum = footprintColumns.First();
+        var maximum = footprintColumns.Last();
+        var target = Column(destination);
+        var candidates = new[] { minimum - 1, maximum + 1 }
+            .Where(value => value >= 0 && value < grid.ColumnOrder.Count)
+            .Distinct()
+            .OrderBy(value => Math.Abs(value - target))
+            .ThenBy(value => value == maximum + 1 ? 0 : 1)
+            .ToArray();
+        if (candidates.Length > 0) return candidates[0];
+
+        return target < minimum ? minimum - 1 : maximum + 1;
+    }
 
     private sealed class MutableGrid
     {
@@ -346,6 +392,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             OwnedPhysicalNodeIds.Count == 0 ? owned.Select(item => item.PhysicalNodeId).ToArray() : OwnedPhysicalNodeIds,
             OwnedExternalNodeIds.Count == 0 ? owned.Where(item => item.IsExternal).Select(item => item.PhysicalNodeId).ToArray() : OwnedExternalNodeIds);
     }
+
+    private sealed record RouteLegalityResult(bool IsSupported, string? Message);
 }
 
 internal sealed record AbstractRoutePlanningResult(
