@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
@@ -13,7 +14,18 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
     {
         if (request is null) throw new ArgumentNullException(nameof(request));
 
-        var projection = new ProjectionBuilder(request).Build();
+        var stageTimings = new Dictionary<string, long>(StringComparer.Ordinal);
+        var stageInvocations = new Dictionary<string, int>(StringComparer.Ordinal);
+        void TimeStage(string name, Action action)
+        {
+            var timer = Stopwatch.StartNew();
+            action();
+            timer.Stop();
+            stageTimings[name] = stageTimings.TryGetValue(name, out var elapsed) ? elapsed + timer.ElapsedMilliseconds : timer.ElapsedMilliseconds;
+            stageInvocations[name] = stageInvocations.TryGetValue(name, out var count) ? count + 1 : 1;
+        }
+        ArchitectureProjectionResult projection = null!;
+        TimeStage("projection", () => projection = new ProjectionBuilder(request).Build());
         var requiredSpans = new Dictionary<string, int>(StringComparer.Ordinal);
         var placementRebuildCount = 0;
         var expansionRequirementCount = 0;
@@ -26,17 +38,18 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         ArchitectureLaneAllocationResult allocation = null!;
         for (var pass = 0; pass < 2; pass++)
         {
-            placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build();
-            routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
-                placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid).Build();
-            allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
-                routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build();
+            TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build());
+            TimeStage("abstractRouting", () => routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
+                placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid).Build());
+            TimeStage("laneAllocation", () => allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
+                routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build());
             var expanded = allocation.FootprintExpansionRequirements
                 .Where(item => item.RequiredOddSpan > item.CurrentSpan)
                 .GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Max(item => item.RequiredOddSpan), StringComparer.Ordinal);
             if (expanded.Count == 0) break;
             placementRebuildCount++;
+            stageInvocations["footprintExpansionRebuild"] = stageInvocations.TryGetValue("footprintExpansionRebuild", out var rebuilds) ? rebuilds + 1 : 1;
             expansionRequirementCount += allocation.FootprintExpansionRequirements.Count;
             invalidatedRouteCount += routing.Routes.Count;
             rebuiltReservationCount += placement.SubtreeReservations.Count;
@@ -133,7 +146,24 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              StructuralColumnRoleCounts: projectGrids.SelectMany(grid => grid.Grid.Columns).GroupBy(column => column.Role.ToString())
                  .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
              RouteOnlyRowCount: 0,
-             RouteOnlyColumnCount: 0);
+             RouteOnlyColumnCount: 0,
+             StageTimingMilliseconds: stageTimings,
+             StageInvocationCounts: stageInvocations,
+             CellsBeforeRouting: placement.ProjectGrids.Sum(grid => grid.Grid.Cells.Count),
+             CellsAfterRouting: projectGrids.Sum(grid => grid.Grid.Cells.Count),
+             HorizontalLaneCount: allocation.HorizontalLanes.Count,
+             VerticalLaneCount: allocation.VerticalLanes.Count,
+             MaximumHorizontalLanesInDomain: allocation.HorizontalLanes.GroupBy(lane => lane.DomainId).Select(group => group.Count()).DefaultIfEmpty(0).Max(),
+             MaximumVerticalLanesInDomain: allocation.VerticalLanes.GroupBy(lane => lane.DomainId).Select(group => group.Count()).DefaultIfEmpty(0).Max(),
+             NodeGridEvidence: placement.NodePlacements.OrderBy(item => item.PhysicalNodeId, StringComparer.Ordinal).Select(item =>
+             {
+                 var metadata = placement.NodeMetadata.Single(value => value.PhysicalNodeId == item.PhysicalNodeId);
+                 var physical = projection.PhysicalNodes.Single(value => value.PhysicalNodeId == item.PhysicalNodeId);
+                 return new ArchitectureNodeGridEvidence(item.PhysicalNodeId, physical.SemanticNodeId,
+                     item.AnchorCellId.RowId.Value, item.AnchorCellId.ColumnId.Value,
+                     item.Footprint.Select(cell => cell.ColumnId.Value).ToArray(), metadata.PositionalOwnerId,
+                     metadata.PositionalChildIds, metadata.SubtreeId);
+             }).ToArray());
 
         return new PlannedArchitectureDiagram(
             request,

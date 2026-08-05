@@ -25,6 +25,16 @@ public sealed record ArchitecturePlanningDiagnostic(
     PlanningDiagnosticSubject Subject,
     string? SubjectId);
 
+public sealed record ArchitectureNodeGridEvidence(
+    string PhysicalNodeId,
+    string SemanticNodeId,
+    string RowId,
+    string AnchorColumnId,
+    IReadOnlyList<string> FootprintColumnIds,
+    string? PositionalOwnerId,
+    IReadOnlyList<string> PositionalChildIds,
+    string SubtreeId);
+
 public sealed record ArchitecturePlanningMetrics(
     int SemanticNodeCount,
     int SemanticLinkCount,
@@ -86,7 +96,16 @@ public sealed record ArchitecturePlanningMetrics(
     IReadOnlyDictionary<string, int>? StructuralRowRoleCounts = null,
     IReadOnlyDictionary<string, int>? StructuralColumnRoleCounts = null,
     int RouteOnlyRowCount = 0,
-    int RouteOnlyColumnCount = 0);
+    int RouteOnlyColumnCount = 0,
+    IReadOnlyDictionary<string, long>? StageTimingMilliseconds = null,
+    IReadOnlyDictionary<string, int>? StageInvocationCounts = null,
+    int CellsBeforeRouting = 0,
+    int CellsAfterRouting = 0,
+    int HorizontalLaneCount = 0,
+    int VerticalLaneCount = 0,
+    int MaximumHorizontalLanesInDomain = 0,
+    int MaximumVerticalLanesInDomain = 0,
+    IReadOnlyList<ArchitectureNodeGridEvidence>? NodeGridEvidence = null);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

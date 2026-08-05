@@ -141,11 +141,11 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         if (!sourceGrid.Equals(destinationGrid))
         {
             var sourceBoundary = UseCell(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
-                ColumnId(source), CellOccupancy.Empty);
+                ColumnForRole(sourceGrid, PlanningGridTrackRole.ProjectBoundaryTransition, ColumnId(source)), CellOccupancy.Empty);
             var diagramId = new PlanningGridId("diagram");
             var diagramBoundary = UseCell(diagramId, grids[diagramId].RowOrder[0], grids[diagramId].ColumnOrder[0], CellOccupancy.Empty);
             var destinationBoundary = UseCell(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId.RowId,
-                ColumnId(destination), CellOccupancy.Empty);
+                ColumnForRole(destinationGrid, PlanningGridTrackRole.ProjectBoundaryTransition, ColumnId(destination)), CellOccupancy.Empty);
             transitions.Add(new GridTransition(sourceGrid, sourceBoundary, diagramId, diagramBoundary, "project-to-diagram", link.SemanticLinkId,
                 "exit", link.SourceProjectId, null, true, request.ProjectPlacement.ShowProjectContainers));
             transitions.Add(new GridTransition(diagramId, diagramBoundary, destinationGrid, destinationBoundary, "diagram-to-project", link.SemanticLinkId,
@@ -268,6 +268,11 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private static bool IsVertical(PlannedGridRouteStep step) => step.EntrySide == GridSide.Top || step.EntrySide == GridSide.Bottom;
     private int Column(PlannedPhysicalNode node) => columnOrderByNode[node.PhysicalNodeId];
     private PlanningGridColumnId ColumnId(PlannedPhysicalNode node) => placements[node.PhysicalNodeId].AnchorCellId.ColumnId;
+    private PlanningGridColumnId ColumnForRole(PlanningGridId gridId, PlanningGridTrackRole role, PlanningGridColumnId fallback)
+    {
+        var grid = grids[gridId];
+        return grid.Columns.Values.OrderBy(column => column.LogicalOrder).FirstOrDefault(column => column.Role == role)?.Id ?? fallback;
+    }
     private PlanningGridColumnId ColumnAt(PlanningGridId gridId, int requested)
     {
         var grid = grids[gridId];

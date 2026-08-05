@@ -73,6 +73,42 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_reuses_horizontal_tracks_for_a_deep_chain()
+    {
+        var nodes = Enumerable.Range(0, 8)
+            .Select(index => new ArchitectureNode($"n{index}", "project:p", $"Node{index}Service", $"Project.Node{index}Service", "Class", $"n{index}", Array.Empty<string>()))
+            .ToArray();
+        var links = Enumerable.Range(0, 7)
+            .Select(index => new ArchitectureLink($"l{index}", $"n{index}", $"n{index + 1}", "internal"))
+            .ToArray();
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
+                Array.Empty<ArchitectureExternalNode>(), links, null)
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var footprintColumns = plan.ProjectGrids.Single().Grid.Columns
+            .Where(column => column.Role == PlanningGridTrackRole.NodeFootprint).ToArray();
+
+        Assert.True(footprintColumns.Length < nodes.Length * 3);
+        Assert.True(plan.NodePlacements.Select(placement => placement.CentreColumnId).Distinct().Count() < nodes.Length);
+        Assert.Equal(plan.Diagnostics.Metrics.StructuralColumnCountBeforeRouting,
+            plan.Diagnostics.Metrics.StructuralColumnCountAfterRouting);
+    }
+
+    [Fact]
+    public void Planner_creates_shared_destination_and_return_regions_before_routing()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var roles = plan.ProjectGrids.SelectMany(grid => grid.Grid.Columns).Select(column => column.Role).ToArray();
+
+        Assert.Contains(PlanningGridTrackRole.DestinationApproach, roles);
+        Assert.Contains(PlanningGridTrackRole.OwnershipLocalReturn, roles);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "MissingStructuralRegion");
+    }
+
+    [Fact]
     public void Planner_relative_node_bounds_equal_their_final_grid_footprints()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
