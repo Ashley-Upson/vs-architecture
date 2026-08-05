@@ -17,13 +17,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var placement = new ArchitectureV6LogicalPlacementBuilder(request, projection).Build();
         var routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
             placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids).Build();
+        var allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
+            routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build();
         var projectGrids = routing.ProjectGrids;
         var diagramGrid = routing.DiagramGrid;
         var findings = projection.Diagnostics.Concat(new[]
         {
             Deferred("V6SizingDeferred", PlanningDiagnosticSubject.TrackConstraint, "Row and column sizing is deferred until route demand exists."),
             Deferred("V6GeometryDeferred", PlanningDiagnosticSubject.Grid, "Relative and absolute geometry compilation is deferred."),
-        }).Concat(routing.Diagnostics).ToArray();
+        }).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(
             request.SemanticModel.Projects.Sum(project => project.Nodes.Count) + request.SemanticModel.ExternalNodes.Count,
@@ -34,11 +36,11 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projectGrids.Sum(grid => grid.Grid.Rows.Count),
             projectGrids.Sum(grid => grid.Grid.Columns.Count),
             projectGrids.Sum(grid => grid.Grid.Cells.Count(item => item.Value.Occupancy == CellOccupancy.NodeAnchor)),
-            routing.Routes.SelectMany(route => route.Steps).Select(step => step.CellId).Distinct().Count(),
-            routing.Routes.GroupBy(route => route.TopologyFamily).ToDictionary(group => group.Key.ToString(), group => group.Count(), StringComparer.Ordinal),
-            routing.Routes.Sum(route => route.Steps.Count),
-            routing.StraightRuns.Count,
-            routing.StraightRuns.Select(run => run.Lane).Distinct().Count(),
+            allocation.Routes.SelectMany(route => route.Steps).Select(step => step.CellId).Distinct().Count(),
+            allocation.Routes.GroupBy(route => route.TopologyFamily).ToDictionary(group => group.Key.ToString(), group => group.Count(), StringComparer.Ordinal),
+            allocation.Routes.Sum(route => route.Steps.Count),
+            allocation.StraightRuns.Count,
+            allocation.HorizontalLanes.Concat(allocation.VerticalLanes).Select(run => run.Lane).Distinct().Count(),
             null,
             findings.Length,
             projection.SemanticNodeToPhysicalNodeIds.ToDictionary(item => item.Key, item => item.Value.Count, StringComparer.Ordinal),
@@ -59,18 +61,19 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             diagramGrid,
             projectGrids,
             placement.NodePlacements,
-            routing.Routes,
-            new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(), Array.Empty<GridTrackConstraint>(), null),
+            allocation.Routes,
+            allocation.Sizing,
             new ArchitecturePlanningDiagnostics(findings, metrics),
             projection,
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, true, true, true, false, false),
+            new ArchitecturePlanningStageStatus(true, true, true, true, false, true, false, false, true, true),
             routing.DestinationApproaches,
-            routing.StraightRuns,
+            allocation.StraightRuns,
             routing.TurnDemands,
-            routing.EndpointDemands);
+            routing.EndpointDemands,
+            allocation);
     }
 
     private static ArchitecturePlanningDiagnostic Deferred(string code, PlanningDiagnosticSubject subject, string message) =>

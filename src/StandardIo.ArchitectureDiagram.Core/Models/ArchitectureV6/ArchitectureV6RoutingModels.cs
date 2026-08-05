@@ -54,7 +54,9 @@ public sealed record PlannedGridRouteStep(
     RouteStepRole Role,
     int Order = 0,
     string TopologyProvenance = "",
-    string? EndpointRelationship = null);
+    string? EndpointRelationship = null,
+    LaneId? AllocatedLane = null,
+    string? StraightRunId = null);
 
 public sealed record GridTransition(
     PlanningGridId SourceGridId,

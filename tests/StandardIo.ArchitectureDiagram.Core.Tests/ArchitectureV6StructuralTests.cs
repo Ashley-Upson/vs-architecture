@@ -53,7 +53,9 @@ public sealed class ArchitectureV6StructuralTests
         Assert.True(plan.StageStatus.LogicalPlacementCompleted);
         Assert.True(plan.StageStatus.AbstractRoutingCompleted);
         Assert.True(plan.StageStatus.LaneAllocationDeferred);
-        Assert.True(plan.StageStatus.SizingDeferred);
+        Assert.False(plan.StageStatus.SizingDeferred);
+        Assert.True(plan.StageStatus.CapacityConstraintsCompleted);
+        Assert.True(plan.StageStatus.PhysicalSizingDeferred);
         Assert.True(plan.StageStatus.AbsoluteGeometryDeferred);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
@@ -221,7 +223,18 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(plan.PhysicalNodes.Count, plan.DestinationApproaches.Count);
         Assert.NotEmpty(plan.StraightRuns);
         Assert.Equal(plan.Routes.Count * 2, plan.EndpointDemands.Count);
+        Assert.NotNull(plan.LaneAllocation);
+        Assert.Equal(plan.StraightRuns.Count, plan.LaneAllocation!.HorizontalLanes.Count + plan.LaneAllocation.VerticalLanes.Count);
+        Assert.All(plan.Routes.SelectMany(route => route.Steps), step => Assert.NotNull(step.AllocatedLane));
+        Assert.All(plan.LaneAllocation.HorizontalLanes.Concat(plan.LaneAllocation.VerticalLanes), allocation =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(allocation.DomainId));
+            Assert.True(allocation.Ordinal >= 0);
+            Assert.NotEmpty(allocation.Provenance);
+        });
+        Assert.NotEmpty(plan.Sizing.Constraints);
         Assert.Equal(plan.SubtreeReservations.Count, plan.ProjectGrids.SelectMany(grid => grid.SubtreeReservations).Count());
+        Assert.True(new ArchitectureDiagramV6Validator().Validate(plan).IsValid);
     }
 
     [Fact]

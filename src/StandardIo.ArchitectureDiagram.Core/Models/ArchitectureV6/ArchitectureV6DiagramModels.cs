@@ -106,7 +106,9 @@ public sealed record ArchitecturePlanningStageStatus(
     bool SizingDeferred,
     bool AbsoluteGeometryDeferred,
     bool SizingCompleted = false,
-    bool AbsoluteGeometryCompleted = false);
+    bool AbsoluteGeometryCompleted = false,
+    bool CapacityConstraintsCompleted = false,
+    bool PhysicalSizingDeferred = true);
 
 public sealed class PlannedNodePlacement
 {
@@ -165,7 +167,8 @@ public sealed class PlannedArchitectureDiagram
         IReadOnlyList<DestinationApproachReservation>? destinationApproaches = null,
         IReadOnlyList<PlannedStraightRun>? straightRuns = null,
         IReadOnlyList<TurnDemand>? turnDemands = null,
-        IReadOnlyList<NodeEndpointDemand>? endpointDemands = null)
+        IReadOnlyList<NodeEndpointDemand>? endpointDemands = null,
+        ArchitectureLaneAllocationResult? laneAllocation = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -185,6 +188,7 @@ public sealed class PlannedArchitectureDiagram
         StraightRuns = Array.AsReadOnly((straightRuns ?? Array.Empty<PlannedStraightRun>()).ToArray());
         TurnDemands = Array.AsReadOnly((turnDemands ?? Array.Empty<TurnDemand>()).ToArray());
         EndpointDemands = Array.AsReadOnly((endpointDemands ?? Array.Empty<NodeEndpointDemand>()).ToArray());
+        LaneAllocation = laneAllocation;
     }
 
     public ArchitecturePlanningRequest Request { get; }
@@ -205,6 +209,7 @@ public sealed class PlannedArchitectureDiagram
     public IReadOnlyList<PlannedStraightRun> StraightRuns { get; }
     public IReadOnlyList<TurnDemand> TurnDemands { get; }
     public IReadOnlyList<NodeEndpointDemand> EndpointDemands { get; }
+    public ArchitectureLaneAllocationResult? LaneAllocation { get; }
     public PlannedArchitectureGeometry? Geometry { get; init; }
 }
 

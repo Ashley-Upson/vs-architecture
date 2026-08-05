@@ -95,9 +95,9 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             .ToArray();
         return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, findings, manifest,
-            new ArchitectureEligibilityResult(false, new[] { "V6 projection, logical placement and abstract routing are available; lane allocation, sizing, geometry and Architecture node/link emission are deferred." }),
+            new ArchitectureEligibilityResult(false, new[] { "V6 projection, logical placement, abstract routing, lane allocation and logical capacity constraints are available; physical sizing, geometry and Architecture node/link emission are deferred." }),
             () => new DrawioDiagnosticExportResult(page.GraphModel.ToString(),
-                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"abstractRoutingCompleted\":true,\"laneAllocationDeferred\":true,\"sizingCompleted\":false,\"absoluteGeometryCompleted\":false,\"sizingDeferred\":true,\"absoluteGeometryDeferred\":true}",
+                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"abstractRoutingCompleted\":true,\"laneAllocationCompleted\":true,\"capacityConstraintsCompleted\":true,\"physicalSizingDeferred\":true,\"absoluteGeometryCompleted\":false,\"absoluteGeometryDeferred\":true}",
                 new Dictionary<string, string>(), 0, 0),
             repeat, planned.Diagnostics.Metrics));
     }
