@@ -118,7 +118,13 @@ internal sealed class ArchitectureV6GeometryBuilder
         var source = sourceGrids.FirstOrDefault(item => item.ProjectId == projectId);
         var columnCount = Math.Max(1, projectPlacements.SelectMany(item => item.Footprint).Select(item => ParseColumn(item.ColumnId)).DefaultIfEmpty(0).Max() + 1);
         var rowCount = Math.Max(1, projectPlacements.Select(item => ParseRow(item.AnchorCellId.RowId)).DefaultIfEmpty(0).Max() + 1);
-        var columnExtents = Enumerable.Repeat(Math.Max(1, request.GridSizing.CellWidth), columnCount).ToArray();
+        // Covered columns are logical tracks, not visible gaps. Their extents are
+        // established by node sizing below; empty separator columns carry spacing.
+        var columnExtents = Enumerable.Repeat(1, columnCount).ToArray();
+        var coveredColumns = new HashSet<int>(projectPlacements.SelectMany(item => item.Footprint).Select(item => ParseColumn(item.ColumnId)));
+        for (var column = 0; column < columnExtents.Length; column++)
+            if (!coveredColumns.Contains(column))
+                columnExtents[column] = Math.Max(1, request.NodePlacement.HorizontalSpacing);
         var rowExtents = Enumerable.Repeat(Math.Max(1, request.GridSizing.CellHeight), rowCount).ToArray();
         foreach (var placement in projectPlacements)
         {
@@ -129,28 +135,62 @@ internal sealed class ArchitectureV6GeometryBuilder
             foreach (var column in footprintColumns) columnExtents[column] = Math.Max(columnExtents[column], perColumn);
             rowExtents[ParseRow(placement.AnchorCellId.RowId)] = Math.Max(rowExtents[ParseRow(placement.AnchorCellId.RowId)], NodeHeight(node));
         }
-        var columnOffsets = Offsets(columnExtents, request.NodePlacement.HorizontalSpacing);
+        // Logical columns inside a footprint are contiguous. Unoccupied separator columns
+        // carry the normal horizontal gap, preventing spacing from multiplying per footprint cell.
+        var columnOffsets = Offsets(columnExtents, 0);
         var rowOffsets = Offsets(rowExtents, request.NodePlacement.VerticalSpacing);
         var contentWidth = columnOffsets.Last() + columnExtents.Last();
         var contentHeight = rowOffsets.Last() + rowExtents.Last();
         var padding = Math.Max(0, request.GridSizing.ContainerPadding);
         var header = Math.Max(0, request.GridSizing.ProjectHeaderHeight);
-        var relativeBounds = new RelativeRectangle(0, 0, contentWidth + padding * 2, contentHeight + header + padding * 2);
-        var absoluteBounds = new AbsoluteRectangle(diagramX, 0, relativeBounds.Width, relativeBounds.Height);
-        var relativeLabel = new RelativeRectangle(padding, padding, Math.Max(1, contentWidth), header);
-        var absoluteLabel = new AbsoluteRectangle(diagramX + relativeLabel.X, relativeLabel.Y, relativeLabel.Width, relativeLabel.Height);
         var gridId = new PlanningGridId($"project:{projectId}");
         var rows = rowExtents.Select((extent, index) => new PlanningGridRow(new PlanningGridRowId($"row:{index}"), index, extent, extent, extent, rowOffsets[index], rowOffsets[index])).ToArray();
         var columns = columnExtents.Select((extent, index) => new PlanningGridColumn(new PlanningGridColumnId($"column:{index}"), index, extent, extent, extent, columnOffsets[index], columnOffsets[index])).ToArray();
         var sizedCells = BuildCells(gridId, rows, columns, source);
         var grid = new PlanningGrid(gridId, rows, columns, sizedCells, new GridTransform(gridId, new RelativePoint(diagramX + padding, header + padding)));
-        var nodeOutput = projectPlacements.Select(placement => BuildNodeGeometry(placement, grid, diagramX, padding, header)).ToArray();
+        var nodeOutput = NormalizeHorizontalGaps(projectPlacements.Select(placement => BuildNodeGeometry(placement, grid, diagramX, padding, header)).ToArray(), request.NodePlacement.HorizontalSpacing, diagramX);
+        contentWidth = Math.Max(contentWidth, nodeOutput.Select(node => node.RelativeBounds.X + node.RelativeBounds.Width).DefaultIfEmpty(padding).Max() - padding);
+        var relativeBounds = new RelativeRectangle(0, 0, contentWidth + padding * 2, contentHeight + header + padding * 2);
+        var absoluteBounds = new AbsoluteRectangle(diagramX, 0, relativeBounds.Width, relativeBounds.Height);
+        var relativeLabel = new RelativeRectangle(padding, padding, Math.Max(1, contentWidth), header);
+        var absoluteLabel = new AbsoluteRectangle(diagramX + relativeLabel.X, relativeLabel.Y, relativeLabel.Width, relativeLabel.Height);
         var gridOutput = new PlannedGridGeometry(gridId, new RelativeRectangle(padding, header + padding, contentWidth, contentHeight), new AbsoluteRectangle(diagramX + padding, header + padding, contentWidth, contentHeight), grid.Transform, rows, columns);
         var projectNodes = projectPlacements.Select(item => item.PhysicalNodeId).ToArray();
         var projectGrid = new ProjectRoutingGrid(projectId, grid,
             reservations.Where(item => item.GridId.Equals(gridId)).ToArray(), relativeLabel,
             projectNodes, projectNodes.Where(id => nodesById[id].IsExternal).ToArray(), $"project:{projectId}");
         return new ProjectOutput(projectId, relativeBounds, new PlannedProjectGeometry(projectId, relativeBounds, absoluteBounds, relativeLabel, absoluteLabel, projectNodes), projectGrid, nodeOutput, new[] { gridOutput });
+    }
+
+    private static IReadOnlyList<PlannedPhysicalNodeGeometry> NormalizeHorizontalGaps(
+        IReadOnlyList<PlannedPhysicalNodeGeometry> nodes,
+        int spacing,
+        int diagramX)
+    {
+        var result = nodes.ToArray();
+        foreach (var group in result.GroupBy(node => node.RelativeBounds.Y).OrderBy(group => group.Key))
+        {
+            PlannedPhysicalNodeGeometry? previous = null;
+            foreach (var node in group.OrderBy(item => item.RelativeBounds.X).ToArray())
+            {
+                var current = node;
+                if (previous is not null)
+                {
+                    var desiredX = previous.RelativeBounds.X + previous.RelativeBounds.Width + Math.Max(0, spacing);
+                    var delta = desiredX - node.RelativeBounds.X;
+                    if (delta != 0)
+                    {
+                        var relative = node.RelativeBounds with { X = desiredX };
+                        var absolute = node.AbsoluteBounds with { X = diagramX + desiredX };
+                        var index = Array.IndexOf(result, node);
+                        result[index] = node with { RelativeBounds = relative, AbsoluteBounds = absolute };
+                        current = result[index];
+                    }
+                }
+                previous = current;
+            }
+        }
+        return result;
     }
 
     private PlannedPhysicalNodeGeometry BuildNodeGeometry(PlannedNodePlacement placement, PlanningGrid grid, int diagramX, int padding, int header)

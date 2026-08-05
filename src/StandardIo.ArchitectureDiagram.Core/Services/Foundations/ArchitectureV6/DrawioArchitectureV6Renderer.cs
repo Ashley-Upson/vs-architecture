@@ -33,6 +33,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         var emitted = new HashSet<string>(StringComparer.Ordinal);
         var fallbackCount = 0;
         var skippedCount = 0;
+        var styleUsage = new Dictionary<string, (int Count, string Style)>(StringComparer.Ordinal);
 
         if (diagram.Request.ProjectPlacement.ShowProjectContainers)
             foreach (var project in projects)
@@ -49,6 +50,9 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
 
             var style = ResolveStyle(diagram.Request, node);
             if (style.IsFallback) fallbackCount++;
+            var styleKey = style.MatchedSelector ?? "<fallback>";
+            styleUsage.TryGetValue(styleKey, out var usage);
+            styleUsage[styleKey] = (usage.Count + 1, StyleString(style.Rule));
             var parent = diagram.Request.ProjectPlacement.ShowProjectContainers && node.ProjectId is not null
                 ? ProjectCellId(node.ProjectId)
                 : "1";
@@ -69,8 +73,18 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         diagnostics.Add(new DiagramDiagnostic("V6VertexCount", emitted.Count.ToString(CultureInfo.InvariantCulture), null));
         diagnostics.Add(new DiagramDiagnostic("V6SkippedNodeCount", skippedCount.ToString(CultureInfo.InvariantCulture), null));
         diagnostics.Add(new DiagramDiagnostic("V6StyleFallbackCount", fallbackCount.ToString(CultureInfo.InvariantCulture), null));
+        foreach (var usage in styleUsage.OrderBy(item => item.Key, StringComparer.Ordinal))
+            diagnostics.Add(new DiagramDiagnostic("V6StyleRuleUsage", $"rule={usage.Key};count={usage.Value.Count};style={usage.Value.Style}", null));
+        foreach (var rule in diagram.Request.StylePolicies ?? Array.Empty<ArchitectureV6StyleRule>())
+            if (!styleUsage.ContainsKey(rule.Match))
+                diagnostics.Add(new DiagramDiagnostic("V6UnmatchedStyleSelector", $"rule={rule.Match};style={StyleString(rule)}", null));
+        foreach (var styleOverride in diagram.Request.StyleOverridesWithValues ?? Array.Empty<ArchitectureV6StyleOverride>())
+            if (!diagram.PhysicalNodes.Any(node => string.Equals(node.SemanticFullName, styleOverride.FullName, StringComparison.Ordinal)))
+                diagnostics.Add(new DiagramDiagnostic("V6UnusedStyleOverride", $"selector={styleOverride.FullName};style={StyleString(styleOverride.Style)}", null));
         if (geometry is not null)
             diagnostics.Add(new DiagramDiagnostic("V6OutputBounds", $"{geometry.AbsoluteDiagramBounds.Width}x{geometry.AbsoluteDiagramBounds.Height}", null));
+        if (geometry is not null)
+            AddGapDiagnostics(diagram, geometry, diagnostics);
 
         var bounds = geometry?.AbsoluteDiagramBounds ?? new AbsoluteRectangle(0, 0, 1, 1);
         var graph = new XElement("mxGraphModel",
@@ -133,17 +147,63 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
 
     private static ResolvedStyle ResolveStyle(ArchitecturePlanningRequest request, PlannedPhysicalNode node)
     {
-        if (node.IsExternal) return new ResolvedStyle(request.ExternalDependencyStyle ?? ExternalStyle, false);
+        if (node.IsExternal) return new ResolvedStyle(request.ExternalDependencyStyle ?? ExternalStyle, false, "<external>");
         var overrideStyle = request.StyleOverridesWithValues?.FirstOrDefault(item => string.Equals(item.FullName, node.SemanticFullName, StringComparison.Ordinal));
-        if (overrideStyle is not null) return new ResolvedStyle(overrideStyle.Style, false);
+        if (overrideStyle is not null) return new ResolvedStyle(overrideStyle.Style, false, overrideStyle.FullName);
         var match = request.StylePolicies?.FirstOrDefault(rule => GlobMatcher.IsMatch(node.SemanticName, rule.Match) || GlobMatcher.IsMatch(node.SemanticFullName, rule.Match));
-        return match is null ? new ResolvedStyle(FallbackStyle, true) : new ResolvedStyle(match, false);
+        return match is null ? new ResolvedStyle(FallbackStyle, true, null) : new ResolvedStyle(match, false, match.Match);
     }
 
     private static string StyleString(ArchitectureV6StyleRule style) =>
         $"shape={style.Shape};whiteSpace=wrap;html=1;rounded={(style.Shape == "rounded" ? "1" : "0")};shadow={(style.Shadow ? "1" : "0")};fillColor={style.FillColor};strokeColor={style.StrokeColor};fontColor={style.FontColor};{style.ExtraStyle}";
 
+    private static void AddGapDiagnostics(PlannedArchitectureDiagram diagram, PlannedArchitectureGeometry geometry, ICollection<DiagramDiagnostic> diagnostics)
+    {
+        var placements = diagram.NodePlacements.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
+        foreach (var group in geometry.Nodes.GroupBy(node => node.ProjectId, StringComparer.Ordinal))
+        {
+            var horizontal = group.OrderBy(node => node.AbsoluteBounds.X).ThenBy(node => node.AbsoluteBounds.Y).ToArray();
+            for (var index = 1; index < horizontal.Length; index++)
+            {
+                var previous = horizontal[index - 1];
+                var current = horizontal[index];
+                if (previous.AbsoluteBounds.Y >= current.AbsoluteBounds.Y + current.AbsoluteBounds.Height || current.AbsoluteBounds.Y >= previous.AbsoluteBounds.Y + previous.AbsoluteBounds.Height)
+                    continue;
+                var renderedGap = current.AbsoluteBounds.X - (previous.AbsoluteBounds.X + previous.AbsoluteBounds.Width);
+                var plannedGap = PlannedHorizontalGap(placements, previous.PhysicalNodeId, current.PhysicalNodeId, diagram.Request.NodePlacement.HorizontalSpacing);
+                diagnostics.Add(new DiagramDiagnostic("V6NodeGap", $"from={previous.PhysicalNodeId};to={current.PhysicalNodeId};planned={plannedGap};rendered={renderedGap};policy=normal-horizontal", null));
+            }
+            var vertical = group.OrderBy(node => node.AbsoluteBounds.Y).ThenBy(node => node.AbsoluteBounds.X).ToArray();
+            for (var index = 1; index < vertical.Length; index++)
+            {
+                var previous = vertical[index - 1];
+                var current = vertical[index];
+                if (previous.AbsoluteBounds.X >= current.AbsoluteBounds.X + current.AbsoluteBounds.Width || current.AbsoluteBounds.X >= previous.AbsoluteBounds.X + previous.AbsoluteBounds.Width)
+                    continue;
+                var renderedGap = current.AbsoluteBounds.Y - (previous.AbsoluteBounds.Y + previous.AbsoluteBounds.Height);
+                diagnostics.Add(new DiagramDiagnostic("V6NodeGap", $"from={previous.PhysicalNodeId};to={current.PhysicalNodeId};planned=logical-row;rendered={renderedGap};policy=normal-vertical", null));
+            }
+        }
+        var projects = geometry.Projects.OrderBy(project => project.AbsoluteBounds.X).ToArray();
+        for (var index = 1; index < projects.Length; index++)
+        {
+            var previous = projects[index - 1];
+            var current = projects[index];
+            diagnostics.Add(new DiagramDiagnostic("V6ProjectGap", $"from={previous.ProjectId};to={current.ProjectId};rendered={current.AbsoluteBounds.X - (previous.AbsoluteBounds.X + previous.AbsoluteBounds.Width)};policy=project-section", null));
+        }
+    }
+
+    private static int PlannedHorizontalGap(IReadOnlyDictionary<string, PlannedNodePlacement> placements, string leftId, string rightId, int cellWidth)
+    {
+        if (!placements.TryGetValue(leftId, out var left) || !placements.TryGetValue(rightId, out var right)) return 0;
+        var leftMax = left.Footprint.Select(cell => ParseColumn(cell.ColumnId)).DefaultIfEmpty(0).Max();
+        var rightMin = right.Footprint.Select(cell => ParseColumn(cell.ColumnId)).DefaultIfEmpty(0).Min();
+        return Math.Max(0, rightMin - leftMax - 1) * Math.Max(1, cellWidth);
+    }
+
+    private static int ParseColumn(PlanningGridColumnId id) => int.Parse(id.Value.Substring(id.Value.LastIndexOf(':') + 1), CultureInfo.InvariantCulture);
+
     private static string CellId(string physicalNodeId) => StableId.From("architecture_v6_node", physicalNodeId);
     private static string ProjectCellId(string projectId) => StableId.From("architecture_v6_project", projectId);
-    private sealed record ResolvedStyle(ArchitectureV6StyleRule Rule, bool IsFallback);
+    private sealed record ResolvedStyle(ArchitectureV6StyleRule Rule, bool IsFallback, string? MatchedSelector);
 }

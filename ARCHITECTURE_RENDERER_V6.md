@@ -28,9 +28,11 @@ Roslyn semantic analysis
 - Abstract routes retain physical endpoints, route steps, topology family and grid transitions. Straight runs, turns, crossings and endpoint demands retain future lane continuity without assigning pixels.
 - Track constraints represent single-track, span, lane, clearance, node and project requirements. Solving is deferred.
 - `ArchitectureV6GeometryBuilder` converts logical rows and columns into deterministic track extents and offsets. Node rectangles are sized from the node label, minimum node policy and grid sizing inputs; project regions include padding and reserved header space.
+- Logical columns inside a node footprint are contiguous. Empty logical separator columns carry the normal horizontal spacing policy; spacing is not added after every footprint column. A final same-row reconciliation preserves the explicit normal gap between adjacent visible node rectangles while retaining larger project-section gaps.
 - `PlannedPhysicalNodeGeometry`, `PlannedProjectGeometry`, `PlannedGridGeometry` and `PlannedSubtreeGeometry` preserve physical projection identity, positional ownership and project ownership through local and absolute bounds. The project grids are laid out in selected-project order followed by remaining projects in discovery order.
 - Geometry validation checks positive dimensions, node collision, project containment, page bounds and one geometry record per physical node. `DrawioArchitectureV6Renderer` projects each planned physical node exactly once into a deterministic vertex cell, using absolute geometry for page-level nodes and project-relative geometry for nodes under project containers.
 - Vertex metadata retains physical and semantic identity, full name, projection mode, project ownership, positional ownership and duplicate provenance. Labels are XML-escaped by `XElement` serialization. Project geometry is emitted as a swimlane-style boundary cell when containers are enabled.
+- Renderer diagnostics report style-rule usage, fallback count, unmatched selectors, unused exact overrides, final node gaps and project-section gaps. Style resolution is first-match for configured rules, after exact full-name overrides and before the deterministic fallback.
 
 ## Validation and diagnostics
 

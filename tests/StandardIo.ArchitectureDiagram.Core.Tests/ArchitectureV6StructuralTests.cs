@@ -303,6 +303,40 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains(cells, cell => (string?)cell.Attribute("projectionMode") == "DuplicateBranch" && cell.Attribute("duplicationReason") is not null);
     }
 
+    [Fact]
+    public void V6_geometry_uses_one_normal_gap_between_adjacent_logical_groups()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(GraphRequest(NodeProjectionMode.Canonical));
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var gapMessages = page.Diagnostics.Where(diagnostic => diagnostic.Code == "V6NodeGap" && diagnostic.Message.Contains("policy=normal-horizontal", StringComparison.Ordinal)).ToArray();
+
+        Assert.NotEmpty(gapMessages);
+        Assert.All(gapMessages, diagnostic => Assert.Contains("rendered=20", diagnostic.Message));
+    }
+
+    [Fact]
+    public void V6_renderer_emits_distinctive_configured_style_and_reports_usage()
+    {
+        var request = GraphRequest(NodeProjectionMode.Canonical) with
+        {
+            StylePolicies = new[]
+            {
+                new ArchitectureV6StyleRule("RootOrchestrationService", "#010203", "#040506", "#070809", "hexagon", false, "align=left;"),
+                new ArchitectureV6StyleRule("NeverMatches", "#101112", "#131415", "#161718", "ellipse", false, null)
+            }
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var root = Assert.Single(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("semanticNodeId") == "root");
+
+        Assert.Contains("fillColor=#010203", root.Attribute("style")!.Value);
+        Assert.Contains("shape=hexagon", root.Attribute("style")!.Value);
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6StyleRuleUsage" && diagnostic.Message.Contains("rule=RootOrchestrationService", StringComparison.Ordinal));
+        Assert.DoesNotContain(page.Diagnostics, diagnostic => diagnostic.Code == "V6UnmatchedStyleSelector" && diagnostic.Message.Contains("RootOrchestrationService", StringComparison.Ordinal));
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6UnmatchedStyleSelector" && diagnostic.Message.Contains("rule=NeverMatches", StringComparison.Ordinal));
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6StyleFallbackCount" && diagnostic.Message != "0");
+    }
+
 
     private static bool Intersects(RelativeRectangle left, RelativeRectangle right) =>
         left.X < right.X + right.Width && right.X < left.X + left.Width && left.Y < right.Y + right.Height && right.Y < left.Y + left.Height;
