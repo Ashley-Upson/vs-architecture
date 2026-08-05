@@ -19,13 +19,14 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids).Build();
         var allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
             routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build();
+        var sizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, placement.NodePlacements, placement.NodeMetadata,
+            routing.ProjectGrids, placement.SubtreeReservations, allocation.Sizing.Constraints).Build();
         var projectGrids = routing.ProjectGrids;
         var diagramGrid = routing.DiagramGrid;
         var findings = projection.Diagnostics.Concat(new[]
         {
-            Deferred("V6SizingDeferred", PlanningDiagnosticSubject.TrackConstraint, "Row and column sizing is deferred until route demand exists."),
-            Deferred("V6GeometryDeferred", PlanningDiagnosticSubject.Grid, "Relative and absolute geometry compilation is deferred."),
-        }).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).ToArray();
+            Deferred("V6AbsoluteGeometryDeferred", PlanningDiagnosticSubject.Grid, "Absolute geometry compilation remains deferred until the next planning stage."),
+        }).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(sizing.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(
             request.SemanticModel.Projects.Sum(project => project.Nodes.Count) + request.SemanticModel.ExternalNodes.Count,
@@ -41,7 +42,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             allocation.Routes.Sum(route => route.Steps.Count),
             allocation.StraightRuns.Count,
             allocation.HorizontalLanes.Concat(allocation.VerticalLanes).Select(run => run.Lane).Distinct().Count(),
-            null,
+            sizing.RelativeGeometry.DiagramBounds,
             findings.Length,
             projection.SemanticNodeToPhysicalNodeIds.ToDictionary(item => item.Key, item => item.Value.Count, StringComparer.Ordinal),
             projection.RootPhysicalNodeIds.Count,
@@ -52,7 +53,14 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             AnchorCellCount: placement.NodePlacements.Count,
             FootprintCellCount: placement.NodePlacements.Sum(item => item.Footprint.Count),
             SubtreeReservationCount: placement.SubtreeReservations.Count,
-            PositionalOwnerCount: placement.NodeMetadata.Count(item => item.PositionalOwnerId is not null));
+            PositionalOwnerCount: placement.NodeMetadata.Count(item => item.PositionalOwnerId is not null),
+            SizedNodeCount: sizing.RelativeGeometry.Nodes.Count,
+            GeometryProjectCount: sizing.RelativeGeometry.Projects.Count,
+            GeometryGridCount: sizing.RelativeGeometry.Grids.Count,
+            GeometryWidth: sizing.RelativeGeometry.DiagramBounds.Width,
+            GeometryHeight: sizing.RelativeGeometry.DiagramBounds.Height,
+            GeometryCollisionCount: sizing.Diagnostics.Count(item => item.Code == "RelativeNodeOverlap"),
+            InvalidDimensionCount: sizing.Diagnostics.Count(item => item.Code == "InvalidTrackDimension"));
 
         return new PlannedArchitectureDiagram(
             request,
@@ -62,18 +70,19 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projectGrids,
             placement.NodePlacements,
             allocation.Routes,
-            allocation.Sizing,
+            sizing.Sizing,
             new ArchitecturePlanningDiagnostics(findings, metrics),
             projection,
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, true, false, true, false, false, true, true),
+            new ArchitecturePlanningStageStatus(true, true, true, false, false, true, true, false, true, false),
             routing.DestinationApproaches,
             allocation.StraightRuns,
             routing.TurnDemands,
             routing.EndpointDemands,
-            allocation);
+            allocation,
+            sizing.RelativeGeometry);
     }
 
     private static ArchitecturePlanningDiagnostic Deferred(string code, PlanningDiagnosticSubject subject, string message) =>

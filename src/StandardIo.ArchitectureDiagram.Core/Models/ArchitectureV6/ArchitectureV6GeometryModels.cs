@@ -97,6 +97,55 @@ public sealed record PlannedGridGeometry(
     IReadOnlyList<PlanningGridRow> Rows,
     IReadOnlyList<PlanningGridColumn> Columns);
 
+public sealed record PlannedRelativeNodeGeometry(
+    string PhysicalNodeId,
+    string SemanticNodeId,
+    string? ProjectId,
+    RelativeRectangle Bounds,
+    PlanningGridId GridId,
+    PlanningGridCellId AnchorCellId,
+    string? PositionalOwnerId,
+    PhysicalNodeProjectionMode ProjectionMode,
+    bool IsExternal,
+    bool IsStandalone);
+
+public sealed record PlannedRelativeProjectGeometry(
+    string ProjectId,
+    RelativeRectangle Bounds,
+    RelativeRectangle LabelBounds,
+    IReadOnlyList<string> PhysicalNodeIds);
+
+public sealed record PlannedRelativeSubtreeGeometry(
+    string SubtreeId,
+    string? PositionalOwnerId,
+    PlanningGridId GridId,
+    RelativeRectangle Bounds,
+    string? AncestorSubtreeId);
+
+public sealed class PlannedArchitectureRelativeGeometry
+{
+    public PlannedArchitectureRelativeGeometry(
+        IReadOnlyList<PlannedRelativeNodeGeometry> nodes,
+        IReadOnlyList<PlannedRelativeProjectGeometry> projects,
+        IReadOnlyList<PlannedGridGeometry> grids,
+        IReadOnlyList<PlannedRelativeSubtreeGeometry> subtrees,
+        RelativeRectangle diagramBounds)
+    {
+        Nodes = Array.AsReadOnly((nodes ?? throw new ArgumentNullException(nameof(nodes))).ToArray());
+        Projects = Array.AsReadOnly((projects ?? throw new ArgumentNullException(nameof(projects))).ToArray());
+        Grids = Array.AsReadOnly((grids ?? throw new ArgumentNullException(nameof(grids))).ToArray());
+        Subtrees = Array.AsReadOnly((subtrees ?? throw new ArgumentNullException(nameof(subtrees))).ToArray());
+        if (diagramBounds.Width <= 0 || diagramBounds.Height <= 0) throw new ArgumentException("Diagram bounds must be positive.", nameof(diagramBounds));
+        DiagramBounds = diagramBounds;
+    }
+
+    public IReadOnlyList<PlannedRelativeNodeGeometry> Nodes { get; }
+    public IReadOnlyList<PlannedRelativeProjectGeometry> Projects { get; }
+    public IReadOnlyList<PlannedGridGeometry> Grids { get; }
+    public IReadOnlyList<PlannedRelativeSubtreeGeometry> Subtrees { get; }
+    public RelativeRectangle DiagramBounds { get; }
+}
+
 public sealed record PlannedSubtreeGeometry(
     string SubtreeId,
     string? PositionalOwnerId,
