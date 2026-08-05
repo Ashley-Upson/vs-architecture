@@ -141,10 +141,34 @@ public sealed class ReplacementArchitectureRenderer
         DiagramSettings settings)
     {
         var nodeRects = PlaceCanonicalUnits(graph, settings);
-        var expansionEvents = Array.Empty<ArchitectureExpansionEvent>();
+        var expansionEvents = new List<ArchitectureExpansionEvent>();
+        CanonicalRoutingAllocation routing;
+        Dictionary<string, Rect> projectRects;
+        for (var iteration = 0; ; iteration++)
+        {
+            projectRects = BuildProjectRects(graph, nodeRects, settings);
+            routing = AllocateAndMaterializeRoutes(graph, nodeRects, projectRects, settings);
+            var baseExtents = BaseLayerExtents(graph, nodeRects, settings);
+            var requiredExpansion = ProjectLayerExpansionReconciler.DesiredExpansions(
+                baseExtents,
+                routing.RequiredLayerExtents ?? new Dictionary<ProjectLayerExpansionIdentity, int>());
+            var expansions = (routing.RequiredLayerExpansion ?? new Dictionary<ProjectLayerExpansionIdentity, int>())
+                .Concat(requiredExpansion)
+                .GroupBy(item => item.Key)
+                .ToDictionary(group => group.Key, group => group.Max(item => item.Value));
+            if (expansions.Count == 0 || iteration >= 3)
+                break;
 
-        var projectRects = BuildProjectRects(graph, nodeRects, settings);
-        var routing = AllocateAndMaterializeRoutes(graph, nodeRects, projectRects, settings);
+            foreach (var expansion in expansions.OrderBy(item => item.Key.ProjectId, StringComparer.Ordinal)
+                         .ThenBy(item => item.Key.LowerDepth))
+            {
+                if (expansion.Value <= 0) continue;
+                ApplyLayerExpansion(graph, nodeRects, expansion.Key, expansion.Value);
+                expansionEvents.Add(new ArchitectureExpansionEvent(
+                    "InterLayer", expansion.Key.ProjectId, expansion.Key.ProjectId,
+                    0, 0, 0, $"Expanded layer gap below depth {expansion.Key.LowerDepth} by {expansion.Value}px."));
+            }
+        }
         var terminals = routing.Terminals;
         var routes = routing.Routes;
         var findings = routing.Findings.Concat(
@@ -175,6 +199,46 @@ public sealed class ReplacementArchitectureRenderer
             routing.Evidence);
     }
 
+    private static IReadOnlyDictionary<ProjectLayerExpansionIdentity, int> BaseLayerExtents(
+        ArchitecturePlacementGraph graph,
+        IReadOnlyDictionary<string, Rect> rects,
+        DiagramSettings settings)
+    {
+        var result = new Dictionary<ProjectLayerExpansionIdentity, int>();
+        foreach (var project in graph.Nodes.Where(node => node.ProjectId is not null)
+                     .GroupBy(node => node.ProjectId!, StringComparer.Ordinal))
+        {
+            var layers = project.GroupBy(node => node.Depth)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            foreach (var depth in layers.Keys.OrderBy(item => item))
+            {
+                var upperBottom = layers[depth].Max(node => rects[node.RenderInstanceId].Bottom);
+                var lowerTop = layers.TryGetValue(depth + 1, out var lower)
+                    ? lower.Min(node => rects[node.RenderInstanceId].Y)
+                    : upperBottom + settings.Layout.LinkPadding * 2;
+                result[new ProjectLayerExpansionIdentity(project.Key, depth + 1)] =
+                    Math.Max(0, lowerTop - upperBottom);
+            }
+        }
+        return result;
+    }
+
+    private static void ApplyLayerExpansion(
+        ArchitecturePlacementGraph graph,
+        IDictionary<string, Rect> nodeRects,
+        ProjectLayerExpansionIdentity expansion,
+        int delta)
+    {
+        var projectNodes = graph.Nodes.Where(node => string.Equals(node.ProjectId, expansion.ProjectId,
+            StringComparison.Ordinal)).ToArray();
+        foreach (var node in projectNodes)
+        {
+            if (node.Depth < expansion.LowerDepth || !nodeRects.TryGetValue(node.RenderInstanceId, out var rect))
+                continue;
+            nodeRects[node.RenderInstanceId] = rect with { Y = rect.Y + delta };
+        }
+    }
+
     private static CanonicalRoutingAllocation AllocateAndMaterializeRoutes(
         ArchitecturePlacementGraph graph,
         IReadOnlyDictionary<string, Rect> nodeRects,
@@ -188,7 +252,9 @@ public sealed class ReplacementArchitectureRenderer
                 Array.Empty<ArchitecturePhysicalRoute>(),
                 Array.Empty<ValidationFinding>(),
                 new ArchitectureRoutingEvidence(0, new Dictionary<string, int>(StringComparer.Ordinal),
-                    0, 0, 0, 0, 0, 0, 0, 0));
+                    0, 0, 0, 0, 0, 0, 0, 0),
+                new Dictionary<ProjectLayerExpansionIdentity, int>(),
+                new Dictionary<ProjectLayerExpansionIdentity, int>());
 
         var nodes = renderGraph.Nodes.ToDictionary(
             node => node.Id,
@@ -295,7 +361,9 @@ public sealed class ReplacementArchitectureRenderer
             topology.Plans.Values.Count(plan => plan.Family == CanonicalTopologyFamily.CrossProjectBoundaryTransition),
             topology.Rejections.Count,
             findings.Count);
-        return new CanonicalRoutingAllocation(terminals, routes, findings, evidence);
+        return new CanonicalRoutingAllocation(terminals, routes, findings, evidence,
+            compilation?.RequiredLayerExpansion ?? new Dictionary<ProjectLayerExpansionIdentity, int>(),
+            compilation?.RequiredExtentByBand ?? new Dictionary<ProjectLayerExpansionIdentity, int>());
     }
 
     private static IReadOnlyDictionary<string, LinkLayout> AllocateTraceableTerminals(

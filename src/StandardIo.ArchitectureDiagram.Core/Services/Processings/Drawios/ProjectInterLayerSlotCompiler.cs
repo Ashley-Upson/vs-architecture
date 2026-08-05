@@ -143,19 +143,27 @@ internal static class ProjectInterLayerSlotCompiler
             .ToDictionary(
                 band => new ProjectLayerExpansionIdentity(band.ProjectId!, band.LowerLayer),
                 _ => 0);
+        // Slot ownership is collective for one inter-layer routing region.  Do not
+        // split a region merely because one demand has a local span while another
+        // uses the wider project span: separate allocations can then reuse the
+        // same slot coordinate and emit shared horizontal segments.
         foreach (var group in demands.GroupBy(item =>
-                     $"{item.MovementScope?.Id}:{item.AllowedAxisRange.Minimum}:{item.AllowedAxisRange.Maximum}",
+                     $"{item.MovementScope?.Id}:{item.BandId}:{item.CoordinateFrameId}:{item.DemandCategory}",
                      StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
         {
-            var sample = group.First();
-            var allowedRange = sample.AllowedAxisRange;
+            var source = group.ToArray();
+            var allowedRange = new AxisInterval(
+                source.Min(item => item.AllowedAxisRange.Minimum),
+                source.Max(item => item.AllowedAxisRange.Maximum));
+            var regionDemands = source.Select(item => item with { AllowedAxisRange = allowedRange }).ToArray();
+            var sample = regionDemands[0];
             var identity = new LinkSegmentAllocationRegionIdentity(
                 LinkSegmentOrientation.Horizontal, allowedRange,
                 $"project-interLayer:{group.Key}", sample.MovementScope, revision);
-            var assigned = DeterministicSlotAllocator.Assign(identity, group,
+            var assigned = DeterministicSlotAllocator.Assign(identity, regionDemands,
                 new LinkSegmentAssignmentOptions(separation, padding));
             var selected = string.Equals(sample.DemandCategory, "ProjectInternal", StringComparison.Ordinal)
-                ? ConstrainProjectAssignments(group.ToArray(), assigned.SegmentsByDemandId, plans, nodes,
+                ? ConstrainProjectAssignments(regionDemands, assigned.SegmentsByDemandId, plans, nodes,
                     projectLabels, separation, padding)
                 : assigned.SegmentsByDemandId;
             foreach (var item in selected)

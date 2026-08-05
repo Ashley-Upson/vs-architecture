@@ -126,7 +126,9 @@ internal sealed record CanonicalRoutingAllocation(
     IReadOnlyList<ArchitectureTerminal> Terminals,
     IReadOnlyList<ArchitecturePhysicalRoute> Routes,
     IReadOnlyList<ValidationFinding> Findings,
-    ArchitectureRoutingEvidence Evidence);
+    ArchitectureRoutingEvidence Evidence,
+    IReadOnlyDictionary<ProjectLayerExpansionIdentity, int>? RequiredLayerExpansion = null,
+    IReadOnlyDictionary<ProjectLayerExpansionIdentity, int>? RequiredLayerExtents = null);
 
 internal sealed record DrawioPageCell(
     string Id,
