@@ -24,38 +24,44 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_retains_empty_project_grid_shells_without_placing_nodes()
+    public void Planner_builds_sparse_project_grid_with_one_anchor_per_node()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
 
         var grid = Assert.Single(plan.ProjectGrids);
         Assert.Equal("project:project:p", grid.Grid.Id.Value);
         Assert.Equal(3, grid.OwnedPhysicalNodeIds.Count);
-        Assert.Empty(grid.Grid.Rows);
-        Assert.Empty(grid.Grid.Columns);
-        Assert.Empty(grid.Grid.Cells);
-        Assert.Empty(plan.NodePlacements);
-        Assert.Empty(plan.SubtreeReservations);
+        Assert.NotEmpty(grid.Grid.Rows);
+        Assert.NotEmpty(grid.Grid.Columns);
+        Assert.Equal(3, plan.NodePlacements.Count);
+        Assert.Equal(3, plan.NodePlacements.Select(item => item.AnchorCellId).Distinct().Count());
+        Assert.All(plan.NodePlacements, placement =>
+        {
+            Assert.True(placement.ColumnSpan >= 3);
+            Assert.Equal(1, placement.ColumnSpan % 2);
+            Assert.Contains(placement.AnchorCellId, placement.Footprint);
+        });
+        Assert.Equal(3, plan.SubtreeReservations.Count);
     }
 
     [Fact]
-    public void Planner_marks_placement_routing_sizing_and_geometry_as_deferred()
+    public void Planner_marks_placement_complete_and_later_stages_deferred()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
 
         Assert.True(plan.StageStatus.ProjectionCompleted);
-        Assert.False(plan.StageStatus.LogicalPlacementCompleted);
+        Assert.True(plan.StageStatus.LogicalPlacementCompleted);
         Assert.True(plan.StageStatus.RoutingDeferred);
         Assert.True(plan.StageStatus.SizingDeferred);
         Assert.True(plan.StageStatus.AbsoluteGeometryDeferred);
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6SizingDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6GeometryDeferred");
     }
 
     [Fact]
-    public void Planner_cycle_projection_terminates_without_routes_or_placement()
+    public void Planner_cycle_projection_terminates_with_finite_placement()
     {
         var request = Request() with
         {
@@ -75,6 +81,123 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(2, plan.PhysicalLinks.Count);
         Assert.NotEmpty(plan.Projection!.CycleSemanticNodeIds);
         Assert.Empty(plan.Routes);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.NodePlacements.Count);
+    }
+
+    [Fact]
+    public void Planner_keeps_baseline_members_on_one_row_without_changing_depth()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with { BaselinePattern = "*Service" },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "RootService", "Project.RootService", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[] { new ArchitectureLink("root-child", "root", "child", "internal") }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var baseline = plan.NodeMetadata.Where(node => node.IsBaseline).ToArray();
+
+        Assert.Equal(2, baseline.Length);
+        Assert.Single(baseline.Select(node => node.PhysicalRow).Distinct());
+        Assert.Equal(0, plan.NodeMetadata.Single(node => node.SemanticNodeId == "root").SemanticDepth);
+        Assert.Equal(1, plan.NodeMetadata.Single(node => node.SemanticNodeId == "child").SemanticDepth);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementBaselineMisalignment");
+    }
+
+    [Fact]
+    public void Planner_places_external_node_below_and_centred_on_its_owner()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                ExternalNodes = new[] { new ArchitectureExternalNode("external", "IExternal", "External", "external", "External.IExternal", "interface") },
+                Links = new[] { new ArchitectureLink("root-external", "root", "external", "external") }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var owner = plan.NodeMetadata.Single(node => node.SemanticNodeId == "root");
+        var external = plan.NodeMetadata.Single(node => node.SemanticNodeId == "external");
+
+        Assert.True(external.IsExternal);
+        Assert.Equal(owner.PhysicalColumn, external.PhysicalColumn);
+        Assert.True(external.PhysicalRow > owner.PhysicalRow);
+        Assert.Equal(owner.PhysicalNodeId, external.PositionalOwnerId);
+    }
+
+    [Fact]
+    public void Planner_packs_standalones_in_a_deterministic_near_square_region()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "Root", "Project.Root", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("one", "project:p", "One", "Project.One", "Class", "one", Array.Empty<string>()),
+                        new ArchitectureNode("two", "project:p", "Two", "Project.Two", "Class", "two", Array.Empty<string>()),
+                        new ArchitectureNode("three", "project:p", "Three", "Project.Three", "Class", "three", Array.Empty<string>()),
+                        new ArchitectureNode("four", "project:p", "Four", "Project.Four", "Class", "four", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = Array.Empty<ArchitectureLink>()
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var standaloneRows = plan.NodeMetadata.Where(node => node.IsStandalone).Select(node => node.PhysicalRow).Distinct().Count();
+
+        Assert.Equal(5, plan.NodeMetadata.Count(node => node.IsStandalone));
+        Assert.Equal(2, standaloneRows);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code.Contains("Overlap", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Planner_duplicate_projection_records_provenance_and_keeps_links()
+    {
+        var request = Request() with
+        {
+            NodeProjection = new NodeProjectionPolicy(NodeProjectionMode.DuplicateBranches, new[] { "*Shared*" }),
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "Root", "Project.Root", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("other", "project:p", "Other", "Project.Other", "Class", "other", Array.Empty<string>()),
+                        new ArchitectureNode("shared", "project:p", "SharedService", "Project.SharedService", "Class", "shared", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-shared", "root", "shared", "internal"),
+                    new ArchitectureLink("other-shared", "other", "shared", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal(4, plan.PhysicalNodes.Count);
+        Assert.Single(plan.PhysicalNodes.Where(node => node.ProjectionMode == PhysicalNodeProjectionMode.DuplicateBranch));
+        Assert.Single(plan.PhysicalNodes.Where(node => node.DuplicationProvenance is not null));
+        Assert.Equal(2, plan.PhysicalLinks.Count);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.NodePlacements.Count);
     }
 
     [Fact]
@@ -99,7 +222,7 @@ public sealed class ArchitectureV6StructuralTests
         var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
 
         Assert.DoesNotContain(page.GraphModel.Descendants(), element => element.Name.LocalName == "mxGeometry" && element.Parent?.Name.LocalName == "mxCell");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6PlacementDeferred");
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6LogicalPlacementComplete");
     }
 
     [Fact]

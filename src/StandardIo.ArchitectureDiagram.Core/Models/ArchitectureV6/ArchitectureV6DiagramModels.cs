@@ -116,18 +116,22 @@ public sealed class PlannedNodePlacement
         int columnSpan,
         int rowSpan,
         IReadOnlyList<PlanningGridCellId> footprint,
-        PlanningGridColumnId centreColumnId)
+        PlanningGridColumnId centreColumnId,
+        string footprintReason = "minimum")
     {
         if (string.IsNullOrWhiteSpace(physicalNodeId)) throw new ArgumentException("Physical node id is required.", nameof(physicalNodeId));
         if (columnSpan <= 0 || columnSpan % 2 == 0) throw new ArgumentException("Node column spans must be positive and odd.", nameof(columnSpan));
         if (rowSpan <= 0) throw new ArgumentException("Node row spans must be positive.", nameof(rowSpan));
         Footprint = Array.AsReadOnly((footprint ?? throw new ArgumentNullException(nameof(footprint))).ToArray());
+        if (Footprint.Count != columnSpan || Footprint.Select(cell => cell.ColumnId.Value).Distinct(StringComparer.Ordinal).Count() != columnSpan)
+            throw new ArgumentException("Node footprints must cover their declared contiguous span.", nameof(footprint));
         PhysicalNodeId = physicalNodeId;
         GridId = gridId;
         AnchorCellId = anchorCellId;
         ColumnSpan = columnSpan;
         RowSpan = rowSpan;
         CentreColumnId = centreColumnId;
+        FootprintReason = string.IsNullOrWhiteSpace(footprintReason) ? "minimum" : footprintReason;
     }
 
     public string PhysicalNodeId { get; }
@@ -137,6 +141,7 @@ public sealed class PlannedNodePlacement
     public int RowSpan { get; }
     public IReadOnlyList<PlanningGridCellId> Footprint { get; }
     public PlanningGridColumnId CentreColumnId { get; }
+    public string FootprintReason { get; }
 }
 
 public sealed class PlannedArchitectureDiagram

@@ -6,7 +6,7 @@ V6 is intentionally at a structural reset point. The active boundary is:
 Roslyn semantic analysis
     -> semantic/physical projection
     -> logical project grids
-    -> node placement (deferred)
+    -> logical grid node placement
     -> abstract grid routes (deferred)
     -> straight runs and collective lane demand (deferred)
     -> row/column sizing and relative/absolute geometry (deferred)
@@ -23,7 +23,10 @@ Roslyn semantic analysis
 - configured duplicate policy types at the request boundary;
 - project ownership, roots, externals, standalones and cycle detection;
 - physical links and semantic-link mappings;
-- empty `ProjectRoutingGrid` and `DiagramRoutingGrid` shells;
+- sparse `ProjectRoutingGrid` instances containing logical anchors, odd
+  footprints and nested subtree reservations, plus an empty diagram grid;
+- deterministic positional ownership, depth metadata, baseline rows, external
+  placement and compact standalone regions;
 - immutable `PlannedArchitectureDiagram`, request/policy contracts and diagnostics.
 
 The abstract grid route, route-step, endpoint, transition, straight-run, lane,
@@ -35,8 +38,6 @@ the current structural planner.
 
 The following stages are not active and must not be inferred from metadata:
 
-- node placement, depth/subdepth coordinates and role bands;
-- subtree reservation calculation and footprint allocation;
 - topology classification;
 - terminal allocation;
 - abstract routes through grid cells;
@@ -45,6 +46,10 @@ The following stages are not active and must not be inferred from metadata:
 - relative and absolute geometry compilation;
 - physical-scene validation of a completed geometry;
 - Draw.io node/container/edge emission.
+
+Logical node placement, depth/subdepth metadata, odd logical footprints and
+subtree reservation envelopes are active. Pixel sizing, route planning and
+rendering are not.
 
 The previous coordinate-first route builder, candidate scoring, rectangle-derived
 lane selection, sequential route reservation and degraded fallback route have been
@@ -67,12 +72,12 @@ CLI and VSIX continue to resolve the V6 Architecture planner/renderer boundary.
 `IPlannedArchitectureDiagramValidator` and immutable diagnostics remain available
 for completed plans. The intentionally incomplete structural plan is not passed
 through completed-geometry validation because it has no placements or geometry.
-The planner reports `V6PlacementDeferred`, `V6RoutePlanningDeferred`,
-`V6SizingDeferred` and `V6GeometryDeferred`; the renderer reports the minimal-page
-and deferred-emission state.
+The planner reports `V6RoutePlanningDeferred`, `V6SizingDeferred` and
+`V6GeometryDeferred`; the renderer reports logical-placement completion, the
+minimal-page state and deferred emission/routing.
 
 ## Next implementation boundary
 
-The next tranche should implement logical grid construction and node placement
-against the retained grid/cell/reservation contracts. It should not revive the
-deleted rectangle router or introduce coordinate-first route candidates.
+The next tranche should classify topology and allocate abstract routes against
+the retained grid/cell/reservation contracts. It should not revive the deleted
+rectangle router or introduce coordinate-first route candidates.

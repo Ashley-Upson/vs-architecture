@@ -77,7 +77,8 @@ public sealed record PlanningGridCell(
     PlanningGridCellId Id,
     CellCapability Capabilities,
     CellOccupancy Occupancy,
-    IReadOnlyList<string> ReservationIds);
+    IReadOnlyList<string> ReservationIds,
+    string? FootprintOwnerId = null);
 
 public sealed record PlanningGrid(
     PlanningGridId Id,

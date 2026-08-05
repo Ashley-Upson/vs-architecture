@@ -18,7 +18,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         var diagnostics = diagram.Diagnostics.Findings
             .Select(finding => new DiagramDiagnostic(finding.Code, finding.Message, finding.SubjectId))
             .ToList();
-        diagnostics.Add(new DiagramDiagnostic("V6PlacementDeferred", "The V6 renderer received no placed physical nodes; node emission is deferred.", null));
+        diagnostics.Add(new DiagramDiagnostic("V6LogicalPlacementComplete", $"The planner supplied {diagram.NodePlacements.Count} logical physical-node placements; pixel geometry and node emission remain deferred.", null));
         diagnostics.Add(new DiagramDiagnostic("V6RoutingDeferred", "The V6 renderer received no abstract routes; edge emission is deferred.", null));
         diagnostics.Add(new DiagramDiagnostic("V6MinimalPage", "Only the minimal valid Draw.io page shell was emitted.", null));
 

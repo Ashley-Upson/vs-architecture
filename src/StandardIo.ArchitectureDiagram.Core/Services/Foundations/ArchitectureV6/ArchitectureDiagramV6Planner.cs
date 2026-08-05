@@ -14,11 +14,11 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         if (request is null) throw new ArgumentNullException(nameof(request));
 
         var projection = new ProjectionBuilder(request).Build();
-        var projectGrids = BuildProjectGrids(request, projection);
+        var placement = new ArchitectureV6LogicalPlacementBuilder(request, projection).Build();
+        var projectGrids = placement.ProjectGrids;
         var diagramGrid = EmptyDiagramGrid();
         var findings = projection.Diagnostics.Concat(new[]
         {
-            Deferred("V6PlacementDeferred", PlanningDiagnosticSubject.Grid, "Node placement is deferred until the grid planner is implemented."),
             Deferred("V6RoutePlanningDeferred", PlanningDiagnosticSubject.RouteStep, "Abstract grid-route planning is deferred; no coordinate route is generated."),
             Deferred("V6SizingDeferred", PlanningDiagnosticSubject.TrackConstraint, "Row and column sizing is deferred until route demand exists."),
             Deferred("V6GeometryDeferred", PlanningDiagnosticSubject.Grid, "Relative and absolute geometry compilation is deferred."),
@@ -30,9 +30,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projection.PhysicalNodes.Count,
             projection.PhysicalLinks.Count,
             projectGrids.Count,
-            0,
-            0,
-            0,
+            projectGrids.Sum(grid => grid.Grid.Rows.Count),
+            projectGrids.Sum(grid => grid.Grid.Columns.Count),
+            projectGrids.Sum(grid => grid.Grid.Cells.Count(item => item.Value.Occupancy == CellOccupancy.NodeAnchor)),
             0,
             new Dictionary<string, int>(),
             0,
@@ -44,7 +44,12 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projection.RootPhysicalNodeIds.Count,
             projection.ExternalPhysicalNodeIds.Count,
             projection.StandalonePhysicalNodeIds.Count,
-            projection.CycleSemanticNodeIds.Count);
+            projection.CycleSemanticNodeIds.Count,
+            LogicalLayerCount: placement.NodeMetadata.Select(item => item.LogicalLayer).Distinct().Count(),
+            AnchorCellCount: placement.NodePlacements.Count,
+            FootprintCellCount: placement.NodePlacements.Sum(item => item.Footprint.Count),
+            SubtreeReservationCount: placement.SubtreeReservations.Count,
+            PositionalOwnerCount: placement.NodeMetadata.Count(item => item.PositionalOwnerId is not null));
 
         return new PlannedArchitectureDiagram(
             request,
@@ -52,55 +57,26 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projection.PhysicalLinks,
             diagramGrid,
             projectGrids,
-            Array.Empty<PlannedNodePlacement>(),
+            placement.NodePlacements,
             Array.Empty<PlannedGridRoute>(),
             new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(), Array.Empty<GridTrackConstraint>(), null),
             new ArchitecturePlanningDiagnostics(findings, metrics),
             projection,
-            Array.Empty<PhysicalNodePlacementMetadata>(),
-            BuildLinkMetadata(projection),
-            Array.Empty<SubtreeReservation>(),
-            new ArchitecturePlanningStageStatus(true, false, true, true, true, false, false));
+            placement.NodeMetadata,
+            placement.LinkMetadata,
+            placement.SubtreeReservations,
+            new ArchitecturePlanningStageStatus(true, true, true, true, true, false, false));
     }
 
     private static ArchitecturePlanningDiagnostic Deferred(string code, PlanningDiagnosticSubject subject, string message) =>
         new(code, message, subject, null);
 
-    private static IReadOnlyList<PlannedPhysicalLinkMetadata> BuildLinkMetadata(ArchitectureProjectionResult projection) =>
-        projection.PhysicalLinks.Select(link => new PlannedPhysicalLinkMetadata(
-            link.PhysicalLinkId,
-            link.SemanticLinkId,
-            link.SourcePhysicalNodeId,
-            link.DestinationPhysicalNodeId,
-            link.SourceProjectId,
-            link.DestinationProjectId,
-            0,
-            0,
-            link.SourceProjectId != link.DestinationProjectId ? "CrossProject" : "Unclassified",
-            link.SourceProjectId != link.DestinationProjectId,
-            projection.ExternalPhysicalNodeIds.Contains(link.DestinationPhysicalNodeId, StringComparer.Ordinal))).ToArray();
-
-    private static IReadOnlyList<ProjectRoutingGrid> BuildProjectGrids(
-        ArchitecturePlanningRequest request,
-        ArchitectureProjectionResult projection)
+    private static Regex ToRegex(string? value)
     {
-        var selected = request.SelectedScope.SelectedProjectIds ?? Array.Empty<string>();
-        var discovered = projection.PhysicalNodes
-            .Select(node => node.ProjectId ?? "external")
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        var projectIds = selected.Concat(discovered).Distinct(StringComparer.Ordinal).ToArray();
-        return projectIds.Select(projectId =>
-        {
-            var gridId = new PlanningGridId($"project:{projectId}");
-            var grid = new PlanningGrid(gridId, Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(),
-                new Dictionary<PlanningGridCellId, PlanningGridCell>(), new GridTransform(gridId, new RelativePoint(0, 0)));
-            var owned = projection.PhysicalNodes.Where(node => (node.ProjectId ?? "external") == projectId)
-                .Select(node => node.PhysicalNodeId).ToArray();
-            var external = projection.PhysicalNodes.Where(node => (node.ProjectId ?? "external") == projectId && node.IsExternal)
-                .Select(node => node.PhysicalNodeId).ToArray();
-            return new ProjectRoutingGrid(projectId, grid, Array.Empty<SubtreeReservation>(), null, owned, external, "project");
-        }).ToArray();
+        var pattern = string.IsNullOrWhiteSpace(value) ? ".*" : value!;
+        if (pattern.IndexOf(".*", StringComparison.Ordinal) >= 0 || pattern.IndexOf("$", StringComparison.Ordinal) >= 0 || pattern.IndexOf("(", StringComparison.Ordinal) >= 0)
+            return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return new Regex("^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private static DiagramRoutingGrid EmptyDiagramGrid()
@@ -139,12 +115,40 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 };
             }).ToList();
             var bySemantic = physicalNodes.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
-            var physicalLinks = links.Select((link, index) => new PlannedPhysicalLink(
-                $"physical-link:{link.Id}:{index}", link.Id, bySemantic[link.SourceId].PhysicalNodeId,
-                bySemantic[link.TargetId].PhysicalNodeId, bySemantic[link.SourceId].ProjectId,
-                bySemantic[link.TargetId].ProjectId) { Kind = link.Kind }).ToArray();
-            var nodeMap = physicalNodes.ToDictionary(node => node.SemanticNodeId,
-                node => (IReadOnlyList<string>)new[] { node.PhysicalNodeId }, StringComparer.Ordinal);
+            var nodeMapBuilder = physicalNodes.ToDictionary(node => node.SemanticNodeId,
+                node => new List<string> { node.PhysicalNodeId }, StringComparer.Ordinal);
+            var duplicatePatterns = request.NodeProjection.DuplicationExceptionPatterns
+                .Where(pattern => !string.IsNullOrWhiteSpace(pattern)).Select(ToRegex).ToArray();
+            var duplicateCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var targetUses = new Dictionary<string, int>(StringComparer.Ordinal);
+            var physicalLinksBuilder = new List<PlannedPhysicalLink>();
+            foreach (var link in links)
+            {
+                var source = bySemantic[link.SourceId];
+                var target = bySemantic[link.TargetId];
+                if (request.NodeProjection.Mode == NodeProjectionMode.DuplicateBranches && targetUses.TryGetValue(link.TargetId, out var useCount) && useCount > 0 &&
+                    duplicatePatterns.Any(pattern => pattern.IsMatch(nodes[link.TargetId].Name) || pattern.IsMatch(link.TargetId)))
+                {
+                    var ordinal = duplicateCounts.TryGetValue(link.TargetId, out var current) ? current + 1 : 1;
+                    duplicateCounts[link.TargetId] = ordinal;
+                    target = new PlannedPhysicalNode($"physical:{link.TargetId}:duplicate:{ordinal}", link.TargetId,
+                        PhysicalNodeProjectionMode.DuplicateBranch, source.PhysicalNodeId,
+                        nodes[link.TargetId].ProjectId ?? FindExternalOwner(link.TargetId, links),
+                        new DuplicationProvenance(link.TargetId, $"Configured duplicate pattern matched '{nodes[link.TargetId].Name}' for link '{link.Id}', ordinal {ordinal}.", source.PhysicalNodeId),
+                        nodes[link.TargetId].IsExternal, false)
+                    {
+                        SemanticName = nodes[link.TargetId].Name,
+                        SemanticFullName = nodes[link.TargetId].FullName
+                    };
+                    physicalNodes.Add(target);
+                    nodeMapBuilder[link.TargetId].Add(target.PhysicalNodeId);
+                }
+                targetUses[link.TargetId] = targetUses.TryGetValue(link.TargetId, out var count) ? count + 1 : 1;
+                physicalLinksBuilder.Add(new PlannedPhysicalLink($"physical-link:{link.Id}:{physicalLinksBuilder.Count}", link.Id,
+                    source.PhysicalNodeId, target.PhysicalNodeId, source.ProjectId, target.ProjectId) { Kind = link.Kind });
+            }
+            var physicalLinks = physicalLinksBuilder.ToArray();
+            var nodeMap = nodeMapBuilder.ToDictionary(item => item.Key, item => (IReadOnlyList<string>)item.Value.ToArray(), StringComparer.Ordinal);
             var linkMap = links.GroupBy(link => link.Id).ToDictionary(group => group.Key,
                 group => (IReadOnlyList<string>)physicalLinks.Where(item => item.SemanticLinkId == group.Key)
                     .Select(item => item.PhysicalLinkId).ToArray(), StringComparer.Ordinal);
