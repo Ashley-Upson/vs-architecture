@@ -257,11 +257,14 @@ internal sealed class ArchitectureV6LaneAllocator
         foreach (var group in approachesAllocated.GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal))
             constraints.Add(new GridTrackConstraint(TrackConstraintKind.VerticalLaneEnvelope, group.First().GridId, group.SelectMany(item => approaches.Single(item2 => item2.ReservationId == item.ReservationId).Cells).Select(cell => cell.RowId).Distinct().ToArray(), Array.Empty<PlanningGridColumnId>(),
                 group.Count(), $"destination approach lanes:{string.Join(",", group.Select(item => item.PhysicalLinkId))}", group.Key));
-        foreach (var turn in turns)
+        foreach (var group in turns.Select(turn => routes.Single(route => route.PhysicalLinkId == turn.RouteId).Steps
+                     .Single(step => step.CellId.ToString() == turn.CellId))
+                 .GroupBy(step => step.GridId.Value + ":" + step.CellId, StringComparer.Ordinal))
         {
-            var turnStep = routes.Single(route => route.PhysicalLinkId == turn.RouteId).Steps.Single(step => step.CellId.ToString() == turn.CellId);
+            var turnStep = group.First();
             constraints.Add(new GridTrackConstraint(TrackConstraintKind.TurnClearance, turnStep.GridId,
-                new[] { turnStep.CellId.RowId }, new[] { turnStep.CellId.ColumnId }, 1, turn.Provenance, turn.RouteId));
+                new[] { turnStep.CellId.RowId }, new[] { turnStep.CellId.ColumnId }, group.Count(),
+                $"turn capacity:{turnStep.CellId};turns={group.Count()}", group.Key));
         }
         foreach (var transition in transitions)
         {

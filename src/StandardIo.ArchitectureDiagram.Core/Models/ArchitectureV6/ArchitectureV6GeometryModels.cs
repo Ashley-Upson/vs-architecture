@@ -77,7 +77,12 @@ public sealed record GridTrackProvenance(
     string TrackId,
     int MinimumExtent,
     int FinalExtent,
-    IReadOnlyList<GridTrackContribution> Contributions);
+    IReadOnlyList<GridTrackContribution> Contributions,
+    PlanningGridTrackRole StructuralRole = PlanningGridTrackRole.Unknown,
+    string? OwnerId = null,
+    int LaneCount = 0,
+    int UnusedCapacity = 0,
+    TrackConstraintKind? DominantConstraint = null);
 
 public sealed record PlannedPhysicalNodeGeometry(
     string PhysicalNodeId,
@@ -131,7 +136,12 @@ public sealed record PlannedRelativeSubtreeGeometry(
     string? PositionalOwnerId,
     PlanningGridId GridId,
     RelativeRectangle Bounds,
-    string? AncestorSubtreeId);
+    string? AncestorSubtreeId,
+    IReadOnlyList<PlannedRelativeSubtreeInterval>? Intervals = null);
+
+public sealed record PlannedRelativeSubtreeInterval(
+    PlanningGridRowId RowId,
+    RelativeRectangle Bounds);
 
 public sealed class PlannedArchitectureRelativeGeometry
 {

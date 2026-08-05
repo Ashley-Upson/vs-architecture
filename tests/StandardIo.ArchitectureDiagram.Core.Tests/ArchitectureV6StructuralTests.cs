@@ -59,7 +59,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_records_track_roles_and_deferred_sizing_metrics()
+    public void Planner_records_track_roles_and_sizing_metrics()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
         var metrics = plan.Diagnostics.Metrics;
@@ -68,8 +68,11 @@ public sealed class ArchitectureV6StructuralTests
         Assert.NotEmpty(metrics.StructuralColumnRoleCounts!);
         Assert.Equal(0, metrics.RouteOnlyRowCount);
         Assert.Equal(0, metrics.RouteOnlyColumnCount);
-        Assert.True(plan.StageStatus.SizingDeferred);
-        Assert.Null(plan.RelativeGeometry);
+        Assert.False(plan.StageStatus.SizingDeferred);
+        Assert.True(plan.StageStatus.SizingCompleted);
+        Assert.NotNull(plan.RelativeGeometry);
+        Assert.True(metrics.SizedNodeCount > 0);
+        Assert.True(metrics.GeometryWidth > 0);
     }
 
     [Fact]
@@ -197,8 +200,10 @@ public sealed class ArchitectureV6StructuralTests
     public void Planner_relative_node_bounds_equal_their_final_grid_footprints()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        Assert.Null(plan.RelativeGeometry);
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6PhysicalSizingDeferred");
+        Assert.NotNull(plan.RelativeGeometry);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.RelativeGeometry!.Nodes.Count);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PhysicalSizingDeferred");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RelativeNodeOverlap");
     }
 
     [Fact]
@@ -207,12 +212,79 @@ public sealed class ArchitectureV6StructuralTests
         var first = new ArchitectureDiagramV6Planner().Plan(Request());
         var second = new ArchitectureDiagramV6Planner().Plan(Request());
 
-        Assert.Null(first.RelativeGeometry);
-        Assert.Null(second.RelativeGeometry);
+        Assert.NotNull(first.RelativeGeometry);
+        Assert.NotNull(second.RelativeGeometry);
+        Assert.True(first.Diagnostics.Metrics.SizingIdempotent);
+        Assert.Equal(first.RelativeGeometry!.DiagramBounds, second.RelativeGeometry!.DiagramBounds);
+        Assert.Equal(first.RelativeGeometry.Nodes.Select(node => node.Bounds), second.RelativeGeometry.Nodes.Select(node => node.Bounds));
         Assert.Equal(first.ProjectGrids.SelectMany(grid => grid.Grid.Rows.Select(row => row.Id)),
             second.ProjectGrids.SelectMany(grid => grid.Grid.Rows.Select(row => row.Id)));
         Assert.Equal(first.ProjectGrids.SelectMany(grid => grid.Grid.Columns.Select(column => column.Id)),
             second.ProjectGrids.SelectMany(grid => grid.Grid.Columns.Select(column => column.Id)));
+    }
+
+    [Fact]
+    public void Planner_sizes_existing_tracks_with_provenance_and_sparse_reservation_intervals()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var projectGrid = Assert.Single(plan.RelativeGeometry!.Grids, grid => grid.GridId.Value.StartsWith("project:", StringComparison.Ordinal));
+        var projectSizing = plan.Sizing.Columns.Where(column => projectGrid.Columns.Any(item => item.Id.Equals(column.Id))).ToArray();
+
+        Assert.Equal(plan.ProjectGrids.Single().Grid.Rows.Count, projectGrid.Rows.Count);
+        Assert.Equal(plan.ProjectGrids.Single().Grid.Columns.Count, projectGrid.Columns.Count);
+        Assert.All(projectGrid.Rows, track => Assert.True(track.FinalExtent > 0));
+        Assert.All(projectGrid.Columns, track => Assert.True(track.FinalExtent > 0));
+        Assert.All(plan.Sizing.Provenance!.Where(item => item.GridId.Equals(projectGrid.GridId)), item =>
+        {
+            Assert.True(item.FinalExtent >= item.MinimumExtent);
+            Assert.NotEqual(PlanningGridTrackRole.Unknown, item.StructuralRole);
+        });
+        Assert.NotEmpty(plan.RelativeGeometry.Subtrees.SelectMany(subtree => subtree.Intervals!));
+        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.HorizontalLaneEnvelope);
+        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.VerticalLaneEnvelope);
+        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.TurnClearance);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "RelativeNodeOverlap" or "SizingInvalidTrack");
+        Assert.NotEmpty(projectSizing);
+    }
+
+    [Fact]
+    public void Planner_relative_node_bounds_are_exact_complete_footprint_envelopes()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        foreach (var node in plan.RelativeGeometry!.Nodes)
+        {
+            var placement = plan.NodePlacements.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
+            var grid = plan.RelativeGeometry.Grids.Single(item => item.GridId.Equals(node.GridId));
+            var columns = placement.Footprint.Select(cell => grid.Columns.Single(column => column.Id.Equals(cell.ColumnId))).ToArray();
+            var rows = placement.Footprint.Select(cell => grid.Rows.Single(row => row.Id.Equals(cell.RowId))).ToArray();
+            var x = columns.Min(column => column.RelativeOffset);
+            var y = rows.Min(row => row.RelativeOffset);
+            var expected = new RelativeRectangle(x, y,
+                columns.Max(column => column.RelativeOffset + column.FinalExtent) - x,
+                rows.Max(row => row.RelativeOffset + row.FinalExtent) - y);
+
+            Assert.Equal(expected, node.Bounds);
+        }
+    }
+
+    [Fact]
+    public void Planner_sizing_preserves_structural_cardinality_and_satisfies_constraints()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var project = Assert.Single(plan.ProjectGrids);
+        var sizedProject = Assert.Single(plan.RelativeGeometry!.Grids, grid => grid.GridId.Equals(project.Grid.Id));
+
+        Assert.Equal(project.Grid.Rows.Count, sizedProject.Rows.Count);
+        Assert.Equal(project.Grid.Columns.Count, sizedProject.Columns.Count);
+        Assert.Equal(project.Grid.Rows.Select(row => row.Id), sizedProject.Rows.Select(row => row.Id));
+        Assert.Equal(project.Grid.Columns.Select(column => column.Id), sizedProject.Columns.Select(column => column.Id));
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "SizingConstraintUnsatisfied" or "SizingConstraintTrackMissing" or "SizingGridBoundsMismatch");
+        Assert.All(plan.RelativeGeometry.Grids, grid =>
+        {
+            Assert.Equal(grid.Columns.Sum(column => column.FinalExtent), grid.RelativeBounds.Width);
+            Assert.Equal(grid.Rows.Sum(row => row.FinalExtent), grid.RelativeBounds.Height);
+        });
     }
 
     [Fact]
@@ -224,16 +296,16 @@ public sealed class ArchitectureV6StructuralTests
         Assert.True(plan.StageStatus.LogicalPlacementCompleted);
         Assert.True(plan.StageStatus.AbstractRoutingCompleted);
         Assert.False(plan.StageStatus.LaneAllocationDeferred);
-        Assert.True(plan.StageStatus.SizingDeferred);
-        Assert.False(plan.StageStatus.SizingCompleted);
+        Assert.False(plan.StageStatus.SizingDeferred);
+        Assert.True(plan.StageStatus.SizingCompleted);
         Assert.True(plan.StageStatus.CapacityConstraintsCompleted);
-        Assert.True(plan.StageStatus.PhysicalSizingDeferred);
+        Assert.False(plan.StageStatus.PhysicalSizingDeferred);
         Assert.True(plan.StageStatus.AbsoluteGeometryDeferred);
         Assert.False(plan.StageStatus.AbsoluteGeometryCompleted);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6AbsoluteGeometryDeferred");
-        Assert.Null(plan.RelativeGeometry);
+        Assert.NotNull(plan.RelativeGeometry);
     }
 
     [Fact]
@@ -436,7 +508,7 @@ public sealed class ArchitectureV6StructuralTests
             Assert.NotEmpty(allocation.Provenance);
         });
         Assert.NotEmpty(plan.Sizing.Constraints);
-        Assert.Null(plan.RelativeGeometry);
+        Assert.NotNull(plan.RelativeGeometry);
         Assert.NotNull(plan.Sizing);
         Assert.Equal(plan.SubtreeReservations.Count, plan.ProjectGrids.SelectMany(grid => grid.SubtreeReservations).Count());
         Assert.Empty(plan.LaneAllocation!.Conflicts);

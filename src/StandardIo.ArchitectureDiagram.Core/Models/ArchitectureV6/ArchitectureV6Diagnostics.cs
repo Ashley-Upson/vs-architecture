@@ -121,7 +121,14 @@ public sealed record ArchitecturePlanningMetrics(
     int TurnCellCount = 0,
     int MaximumTurnsInCell = 0,
     long LaneIntervalComparisons = 0,
-    int LaneCapacityRequirementCount = 0);
+    int LaneCapacityRequirementCount = 0,
+    long SizingConstraintConstructionMilliseconds = 0,
+    long SizingSolverMilliseconds = 0,
+    long SizingOffsetCompilationMilliseconds = 0,
+    long SizingNodeEnvelopeMilliseconds = 0,
+    long SizingReservationEnvelopeMilliseconds = 0,
+    long SizingValidationMilliseconds = 0,
+    long SizingEvidenceSerializationMilliseconds = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

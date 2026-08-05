@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 
@@ -13,9 +14,16 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     private readonly IReadOnlyList<PlannedNodePlacement> placements;
     private readonly IReadOnlyList<ProjectRoutingGrid> projectGrids;
     private readonly IReadOnlyList<SubtreeReservation> reservations;
+    private readonly IReadOnlyList<PhysicalNodePlacementMetadata> metadata;
     private readonly List<GridTrackConstraint> constraintsForSizing;
     private readonly DiagramRoutingGrid diagramGrid;
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
+    private long constraintConstructionMilliseconds;
+    private long solverMilliseconds;
+    private long offsetCompilationMilliseconds;
+    private long nodeEnvelopeMilliseconds;
+    private long reservationEnvelopeMilliseconds;
+    private long validationMilliseconds;
 
     public ArchitectureV6TrackSizingPlanner(
         ArchitecturePlanningRequest request,
@@ -30,6 +38,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
         this.placements = placements ?? throw new ArgumentNullException(nameof(placements));
+        this.metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         this.projectGrids = projectGrids ?? throw new ArgumentNullException(nameof(projectGrids));
         this.reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
         constraintsForSizing = new List<GridTrackConstraint>(constraints ?? throw new ArgumentNullException(nameof(constraints)));
@@ -62,6 +71,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 
             var owned = new HashSet<string>(project.OwnedPhysicalNodeIds, StringComparer.Ordinal);
             var projectPlacements = placements.Where(item => owned.Contains(item.PhysicalNodeId)).ToArray();
+            var nodeEnvelopeTimer = Stopwatch.StartNew();
             foreach (var placement in projectPlacements)
             {
                 var node = nodes.Single(item => item.PhysicalNodeId == placement.PhysicalNodeId);
@@ -69,12 +79,19 @@ internal sealed class ArchitectureV6TrackSizingPlanner
                 relativeNodes.Add(new PlannedRelativeNodeGeometry(node.PhysicalNodeId, node.SemanticNodeId, node.ProjectId,
                     bounds, placement.GridId, placement.AnchorCellId, node.PositionalOwnerId, node.ProjectionMode, node.IsExternal, node.IsStandalone));
             }
+            nodeEnvelopeTimer.Stop();
+            nodeEnvelopeMilliseconds += nodeEnvelopeTimer.ElapsedMilliseconds;
 
+            var reservationEnvelopeTimer = Stopwatch.StartNew();
             foreach (var reservation in reservations.Where(item => item.GridId.Equals(project.Grid.Id)))
             {
                 relativeSubtrees.Add(new PlannedRelativeSubtreeGeometry(reservation.SubtreeId, reservation.PositionalOwnerId,
-                    reservation.GridId, FootprintBounds(reservation.Cells, sized), reservation.AncestorReservationId));
+                    reservation.GridId, FootprintBounds(reservation.Cells, sized), reservation.AncestorReservationId,
+                    reservation.OccupiedRowIntervals.Select(interval => new PlannedRelativeSubtreeInterval(interval.RowId,
+                        FootprintBounds(interval.Columns.Select(column => new PlanningGridCellId(reservation.GridId, interval.RowId, column)).ToArray(), sized))).ToArray()));
             }
+            reservationEnvelopeTimer.Stop();
+            reservationEnvelopeMilliseconds += reservationEnvelopeTimer.ElapsedMilliseconds;
 
             var content = project.Grid.Columns.OrderBy(item => item.LogicalOrder).Sum(item => sized.Columns.Single(column => column.Id.Equals(item.Id)).FinalExtent);
             var height = project.Grid.Rows.OrderBy(item => item.LogicalOrder).Sum(item => sized.Rows.Single(row => row.Id.Equals(item.Id)).FinalExtent);
@@ -82,15 +99,19 @@ internal sealed class ArchitectureV6TrackSizingPlanner
             var heightWithHeader = checked(height + request.GridSizing.ContainerPadding * 2 + request.GridSizing.ProjectHeaderHeight);
             projectWidths[project.ProjectId] = widthWithPadding;
             projectHeights[project.ProjectId] = heightWithHeader;
+            if (project.ProjectLabelReservation is null)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("ProjectLabelMeasurementUnavailable",
+                    "No measured project-label rectangle was supplied; the configured project header height is retained as structural space only.",
+                    PlanningDiagnosticSubject.Grid, project.ProjectId));
             relativeProjects.Add(new PlannedRelativeProjectGeometry(project.ProjectId,
                 new RelativeRectangle(0, 0, widthWithPadding, heightWithHeader),
                 new RelativeRectangle(0, 0, widthWithPadding, request.GridSizing.ProjectHeaderHeight),
                 projectPlacements.Select(item => item.PhysicalNodeId).ToArray()));
         }
 
-        var diagramSource = diagramGrid.Grid.Rows.Count == 0 || diagramGrid.Grid.Columns.Count == 0
-            ? CreateDiagramGrid(projectWidths, projectHeights)
-            : diagramGrid.Grid;
+        var hasDiagramTracks = diagramGrid.Grid.Rows.Count > 0 && diagramGrid.Grid.Columns.Count > 0;
+        var diagramSource = hasDiagramTracks ? diagramGrid.Grid : CreateDiagramGrid(projectWidths, projectHeights);
+        if (hasDiagramTracks) AddDiagramProjectConstraints(diagramSource, projectWidths, projectHeights);
         var diagramSized = SizeGrid(diagramSource);
         solverIterations += diagramSized.Iterations;
         idempotent &= SameTracks(diagramSized, SizeGrid(diagramSource));
@@ -103,9 +124,27 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var diagramBounds = new RelativeRectangle(0, 0, diagramWidth, diagramHeight);
         var relative = new PlannedArchitectureRelativeGeometry(relativeNodes, relativeProjects, grids, relativeSubtrees, diagramBounds);
         var sizing = new GridTrackSizingPlan(sizingRows, sizingColumns, constraintsForSizing, diagramBounds, provenance);
+        var validationTimer = Stopwatch.StartNew();
         Validate(relative, projectGrids, diagramSized);
+        validationTimer.Stop();
+        validationMilliseconds += validationTimer.ElapsedMilliseconds;
         return new PhysicalSizingResult(sizing, relative, diagnostics, solverIterations, projectWidths, projectHeights,
-            sizingRows.Count + sizingColumns.Count, diagramWidth, diagramHeight, idempotent);
+            sizingRows.Count + sizingColumns.Count, diagramWidth, diagramHeight, idempotent,
+            new SizingPerformance(constraintConstructionMilliseconds, solverMilliseconds, offsetCompilationMilliseconds,
+                nodeEnvelopeMilliseconds, reservationEnvelopeMilliseconds, validationMilliseconds));
+    }
+
+    private void AddDiagramProjectConstraints(PlanningGrid grid, IReadOnlyDictionary<string, int> projectWidths,
+        IReadOnlyDictionary<string, int> projectHeights)
+    {
+        foreach (var column in grid.Columns.Where(column => column.Role == PlanningGridTrackRole.DiagramProjectPlacement && column.OwnerId is not null))
+            if (projectWidths.TryGetValue(column.OwnerId!, out var width))
+                constraintsForSizing.Add(new GridTrackConstraint(TrackConstraintKind.ProjectFootprint, grid.Id,
+                    Array.Empty<PlanningGridRowId>(), new[] { column.Id }, width, "sized project footprint width", column.OwnerId));
+        foreach (var row in grid.Rows.Where(row => row.Role == PlanningGridTrackRole.DiagramProjectPlacement))
+            foreach (var project in projectHeights.OrderBy(item => item.Key, StringComparer.Ordinal))
+                constraintsForSizing.Add(new GridTrackConstraint(TrackConstraintKind.ProjectFootprint, grid.Id,
+                    new[] { row.Id }, Array.Empty<PlanningGridColumnId>(), project.Value, "sized project footprint height", project.Key));
     }
 
     private SizedGrid SizeGrid(PlanningGrid grid)
@@ -119,9 +158,13 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 
         foreach (var row in rows) rowContributions[row.Id] = new List<GridTrackContribution>();
         foreach (var column in columns) columnContributions[column.Id] = new List<GridTrackContribution>();
+        var constraintTimer = Stopwatch.StartNew();
         var gridConstraints = BuildGridConstraints(grid, rows, columns);
+        constraintTimer.Stop();
+        constraintConstructionMilliseconds += constraintTimer.ElapsedMilliseconds;
         var iterations = 0;
         var changed = true;
+        var solverTimer = Stopwatch.StartNew();
         while (changed && iterations++ < Math.Max(1, gridConstraints.Count + 1))
         {
             changed = false;
@@ -141,12 +184,19 @@ internal sealed class ArchitectureV6TrackSizingPlanner
             }
         }
 
+        solverTimer.Stop();
+        solverMilliseconds += solverTimer.ElapsedMilliseconds;
         if (changed)
             diagnostics.Add(new ArchitecturePlanningDiagnostic("SizingIterationLimit", "Track sizing did not converge within its deterministic iteration bound.", PlanningDiagnosticSubject.Grid, grid.Id.Value));
 
+        var offsetTimer = Stopwatch.StartNew();
         var sizedRows = CompileRows(rows, rowExtents, rowContributions);
         var sizedColumns = CompileColumns(columns, columnExtents, columnContributions);
-        return new SizedGrid(grid.Id, sizedRows, sizedColumns, iterations, rowContributions, columnContributions);
+        offsetTimer.Stop();
+        offsetCompilationMilliseconds += offsetTimer.ElapsedMilliseconds;
+        var result = new SizedGrid(grid.Id, sizedRows, sizedColumns, iterations, rowContributions, columnContributions, gridConstraints);
+        ValidateConstraints(result, gridConstraints);
+        return result;
     }
 
     private PlanningGrid CreateDiagramGrid(IReadOnlyDictionary<string, int> projectWidths, IReadOnlyDictionary<string, int> projectHeights)
@@ -177,9 +227,23 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 
     private IReadOnlyList<GridTrackConstraint> BuildGridConstraints(PlanningGrid grid, IReadOnlyList<PlanningGridRow> rows, IReadOnlyList<PlanningGridColumn> columns)
     {
-        var result = constraintsForSizing.Where(item => item.GridId.Equals(grid.Id)).ToList();
         var rowIds = new HashSet<PlanningGridRowId>(rows.Select(item => item.Id));
         var columnIds = new HashSet<PlanningGridColumnId>(columns.Select(item => item.Id));
+        var result = new List<GridTrackConstraint>();
+        foreach (var constraint in constraintsForSizing.Where(item => item.GridId.Equals(grid.Id)))
+        {
+            var missingRows = constraint.Rows.Where(row => !rowIds.Contains(row)).ToArray();
+            var missingColumns = constraint.Columns.Where(column => !columnIds.Contains(column)).ToArray();
+            if (missingRows.Length > 0 || missingColumns.Length > 0)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("SizingConstraintTrackMissing",
+                    $"Sizing constraint references tracks not present in its owning grid: {constraint.Reason}.",
+                    PlanningDiagnosticSubject.TrackConstraint, constraint.OwnerId));
+            result.Add(constraint with
+            {
+                Rows = constraint.Rows.Where(rowIds.Contains).ToArray(),
+                Columns = constraint.Columns.Where(columnIds.Contains).ToArray()
+            });
+        }
         foreach (var placement in placements.Where(item => item.GridId.Equals(grid.Id)))
         {
             result.Add(new GridTrackConstraint(TrackConstraintKind.NodeFootprint, grid.Id,
@@ -210,6 +274,8 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     private static bool SatisfySpan<TKey>(IDictionary<TKey, int> extents, IDictionary<TKey, List<GridTrackContribution>> contributions,
         IReadOnlyList<TKey> keys, int required, GridTrackConstraint constraint) where TKey : notnull
     {
+        keys = keys.Where(extents.ContainsKey).ToArray();
+        if (keys.Count == 0) return false;
         var deficit = required - keys.Sum(key => extents[key]);
         if (deficit <= 0) return false;
         for (var index = 0; index < deficit; index++)
@@ -231,7 +297,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         return source.Select(row =>
         {
             var extent = extents[row.Id];
-            var result = new PlanningGridRow(row.Id, row.LogicalOrder, row.MinimumExtent, extent, extent, offset, offset);
+            var result = row with { RequiredExtent = extent, FinalExtent = extent, RelativeOffset = offset, AbsoluteOffset = offset };
             offset += extent;
             return result;
         }).ToArray();
@@ -244,7 +310,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         return source.Select(column =>
         {
             var extent = extents[column.Id];
-            var result = new PlanningGridColumn(column.Id, column.LogicalOrder, column.MinimumExtent, extent, extent, offset, offset);
+            var result = column with { RequiredExtent = extent, FinalExtent = extent, RelativeOffset = offset, AbsoluteOffset = offset };
             offset += extent;
             return result;
         }).ToArray();
@@ -273,6 +339,24 @@ internal sealed class ArchitectureV6TrackSizingPlanner
             rows.Max(item => item.RelativeOffset + item.FinalExtent) - y);
     }
 
+    private static RelativeRectangle FootprintBounds(IReadOnlyList<PlanningGridCellId> cells,
+        IReadOnlyList<PlanningGridRow> rows, IReadOnlyList<PlanningGridColumn> columns)
+    {
+        if (cells.Count == 0) throw new InvalidOperationException("A footprint must contain at least one cell.");
+        var selectedColumns = cells.Select(cell => columns.Single(column => column.Id.Equals(cell.ColumnId))).ToArray();
+        var selectedRows = cells.Select(cell => rows.Single(row => row.Id.Equals(cell.RowId))).ToArray();
+        var x = selectedColumns.Min(item => item.RelativeOffset);
+        var y = selectedRows.Min(item => item.RelativeOffset);
+        return new RelativeRectangle(x, y,
+            selectedColumns.Max(item => item.RelativeOffset + item.FinalExtent) - x,
+            selectedRows.Max(item => item.RelativeOffset + item.FinalExtent) - y);
+    }
+
+    private static bool Contains(RelativeRectangle outer, RelativeRectangle inner) =>
+        inner.X >= outer.X && inner.Y >= outer.Y &&
+        inner.X + inner.Width <= outer.X + outer.Width &&
+        inner.Y + inner.Height <= outer.Y + outer.Height;
+
     private void Validate(PlannedArchitectureRelativeGeometry relative, IReadOnlyList<ProjectRoutingGrid> projects, SizedGrid diagram)
     {
         if (relative.Nodes.Count != placements.Count)
@@ -286,8 +370,66 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         }
         if (relative.Nodes.Any(node => node.Bounds.Width <= 0 || node.Bounds.Height <= 0))
             diagnostics.Add(new ArchitecturePlanningDiagnostic("RelativeInvalidDimension", "A relative node rectangle has a non-positive dimension.", PlanningDiagnosticSubject.PhysicalNode, null));
-        if (diagram.Rows.Any(row => row.FinalExtent <= 0) || diagram.Columns.Any(column => column.FinalExtent <= 0))
-            diagnostics.Add(new ArchitecturePlanningDiagnostic("SizingInvalidTrack", "A final grid track has a non-positive extent.", PlanningDiagnosticSubject.Grid, diagram.Id.Value));
+        foreach (var grid in relative.Grids)
+        {
+            if (grid.Rows.Any(row => row.FinalExtent <= 0) || grid.Columns.Any(column => column.FinalExtent <= 0))
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("SizingInvalidTrack", "A final grid track has a non-positive extent.", PlanningDiagnosticSubject.Grid, grid.GridId.Value));
+            if (grid.RelativeBounds.Width != grid.Columns.Sum(column => column.FinalExtent) ||
+                grid.RelativeBounds.Height != grid.Rows.Sum(row => row.FinalExtent))
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("SizingGridBoundsMismatch", "Grid bounds do not equal the sum of final track extents.", PlanningDiagnosticSubject.Grid, grid.GridId.Value));
+        }
+        foreach (var node in relative.Nodes)
+        {
+            var placement = placements.SingleOrDefault(item => item.PhysicalNodeId == node.PhysicalNodeId);
+            var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(node.GridId));
+            if (placement is null || grid is null) continue;
+            var expected = FootprintBounds(placement.Footprint, grid.Rows, grid.Columns);
+            if (node.Bounds != expected)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("RelativeNodeEnvelopeMismatch",
+                    $"Node rectangle must equal its complete footprint envelope: {node.PhysicalNodeId} [{node.Bounds}] != [{expected}].",
+                    PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+            if (node.ProjectId is not null)
+            {
+                var project = relative.Projects.SingleOrDefault(item => item.ProjectId == node.ProjectId);
+                if (project is null || !Contains(project.Bounds, node.Bounds))
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic("RelativeProjectContainment", "A node lies outside its project bounds.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+            }
+        }
+        foreach (var reservation in relative.Subtrees)
+        {
+            var source = reservations.SingleOrDefault(item => item.SubtreeId == reservation.SubtreeId);
+            if (source is null || reservation.Intervals is null) continue;
+            var grid = relative.Grids.Single(item => item.GridId.Equals(reservation.GridId));
+            foreach (var placement in placements.Where(item => item.GridId.Equals(source.GridId) && item.Footprint.All(source.Cells.Contains)))
+            {
+                foreach (var cell in placement.Footprint)
+                {
+                    var interval = reservation.Intervals.SingleOrDefault(item => item.RowId.Equals(cell.RowId));
+                    var column = grid.Columns.Single(item => item.Id.Equals(cell.ColumnId));
+                    var row = grid.Rows.Single(item => item.Id.Equals(cell.RowId));
+                    var cellBounds = new RelativeRectangle(column.RelativeOffset, row.RelativeOffset, column.FinalExtent, row.FinalExtent);
+                    if (interval is null || !Contains(interval.Bounds, cellBounds))
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("SparseReservationContainment", "A member node footprint lies outside its sparse subtree reservation interval.", PlanningDiagnosticSubject.Cell, reservation.SubtreeId));
+                }
+            }
+        }
+        if (relative.Nodes.Any(node => node.Bounds.X < 0 || node.Bounds.Y < 0))
+            diagnostics.Add(new ArchitecturePlanningDiagnostic("RelativeNodeNegativeOffset", "A relative node rectangle has a negative track-derived offset.", PlanningDiagnosticSubject.PhysicalNode, null));
+    }
+
+    private void ValidateConstraints(SizedGrid grid, IReadOnlyList<GridTrackConstraint> constraints)
+    {
+        foreach (var constraint in constraints)
+        {
+            var extent = RequiredExtent(constraint);
+            var actual = constraint.Rows.Count > 0
+                ? constraint.Rows.Sum(row => grid.Rows.SingleOrDefault(item => item.Id.Equals(row))?.FinalExtent ?? 0)
+                : constraint.Columns.Sum(column => grid.Columns.SingleOrDefault(item => item.Id.Equals(column))?.FinalExtent ?? 0);
+            if (actual < extent)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("SizingConstraintUnsatisfied",
+                    $"Sizing constraint requires {extent} but final tracks provide {actual}: {constraint.Reason}.",
+                    PlanningDiagnosticSubject.TrackConstraint, constraint.OwnerId));
+        }
     }
 
     private static bool HasOverlap(IEnumerable<RelativeRectangle> rectangles)
@@ -319,13 +461,28 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         IReadOnlyList<PlanningGridColumn> Columns,
         int Iterations,
         IReadOnlyDictionary<PlanningGridRowId, List<GridTrackContribution>> RowContributions,
-        IReadOnlyDictionary<PlanningGridColumnId, List<GridTrackContribution>> ColumnContributions)
+        IReadOnlyDictionary<PlanningGridColumnId, List<GridTrackContribution>> ColumnContributions,
+        IReadOnlyList<GridTrackConstraint> Constraints)
     {
         public IEnumerable<GridTrackProvenance> Provenance(PlanningGridId gridId) =>
-            Rows.Select(row => new GridTrackProvenance(gridId, "row", row.Id.Value, row.MinimumExtent, row.FinalExtent,
-                RowContributions.TryGetValue(row.Id, out var rowContributions) ? rowContributions : Array.Empty<GridTrackContribution>()))
-            .Concat(Columns.Select(column => new GridTrackProvenance(gridId, "column", column.Id.Value, column.MinimumExtent, column.FinalExtent,
-                ColumnContributions.TryGetValue(column.Id, out var columnContributions) ? columnContributions : Array.Empty<GridTrackContribution>())));
+            Rows.Select(row => Create(gridId, "row", row.Id.Value, row.MinimumExtent, row.FinalExtent, row.Role, row.OwnerId,
+                RowContributions.TryGetValue(row.Id, out var rowContributions) ? rowContributions : Array.Empty<GridTrackContribution>(),
+                Constraints.Where(constraint => constraint.Rows.Contains(row.Id)).ToArray()))
+            .Concat(Columns.Select(column => Create(gridId, "column", column.Id.Value, column.MinimumExtent, column.FinalExtent, column.Role, column.OwnerId,
+                ColumnContributions.TryGetValue(column.Id, out var columnContributions) ? columnContributions : Array.Empty<GridTrackContribution>(),
+                Constraints.Where(constraint => constraint.Columns.Contains(column.Id)).ToArray())));
+
+        private static GridTrackProvenance Create(PlanningGridId gridId, string axis, string trackId, int minimum, int final,
+            PlanningGridTrackRole role, string? ownerId, IReadOnlyList<GridTrackContribution> contributions,
+            IReadOnlyList<GridTrackConstraint> constraints)
+        {
+            var dominant = contributions.GroupBy(item => item.Kind).OrderByDescending(group => group.Sum(item => item.Extent))
+                .ThenBy(group => group.Key).Select(group => (TrackConstraintKind?)group.Key).FirstOrDefault();
+            var laneCount = constraints.Where(item => item.Kind == TrackConstraintKind.HorizontalLaneEnvelope || item.Kind == TrackConstraintKind.VerticalLaneEnvelope)
+                .Select(item => item.MinimumExtent).DefaultIfEmpty(0).Max();
+            return new GridTrackProvenance(gridId, axis, trackId, minimum, final, contributions, role, ownerId, laneCount,
+                Math.Max(0, final - minimum), dominant);
+        }
     }
 }
 
@@ -339,4 +496,13 @@ internal sealed record PhysicalSizingResult(
     int SizedTrackCount,
     int DiagramWidth,
     int DiagramHeight,
-    bool SizingIdempotent);
+    bool SizingIdempotent,
+    SizingPerformance Performance);
+
+internal sealed record SizingPerformance(
+    long ConstraintConstructionMilliseconds,
+    long SolverMilliseconds,
+    long OffsetCompilationMilliseconds,
+    long NodeEnvelopeMilliseconds,
+    long ReservationEnvelopeMilliseconds,
+    long ValidationMilliseconds);
