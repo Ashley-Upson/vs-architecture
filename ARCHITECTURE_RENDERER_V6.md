@@ -45,3 +45,26 @@ The V6 renderer emits a valid Draw.io page containing planned project boundaries
 Topology classification, terminal allocation, inter-layer slot allocation, destination/return column allocation, route materialisation, route-aware physical validation, Draw.io edge projection and reconstruction are intentionally not implemented. Logical node projection, layer assignment, positional ownership, anchor placement, nested subtree reservations, track sizing, relative-to-absolute geometry compilation and physical vertex projection are active.
 
 The generic `DiagramModel` Draw.io renderer remains for non-Architecture diagram workflows. Architecture generation resolves only `DrawioArchitectureV6Renderer`.
+
+## Role-aware placement
+
+V6 preserves the useful semantic behavior of the retired renderer without copying
+its pixel coordinates. The semantic graph receives deterministic dependency depth,
+then configured `NodeLayerGroups` are copied into immutable V6 role rules and
+resolved first-match-wins. Specific `CoordinationService`, `OrchestrationService`
+and `ProcessingService` rules therefore win over a broad `Service` rule. External
+and unmatched nodes remain explicit roles.
+
+Within a dependency depth, role groups become ordered visual sublayers. The
+configured baseline pattern is a rigid group and all matching nodes share one row;
+other role bands receive deterministic rows in configured order. Discovery order
+continues to order nodes within a band, with IDs used only as a stable fallback.
+Geometry applies named spacing tiers for sibling groups, ownership boundaries, role
+bands, logical layers, brokers, external nodes and project boundaries. Sparse
+logical columns do not multiply visible gaps.
+
+Placement metadata is carried into planned geometry and emitted vertex attributes:
+semantic depth, role selector, role band, ownership and sibling group, spacing
+policy, and final logical row/column. Renderer diagnostics aggregate role-band and
+spacing-policy usage, making the hierarchy inspectable before links or routing are
+introduced.

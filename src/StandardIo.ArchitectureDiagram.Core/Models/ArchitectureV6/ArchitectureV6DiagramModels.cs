@@ -26,7 +26,16 @@ public sealed record PhysicalNodePlacementMetadata(
     bool IsBaseline,
     bool IsExternal,
     bool IsStandalone,
-    string PlacementReason);
+    string PlacementReason,
+    int SemanticDepth = 0,
+    string RoleSelector = "Unmatched",
+    int RoleBand = 0,
+    string OwnershipGroup = "",
+    string SiblingGroup = "",
+    string HorizontalSpacingPolicy = "sibling",
+    string VerticalSpacingPolicy = "logical-layer",
+    int PhysicalRow = 0,
+    int PhysicalColumn = 0);
 
 public sealed record PlannedPhysicalNode(
     string PhysicalNodeId,

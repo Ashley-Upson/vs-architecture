@@ -32,7 +32,25 @@ public sealed record NodePlacementPolicy(
     int MinimumNodeWidth,
     int MinimumNodeHeight,
     int HorizontalSpacing,
-    int VerticalSpacing);
+    int VerticalSpacing,
+    IReadOnlyList<ArchitectureV6RoleRule>? RoleRules = null,
+    ArchitectureV6SpacingPolicy? Spacing = null);
+
+public sealed record ArchitectureV6RoleRule(string Name, string Pattern, int Order);
+
+public sealed record ArchitectureV6SpacingPolicy(
+    int Sibling,
+    int SiblingGroup,
+    int OwnershipBoundary,
+    int RoleBand,
+    int LogicalLayer,
+    int External,
+    int Broker,
+    int ProjectBoundary)
+{
+    public static ArchitectureV6SpacingPolicy From(int normal) => new(
+        normal, normal * 2, normal * 2, normal * 2, normal, normal * 2, normal, normal * 3);
+}
 
 public sealed record RoutePlanningPolicy(
     int MinimumParallelSpacing,

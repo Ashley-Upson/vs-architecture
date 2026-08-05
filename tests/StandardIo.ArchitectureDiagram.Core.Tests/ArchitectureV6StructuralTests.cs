@@ -80,6 +80,32 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Placement_preserves_depth_and_first_match_role_bands_without_collisions()
+    {
+        var request = GraphRequest(NodeProjectionMode.Canonical) with
+        {
+            NodePlacement = GraphRequest(NodeProjectionMode.Canonical).NodePlacement with
+            {
+                RoleRules = new[]
+                {
+                    new ArchitectureV6RoleRule("SpecificService", "ChildService$", 0),
+                    new ArchitectureV6RoleRule("Service", "Service$", 1),
+                    new ArchitectureV6RoleRule("Broker", "Broker$", 2)
+                }
+            }
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var root = Assert.Single(plan.NodeMetadata, item => item.SemanticNodeId == "root");
+        var child = Assert.Single(plan.NodeMetadata, item => item.SemanticNodeId == "child");
+
+        Assert.Equal("Service", root.RoleSelector);
+        Assert.Equal("SpecificService", child.RoleSelector);
+        Assert.Equal(0, root.PhysicalRow);
+        Assert.True(child.PhysicalRow > root.PhysicalRow);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "GeometryCollision");
+    }
+
+    [Fact]
     public void Route_structure_retains_endpoints_steps_and_cross_grid_transition()
     {
         var diagramGrid = new PlanningGridId("diagram");

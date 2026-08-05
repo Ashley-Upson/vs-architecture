@@ -276,6 +276,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         private readonly Dictionary<string, List<string>> children = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string?> owners = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> layers = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> visualRows = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> roleBands = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> roleSelectors = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> siblingGroups = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> spans = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Position> positions = new(StringComparer.Ordinal);
         private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
@@ -305,7 +309,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             }
             foreach (var item in children.Values) item.Sort((left, right) => order[left].CompareTo(order[right]));
             AssignLayers(links);
-            var baseline = new Regex(WildcardToRegex(request.NodePlacement.BaselinePattern), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var baseline = new Regex(BaselineExpression(request.NodePlacement.BaselinePattern), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             foreach (var node in projection.PhysicalNodes)
                 if (layers[node.PhysicalNodeId] == int.MaxValue) layers[node.PhysicalNodeId] = 0;
             foreach (var node in projection.PhysicalNodes)
@@ -315,6 +319,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     if (layers[link.DestinationPhysicalNodeId] <= layers[link.SourcePhysicalNodeId] &&
                         !baseline.IsMatch(nodes[link.DestinationPhysicalNodeId].SemanticName))
                         layers[link.DestinationPhysicalNodeId] = layers[link.SourcePhysicalNodeId] + 1;
+            AssignRoleBandsAndRows(baseline);
             foreach (var node in projection.PhysicalNodes) spans[node.PhysicalNodeId] = FootprintSpan(node, links);
 
             var roots = projection.PhysicalNodes.Where(node => owners[node.PhysicalNodeId] is null).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
@@ -367,6 +372,51 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 if (layers[node.PhysicalNodeId] == int.MaxValue) layers[node.PhysicalNodeId] = 0;
         }
 
+        private void AssignRoleBandsAndRows(Regex baseline)
+        {
+            var rules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+                .OrderBy(rule => rule.Order).ToArray();
+            foreach (var node in projection.PhysicalNodes)
+            {
+                var role = node.IsExternal ? new ArchitectureV6RoleRule("External", "", int.MaxValue)
+                    : rules.FirstOrDefault(rule => IsMatch(node.SemanticName, rule.Pattern));
+                roleSelectors[node.PhysicalNodeId] = role?.Name ?? "Unmatched";
+                roleBands[node.PhysicalNodeId] = role?.Order ?? rules.Length;
+                siblingGroups[node.PhysicalNodeId] = owners[node.PhysicalNodeId] is null
+                    ? $"root:{node.ProjectId ?? "external"}"
+                    : $"owner:{owners[node.PhysicalNodeId]}";
+            }
+
+            // A configured baseline is a rigid group. Other roles are sublayers within
+            // their semantic depth, preserving dependency order without sparse columns.
+            foreach (var node in projection.PhysicalNodes.Where(node => baseline.IsMatch(node.SemanticName)))
+                visualRows[node.PhysicalNodeId] = 0;
+            var nextRow = visualRows.Count == 0 ? 0 : 1;
+            foreach (var layer in layers.Values.Distinct().OrderBy(value => value))
+            {
+                var groups = projection.PhysicalNodes.Where(node => layers[node.PhysicalNodeId] == layer &&
+                        !visualRows.ContainsKey(node.PhysicalNodeId))
+                    .GroupBy(node => roleBands[node.PhysicalNodeId]).OrderBy(group => group.Key).ToArray();
+                foreach (var group in groups)
+                {
+                    foreach (var node in group.OrderBy(node => order[node.PhysicalNodeId]))
+                        visualRows[node.PhysicalNodeId] = nextRow;
+                    nextRow++;
+                }
+            }
+            foreach (var node in projection.PhysicalNodes)
+                if (!visualRows.ContainsKey(node.PhysicalNodeId)) visualRows[node.PhysicalNodeId] = nextRow++;
+        }
+
+        private static bool IsMatch(string value, string pattern)
+        {
+            if (string.IsNullOrWhiteSpace(pattern)) return false;
+            var expression = IsRegexPattern(pattern)
+                ? pattern
+                : "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+            return Regex.IsMatch(value, expression, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
         private int SubtreeWidth(string id)
         {
             if (!children.TryGetValue(id, out var childIds) || childIds.Count == 0) return spans[id];
@@ -397,7 +447,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var members = SubtreeMembers(node.PhysicalNodeId).ToArray();
                 var min = members.Min(item => positions[item].Start);
                 var max = members.Max(item => positions[item].End);
-                var rows = members.Select(item => layers[item]).Distinct().OrderBy(item => item).ToArray();
+                var rows = members.Select(item => visualRows[item]).Distinct().OrderBy(item => item).ToArray();
                 var cells = rows.SelectMany(row => Enumerable.Range(min, max - min + 1).Select(column => CellId(nodes[node.PhysicalNodeId].ProjectId, row, column))).ToArray();
                 reservations.Add(new SubtreeReservation($"subtree:{node.PhysicalNodeId}", node.PhysicalNodeId,
                     new PlanningGridId($"project:{nodes[node.PhysicalNodeId].ProjectId ?? "external"}"), cells,
@@ -421,8 +471,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var position = positions[node.PhysicalNodeId];
                 var gridId = new PlanningGridId($"project:{node.ProjectId ?? "external"}");
                 var start = position.Centre - spans[node.PhysicalNodeId] / 2;
-                var footprint = Enumerable.Range(start, spans[node.PhysicalNodeId]).Select(column => new PlanningGridCellId(gridId, RowId(layers[node.PhysicalNodeId]), ColumnId(column))).ToArray();
-                result.Add(new PlannedNodePlacement(node.PhysicalNodeId, gridId, new PlanningGridCellId(gridId, RowId(layers[node.PhysicalNodeId]), ColumnId(position.Centre)), spans[node.PhysicalNodeId], 1, footprint, ColumnId(position.Centre)));
+                var row = visualRows[node.PhysicalNodeId];
+                var footprint = Enumerable.Range(start, spans[node.PhysicalNodeId]).Select(column => new PlanningGridCellId(gridId, RowId(row), ColumnId(column))).ToArray();
+                result.Add(new PlannedNodePlacement(node.PhysicalNodeId, gridId, new PlanningGridCellId(gridId, RowId(row), ColumnId(position.Centre)), spans[node.PhysicalNodeId], 1, footprint, ColumnId(position.Centre)));
             }
             return result;
         }
@@ -471,7 +522,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var ancestors = new List<string>();
                 var owner = owners[node.PhysicalNodeId];
                 while (owner is not null) { ancestors.Add($"subtree:{owner}"); owner = owners[owner]; }
-                return new PhysicalNodePlacementMetadata(node.PhysicalNodeId, node.SemanticNodeId, owners[node.PhysicalNodeId], positionalChildren, semanticParents, semanticChildren, subtreeId, ancestors, node.ProjectId, layers[node.PhysicalNodeId], layers[node.PhysicalNodeId] == 0 && Regex.IsMatch(node.SemanticName, WildcardToRegex(request.NodePlacement.BaselinePattern), RegexOptions.IgnoreCase), node.IsExternal, node.IsStandalone, owners[node.PhysicalNodeId] is null ? "root-or-disconnected" : "first-discovered-parent");
+                var baselineMember = Regex.IsMatch(node.SemanticName, BaselineExpression(request.NodePlacement.BaselinePattern), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                return new PhysicalNodePlacementMetadata(node.PhysicalNodeId, node.SemanticNodeId, owners[node.PhysicalNodeId], positionalChildren, semanticParents, semanticChildren, subtreeId, ancestors, node.ProjectId, layers[node.PhysicalNodeId], baselineMember, node.IsExternal, node.IsStandalone, owners[node.PhysicalNodeId] is null ? "root-or-disconnected" : "first-discovered-parent", layers[node.PhysicalNodeId], roleSelectors[node.PhysicalNodeId], roleBands[node.PhysicalNodeId], node.ProjectId ?? "external", siblingGroups[node.PhysicalNodeId], "tiered-horizontal", baselineMember ? "baseline" : "role-band", visualRows[node.PhysicalNodeId], positions[node.PhysicalNodeId].Centre);
             }).ToArray();
         }
 
@@ -493,6 +545,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             var pattern = string.IsNullOrWhiteSpace(value) ? ".*" : value;
             return "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
         }
+        private static string BaselineExpression(string value) => string.IsNullOrWhiteSpace(value) ? ".*" :
+            IsRegexPattern(value) ? value : WildcardToRegex(value);
+        private static bool IsRegexPattern(string value) => value.IndexOf(".*", StringComparison.Ordinal) >= 0 ||
+            value.IndexOf('(') >= 0 || value.IndexOf('[') >= 0 || value.EndsWith("$", StringComparison.Ordinal);
         private sealed record Position(int Centre, int Layer, int Start, int End);
     }
 

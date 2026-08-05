@@ -59,7 +59,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             var rectangle = parent == "1"
                 ? nodeGeometry.AbsoluteBounds
                 : new AbsoluteRectangle(nodeGeometry.RelativeBounds.X, nodeGeometry.RelativeBounds.Y, nodeGeometry.RelativeBounds.Width, nodeGeometry.RelativeBounds.Height);
-            root.Add(NodeCell(node, nodeGeometry, parent, rectangle, style.Rule, style.MatchedSelector ?? "<fallback>", diagram.Request.RoutePlanning.ExternalDependencyTag));
+            root.Add(NodeCell(node, nodeGeometry, parent, rectangle, style.Rule, style.MatchedSelector ?? "<fallback>", diagram.Request.RoutePlanning.ExternalDependencyTag, diagram.NodeMetadata.FirstOrDefault(item => item.PhysicalNodeId == node.PhysicalNodeId)));
             emitted.Add(node.PhysicalNodeId);
         }
 
@@ -85,6 +85,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             diagnostics.Add(new DiagramDiagnostic("V6OutputBounds", $"{geometry.AbsoluteDiagramBounds.Width}x{geometry.AbsoluteDiagramBounds.Height}", null));
         if (geometry is not null)
             AddGapDiagnostics(diagram, geometry, diagnostics);
+        AddPlacementDiagnostics(diagram, diagnostics);
 
         var bounds = geometry?.AbsoluteDiagramBounds ?? new AbsoluteRectangle(0, 0, 1, 1);
         var graph = new XElement("mxGraphModel",
@@ -118,7 +119,8 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         AbsoluteRectangle rectangle,
         ArchitectureV6StyleRule style,
         string matchedSelector,
-        string externalTag)
+        string externalTag,
+        PhysicalNodePlacementMetadata? nodeMetadata)
     {
         var value = node.IsExternal ? (externalTag ?? "[External]") + " " + node.SemanticName : node.SemanticName;
         var cell = new XElement("mxCell",
@@ -138,6 +140,20 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             new XAttribute("matchedStyleRule", matchedSelector),
             new XElement("mxGeometry", new XAttribute("x", rectangle.X), new XAttribute("y", rectangle.Y),
                 new XAttribute("width", rectangle.Width), new XAttribute("height", rectangle.Height), new XAttribute("as", "geometry")));
+        var metadata = nodeMetadata;
+        if (metadata is not null)
+        {
+            cell.Add(new XAttribute("semanticDepth", metadata.SemanticDepth));
+            cell.Add(new XAttribute("logicalLayer", metadata.LogicalLayer));
+            cell.Add(new XAttribute("roleSelector", metadata.RoleSelector));
+            cell.Add(new XAttribute("roleBand", metadata.RoleBand));
+            cell.Add(new XAttribute("ownershipGroup", metadata.OwnershipGroup));
+            cell.Add(new XAttribute("siblingGroup", metadata.SiblingGroup));
+            cell.Add(new XAttribute("horizontalSpacingPolicy", metadata.HorizontalSpacingPolicy));
+            cell.Add(new XAttribute("verticalSpacingPolicy", metadata.VerticalSpacingPolicy));
+            cell.Add(new XAttribute("physicalRow", metadata.PhysicalRow));
+            cell.Add(new XAttribute("physicalColumn", metadata.PhysicalColumn));
+        }
         if (node.DuplicationProvenance is not null)
         {
             cell.Add(new XAttribute("duplicationSemanticNodeId", node.DuplicationProvenance.SemanticNodeId));
@@ -145,6 +161,16 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             cell.Add(new XAttribute("duplicationParentPhysicalNodeId", node.DuplicationProvenance.ParentPhysicalNodeId ?? string.Empty));
         }
         return cell;
+    }
+
+    private static void AddPlacementDiagnostics(PlannedArchitectureDiagram diagram, ICollection<DiagramDiagnostic> diagnostics)
+    {
+        foreach (var group in diagram.NodeMetadata.GroupBy(item => item.RoleSelector, StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
+            diagnostics.Add(new DiagramDiagnostic("V6RoleBandUsage", $"role={group.Key};count={group.Count()};bands={string.Join(",", group.Select(item => item.RoleBand).Distinct().OrderBy(value => value).Select(value => value.ToString(CultureInfo.InvariantCulture)))}", null));
+        foreach (var group in diagram.NodeMetadata.GroupBy(item => item.HorizontalSpacingPolicy, StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
+            diagnostics.Add(new DiagramDiagnostic("V6SpacingPolicyUsage", $"axis=horizontal;policy={group.Key};count={group.Count()}", null));
+        foreach (var group in diagram.NodeMetadata.GroupBy(item => item.VerticalSpacingPolicy, StringComparer.Ordinal).OrderBy(item => item.Key, StringComparer.Ordinal))
+            diagnostics.Add(new DiagramDiagnostic("V6SpacingPolicyUsage", $"axis=vertical;policy={group.Key};count={group.Count()}", null));
     }
 
     private static ResolvedStyle ResolveStyle(ArchitecturePlanningRequest request, PlannedPhysicalNode node)

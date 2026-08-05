@@ -15,6 +15,7 @@ internal sealed class ArchitectureV6GeometryBuilder
     private readonly IReadOnlyList<ProjectRoutingGrid> sourceGrids;
     private readonly Dictionary<string, PlannedPhysicalNode> nodesById;
     private readonly Dictionary<string, PlannedNodePlacement> placementById;
+    private readonly Dictionary<string, PhysicalNodePlacementMetadata> metadataById;
     private readonly List<ArchitecturePlanningDiagnostic> findings = new();
 
     public ArchitectureV6GeometryBuilder(
@@ -33,6 +34,7 @@ internal sealed class ArchitectureV6GeometryBuilder
         this.sourceGrids = sourceGrids ?? throw new ArgumentNullException(nameof(sourceGrids));
         nodesById = nodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         placementById = placements.ToDictionary(placement => placement.PhysicalNodeId, StringComparer.Ordinal);
+        metadataById = metadata.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
     }
 
     public GeometryBuildResult Build()
@@ -44,10 +46,10 @@ internal sealed class ArchitectureV6GeometryBuilder
         {
             var output = BuildProject(projectId, diagramX);
             projectOutputs.Add(output);
-            diagramX += output.RelativeBounds.Width + request.NodePlacement.HorizontalSpacing;
+            diagramX += output.RelativeBounds.Width + Spacing.ProjectBoundary;
         }
 
-        var width = Math.Max(1, projectOutputs.Count == 0 ? request.GridSizing.ContainerPadding * 2 : diagramX - request.NodePlacement.HorizontalSpacing);
+        var width = Math.Max(1, projectOutputs.Count == 0 ? request.GridSizing.ContainerPadding * 2 : diagramX - Spacing.ProjectBoundary);
         var height = Math.Max(1, projectOutputs.Select(output => output.RelativeBounds.Height).DefaultIfEmpty(1).Max());
         var nodeGeometry = projectOutputs.SelectMany(output => output.Nodes).ToArray();
         var projectGeometry = projectOutputs.Select(output => output.Geometry).ToArray();
@@ -138,7 +140,7 @@ internal sealed class ArchitectureV6GeometryBuilder
         // Logical columns inside a footprint are contiguous. Unoccupied separator columns
         // carry the normal horizontal gap, preventing spacing from multiplying per footprint cell.
         var columnOffsets = Offsets(columnExtents, 0);
-        var rowOffsets = Offsets(rowExtents, request.NodePlacement.VerticalSpacing);
+        var rowOffsets = RowOffsets(rowExtents, projectPlacements);
         var contentWidth = columnOffsets.Last() + columnExtents.Last();
         var contentHeight = rowOffsets.Last() + rowExtents.Last();
         var padding = Math.Max(0, request.GridSizing.ContainerPadding);
@@ -148,7 +150,7 @@ internal sealed class ArchitectureV6GeometryBuilder
         var columns = columnExtents.Select((extent, index) => new PlanningGridColumn(new PlanningGridColumnId($"column:{index}"), index, extent, extent, extent, columnOffsets[index], columnOffsets[index])).ToArray();
         var sizedCells = BuildCells(gridId, rows, columns, source);
         var grid = new PlanningGrid(gridId, rows, columns, sizedCells, new GridTransform(gridId, new RelativePoint(diagramX + padding, header + padding)));
-        var nodeOutput = NormalizeHorizontalGaps(projectPlacements.Select(placement => BuildNodeGeometry(placement, grid, diagramX, padding, header)).ToArray(), request.NodePlacement.HorizontalSpacing, diagramX);
+        var nodeOutput = NormalizeHorizontalGaps(projectPlacements.Select(placement => BuildNodeGeometry(placement, grid, diagramX, padding, header)).ToArray(), diagramX);
         contentWidth = Math.Max(contentWidth, nodeOutput.Select(node => node.RelativeBounds.X + node.RelativeBounds.Width).DefaultIfEmpty(padding).Max() - padding);
         var relativeBounds = new RelativeRectangle(0, 0, contentWidth + padding * 2, contentHeight + header + padding * 2);
         var absoluteBounds = new AbsoluteRectangle(diagramX, 0, relativeBounds.Width, relativeBounds.Height);
@@ -162,9 +164,8 @@ internal sealed class ArchitectureV6GeometryBuilder
         return new ProjectOutput(projectId, relativeBounds, new PlannedProjectGeometry(projectId, relativeBounds, absoluteBounds, relativeLabel, absoluteLabel, projectNodes), projectGrid, nodeOutput, new[] { gridOutput });
     }
 
-    private static IReadOnlyList<PlannedPhysicalNodeGeometry> NormalizeHorizontalGaps(
+    private IReadOnlyList<PlannedPhysicalNodeGeometry> NormalizeHorizontalGaps(
         IReadOnlyList<PlannedPhysicalNodeGeometry> nodes,
-        int spacing,
         int diagramX)
     {
         var result = nodes.ToArray();
@@ -176,7 +177,7 @@ internal sealed class ArchitectureV6GeometryBuilder
                 var current = node;
                 if (previous is not null)
                 {
-                    var desiredX = previous.RelativeBounds.X + previous.RelativeBounds.Width + Math.Max(0, spacing);
+                    var desiredX = previous.RelativeBounds.X + previous.RelativeBounds.Width + Gap(previous.PhysicalNodeId, current.PhysicalNodeId).Value;
                     var delta = desiredX - node.RelativeBounds.X;
                     if (delta != 0)
                     {
@@ -192,6 +193,38 @@ internal sealed class ArchitectureV6GeometryBuilder
         }
         return result;
     }
+
+    private (int Value, string Policy) Gap(string leftId, string rightId)
+    {
+        if (!metadataById.TryGetValue(leftId, out var left) || !metadataById.TryGetValue(rightId, out var right))
+            return (Spacing.Sibling, "sibling");
+        if (left.IsExternal || right.IsExternal) return (Spacing.External, "external");
+        if (Role(left.RoleSelector) == "Broker" || Role(right.RoleSelector) == "Broker") return (Spacing.Broker, "broker");
+        if (!string.Equals(left.OwnershipGroup, right.OwnershipGroup, StringComparison.Ordinal)) return (Spacing.OwnershipBoundary, "ownership-boundary");
+        if (left.RoleBand != right.RoleBand) return (Spacing.RoleBand, "role-band");
+        if (!string.Equals(left.SiblingGroup, right.SiblingGroup, StringComparison.Ordinal)) return (Spacing.SiblingGroup, "sibling-group");
+        return (Spacing.Sibling, "sibling");
+    }
+
+    private static string Role(string selector) => selector.EndsWith("Broker", StringComparison.OrdinalIgnoreCase) ? "Broker" : selector;
+
+    private int[] RowOffsets(IReadOnlyList<int> extents, IReadOnlyList<PlannedNodePlacement> projectPlacements)
+    {
+        var rows = projectPlacements.GroupBy(item => ParseRow(item.AnchorCellId.RowId))
+            .ToDictionary(group => group.Key, group => group.Select(item => metadataById[item.PhysicalNodeId]).ToArray());
+        var offsets = new int[extents.Count];
+        for (var row = 1; row < extents.Count; row++)
+        {
+            var previous = rows.TryGetValue(row - 1, out var previousItems) ? previousItems : Array.Empty<PhysicalNodePlacementMetadata>();
+            var current = rows.TryGetValue(row, out var currentItems) ? currentItems : Array.Empty<PhysicalNodePlacementMetadata>();
+            var sameLayer = previous.Length > 0 && current.Length > 0 && previous[0].LogicalLayer == current[0].LogicalLayer;
+            var policy = current.Any(item => item.IsExternal) ? Spacing.External : sameLayer ? Spacing.RoleBand : Spacing.LogicalLayer;
+            offsets[row] = offsets[row - 1] + extents[row - 1] + policy;
+        }
+        return offsets;
+    }
+
+    private ArchitectureV6SpacingPolicy Spacing => request.NodePlacement.Spacing ?? ArchitectureV6SpacingPolicy.From(request.NodePlacement.HorizontalSpacing);
 
     private PlannedPhysicalNodeGeometry BuildNodeGeometry(PlannedNodePlacement placement, PlanningGrid grid, int diagramX, int padding, int header)
     {

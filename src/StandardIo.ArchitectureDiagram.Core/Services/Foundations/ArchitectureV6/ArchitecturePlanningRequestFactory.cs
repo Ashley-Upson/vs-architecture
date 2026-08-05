@@ -37,7 +37,14 @@ public static class ArchitecturePlanningRequestFactory
             new NodeProjectionPolicy(projection, layout.DuplicateHighNoiseNodePatterns.ToArray()),
             new ProjectPlacementPolicy(rendering.ShowProjectContainers, rendering.ProjectContainerStyle.Shape),
             new NodePlacementPolicy(layout.BaselineAlignmentPattern, layout.NodeWidth, layout.NodeHeight,
-                layout.HorizontalSpacing, layout.VerticalSpacing),
+                layout.HorizontalSpacing, layout.VerticalSpacing,
+                layout.NodeLayerGroups.Select((rule, index) => new ArchitectureV6RoleRule(rule.Name, rule.Pattern, index)).ToArray(),
+                ArchitectureV6SpacingPolicy.From(layout.HorizontalSpacing) with
+                {
+                    LogicalLayer = layout.VerticalSpacing,
+                    External = Math.Max(layout.HorizontalSpacing, layout.StandaloneGroupSpacing / 2),
+                    ProjectBoundary = Math.Max(layout.HorizontalSpacing * 2, layout.ContainerPadding * 2)
+                }),
             new RoutePlanningPolicy(layout.ParallelLaneSpacing, layout.EdgePortSpacing, analysis.ExternalDependencyTag),
             new GridSizingPolicy(layout.NodeWidth, layout.NodeHeight, layout.ContainerPadding, layout.ProjectHeaderHeight),
             new ValidationPolicy(mode == ArchitectureRenderingMode.Production
