@@ -206,6 +206,36 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_collapses_repeated_semantic_discovery_without_duplicate_canonical_ids()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project P", new[]
+                    {
+                        new ArchitectureNode("same", "project:p", "Same", "P.Same", "Class", "same", Array.Empty<string>())
+                    }, "project:p"),
+                    new ArchitectureProject("project:q", "Project Q", new[]
+                    {
+                        new ArchitectureNode("same", "project:q", "Same", "Q.Same", "Class", "same", Array.Empty<string>())
+                    }, "project:q")
+                },
+                Links = Array.Empty<ArchitectureLink>()
+            },
+            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", Array.Empty<string>(), Array.Empty<string>())
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Single(plan.PhysicalNodes);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalNodes.Select(node => node.PhysicalNodeId).Distinct().Count());
+        Assert.Single(plan.Projection!.SemanticNodeToPhysicalNodeIds["same"]);
+    }
+
+    [Fact]
     public void Planner_compiles_topology_owned_routes_and_collective_approaches()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

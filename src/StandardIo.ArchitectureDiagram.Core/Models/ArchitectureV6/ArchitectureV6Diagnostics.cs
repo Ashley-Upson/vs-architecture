@@ -61,7 +61,16 @@ public sealed record ArchitecturePlanningMetrics(
     int GeometryHeight = 0,
     int GeometryCollisionCount = 0,
     int GeometryContainmentViolationCount = 0,
-    int InvalidDimensionCount = 0);
+    int InvalidDimensionCount = 0,
+    int FootprintExpansionRequirementCount = 0,
+    int PlacementRebuildCount = 0,
+    int ExpandedNodeCount = 0,
+    int UnsupportedRouteCount = 0,
+    IReadOnlyDictionary<string, int>? LaneAllocationConflictCounts = null,
+    IReadOnlyDictionary<string, string>? ExpandedNodeSpans = null,
+    int InvalidatedRouteCount = 0,
+    int RebuiltReservationCount = 0,
+    int ShiftedRegionCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

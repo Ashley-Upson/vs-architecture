@@ -15,6 +15,12 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
 
         var projection = new ProjectionBuilder(request).Build();
         var requiredSpans = new Dictionary<string, int>(StringComparer.Ordinal);
+        var placementRebuildCount = 0;
+        var expansionRequirementCount = 0;
+        var expandedNodeIds = new HashSet<string>(StringComparer.Ordinal);
+        var expandedNodeSpans = new Dictionary<string, string>(StringComparer.Ordinal);
+        var invalidatedRouteCount = 0;
+        var rebuiltReservationCount = 0;
         LogicalPlacementResult placement = null!;
         AbstractRoutePlanningResult routing = null!;
         ArchitectureLaneAllocationResult allocation = null!;
@@ -27,8 +33,22 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build();
             var expanded = allocation.FootprintExpansionRequirements
                 .Where(item => item.RequiredOddSpan > item.CurrentSpan)
-                .ToDictionary(item => item.PhysicalNodeId, item => item.RequiredOddSpan, StringComparer.Ordinal);
+                .GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Max(item => item.RequiredOddSpan), StringComparer.Ordinal);
             if (expanded.Count == 0) break;
+            placementRebuildCount++;
+            expansionRequirementCount += allocation.FootprintExpansionRequirements.Count;
+            invalidatedRouteCount += routing.Routes.Count;
+            rebuiltReservationCount += placement.SubtreeReservations.Count;
+            foreach (var nodeId in expanded.Keys) expandedNodeIds.Add(nodeId);
+            foreach (var item in allocation.FootprintExpansionRequirements
+                .Where(item => item.RequiredOddSpan > item.CurrentSpan)
+                .GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal))
+            {
+                var current = item.Min(requirement => requirement.CurrentSpan);
+                var required = item.Max(requirement => requirement.RequiredOddSpan);
+                expandedNodeSpans[item.Key] = $"{current}->{required}";
+            }
             foreach (var item in expanded) requiredSpans[item.Key] = Math.Max(requiredSpans.TryGetValue(item.Key, out var existing) ? existing : 0, item.Value);
         }
         var projectGrids = routing.ProjectGrids;
@@ -71,9 +91,22 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             GeometryProjectCount: 0,
             GeometryGridCount: 0,
             GeometryWidth: 0,
-            GeometryHeight: 0,
-            GeometryCollisionCount: 0,
-            InvalidDimensionCount: 0);
+             GeometryHeight: 0,
+             GeometryCollisionCount: 0,
+             InvalidDimensionCount: 0,
+             UnplacedNodeCount: projection.PhysicalNodes.Count - placement.NodePlacements.Count,
+             OverlappingFootprintCount: placement.Diagnostics.Count(item => item.Code == "LogicalPlacementFootprintOverlap"),
+             IncompatibleReservationCount: placement.Diagnostics.Count(item => item.Code == "LogicalPlacementReservationConflict"),
+             FootprintExpansionRequirementCount: expansionRequirementCount,
+             PlacementRebuildCount: placementRebuildCount,
+             ExpandedNodeCount: expandedNodeIds.Count,
+             UnsupportedRouteCount: allocation.Routes.Count(route => !route.IsStructurallySupported),
+             LaneAllocationConflictCounts: allocation.Conflicts.GroupBy(conflict => conflict.Kind.ToString())
+                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
+             ExpandedNodeSpans: expandedNodeSpans,
+             InvalidatedRouteCount: invalidatedRouteCount,
+             RebuiltReservationCount: rebuiltReservationCount,
+             ShiftedRegionCount: 0);
 
         return new PlannedArchitectureDiagram(
             request,
@@ -129,11 +162,12 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         public ArchitectureProjectionResult Build()
         {
             ReadSemanticNodes();
+            var discoveredOrder = order.Distinct(StringComparer.Ordinal).ToArray();
             var links = request.SemanticModel.Links.Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId)).ToArray();
             var parents = links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var children = links.GroupBy(link => link.SourceId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var roots = FindRoots(parents);
-            var physicalNodes = order.Select(id =>
+            var physicalNodes = discoveredOrder.Select(id =>
             {
                 var info = nodes[id];
                 return new PlannedPhysicalNode($"physical:{id}", id, PhysicalNodeProjectionMode.Canonical, null,
@@ -145,7 +179,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 };
             }).ToList();
             var bySemantic = physicalNodes.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
-            var nodeMapBuilder = physicalNodes.ToDictionary(node => node.SemanticNodeId,
+            var nodeMapBuilder = bySemantic.Values.ToDictionary(node => node.SemanticNodeId,
                 node => new List<string> { node.PhysicalNodeId }, StringComparer.Ordinal);
             var duplicatePatterns = request.NodeProjection.DuplicationExceptionPatterns
                 .Where(pattern => !string.IsNullOrWhiteSpace(pattern)).Select(ToRegex).ToArray();
@@ -214,13 +248,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 foreach (var node in project.Nodes)
                 {
                     if (selectedNodes.Count > 0 && !selectedNodes.Contains(node.Id)) continue;
-                    nodes[node.Id] = new SemanticInfo(node.Id, node.Name, node.FullName, project.Id, false);
+                    if (nodes.ContainsKey(node.Id)) continue;
+                    nodes.Add(node.Id, new SemanticInfo(node.Id, node.Name, node.FullName, project.Id, false));
                     order.Add(node.Id);
                 }
             }
             foreach (var external in request.SemanticModel.ExternalNodes)
             {
-                nodes[external.Id] = new SemanticInfo(external.Id, external.Name, external.FullName, null, true);
+                if (nodes.ContainsKey(external.Id)) continue;
+                nodes.Add(external.Id, new SemanticInfo(external.Id, external.Name, external.FullName, null, true));
                 order.Add(external.Id);
             }
         }
