@@ -541,8 +541,22 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var owner = owners[node.PhysicalNodeId];
                 while (owner is not null) { ancestors.Add($"subtree:{owner}"); owner = owners[owner]; }
                 var baselineMember = Regex.IsMatch(node.SemanticName, BaselineExpression(request.NodePlacement.BaselinePattern), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-                return new PhysicalNodePlacementMetadata(node.PhysicalNodeId, node.SemanticNodeId, owners[node.PhysicalNodeId], positionalChildren, semanticParents, semanticChildren, subtreeId, ancestors, node.ProjectId, layers[node.PhysicalNodeId], baselineMember, node.IsExternal, node.IsStandalone, owners[node.PhysicalNodeId] is null ? "root-or-disconnected" : "first-discovered-parent", layers[node.PhysicalNodeId], roleSelectors[node.PhysicalNodeId], roleBands[node.PhysicalNodeId], node.ProjectId ?? "external", siblingGroups[node.PhysicalNodeId], "tiered-horizontal", baselineMember ? "baseline" : "role-band", visualRows[node.PhysicalNodeId], positions[node.PhysicalNodeId].Centre);
+                var treeRoot = TreeRoot(node.PhysicalNodeId);
+                var parent = owners[node.PhysicalNodeId];
+                var siblingOrder = parent is null || !children.TryGetValue(parent, out var siblings) ? 0 : siblings.IndexOf(node.PhysicalNodeId);
+                var branchOrder = projection.PhysicalNodes.Where(item => owners[item.PhysicalNodeId] is null)
+                    .OrderBy(item => order[item.PhysicalNodeId]).Select((item, index) => (item.PhysicalNodeId, index))
+                    .FirstOrDefault(item => item.PhysicalNodeId == treeRoot).index;
+                return new PhysicalNodePlacementMetadata(node.PhysicalNodeId, node.SemanticNodeId, parent, positionalChildren, semanticParents, semanticChildren, subtreeId, ancestors, node.ProjectId, layers[node.PhysicalNodeId], baselineMember, node.IsExternal, node.IsStandalone, parent is null ? "root-or-disconnected" : "first-discovered-parent", layers[node.PhysicalNodeId], roleSelectors[node.PhysicalNodeId], roleBands[node.PhysicalNodeId], node.ProjectId ?? "external", siblingGroups[node.PhysicalNodeId], "tiered-horizontal", baselineMember ? "baseline" : "role-band", visualRows[node.PhysicalNodeId], positions[node.PhysicalNodeId].Centre, treeRoot, parent is null ? null : nodes[parent].SemanticNodeId, roleBands[node.PhysicalNodeId], roleBands[node.PhysicalNodeId], siblingOrder, branchOrder, $"branch:{treeRoot}");
             }).ToArray();
+        }
+
+        private string TreeRoot(string id)
+        {
+            var root = id;
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            while (owners.TryGetValue(root, out var owner) && owner is not null && seen.Add(root)) root = owner;
+            return root;
         }
 
         private PlanningGridCellId CellId(string? projectId, int row, int column) => new(new PlanningGridId($"project:{projectId ?? "external"}"), RowId(row), ColumnId(column));

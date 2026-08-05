@@ -119,6 +119,14 @@ public sealed class ArchitectureV6StructuralTests
         Assert.All(routes, route => Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
         Assert.All(edges, edge => Assert.NotNull(edge.Attribute("source")));
         Assert.All(edges, edge => Assert.NotNull(edge.Attribute("target")));
+        Assert.All(edges, edge =>
+        {
+            Assert.Contains("edgeStyle=none", edge.Attribute("style")!.Value);
+            Assert.Contains("orthogonal=0", edge.Attribute("style")!.Value);
+            Assert.Contains("exitX=0.5", edge.Attribute("style")!.Value);
+            Assert.Contains("entryY=0", edge.Attribute("style")!.Value);
+            Assert.Equal(string.Empty, edge.Attribute("value")!.Value);
+        });
     }
 
     [Fact]

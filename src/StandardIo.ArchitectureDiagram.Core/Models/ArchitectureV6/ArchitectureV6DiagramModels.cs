@@ -35,7 +35,14 @@ public sealed record PhysicalNodePlacementMetadata(
     string HorizontalSpacingPolicy = "sibling",
     string VerticalSpacingPolicy = "logical-layer",
     int PhysicalRow = 0,
-    int PhysicalColumn = 0);
+    int PhysicalColumn = 0,
+    string TreeRootId = "",
+    string? ParentSemanticId = null,
+    int Subdepth = 0,
+    int ConfiguredRoleOrder = 0,
+    int SiblingOrder = 0,
+    int BranchOrder = 0,
+    string PlacementGroup = "");
 
 public sealed record PlannedPhysicalNode(
     string PhysicalNodeId,
@@ -60,6 +67,7 @@ public sealed record PlannedPhysicalLink(
     string? DestinationProjectId)
 {
     public string Kind { get; init; } = string.Empty;
+    public string? DisplayLabel { get; init; }
 }
 
 public sealed record PlannedPhysicalLinkMetadata(

@@ -69,3 +69,29 @@ semantic depth, role selector, role band, ownership and sibling group, spacing
 policy, and final logical row/column. Renderer diagnostics aggregate role-band and
 spacing-policy usage, making the hierarchy inspectable before links or routing are
 introduced.
+
+Placement precedence is explicit: project/subsystem ownership, tree root and
+branch, semantic depth, subdepth/role band, configured role order, then discovery
+order with IDs only as a tie-break. A physical node records its tree root, parent
+semantic identity, branch and sibling order, role order, final row/column and
+placement group. Role selectors refine a branch; they do not replace branch
+ownership.
+
+## Fixed edge projection
+
+Architecture links are planned after node geometry and are emitted as explicit
+`mxCell` edges. The route planner records physical and semantic link identity,
+endpoint projection mode, topology family, orthogonal segments, bends and route
+conflicts. The XML emitter uses absolute waypoint geometry under the page parent,
+fixed bottom-source/top-destination terminal constraints, `edgeStyle=none`, and
+disables automatic orthogonal-loop/jetty behavior so Draw.io does not invent a
+different primary path. Edge values are empty by default; relationship kinds stay
+custom metadata and are never shown as labels unless an explicit label policy is
+enabled.
+
+Connector settings are copied through the V6 request into the final edge style,
+including stroke, width, dash, arrow, arrow size, opacity, font colour, rounded
+state and label policy. Route inspection reconstructs source terminal, emitted
+waypoints and target terminal and checks axis alignment, missing endpoints, node
+intersections and shared segments. These findings remain visible in diagnostics;
+the current first router is intentionally not described as congestion-complete.

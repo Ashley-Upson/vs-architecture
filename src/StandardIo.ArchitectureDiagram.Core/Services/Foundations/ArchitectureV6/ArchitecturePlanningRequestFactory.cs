@@ -56,6 +56,9 @@ public static class ArchitecturePlanningRequestFactory
             rendering.Overrides.Select(item => new ArchitectureV6StyleOverride(item.FullName, new ArchitectureV6StyleRule(item.FullName, item.Style.FillColor, item.Style.StrokeColor, item.Style.FontColor, item.Style.Shape, item.Style.Shadow, item.Style.ExtraStyle))).ToArray(),
             new ArchitectureV6StyleRule("<project>", rendering.ProjectContainerStyle.FillColor, rendering.ProjectContainerStyle.StrokeColor, rendering.ProjectContainerStyle.FontColor, rendering.ProjectContainerStyle.Shape, rendering.ProjectContainerStyle.Shadow, rendering.ProjectContainerStyle.ExtraStyle),
             new ArchitectureV6StyleRule("<external>", rendering.ExternalDependencyStyle.FillColor, rendering.ExternalDependencyStyle.StrokeColor, rendering.ExternalDependencyStyle.FontColor, rendering.ExternalDependencyStyle.Shape, rendering.ExternalDependencyStyle.Shadow, rendering.ExternalDependencyStyle.ExtraStyle),
-            new ArchitectureV6ConnectorStyle(rendering.Connector.StrokeColor, rendering.Connector.StrokeWidth, rendering.Connector.Rounded));
+            new ArchitectureV6ConnectorStyle(rendering.Connector.StrokeColor, rendering.Connector.StrokeWidth, rendering.Connector.Rounded,
+                rendering.Connector.Dashed, rendering.Connector.DashPattern, rendering.Connector.StartArrow,
+                rendering.Connector.EndArrow, rendering.Connector.ArrowSize, rendering.Connector.Opacity,
+                rendering.Connector.FontColor, rendering.Connector.ShowLabels));
     }
 }

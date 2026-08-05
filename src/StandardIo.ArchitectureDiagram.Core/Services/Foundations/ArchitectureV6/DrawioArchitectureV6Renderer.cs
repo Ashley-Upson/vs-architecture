@@ -132,19 +132,22 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     private static XElement EdgeCell(PlannedPhysicalLink link, PlannedPhysicalRoute route, ArchitecturePlanningRequest request)
     {
         var connector = request.ConnectorStyle ?? new ArchitectureV6ConnectorStyle("#ffffff", 2, false);
-        var style = $"edgeStyle=none;orthogonal=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={connector.StrokeColor};strokeWidth={connector.StrokeWidth};endArrow=block;endFill=1;";
+        var style = $"edgeStyle=none;orthogonal=0;orthogonalLoop=0;jettySize=0;rounded={(connector.Rounded ? "1" : "0")};html=1;strokeColor={connector.StrokeColor};strokeWidth={connector.StrokeWidth};dashed={(connector.Dashed ? "1" : "0")};" +
+            (string.IsNullOrWhiteSpace(connector.DashPattern) ? string.Empty : $"dashPattern={connector.DashPattern};") +
+            $"startArrow={connector.StartArrow};endArrow={connector.EndArrow};startFill=1;endFill=1;arrowSize={connector.ArrowSize};opacity={connector.Opacity};fontColor={connector.FontColor};exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitPerimeter=1;entryPerimeter=1;";
         var geometry = new XElement("mxGeometry", new XAttribute("relative", "0"), new XAttribute("as", "geometry"));
         foreach (var point in route.Segments.Take(Math.Max(0, route.Segments.Count - 1)).Select(segment => segment.End))
             geometry.Add(new XElement("mxPoint", new XAttribute("x", point.X.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", point.Y.ToString(CultureInfo.InvariantCulture)), new XAttribute("as", "waypoint")));
         return new XElement("mxCell",
             new XAttribute("id", EdgeCellId(link.PhysicalLinkId)),
-            new XAttribute("value", link.Kind ?? link.SemanticLinkId),
+            new XAttribute("value", connector.ShowLabels ? link.DisplayLabel ?? string.Empty : string.Empty),
             new XAttribute("style", style),
             new XAttribute("edge", "1"), new XAttribute("parent", "1"),
             new XAttribute("source", CellId(link.SourcePhysicalNodeId)),
             new XAttribute("target", CellId(link.DestinationPhysicalNodeId)),
             new XAttribute("physicalLinkId", link.PhysicalLinkId),
             new XAttribute("semanticLinkId", link.SemanticLinkId),
+            new XAttribute("relationshipKind", link.Kind ?? string.Empty),
             new XAttribute("sourceProjection", route.SourceProjection),
             new XAttribute("destinationProjection", route.DestinationProjection),
             new XAttribute("routeTopology", route.TopologyFamily.ToString()), geometry);
@@ -191,6 +194,13 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             cell.Add(new XAttribute("verticalSpacingPolicy", metadata.VerticalSpacingPolicy));
             cell.Add(new XAttribute("physicalRow", metadata.PhysicalRow));
             cell.Add(new XAttribute("physicalColumn", metadata.PhysicalColumn));
+            cell.Add(new XAttribute("treeRootId", metadata.TreeRootId));
+            cell.Add(new XAttribute("parentSemanticId", metadata.ParentSemanticId ?? string.Empty));
+            cell.Add(new XAttribute("subdepth", metadata.Subdepth));
+            cell.Add(new XAttribute("configuredRoleOrder", metadata.ConfiguredRoleOrder));
+            cell.Add(new XAttribute("siblingOrder", metadata.SiblingOrder));
+            cell.Add(new XAttribute("branchOrder", metadata.BranchOrder));
+            cell.Add(new XAttribute("placementGroup", metadata.PlacementGroup));
         }
         if (node.DuplicationProvenance is not null)
         {
