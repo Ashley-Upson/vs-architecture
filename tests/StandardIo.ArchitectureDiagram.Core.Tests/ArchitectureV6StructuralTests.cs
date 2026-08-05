@@ -450,6 +450,59 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_builds_authoritative_route_boundary_contracts_before_physical_materialisation()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var validation = plan.LaneAllocation!.BoundaryValidation;
+
+        Assert.NotNull(validation);
+        Assert.Equal(plan.PhysicalLinks.Count, validation!.Routes.Count);
+        Assert.Equal(plan.PhysicalLinks.Count, validation.ValidRouteCount + validation.InvalidRouteCount);
+        Assert.All(validation.Routes, route =>
+        {
+            Assert.NotEmpty(route.Components);
+            Assert.All(route.Components, component =>
+            {
+                Assert.NotEmpty(component.ComponentId);
+                Assert.NotNull(component.EntryBoundary);
+                Assert.NotNull(component.ExitBoundary);
+            });
+            var pairs = route.Components.Zip(route.Components.Skip(1), (before, after) => (before, after)).ToArray();
+            Assert.All(pairs.Where(pair => pair.before.ExitBoundary == pair.after.EntryBoundary), pair =>
+                Assert.Equal(pair.before.ExitBoundary, pair.after.EntryBoundary));
+        });
+        Assert.Contains(validation.Findings, finding => finding.Code == "SourceDepartureNotBottomFacing");
+        Assert.Contains(validation.Findings, finding => finding.Code == "DestinationApproachNotTopFacing");
+    }
+
+    [Fact]
+    public void Planner_does_not_treat_equal_coordinates_as_boundary_identity()
+    {
+        var first = new GridBoundaryIdentity(new PlanningGridId("project:p"),
+            new PlanningGridCellId(new PlanningGridId("project:p"), new PlanningGridRowId("row:1"), new PlanningGridColumnId("column:1")),
+            GridSide.Top, new LaneId("lane:a"), "project:p", "first");
+        var second = first with { AuthorityId = "second" };
+
+        Assert.Equal(first with { AuthorityId = "first" }, first);
+        Assert.NotEqual(first, second);
+        Assert.NotEqual(first.ToString(), second.ToString());
+    }
+
+    [Fact]
+    public void Planner_reports_incomplete_turn_bindings_without_selecting_a_replacement_lane()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var validation = plan.LaneAllocation!.BoundaryValidation!;
+
+        Assert.Contains(validation.Findings, finding => finding.Code == "IncompleteTurnAllocation");
+        Assert.All(validation.Routes.SelectMany(route => route.Components.Where(component => component.Kind == PlannedRouteComponentKind.Turn)), turn =>
+        {
+            Assert.NotNull(turn.EntryBoundary);
+            Assert.NotNull(turn.ExitBoundary);
+        });
+    }
+
+    [Fact]
     public void Planner_preserves_ordered_route_components_and_segment_provenance()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

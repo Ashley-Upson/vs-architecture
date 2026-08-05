@@ -105,7 +105,8 @@ public sealed record ArchitectureLaneAllocationResult(
     IReadOnlyList<NodeFootprintExpansionRequirement> FootprintExpansionRequirements,
     GridTrackSizingPlan Sizing,
     IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics,
-    LaneAllocationPerformance? Performance = null);
+    LaneAllocationPerformance? Performance = null,
+    ArchitectureRouteBoundaryValidationResult? BoundaryValidation = null);
 
 public sealed record LaneAllocationPerformance(
     long ElapsedMilliseconds,

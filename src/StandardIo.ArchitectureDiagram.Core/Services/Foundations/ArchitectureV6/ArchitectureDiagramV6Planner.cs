@@ -36,6 +36,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         LogicalPlacementResult placement = null!;
         AbstractRoutePlanningResult routing = null!;
         ArchitectureLaneAllocationResult allocation = null!;
+        ArchitectureRouteBoundaryValidationResult boundaryValidation = new ArchitectureRouteBoundaryValidationResult(
+            Array.Empty<PlannedRouteBoundaryContract>(), Array.Empty<RouteBoundaryContractFinding>());
         for (var pass = 0; pass < 2; pass++)
         {
             TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build());
@@ -43,6 +45,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid).Build());
             TimeStage("laneAllocation", () => allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
                 routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build());
+            TimeStage("routeBoundaryContract", () => boundaryValidation = new ArchitectureV6RouteBoundaryContractBuilder(
+                allocation, projection.PhysicalNodes, placement.NodePlacements).Build());
+            allocation = allocation with { BoundaryValidation = boundaryValidation };
             var expanded = allocation.FootprintExpansionRequirements
                 .Where(item => item.RequiredOddSpan > item.CurrentSpan)
                 .GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal)
@@ -82,8 +87,34 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var cardinalityFindings = structuralRowsBeforeRouting != structuralRowsAfterRouting || structuralColumnsBeforeRouting != structuralColumnsAfterRouting
             ? new[] { Deferred("StructuralGridCardinalityChanged", PlanningDiagnosticSubject.Grid, "Abstract routing changed structural row or column cardinality.") }
             : Array.Empty<ArchitecturePlanningDiagnostic>();
+        var boundaryDiagnostics = boundaryValidation.Findings.Select(finding => new ArchitecturePlanningDiagnostic(
+            finding.Code, finding.Message, PlanningDiagnosticSubject.PhysicalLink, finding.PhysicalLinkId)).ToArray();
+        var boundaryComponentTypeCounts = boundaryValidation.Routes.SelectMany(route => route.Components)
+            .GroupBy(component => component.Kind.ToString())
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var boundaryAdjacencyPairCounts = boundaryValidation.Routes.SelectMany(route =>
+                route.Components.Zip(route.Components.Skip(1), (before, after) => before.Kind + "->" + after.Kind))
+            .GroupBy(pair => pair, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var boundaryPairs = boundaryValidation.Routes.SelectMany(route =>
+                route.Components.Zip(route.Components.Skip(1), (before, after) => (before, after)))
+            .ToArray();
+        var boundaryPairKeys = boundaryPairs.Select(pair => (Key: pair.before.Kind + "->" + pair.after.Kind, Pair: pair));
+        var boundaryMatchingPairCounts = boundaryPairKeys.Where(item => item.Pair.before.ExitBoundary == item.Pair.after.EntryBoundary)
+            .GroupBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var boundaryMismatchedPairCounts = boundaryPairKeys.Where(item => item.Pair.before.ExitBoundary != item.Pair.after.EntryBoundary)
+            .GroupBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var matchingBoundaryPairCount = boundaryPairs.Count(pair => pair.before.ExitBoundary == pair.after.EntryBoundary);
+        var mismatchedBoundaryPairCount = boundaryPairs.Length - matchingBoundaryPairCount;
+        var completeTurnContractCount = boundaryValidation.Routes.SelectMany(route => route.Components)
+            .Count(component => component.Kind == PlannedRouteComponentKind.Turn && component.EntryBoundary?.Lane is not null && component.ExitBoundary?.Lane is not null);
+        var incompleteTurnContractCount = boundaryValidation.Routes.SelectMany(route => route.Components)
+            .Count(component => component.Kind == PlannedRouteComponentKind.Turn) - completeTurnContractCount;
         var findings = projection.Diagnostics.Concat(cardinalityFindings)
-            .Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(sizing.Diagnostics).Concat(physicalScene.Diagnostics).ToArray();
+            .Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(boundaryDiagnostics)
+            .Concat(sizing.Diagnostics).Concat(physicalScene.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(
             request.SemanticModel.Projects.Sum(project => project.Nodes.Count) + request.SemanticModel.ExternalNodes.Count,
@@ -209,6 +240,17 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
               LabelGeometryUnavailableCount: physicalScene.Metrics.LabelGeometryUnavailableCount,
               PhysicalTopologyCounts: physicalScene.Metrics.TopologyCounts,
               PhysicalStageTimingMilliseconds: physicalScene.Metrics.StageTimingsMilliseconds,
+              BoundaryValidRouteCount: boundaryValidation.ValidRouteCount,
+              BoundaryInvalidRouteCount: boundaryValidation.InvalidRouteCount,
+              BoundaryFindingCount: boundaryValidation.Findings.Count,
+              BoundaryComponentTypeCounts: boundaryComponentTypeCounts,
+              BoundaryAdjacencyPairCounts: boundaryAdjacencyPairCounts,
+              BoundaryMatchingPairCounts: boundaryMatchingPairCounts,
+              BoundaryMismatchedPairCounts: boundaryMismatchedPairCounts,
+              BoundaryMatchingPairCount: matchingBoundaryPairCount,
+              BoundaryMismatchedPairCount: mismatchedBoundaryPairCount,
+              CompleteTurnContractCount: completeTurnContractCount,
+              IncompleteTurnContractCount: incompleteTurnContractCount,
               InvalidPhysicalRouteCount: physicalScene.Metrics.InvalidRouteCount,
               AttemptedPhysicalSegmentCount: physicalScene.Metrics.AttemptedSegmentCount,
               DiagonalPhysicalSegmentCount: physicalScene.Metrics.DiagonalSegmentCount,
