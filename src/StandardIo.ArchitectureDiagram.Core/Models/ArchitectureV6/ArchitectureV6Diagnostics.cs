@@ -78,7 +78,15 @@ public sealed record ArchitecturePlanningMetrics(
     int LargestRowExtent = 0,
     int LargestColumnExtent = 0,
     int LargestSpanMinimum = 0,
-    int UnsatisfiedSizingConstraintCount = 0);
+    int UnsatisfiedSizingConstraintCount = 0,
+    int StructuralRowCountBeforeRouting = 0,
+    int StructuralColumnCountBeforeRouting = 0,
+    int StructuralRowCountAfterRouting = 0,
+    int StructuralColumnCountAfterRouting = 0,
+    IReadOnlyDictionary<string, int>? StructuralRowRoleCounts = null,
+    IReadOnlyDictionary<string, int>? StructuralColumnRoleCounts = null,
+    int RouteOnlyRowCount = 0,
+    int RouteOnlyColumnCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

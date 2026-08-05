@@ -28,7 +28,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         {
             placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build();
             routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
-                placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids).Build();
+                placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid).Build();
             allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
                 routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build();
             var expanded = allocation.FootprintExpansionRequirements
@@ -53,12 +53,20 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         }
         var projectGrids = routing.ProjectGrids;
         var diagramGrid = routing.DiagramGrid;
-        var physicalSizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, placement.NodePlacements,
-            placement.NodeMetadata, projectGrids, placement.SubtreeReservations, allocation.Sizing.Constraints, diagramGrid).Build();
-        var findings = projection.Diagnostics.Concat(new[]
+        var structuralRowsBeforeRouting = placement.ProjectGrids.Sum(grid => grid.Grid.Rows.Count);
+        var structuralColumnsBeforeRouting = placement.ProjectGrids.Sum(grid => grid.Grid.Columns.Count);
+        var structuralRowsAfterRouting = projectGrids.Sum(grid => grid.Grid.Rows.Count);
+        var structuralColumnsAfterRouting = projectGrids.Sum(grid => grid.Grid.Columns.Count);
+        var deferredSizing = new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(),
+            allocation.Sizing.Constraints, null);
+        var cardinalityFindings = structuralRowsBeforeRouting != structuralRowsAfterRouting || structuralColumnsBeforeRouting != structuralColumnsAfterRouting
+            ? new[] { Deferred("StructuralGridCardinalityChanged", PlanningDiagnosticSubject.Grid, "Abstract routing changed structural row or column cardinality.") }
+            : Array.Empty<ArchitecturePlanningDiagnostic>();
+        var findings = projection.Diagnostics.Concat(cardinalityFindings).Concat(new[]
         {
+            Deferred("V6PhysicalSizingDeferred", PlanningDiagnosticSubject.Grid, "Physical track sizing remains deferred until logical grid cardinality is accepted."),
             Deferred("V6AbsoluteGeometryDeferred", PlanningDiagnosticSubject.Grid, "Absolute geometry compilation remains deferred until a later stage.")
-        }).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(physicalSizing.Diagnostics).ToArray();
+        }).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(
             request.SemanticModel.Projects.Sum(project => project.Nodes.Count) + request.SemanticModel.ExternalNodes.Count,
@@ -86,13 +94,13 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             FootprintCellCount: placement.NodePlacements.Sum(item => item.Footprint.Count),
             SubtreeReservationCount: placement.SubtreeReservations.Count,
             PositionalOwnerCount: placement.NodeMetadata.Count(item => item.PositionalOwnerId is not null),
-             SizedNodeCount: physicalSizing.RelativeGeometry.Nodes.Count,
-             GeometryProjectCount: physicalSizing.RelativeGeometry.Projects.Count,
-             GeometryGridCount: physicalSizing.RelativeGeometry.Grids.Count,
-             GeometryWidth: physicalSizing.RelativeGeometry.DiagramBounds.Width,
-             GeometryHeight: physicalSizing.RelativeGeometry.DiagramBounds.Height,
-             GeometryCollisionCount: physicalSizing.Diagnostics.Count(item => item.Code == "RelativeNodeOverlap"),
-             InvalidDimensionCount: physicalSizing.Diagnostics.Count(item => item.Code == "RelativeInvalidDimension" || item.Code == "SizingInvalidTrack"),
+             SizedNodeCount: 0,
+             GeometryProjectCount: 0,
+             GeometryGridCount: 0,
+             GeometryWidth: 0,
+             GeometryHeight: 0,
+             GeometryCollisionCount: 0,
+             InvalidDimensionCount: 0,
              UnplacedNodeCount: projection.PhysicalNodes.Count - placement.NodePlacements.Count,
              OverlappingFootprintCount: placement.Diagnostics.Count(item => item.Code == "LogicalPlacementFootprintOverlap"),
              IncompatibleReservationCount: placement.Diagnostics.Count(item => item.Code == "LogicalPlacementReservationConflict"),
@@ -106,17 +114,26 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              InvalidatedRouteCount: invalidatedRouteCount,
              RebuiltReservationCount: rebuiltReservationCount,
              ShiftedRegionCount: 0,
-             SizingConstraintCounts: physicalSizing.Sizing.Constraints.GroupBy(item => item.Kind.ToString())
+             SizingConstraintCounts: deferredSizing.Constraints.GroupBy(item => item.Kind.ToString())
                  .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
-             SizingContributionExtents: physicalSizing.Sizing.Provenance!.SelectMany(item => item.Contributions)
-                 .GroupBy(item => item.Kind.ToString()).ToDictionary(group => group.Key, group => group.Sum(item => item.Extent), StringComparer.Ordinal),
-             SizingSolverIterations: physicalSizing.ReconciliationIterations,
-             SizingIdempotent: physicalSizing.SizingIdempotent,
-             LargestRowExtent: physicalSizing.Sizing.Rows.Count == 0 ? 0 : physicalSizing.Sizing.Rows.Max(item => item.FinalExtent),
-             LargestColumnExtent: physicalSizing.Sizing.Columns.Count == 0 ? 0 : physicalSizing.Sizing.Columns.Max(item => item.FinalExtent),
-             LargestSpanMinimum: physicalSizing.Sizing.Constraints.Where(item => item.Rows.Count > 1 || item.Columns.Count > 1)
+             SizingContributionExtents: new Dictionary<string, int>(StringComparer.Ordinal),
+             SizingSolverIterations: 0,
+             SizingIdempotent: false,
+             LargestRowExtent: 0,
+             LargestColumnExtent: 0,
+             LargestSpanMinimum: deferredSizing.Constraints.Where(item => item.Rows.Count > 1 || item.Columns.Count > 1)
                  .Select(item => item.MinimumExtent).DefaultIfEmpty(0).Max(),
-             UnsatisfiedSizingConstraintCount: physicalSizing.Diagnostics.Count(item => item.Code == "SizingConstraintWithoutTracks" || item.Code == "SizingIterationLimit"));
+             UnsatisfiedSizingConstraintCount: 0,
+             StructuralRowCountBeforeRouting: structuralRowsBeforeRouting,
+             StructuralColumnCountBeforeRouting: structuralColumnsBeforeRouting,
+             StructuralRowCountAfterRouting: structuralRowsAfterRouting,
+             StructuralColumnCountAfterRouting: structuralColumnsAfterRouting,
+             StructuralRowRoleCounts: projectGrids.SelectMany(grid => grid.Grid.Rows).GroupBy(row => row.Role.ToString())
+                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
+             StructuralColumnRoleCounts: projectGrids.SelectMany(grid => grid.Grid.Columns).GroupBy(column => column.Role.ToString())
+                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
+             RouteOnlyRowCount: 0,
+             RouteOnlyColumnCount: 0);
 
         return new PlannedArchitectureDiagram(
             request,
@@ -126,19 +143,19 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             projectGrids,
             placement.NodePlacements,
             allocation.Routes,
-            physicalSizing.Sizing,
+            deferredSizing,
             new ArchitecturePlanningDiagnostics(findings, metrics),
             projection,
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, false, false, true, true, false, true, false),
+            new ArchitecturePlanningStageStatus(true, true, true, false, true, true, false, false, true, true),
             routing.DestinationApproaches,
             allocation.StraightRuns,
             routing.TurnDemands,
             routing.EndpointDemands,
             allocation,
-            physicalSizing.RelativeGeometry);
+            null);
     }
 
     private static ArchitecturePlanningDiagnostic Deferred(string code, PlanningDiagnosticSubject subject, string message) =>

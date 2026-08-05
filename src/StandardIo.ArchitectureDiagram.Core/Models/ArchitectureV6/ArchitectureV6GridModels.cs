@@ -38,6 +38,24 @@ public readonly record struct PlanningGridColumnId
 
 public readonly record struct PlanningGridCellId(PlanningGridId GridId, PlanningGridRowId RowId, PlanningGridColumnId ColumnId);
 
+public enum PlanningGridTrackRole
+{
+    Unknown,
+    ProjectHeader,
+    NodeBearing,
+    InterLayerRouting,
+    BaselineNode,
+    ExternalRegion,
+    StandaloneRegion,
+    DiagramProjectPlacement,
+    DiagramCrossProjectRouting,
+    NodeFootprint,
+    SubtreeSiblingGap,
+    DestinationApproach,
+    OwnershipLocalReturn,
+    ProjectBoundaryTransition
+}
+
 [Flags]
 public enum CellCapability
 {
@@ -62,7 +80,11 @@ public sealed record PlanningGridRow(
     int RequiredExtent,
     int FinalExtent,
     int RelativeOffset,
-    int AbsoluteOffset);
+    int AbsoluteOffset,
+    PlanningGridTrackRole Role = PlanningGridTrackRole.Unknown,
+    string? CreationStage = null,
+    string? CreationProvenance = null,
+    string? OwnerId = null);
 
 public sealed record PlanningGridColumn(
     PlanningGridColumnId Id,
@@ -71,7 +93,11 @@ public sealed record PlanningGridColumn(
     int RequiredExtent,
     int FinalExtent,
     int RelativeOffset,
-    int AbsoluteOffset);
+    int AbsoluteOffset,
+    PlanningGridTrackRole Role = PlanningGridTrackRole.Unknown,
+    string? CreationStage = null,
+    string? CreationProvenance = null,
+    string? OwnerId = null);
 
 public sealed record PlanningGridCell(
     PlanningGridCellId Id,

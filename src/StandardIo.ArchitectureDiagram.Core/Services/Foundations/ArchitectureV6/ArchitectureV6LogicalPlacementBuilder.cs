@@ -67,10 +67,11 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
         var reservations = BuildReservations();
         var projectGrids = BuildProjectGrids(projectPlacements, reservations);
+        var diagramGrid = BuildDiagramGrid(projectGrids);
         ValidatePlacement(projectPlacements.Values.SelectMany(items => items).ToArray(), reservations, projectGrids);
         var nodeMetadata = BuildNodeMetadata(reservations);
         var linkMetadata = BuildLinkMetadata();
-        return new LogicalPlacementResult(projectGrids, nodeMetadata, linkMetadata, reservations, diagnostics,
+        return new LogicalPlacementResult(projectGrids, diagramGrid, nodeMetadata, linkMetadata, reservations, diagnostics,
             projectPlacements.Values.SelectMany(items => items).ToArray());
     }
 
@@ -320,8 +321,20 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                         null, isAnchor ? null : placement.PhysicalNodeId, isAnchor ? CellOccupancy.NodeAnchor : CellOccupancy.Empty);
                 }
             var logicalGrid = gridsByProject[projectId];
-            var rows = logicalGrid.Rows.Select((id, index) => new PlanningGridRow(id, index, 1, 1, 1, index, index)).ToArray();
-            var columns = logicalGrid.Columns.Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index)).ToArray();
+            var placementRows = logicalGrid.Rows.ToArray();
+            var rows = placementRows.Select((id, index) => new PlanningGridRow(id, index * 2, 1, 1, 1, index * 2, index * 2,
+                id.Value.StartsWith("standalone:", StringComparison.Ordinal) ? PlanningGridTrackRole.StandaloneRegion :
+                id.Value.StartsWith("baseline:", StringComparison.Ordinal) ? PlanningGridTrackRole.BaselineNode : PlanningGridTrackRole.NodeBearing,
+                "placement", "logical node placement", projectId)).ToList();
+            for (var index = 0; index < placementRows.Length - 1; index++)
+            {
+                var id = new PlanningGridRowId($"routing:inter-layer:{index}");
+                rows.Add(new PlanningGridRow(id, index * 2 + 1, 1, 1, 1, index * 2 + 1, index * 2 + 1,
+                    PlanningGridTrackRole.InterLayerRouting, "placement", "shared inter-layer routing", projectId));
+            }
+            var columns = logicalGrid.Columns.Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index,
+                logicalGrid.NodeFootprintColumns.Contains(id) ? PlanningGridTrackRole.NodeFootprint : PlanningGridTrackRole.SubtreeSiblingGap,
+                "placement", logicalGrid.NodeFootprintColumns.Contains(id) ? "node footprint" : "sibling gap", projectId)).ToArray();
             var grid = new PlanningGrid(gridId, rows, columns, cells, new GridTransform(gridId, new RelativePoint(0, 0)));
             var owned = projectNodes.Select(node => node.PhysicalNodeId).ToArray();
             return new ProjectRoutingGrid(projectId, grid, reservations.Where(item => item.GridId.Equals(gridId)).ToArray(), null,
@@ -402,11 +415,26 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         public PlanningGridColumnId AnchorColumn => Columns[Columns.Count / 2];
     }
 
+    private DiagramRoutingGrid BuildDiagramGrid(IReadOnlyList<ProjectRoutingGrid> projects)
+    {
+        var gridId = new PlanningGridId("diagram");
+        var rowId = new PlanningGridRowId("diagram:projects");
+        var columns = projects.Select((project, index) => new PlanningGridColumn(new PlanningGridColumnId($"diagram:project:{index}"), index, 1, 1, 1, index, index,
+            PlanningGridTrackRole.DiagramProjectPlacement, "placement", project.ProjectId, project.ProjectId)).ToArray();
+        var row = new PlanningGridRow(rowId, 0, 1, 1, 1, 0, 0, PlanningGridTrackRole.DiagramProjectPlacement, "placement", "project placement", "diagram");
+        var cells = columns.ToDictionary(column => new PlanningGridCellId(gridId, rowId, column.Id), column =>
+            new PlanningGridCell(new PlanningGridCellId(gridId, rowId, column.Id), CellCapability.RoutingAllowed | CellCapability.ProjectBoundary,
+                CellOccupancy.ProjectFootprint, Array.Empty<string>(), null));
+        return new DiagramRoutingGrid(new PlanningGrid(gridId, new[] { row }, columns, cells, new GridTransform(gridId, new RelativePoint(0, 0))),
+            Array.Empty<RelativeRectangle>(), Array.Empty<GridTransition>());
+    }
+
     private sealed class LogicalProjectGrid
     {
         private readonly List<PlanningGridColumnId> columns = new();
         private readonly List<PlanningGridRowId> rows = new();
         private readonly HashSet<PlanningGridCellId> occupiedNodeCells = new();
+        public IReadOnlyCollection<PlanningGridColumnId> NodeFootprintColumns => columns.Where(column => occupiedNodeCells.Any(cell => cell.ColumnId.Equals(column))).Distinct().ToArray();
 
         public LogicalProjectGrid(PlanningGridId id) => Id = id;
         public PlanningGridId Id { get; }
@@ -516,6 +544,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
 internal sealed record LogicalPlacementResult(
     IReadOnlyList<ProjectRoutingGrid> ProjectGrids,
+    DiagramRoutingGrid DiagramGrid,
     IReadOnlyList<PhysicalNodePlacementMetadata> NodeMetadata,
     IReadOnlyList<PlannedPhysicalLinkMetadata> LinkMetadata,
     IReadOnlyList<SubtreeReservation> SubtreeReservations,

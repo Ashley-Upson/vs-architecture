@@ -23,7 +23,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         IReadOnlyList<PlannedPhysicalLink> links,
         IReadOnlyList<PlannedNodePlacement> placements,
         IReadOnlyList<PhysicalNodePlacementMetadata> metadata,
-        IReadOnlyList<ProjectRoutingGrid> projectGrids)
+        IReadOnlyList<ProjectRoutingGrid> projectGrids,
+        DiagramRoutingGrid diagramGrid)
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
@@ -31,6 +32,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         this.placements = placements.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         this.metadata = metadata.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         grids = projectGrids.ToDictionary(item => item.Grid.Id, MutableGrid.From, EqualityComparer<PlanningGridId>.Default);
+        grids[diagramGrid.Grid.Id] = MutableGrid.From(diagramGrid.Grid);
         foreach (var placement in placements)
         {
             var grid = projectGrids.Single(item => item.Grid.Id.Equals(placement.GridId)).Grid;
@@ -112,7 +114,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return nodes.OrderBy(node => node.PhysicalNodeId, StringComparer.Ordinal).Select(node =>
         {
             var gridId = GridOf(node);
-            var cell = AddCell(gridId, $"approach:{node.PhysicalNodeId}", Column(node), CellOccupancy.Empty);
+            var cell = UseCell(gridId, placements[node.PhysicalNodeId].AnchorCellId.RowId,
+                placements[node.PhysicalNodeId].AnchorCellId.ColumnId, CellOccupancy.Empty);
             var linkIds = links.Where(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId)
                 .OrderBy(link => link.PhysicalLinkId, StringComparer.Ordinal).Select(link => link.PhysicalLinkId).ToArray();
             return new DestinationApproachReservation($"approach:{node.PhysicalNodeId}", node.PhysicalNodeId, gridId,
@@ -137,10 +140,12 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
 
         if (!sourceGrid.Equals(destinationGrid))
         {
-            var sourceBoundary = AddCell(sourceGrid, $"transition:{link.PhysicalLinkId}:exit", Column(source), CellOccupancy.Empty);
+            var sourceBoundary = UseCell(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
+                ColumnId(source), CellOccupancy.Empty);
             var diagramId = new PlanningGridId("diagram");
-            var diagramBoundary = AddCell(diagramId, $"transition:{link.PhysicalLinkId}:passage", 0, CellOccupancy.Empty);
-            var destinationBoundary = AddCell(destinationGrid, $"transition:{link.PhysicalLinkId}:entry", Column(destination), CellOccupancy.Empty);
+            var diagramBoundary = UseCell(diagramId, grids[diagramId].RowOrder[0], grids[diagramId].ColumnOrder[0], CellOccupancy.Empty);
+            var destinationBoundary = UseCell(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId.RowId,
+                ColumnId(destination), CellOccupancy.Empty);
             transitions.Add(new GridTransition(sourceGrid, sourceBoundary, diagramId, diagramBoundary, "project-to-diagram", link.SemanticLinkId,
                 "exit", link.SourceProjectId, null, true, request.ProjectPlacement.ShowProjectContainers));
             transitions.Add(new GridTransition(diagramId, diagramBoundary, destinationGrid, destinationBoundary, "diagram-to-project", link.SemanticLinkId,
@@ -153,8 +158,10 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         }
         else
         {
-            var departure = AddCell(sourceGrid, $"route:{link.PhysicalLinkId}:departure", DepartureColumn(source, destination), CellOccupancy.Empty);
-            var routeRow = AddCell(sourceGrid, $"route:{link.PhysicalLinkId}:run", Column(destination), CellOccupancy.Empty);
+            var departure = UseCell(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
+                ColumnAt(sourceGrid, DepartureColumn(source, destination)), CellOccupancy.Empty);
+            var routeRow = UseCell(sourceGrid, RoutingRow(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
+                placements[destination.PhysicalNodeId].AnchorCellId.RowId), ColumnId(destination), CellOccupancy.Empty);
             steps.Add(Step(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId, GridSide.Top, topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn ? GridSide.Right : GridSide.Bottom,
                 RouteStepRole.SourceExit, 0, topology));
             if (topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn)
@@ -219,9 +226,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
 
     private DiagramRoutingGrid BuildDiagramGrid(IReadOnlyList<GridTransition> transitions)
     {
-        var grid = grids.TryGetValue(new PlanningGridId("diagram"), out var existing)
-            ? existing
-            : new MutableGrid(new PlanningGridId("diagram"));
+        var grid = grids[new PlanningGridId("diagram")];
         return new DiagramRoutingGrid(grid.ToGrid(), Array.Empty<RelativeRectangle>(), transitions.ToArray());
     }
 
@@ -230,7 +235,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         new(gridId, cell, entry, exit, role, order, topology.ToString(), null);
 
     private NodeEndpoint Endpoint(PlannedPhysicalNode node, GridSide side, string terminal, PlanningGridId gridId) =>
-        new(node.PhysicalNodeId, side, $"{terminal}:{node.PhysicalNodeId}", 0, gridId, new PlanningGridColumnId($"column:{Column(node)}"), 1, $"{ProjectOf(node.PhysicalNodeId)}:{node.PhysicalNodeId}");
+        new(node.PhysicalNodeId, side, $"{terminal}:{node.PhysicalNodeId}", 0, gridId, ColumnId(node), 1, $"{ProjectOf(node.PhysicalNodeId)}:{node.PhysicalNodeId}");
 
     private RouteTopologyFamily Classify(PlannedPhysicalLink link)
     {
@@ -245,20 +250,38 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return RouteTopologyFamily.Upward;
     }
 
-    private PlanningGridCellId AddCell(PlanningGridId gridId, string rowToken, int column, CellOccupancy occupancy)
+    private PlanningGridCellId UseCell(PlanningGridId gridId, PlanningGridRowId rowId, PlanningGridColumnId columnId, CellOccupancy occupancy)
     {
-        if (!grids.TryGetValue(gridId, out var grid))
+        if (!grids.TryGetValue(gridId, out var grid) || !grid.RowOrder.Contains(rowId) || !grid.ColumnOrder.Contains(columnId))
         {
-            grid = new MutableGrid(gridId);
-            grids[gridId] = grid;
+            diagnostics.Add(new ArchitecturePlanningDiagnostic("MissingStructuralRegion", "Route requested a row or column not created by placement.", PlanningDiagnosticSubject.Grid, gridId.Value));
+            return new PlanningGridCellId(gridId, rowId, columnId);
         }
-        return grid.Add(rowToken, column, occupancy);
+        var cell = new PlanningGridCellId(gridId, rowId, columnId);
+        if (!grid.Cells.ContainsKey(cell))
+            grid.Cells[cell] = new PlanningGridCell(cell, CellCapability.RoutingAllowed, occupancy, Array.Empty<string>());
+        return cell;
     }
 
     private PlanningGridId GridOf(PlannedPhysicalNode node) => new($"project:{ProjectOf(node.PhysicalNodeId)}");
     private string ProjectOf(string physicalNodeId) => nodes.Single(node => node.PhysicalNodeId == physicalNodeId).ProjectId ?? "external";
     private static bool IsVertical(PlannedGridRouteStep step) => step.EntrySide == GridSide.Top || step.EntrySide == GridSide.Bottom;
     private int Column(PlannedPhysicalNode node) => columnOrderByNode[node.PhysicalNodeId];
+    private PlanningGridColumnId ColumnId(PlannedPhysicalNode node) => placements[node.PhysicalNodeId].AnchorCellId.ColumnId;
+    private PlanningGridColumnId ColumnAt(PlanningGridId gridId, int requested)
+    {
+        var grid = grids[gridId];
+        var index = Math.Max(0, Math.Min(requested, Math.Max(0, grid.ColumnOrder.Count - 1)));
+        return grid.ColumnOrder[index];
+    }
+    private PlanningGridRowId RoutingRow(PlanningGridId gridId, PlanningGridRowId source, PlanningGridRowId destination)
+    {
+        var grid = grids[gridId];
+        var preferred = grid.Rows.Values.Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting)
+            .OrderBy(row => Math.Abs(row.LogicalOrder - (grid.Rows[source].LogicalOrder + grid.Rows[destination].LogicalOrder) / 2))
+            .FirstOrDefault();
+        return preferred?.Id ?? destination;
+    }
     private int DepartureColumn(PlannedPhysicalNode source, PlannedPhysicalNode destination) => Column(source) <= Column(destination)
         ? Column(source) + placements[source.PhysicalNodeId].ColumnSpan / 2 + 1
         : Column(source) - placements[source.PhysicalNodeId].ColumnSpan / 2 - 1;
@@ -274,32 +297,32 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         public string? ProjectId { get; private set; }
         public IReadOnlyList<string> OwnedPhysicalNodeIds { get; private set; } = Array.Empty<string>();
         public IReadOnlyList<string> OwnedExternalNodeIds { get; private set; } = Array.Empty<string>();
-        public static MutableGrid From(ProjectRoutingGrid project)
+        public Dictionary<PlanningGridRowId, PlanningGridRow> Rows { get; } = new();
+        public Dictionary<PlanningGridColumnId, PlanningGridColumn> Columns { get; } = new();
+        public static MutableGrid From(ProjectRoutingGrid project) => FromProject(project);
+        public static MutableGrid From(PlanningGrid source)
         {
-            var result = new MutableGrid(project.Grid.Id)
-            {
-                Reservations = project.SubtreeReservations,
-                ProjectId = project.ProjectId,
-                OwnedPhysicalNodeIds = project.OwnedPhysicalNodeIds,
-                OwnedExternalNodeIds = project.OwnedExternalNodeIds
-            };
-            result.RowOrder.AddRange(project.Grid.Rows.OrderBy(item => item.LogicalOrder).Select(item => item.Id));
-            result.ColumnOrder.AddRange(project.Grid.Columns.OrderBy(item => item.LogicalOrder).Select(item => item.Id));
-            foreach (var cell in project.Grid.Cells) result.Cells[cell.Key] = cell.Value;
+            var result = new MutableGrid(source.Id);
+            result.RowOrder.AddRange(source.Rows.OrderBy(item => item.LogicalOrder).Select(item => item.Id));
+            result.ColumnOrder.AddRange(source.Columns.OrderBy(item => item.LogicalOrder).Select(item => item.Id));
+            foreach (var row in source.Rows) result.Rows[row.Id] = row;
+            foreach (var column in source.Columns) result.Columns[column.Id] = column;
+            foreach (var cell in source.Cells) result.Cells[cell.Key] = cell.Value;
             return result;
         }
-        public PlanningGridCellId Add(string rowToken, int column, CellOccupancy occupancy)
+        private static MutableGrid FromProject(ProjectRoutingGrid project)
         {
-            var cell = new PlanningGridCellId(Id, new PlanningGridRowId(rowToken.StartsWith("row:", StringComparison.Ordinal) ? rowToken : $"route-row:{rowToken}"), new PlanningGridColumnId($"column:{column}"));
-            if (!RowOrder.Contains(cell.RowId)) RowOrder.Add(cell.RowId);
-            if (!ColumnOrder.Contains(cell.ColumnId)) ColumnOrder.Add(cell.ColumnId);
-            if (!Cells.ContainsKey(cell)) Cells[cell] = new PlanningGridCell(cell, CellCapability.RoutingAllowed | CellCapability.NodeAllowed, occupancy, Array.Empty<string>());
-            return cell;
+            var result = From(project.Grid);
+            result.Reservations = project.SubtreeReservations;
+            result.ProjectId = project.ProjectId;
+            result.OwnedPhysicalNodeIds = project.OwnedPhysicalNodeIds;
+            result.OwnedExternalNodeIds = project.OwnedExternalNodeIds;
+            return result;
         }
         public PlanningGrid ToGrid()
         {
-            var rows = RowOrder.Distinct().Select((id, index) => new PlanningGridRow(id, index, 1, 1, 1, index, index)).ToArray();
-            var columns = ColumnOrder.Distinct().Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index)).ToArray();
+            var rows = RowOrder.Distinct().Select(id => Rows[id]).ToArray();
+            var columns = ColumnOrder.Distinct().Select(id => Columns[id]).ToArray();
             return new PlanningGrid(Id, rows, columns, new Dictionary<PlanningGridCellId, PlanningGridCell>(Cells), new GridTransform(Id, new RelativePoint(0, 0)));
         }
         public ProjectRoutingGrid ToProjectGrid(IEnumerable<PlannedPhysicalNode> owned) => new(ProjectId ?? owned.FirstOrDefault()?.ProjectId ?? Id.Value.Substring("project:".Length), ToGrid(), Reservations, null,
