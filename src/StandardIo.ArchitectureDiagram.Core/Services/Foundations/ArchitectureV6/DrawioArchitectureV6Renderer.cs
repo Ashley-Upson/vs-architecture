@@ -59,7 +59,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             var rectangle = parent == "1"
                 ? nodeGeometry.AbsoluteBounds
                 : new AbsoluteRectangle(nodeGeometry.RelativeBounds.X, nodeGeometry.RelativeBounds.Y, nodeGeometry.RelativeBounds.Width, nodeGeometry.RelativeBounds.Height);
-            root.Add(NodeCell(node, nodeGeometry, parent, rectangle, style.Rule, diagram.Request.RoutePlanning.ExternalDependencyTag));
+            root.Add(NodeCell(node, nodeGeometry, parent, rectangle, style.Rule, style.MatchedSelector ?? "<fallback>", diagram.Request.RoutePlanning.ExternalDependencyTag));
             emitted.Add(node.PhysicalNodeId);
         }
 
@@ -117,6 +117,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         string parent,
         AbsoluteRectangle rectangle,
         ArchitectureV6StyleRule style,
+        string matchedSelector,
         string externalTag)
     {
         var value = node.IsExternal ? (externalTag ?? "[External]") + " " + node.SemanticName : node.SemanticName;
@@ -134,6 +135,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             new XAttribute("external", node.IsExternal ? "1" : "0"),
             new XAttribute("standalone", node.IsStandalone ? "1" : "0"),
             new XAttribute("positionalOwnerId", geometry.PositionalOwnerId ?? string.Empty),
+            new XAttribute("matchedStyleRule", matchedSelector),
             new XElement("mxGeometry", new XAttribute("x", rectangle.X), new XAttribute("y", rectangle.Y),
                 new XAttribute("width", rectangle.Width), new XAttribute("height", rectangle.Height), new XAttribute("as", "geometry")));
         if (node.DuplicationProvenance is not null)
