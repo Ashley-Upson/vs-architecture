@@ -368,7 +368,9 @@ public sealed class ArchitectureV6StructuralTests
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
         Assert.NotNull(plan.PhysicalScene);
         Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalScene!.Metrics.AbsoluteNodeCount);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Metrics.PhysicalRouteCount);
+        Assert.InRange(plan.PhysicalScene.Metrics.PhysicalRouteCount, 0, plan.PhysicalLinks.Count);
+        Assert.Equal(plan.PhysicalLinks.Count,
+            plan.PhysicalScene.Metrics.PhysicalRouteCount + plan.PhysicalScene.Metrics.InvalidRouteCount);
         Assert.NotNull(plan.RelativeGeometry);
     }
 
@@ -400,12 +402,50 @@ public sealed class ArchitectureV6StructuralTests
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
 
         Assert.NotNull(plan.PhysicalScene);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene!.Metrics.PhysicalRouteCount);
+        Assert.Equal(plan.PhysicalLinks.Count,
+            plan.PhysicalScene!.Metrics.PhysicalRouteCount + plan.PhysicalScene.Metrics.InvalidRouteCount);
         Assert.Equal(plan.PhysicalLinks.Count * 2, plan.PhysicalScene.Terminals.Count);
+        Assert.Equal(plan.PhysicalScene.Metrics.InvalidRouteCount, plan.PhysicalScene.InvalidRouteIds.Count);
+        Assert.All(plan.PhysicalScene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
+        {
+            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y);
+            Assert.NotEmpty(segment.AllocatedCells!);
+        });
         Assert.All(plan.PhysicalScene.Terminals, terminal =>
         {
             var node = plan.PhysicalScene.Geometry.Nodes.Single(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
             Assert.Equal(terminal.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y, terminal.Point.Y);
+        });
+    }
+
+    [Fact]
+    public void Planner_keeps_invalid_materialisation_attempts_out_of_accepted_geometry()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+
+        Assert.Equal(scene.Metrics.InvalidRouteCount, scene.InvalidRouteIds.Count);
+        Assert.Equal(scene.Metrics.DiagonalSegmentCount,
+            scene.AttemptedSegments.Count(attempt => attempt.FailureCode == "DiagonalComponentConnection"));
+        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
+            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+        Assert.Contains(scene.AttemptedSegments, attempt => attempt.FailureCode is "DiagonalComponentConnection" or "ComponentContinuityMismatch");
+    }
+
+    [Fact]
+    public void Planner_records_complete_corridor_provenance_for_accepted_segments()
+    {
+        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
+        Assert.NotNull(scene);
+
+        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
+        {
+            Assert.NotNull(segment.AllocatedCells);
+            Assert.NotEmpty(segment.AllocatedCells!);
+            Assert.NotEmpty(segment.ComponentId);
+            Assert.NotEmpty(segment.StartProvenance);
+            Assert.NotEmpty(segment.EndProvenance);
         });
     }
 

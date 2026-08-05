@@ -208,7 +208,14 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
               OwnershipTransformFindingCount: physicalScene.Metrics.OwnershipFindingCount,
               LabelGeometryUnavailableCount: physicalScene.Metrics.LabelGeometryUnavailableCount,
               PhysicalTopologyCounts: physicalScene.Metrics.TopologyCounts,
-              PhysicalStageTimingMilliseconds: physicalScene.Metrics.StageTimingsMilliseconds);
+              PhysicalStageTimingMilliseconds: physicalScene.Metrics.StageTimingsMilliseconds,
+              InvalidPhysicalRouteCount: physicalScene.Metrics.InvalidRouteCount,
+              AttemptedPhysicalSegmentCount: physicalScene.Metrics.AttemptedSegmentCount,
+              DiagonalPhysicalSegmentCount: physicalScene.Metrics.DiagonalSegmentCount,
+              CorridorEscapeCount: physicalScene.Metrics.CorridorEscapeCount,
+              ComponentContinuityFailureCount: physicalScene.Metrics.ComponentContinuityFailureCount,
+              SourceStubDirectionFailureCount: physicalScene.Metrics.SourceStubDirectionFailureCount,
+              DestinationStubDirectionFailureCount: physicalScene.Metrics.DestinationStubDirectionFailureCount);
 
         return new PlannedArchitectureDiagram(
             request,

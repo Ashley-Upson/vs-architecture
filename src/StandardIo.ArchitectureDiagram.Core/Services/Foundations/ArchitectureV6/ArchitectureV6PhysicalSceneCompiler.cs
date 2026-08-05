@@ -20,6 +20,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     private readonly ArchitectureLaneAllocationResult allocation;
     private readonly IReadOnlyList<SubtreeReservation> subtreeReservations;
     private readonly List<ArchitecturePlanningDiagnostic> findings = new();
+    private readonly List<PlannedPhysicalMaterialisationAttempt> attemptedSegments = new();
+    private readonly List<string> invalidRouteIds = new();
 
     public ArchitectureV6PhysicalSceneCompiler(
         ArchitecturePlanningRequest request,
@@ -90,7 +92,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         var metrics = BuildMetrics(geometry, terminals, physicalRoutes, turns, crossings, transitions, timings);
         return new PlannedArchitecturePhysicalScene(geometry, transforms.Values.OrderBy(item => item.GridId.Value, StringComparer.Ordinal).ToArray(),
-            terminals, turns, crossings, transitions, reservationGeometry, findings, metrics);
+            terminals, turns, crossings, transitions, reservationGeometry, findings, metrics, attemptedSegments, invalidRouteIds);
     }
 
     private Dictionary<PlanningGridId, GridTransform> BuildTransforms()
@@ -130,6 +132,76 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 findings.Add(new ArchitecturePlanningDiagnostic("LabelGeometryUnavailable", "Project label measurement is unavailable.", PlanningDiagnosticSubject.Grid, project.ProjectId));
         }
         return result;
+    }
+
+    private void ValidateEndpointDirection(PlannedGridRoute route, PlannedPhysicalTerminal sourceTerminal,
+        PlannedPhysicalTerminal destinationTerminal, IReadOnlyList<PlannedPhysicalRouteComponent> components, ref bool invalid)
+    {
+        var sourceStub = components.FirstOrDefault(item => item.ComponentId.EndsWith(":source-stub", StringComparison.Ordinal));
+        var destinationStub = components.FirstOrDefault(item => item.ComponentId.EndsWith(":destination-stub", StringComparison.Ordinal));
+        if (sourceStub?.EntryPoint is not null && sourceStub.ExitPoint is not null &&
+            (sourceStub.ExitPoint.Value.X != sourceStub.EntryPoint.Value.X || sourceStub.ExitPoint.Value.Y <= sourceStub.EntryPoint.Value.Y))
+        {
+            invalid = true;
+            attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, sourceStub.ComponentId,
+                sourceStub.PrecedingComponentId, sourceStub.FollowingComponentId, sourceStub.EntryPoint.Value, sourceStub.ExitPoint.Value,
+                "SourceStubDirectionInvalid", "Source stubs must descend vertically from the source bottom terminal.", sourceStub.AllocatedCells));
+            findings.Add(new ArchitecturePlanningDiagnostic("SourceStubDirectionInvalid", "Source stubs must descend vertically from the source bottom terminal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+        }
+        if (destinationStub?.EntryPoint is not null && destinationStub.ExitPoint is not null &&
+            (destinationStub.ExitPoint.Value.X != destinationStub.EntryPoint.Value.X || destinationStub.ExitPoint.Value.Y >= destinationStub.EntryPoint.Value.Y))
+        {
+            invalid = true;
+            attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, destinationStub.ComponentId,
+                destinationStub.PrecedingComponentId, destinationStub.FollowingComponentId, destinationStub.EntryPoint.Value, destinationStub.ExitPoint.Value,
+                "DestinationStubDirectionInvalid", "Destination stubs must approach vertically from above into the destination top terminal.", destinationStub.AllocatedCells));
+            findings.Add(new ArchitecturePlanningDiagnostic("DestinationStubDirectionInvalid", "Destination stubs must approach vertically from above into the destination top terminal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+        }
+        if (sourceTerminal.Side != GridSide.Bottom || destinationTerminal.Side != GridSide.Top)
+        {
+            invalid = true;
+            findings.Add(new ArchitecturePlanningDiagnostic("InvalidPhysicalTerminalDirection", "Physical routes must leave source bottoms and enter destination tops.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+        }
+    }
+
+    private void AddMaterialisationFinding(PlannedGridRoute route, string code, string message)
+    {
+        findings.Add(new ArchitecturePlanningDiagnostic(code, message, PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+    }
+
+    private void AddMaterialisationAttempt(PlannedGridRoute route, PlannedPhysicalRouteComponent before,
+        PlannedPhysicalRouteComponent after, AbsolutePoint start, AbsolutePoint end, string code, string message,
+        IReadOnlyList<PlanningGridCellId>? cells = null)
+    {
+        attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, after.ComponentId,
+            before.ComponentId, after.ComponentId, start, end, code, message, cells ?? after.AllocatedCells,
+            after.Points.FirstOrDefault()?.PointId, after.StraightRunId));
+        AddMaterialisationFinding(route, code, message);
+    }
+
+    private bool SegmentWithinCells(AbsolutePoint start, AbsolutePoint end, IReadOnlyList<PlanningGridCellId> cells,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        var rectangles = cells.Select(cell => CellBounds(cell, transforms)).Where(rectangle => rectangle.Width > 0 && rectangle.Height > 0).ToArray();
+        if (rectangles.Length != cells.Count) return false;
+        var left = rectangles.Min(rectangle => rectangle.X);
+        var top = rectangles.Min(rectangle => rectangle.Y);
+        var right = rectangles.Max(rectangle => rectangle.X + rectangle.Width);
+        var bottom = rectangles.Max(rectangle => rectangle.Y + rectangle.Height);
+        if (start.X == end.X)
+            return start.X >= left && start.X <= right && Math.Min(start.Y, end.Y) >= top && Math.Max(start.Y, end.Y) <= bottom;
+        if (start.Y == end.Y)
+            return start.Y >= top && start.Y <= bottom && Math.Min(start.X, end.X) >= left && Math.Max(start.X, end.X) <= right;
+        return false;
+    }
+
+    private AbsoluteRectangle CellBounds(PlanningGridCellId cell, IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(cell.GridId));
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(cell.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(cell.ColumnId));
+        if (row is null || column is null || !transforms.TryGetValue(cell.GridId, out var transform)) return new AbsoluteRectangle(0, 0, 0, 0);
+        return new AbsoluteRectangle(transform.Origin.X + column.RelativeOffset, transform.Origin.Y + row.RelativeOffset, column.FinalExtent, row.FinalExtent);
     }
 
     private IReadOnlyList<PlannedPhysicalNodeGeometry> CompileNodes(IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
@@ -267,23 +339,62 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             }
             var components = BuildComponents(route, sourceTerminal, destinationTerminal, transforms);
             var rawPoints = components.SelectMany(component => component.Points).ToArray();
-            var pointEntries = components.SelectMany(component => component.Points.Select(point => (Point: point, Component: component))).ToArray();
             var segments = new List<PlannedPhysicalRouteSegment>();
-            for (var index = 1; index < pointEntries.Length; index++)
+            var routeInvalid = !route.IsStructurallySupported;
+            if (routeInvalid)
+                AddMaterialisationFinding(route, "UnsupportedAbstractRoute", route.UnsupportedReason ?? "The abstract route is not structurally supported.");
+
+            void AddSegment(PlannedPhysicalRouteComponent owner, PlannedPhysicalRoutePoint beforePoint, PlannedPhysicalRoutePoint afterPoint, PlannedPhysicalRouteComponent? preceding, PlannedPhysicalRouteComponent? following)
             {
-                var before = pointEntries[index - 1];
-                var after = pointEntries[index];
-                if (before.Point.Point == after.Point.Point) continue;
-                var axis = before.Point.Point.X == after.Point.Point.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
-                if (before.Point.Point.X != after.Point.Point.X && before.Point.Point.Y != after.Point.Point.Y)
-                    findings.Add(new ArchitecturePlanningDiagnostic("DiagonalComponentConnection", "Adjacent accepted route components do not connect orthogonally.", PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId));
-                var component = after.Component;
-                segments.Add(new PlannedPhysicalRouteSegment(route.PhysicalLinkId, RelativePointFor(before.Point.Point, before.Point.GridId, transforms), RelativePointFor(after.Point.Point, after.Point.GridId, transforms), before.Point.Point, after.Point.Point,
-                    after.Point.GridId, axis, after.Point.Role, component.Lane ?? new LaneId("component:" + component.ComponentId), route.TopologyFamily,
-                    component.ComponentId, component.RouteStepOrder, component.StraightRunId, component.LaneDomainId, component.AllocatedCells,
-                    component.AllocatedCells.Select(cell => cell.RowId).Distinct().Count() == 1 ? component.AllocatedCells.Select(cell => cell.RowId).Distinct().First() : null,
-                    component.AllocatedCells.Select(cell => cell.ColumnId).Distinct().Count() == 1 ? component.AllocatedCells.Select(cell => cell.ColumnId).Distinct().First() : null,
-                    before.Point.Provenance, after.Point.Provenance));
+                if (beforePoint.Point == afterPoint.Point) return;
+                var start = beforePoint.Point;
+                var end = afterPoint.Point;
+                if (start.X != end.X && start.Y != end.Y)
+                {
+                    routeInvalid = true;
+                    AddMaterialisationAttempt(route, preceding ?? owner, following ?? owner, start, end,
+                        "DiagonalComponentConnection", "A physical component connection must be orthogonal.", owner.AllocatedCells);
+                    return;
+                }
+                var axis = start.X == end.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
+                var cells = owner.AllocatedCells;
+                if (cells.Count == 0 || !SegmentWithinCells(start, end, cells, transforms))
+                {
+                    routeInvalid = true;
+                    AddMaterialisationAttempt(route, preceding ?? owner, following ?? owner, start, end,
+                        "ComponentCorridorEscape", "A physical component connection leaves its allocated cell corridor.", cells);
+                    return;
+                }
+                segments.Add(new PlannedPhysicalRouteSegment(route.PhysicalLinkId, RelativePointFor(start, beforePoint.GridId, transforms), RelativePointFor(end, afterPoint.GridId, transforms), start, end,
+                    afterPoint.GridId, axis, owner.Role, owner.Lane ?? new LaneId("component:" + owner.ComponentId), route.TopologyFamily,
+                    owner.ComponentId, owner.RouteStepOrder, owner.StraightRunId, owner.LaneDomainId, cells,
+                    cells.Select(cell => cell.RowId).Distinct().Count() == 1 ? cells.Select(cell => cell.RowId).Distinct().First() : null,
+                    cells.Select(cell => cell.ColumnId).Distinct().Count() == 1 ? cells.Select(cell => cell.ColumnId).Distinct().First() : null,
+                    beforePoint.Provenance, afterPoint.Provenance));
+            }
+
+            foreach (var component in components)
+                for (var pointIndex = 1; pointIndex < component.Points.Count; pointIndex++)
+                    AddSegment(component, component.Points[pointIndex - 1], component.Points[pointIndex], component, component);
+
+            for (var index = 1; index < components.Count; index++)
+            {
+                var before = components[index - 1];
+                var after = components[index];
+                if (before.ExitPoint is null || after.EntryPoint is null || before.ExitPoint.Value != after.EntryPoint.Value)
+                {
+                    routeInvalid = true;
+                    AddMaterialisationAttempt(route, before, after, before.ExitPoint ?? default, after.EntryPoint ?? default,
+                        "ComponentContinuityMismatch", "Adjacent physical components do not share an exact boundary point.");
+                    continue;
+                }
+                AddSegment(after, before.Points.Last(), after.Points.First(), before, after);
+            }
+            ValidateEndpointDirection(route, sourceTerminal, destinationTerminal, components, ref routeInvalid);
+            if (routeInvalid)
+            {
+                invalidRouteIds.Add(route.PhysicalLinkId);
+                continue;
             }
             var length = segments.Sum(segment => Math.Abs(segment.End.X - segment.Start.X) + Math.Abs(segment.End.Y - segment.Start.Y));
             result.Add(new PlannedPhysicalRoute(route.PhysicalLinkId, links.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId)?.SemanticLinkId ?? string.Empty,
@@ -314,15 +425,20 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         var firstStep = ordered.FirstOrDefault();
         var firstPoint = firstStep is null || !transforms.TryGetValue(firstStep.GridId, out var firstTransform)
-            ? sourceTerminal.Point : PointForStep(route, firstStep, firstTransform);
-        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":source-terminal", route.PhysicalLinkId, RouteStepRole.SourceExit, -1, null, null, null,
-            Array.Empty<PlanningGridCellId>(), new[] { Point(route, route.Steps.FirstOrDefault()?.GridId ?? new PlanningGridId("unknown"), sourceTerminal.Point, RouteStepRole.SourceExit, route.PhysicalLinkId + ":source-terminal", -1, null, null, null, "source terminal", route.PhysicalLinkId + ":source-terminal") }, null, null, route.SourceProjectId ?? "diagram", "source terminal"));
-        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":source-stub", route.PhysicalLinkId, RouteStepRole.SourceExit, -1, null, null, null,
-            Array.Empty<PlanningGridCellId>(), StubPoints(route, sourceTerminal.Point, firstPoint, firstStep?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.SourceExit, route.PhysicalLinkId + ":source-stub", "source stub"), null, null, route.SourceProjectId ?? "diagram", "source stub"));
+            ? sourceTerminal.Point : BoundaryPoint(route, firstStep, firstStep.EntrySide, firstTransform);
+        var sourceTerminalComponent = route.PhysicalLinkId + ":source-terminal";
+        result.Add(new PlannedPhysicalRouteComponent(sourceTerminalComponent, route.PhysicalLinkId, RouteStepRole.SourceExit, -1, null, null, null,
+            Array.Empty<PlanningGridCellId>(), new[] { Point(route, route.Steps.FirstOrDefault()?.GridId ?? new PlanningGridId("unknown"), sourceTerminal.Point, RouteStepRole.SourceExit, sourceTerminalComponent, -1, null, null, null, "source terminal", sourceTerminalComponent) }, null, null, route.SourceProjectId ?? "diagram", "source terminal",
+            sourceTerminal.Point, sourceTerminal.Point, GridSide.Bottom, GridSide.Bottom, null, route.PhysicalLinkId + ":source-stub", "terminal"));
+        var sourceStubComponent = route.PhysicalLinkId + ":source-stub";
+        result.Add(new PlannedPhysicalRouteComponent(sourceStubComponent, route.PhysicalLinkId, RouteStepRole.SourceExit, -1, null, null, null,
+            firstStep is null ? Array.Empty<PlanningGridCellId>() : new[] { firstStep.CellId }, StubPoints(route, sourceTerminal.Point, firstPoint, firstStep?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.SourceExit, sourceStubComponent, "source stub"), null, null, route.SourceProjectId ?? "diagram", "source stub",
+            sourceTerminal.Point, firstPoint, GridSide.Bottom, firstStep?.EntrySide, sourceTerminalComponent, null, "source-stub"));
         foreach (var group in groups)
         {
             var first = group[0];
             if (!transforms.TryGetValue(first.GridId, out var transform)) continue;
+            if (!transforms.TryGetValue(group[group.Count - 1].GridId, out var groupLastTransform)) groupLastTransform = transform;
             var componentId = route.PhysicalLinkId + ":component:" + first.Order;
             var allocatedTurn = first.Role == RouteStepRole.Turn
                 ? allocation.Turns.SingleOrDefault(turn => turn.RouteId == route.PhysicalLinkId && turn.CellId == first.CellId.ToString())
@@ -331,13 +447,19 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 findings.Add(new ArchitecturePlanningDiagnostic("MissingAllocatedTurn", "A turn route step has no allocated turn identity and cannot be materialised as an owned turn.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
             var points = group[0].Role == RouteStepRole.Turn
                 ? new[] { Point(route, first.GridId, TurnPoint(route, first, transform), RouteStepRole.Turn, componentId + ":turn", first.Order, first.StraightRunId, allocatedTurn?.BendIdentity, first.CellId, "allocated turn", componentId) }
-                : group.Select(step => Point(route, step.GridId, CellPoint(step, route, transform), step.Role, componentId + ":cell:" + step.Order, step.Order, step.StraightRunId, null, step.CellId, "allocated straight-run cell", componentId)).ToArray();
+                : new[]
+                {
+                    Point(route, first.GridId, BoundaryPoint(route, first, first.EntrySide, transform), first.Role, componentId + ":entry", first.Order, first.StraightRunId, null, first.CellId, "allocated run entry boundary", componentId),
+                    Point(route, group[group.Count - 1].GridId, BoundaryPoint(route, group[group.Count - 1], first.Role == RouteStepRole.DestinationEntry ? group[group.Count - 1].EntrySide : group[group.Count - 1].ExitSide, groupLastTransform), group[group.Count - 1].Role, componentId + ":exit", group[group.Count - 1].Order, group[group.Count - 1].StraightRunId, null, group[group.Count - 1].CellId, "allocated run exit boundary", componentId)
+                };
             var lane = first.AllocatedLane;
             var allocationForLane = lane is null ? null : allocation.HorizontalLanes.Concat(allocation.VerticalLanes).FirstOrDefault(item => item.Lane.Value == lane.Value.Value);
             result.Add(new PlannedPhysicalRouteComponent(componentId, route.PhysicalLinkId, first.Role, first.Order,
                 first.StraightRunId, allocationForLane?.DomainId, lane, group.Select(step => step.CellId).ToArray(), points,
                 allocatedTurn?.BendIdentity,
-                null, first.GridId.Value, "ordered route-step component"));
+                null, first.GridId.Value, "ordered route-step component",
+                points[0].Point, points[points.Length - 1].Point, first.EntrySide, first.Role == RouteStepRole.DestinationEntry ? group[group.Count - 1].EntrySide : group[group.Count - 1].ExitSide,
+                result.LastOrDefault()?.ComponentId, null, "allocated-component-boundary"));
         }
         foreach (var transition in route.Transitions.OrderBy(item => item.SourceGridId.Value, StringComparer.Ordinal).ThenBy(item => item.DestinationGridId.Value, StringComparer.Ordinal))
         {
@@ -357,11 +479,21 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 null, transition.OwnershipTransition, transition.DestinationGridId.Value, "explicit grid transition"));
         }
         var last = ordered.LastOrDefault();
-        var lastPoint = last is null || !transforms.TryGetValue(last.GridId, out var lastTransform) ? destinationTerminal.Point : PointForStep(route, last, lastTransform);
-        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":destination-stub", route.PhysicalLinkId, RouteStepRole.DestinationEntry, int.MaxValue, null, null, null,
-            Array.Empty<PlanningGridCellId>(), StubPoints(route, lastPoint, destinationTerminal.Point, last?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.DestinationEntry, route.PhysicalLinkId + ":destination-stub", "destination stub"), null, null, route.DestinationProjectId ?? "diagram", "destination stub"));
-        result.Add(new PlannedPhysicalRouteComponent(route.PhysicalLinkId + ":destination-terminal", route.PhysicalLinkId, RouteStepRole.DestinationEntry, int.MaxValue, null, null, null,
-            Array.Empty<PlanningGridCellId>(), new[] { Point(route, route.Steps.LastOrDefault()?.GridId ?? new PlanningGridId("unknown"), destinationTerminal.Point, RouteStepRole.DestinationEntry, route.PhysicalLinkId + ":destination-terminal", int.MaxValue, null, null, null, "destination terminal", route.PhysicalLinkId + ":destination-terminal") }, null, null, route.DestinationProjectId ?? "diagram", "destination terminal"));
+        var lastPoint = last is null || !transforms.TryGetValue(last.GridId, out var lastTransform) ? destinationTerminal.Point : BoundaryPoint(route, last, last.EntrySide, lastTransform);
+        var destinationStubComponent = route.PhysicalLinkId + ":destination-stub";
+        result.Add(new PlannedPhysicalRouteComponent(destinationStubComponent, route.PhysicalLinkId, RouteStepRole.DestinationEntry, int.MaxValue, null, null, null,
+            last is null ? Array.Empty<PlanningGridCellId>() : new[] { last.CellId }, StubPoints(route, lastPoint, destinationTerminal.Point, last?.GridId ?? new PlanningGridId("unknown"), RouteStepRole.DestinationEntry, destinationStubComponent, "destination stub"), null, null, route.DestinationProjectId ?? "diagram", "destination stub",
+            lastPoint, destinationTerminal.Point, last?.EntrySide, GridSide.Top, result.LastOrDefault()?.ComponentId, route.PhysicalLinkId + ":destination-terminal", "destination-stub"));
+        var destinationTerminalComponent = route.PhysicalLinkId + ":destination-terminal";
+        result.Add(new PlannedPhysicalRouteComponent(destinationTerminalComponent, route.PhysicalLinkId, RouteStepRole.DestinationEntry, int.MaxValue, null, null, null,
+            Array.Empty<PlanningGridCellId>(), new[] { Point(route, route.Steps.LastOrDefault()?.GridId ?? new PlanningGridId("unknown"), destinationTerminal.Point, RouteStepRole.DestinationEntry, destinationTerminalComponent, int.MaxValue, null, null, null, "destination terminal", destinationTerminalComponent) }, null, null, route.DestinationProjectId ?? "diagram", "destination terminal",
+            destinationTerminal.Point, destinationTerminal.Point, GridSide.Top, GridSide.Top, destinationStubComponent, null, "terminal"));
+        for (var index = 0; index < result.Count; index++)
+            result[index] = result[index] with
+            {
+                PrecedingComponentId = index == 0 ? null : result[index - 1].ComponentId,
+                FollowingComponentId = index == result.Count - 1 ? null : result[index + 1].ComponentId
+            };
         return result;
     }
 
@@ -384,6 +516,27 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
 
     private AbsolutePoint PointForStep(PlannedGridRoute route, PlannedGridRouteStep step, GridTransform transform) =>
         step.Role == RouteStepRole.Turn ? TurnPoint(route, step, transform) : CellPoint(step, route, transform);
+
+    private AbsolutePoint BoundaryPoint(PlannedGridRoute route, PlannedGridRouteStep step, GridSide side, GridTransform transform)
+    {
+        var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(step.CellId.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(step.CellId.ColumnId));
+        if (row is null || column is null) return new AbsolutePoint(transform.Origin.X, transform.Origin.Y);
+        var horizontal = side is GridSide.Left or GridSide.Right;
+        var lane = step.AllocatedLane;
+        var x = column.RelativeOffset + column.FinalExtent / 2;
+        var y = row.RelativeOffset + row.FinalExtent / 2;
+        if (!horizontal && lane is not null)
+            x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, lane.Value.Value);
+        if (horizontal && lane is not null)
+            y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, lane.Value.Value);
+        if (side == GridSide.Left) x = column.RelativeOffset;
+        if (side == GridSide.Right) x = column.RelativeOffset + column.FinalExtent;
+        if (side == GridSide.Top) y = row.RelativeOffset;
+        if (side == GridSide.Bottom) y = row.RelativeOffset + row.FinalExtent;
+        return new AbsolutePoint(transform.Origin.X + x, transform.Origin.Y + y);
+    }
 
     private AbsolutePoint CellPoint(PlannedGridRouteStep step, PlannedGridRoute route, GridTransform transform)
     {
@@ -476,7 +629,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             findings.Count(item => item.Code == "SharedCollinearSegment"), findings.Count(item => item.Code == "SharedBend"),
             findings.Count(item => item.Code == "InvalidCrossing"), findings.Count(item => item.Code.Contains("Terminal", StringComparison.Ordinal)),
             findings.Count(item => item.Code.Contains("Ownership", StringComparison.Ordinal) || item.Code.Contains("Transform", StringComparison.Ordinal)),
-            findings.Count(item => item.Code == "LabelGeometryUnavailable"), routes.GroupBy(route => route.TopologyFamily.ToString()).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal), timings);
+            findings.Count(item => item.Code == "LabelGeometryUnavailable"), routes.GroupBy(route => route.TopologyFamily.ToString()).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal), timings,
+            InvalidRouteCount: invalidRouteIds.Count,
+            AttemptedSegmentCount: attemptedSegments.Count + routes.Sum(route => route.Segments.Count),
+            DiagonalSegmentCount: attemptedSegments.Count(item => item.FailureCode == "DiagonalComponentConnection"),
+            CorridorEscapeCount: attemptedSegments.Count(item => item.FailureCode == "ComponentCorridorEscape"),
+            ComponentContinuityFailureCount: attemptedSegments.Count(item => item.FailureCode == "ComponentContinuityMismatch"),
+            SourceStubDirectionFailureCount: findings.Count(item => item.Code == "SourceStubDirectionInvalid"),
+            DestinationStubDirectionFailureCount: findings.Count(item => item.Code == "DestinationStubDirectionInvalid"));
     }
 
     private static AbsoluteRectangle Translate(RelativeRectangle rectangle, RelativePoint origin) => new(rectangle.X + origin.X, rectangle.Y + origin.Y, rectangle.Width, rectangle.Height);

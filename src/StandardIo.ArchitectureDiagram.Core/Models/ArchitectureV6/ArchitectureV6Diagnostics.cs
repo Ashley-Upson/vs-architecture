@@ -147,7 +147,14 @@ public sealed record ArchitecturePlanningMetrics(
     int OwnershipTransformFindingCount = 0,
     int LabelGeometryUnavailableCount = 0,
     IReadOnlyDictionary<string, int>? PhysicalTopologyCounts = null,
-    IReadOnlyDictionary<string, long>? PhysicalStageTimingMilliseconds = null);
+     IReadOnlyDictionary<string, long>? PhysicalStageTimingMilliseconds = null,
+     int InvalidPhysicalRouteCount = 0,
+     int AttemptedPhysicalSegmentCount = 0,
+     int DiagonalPhysicalSegmentCount = 0,
+     int CorridorEscapeCount = 0,
+     int ComponentContinuityFailureCount = 0,
+     int SourceStubDirectionFailureCount = 0,
+     int DestinationStubDirectionFailureCount = 0);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

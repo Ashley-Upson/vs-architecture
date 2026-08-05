@@ -60,7 +60,27 @@ public sealed record PlannedPhysicalRouteComponent(
     string? TurnIdentity,
     string? TransitionIdentity,
     string OwnershipScope,
-    string Provenance);
+    string Provenance,
+    AbsolutePoint? EntryPoint = null,
+    AbsolutePoint? ExitPoint = null,
+    GridSide? EntrySide = null,
+    GridSide? ExitSide = null,
+    string? PrecedingComponentId = null,
+    string? FollowingComponentId = null,
+    string? ExpectedBoundary = null);
+
+public sealed record PlannedPhysicalMaterialisationAttempt(
+    string PhysicalLinkId,
+    string ComponentId,
+    string? PreviousComponentId,
+    string? NextComponentId,
+    AbsolutePoint Start,
+    AbsolutePoint End,
+    string FailureCode,
+    string FailureMessage,
+    IReadOnlyList<PlanningGridCellId> AllocatedCells,
+    string? RouteStepId = null,
+    string? StraightRunId = null);
 
 public sealed record PlannedPhysicalRoute(
     string PhysicalLinkId,
@@ -138,7 +158,14 @@ public sealed record PlannedPhysicalSceneMetrics(
     int OwnershipFindingCount,
     int LabelGeometryUnavailableCount,
     IReadOnlyDictionary<string, int> TopologyCounts,
-    IReadOnlyDictionary<string, long> StageTimingsMilliseconds);
+    IReadOnlyDictionary<string, long> StageTimingsMilliseconds,
+    int InvalidRouteCount = 0,
+    int AttemptedSegmentCount = 0,
+    int DiagonalSegmentCount = 0,
+    int CorridorEscapeCount = 0,
+    int ComponentContinuityFailureCount = 0,
+    int SourceStubDirectionFailureCount = 0,
+    int DestinationStubDirectionFailureCount = 0);
 
 public sealed class PlannedArchitecturePhysicalScene
 {
@@ -151,7 +178,9 @@ public sealed class PlannedArchitecturePhysicalScene
         IReadOnlyList<PlannedPhysicalTransition> transitions,
         IReadOnlyList<PlannedSubtreeGeometry> reservations,
         IReadOnlyList<ArchitecturePlanningDiagnostic> diagnostics,
-        PlannedPhysicalSceneMetrics metrics)
+        PlannedPhysicalSceneMetrics metrics,
+        IReadOnlyList<PlannedPhysicalMaterialisationAttempt>? attemptedSegments = null,
+        IReadOnlyList<string>? invalidRouteIds = null)
     {
         Geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
         Transforms = Array.AsReadOnly((transforms ?? throw new ArgumentNullException(nameof(transforms))).ToArray());
@@ -162,6 +191,8 @@ public sealed class PlannedArchitecturePhysicalScene
         Reservations = Array.AsReadOnly((reservations ?? throw new ArgumentNullException(nameof(reservations))).ToArray());
         Diagnostics = Array.AsReadOnly((diagnostics ?? throw new ArgumentNullException(nameof(diagnostics))).ToArray());
         Metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+        AttemptedSegments = Array.AsReadOnly((attemptedSegments ?? Array.Empty<PlannedPhysicalMaterialisationAttempt>()).ToArray());
+        InvalidRouteIds = Array.AsReadOnly((invalidRouteIds ?? Array.Empty<string>()).ToArray());
     }
 
     public PlannedArchitectureGeometry Geometry { get; }
@@ -173,6 +204,8 @@ public sealed class PlannedArchitecturePhysicalScene
     public IReadOnlyList<PlannedSubtreeGeometry> Reservations { get; }
     public IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics { get; }
     public PlannedPhysicalSceneMetrics Metrics { get; }
+    public IReadOnlyList<PlannedPhysicalMaterialisationAttempt> AttemptedSegments { get; }
+    public IReadOnlyList<string> InvalidRouteIds { get; }
 }
 
 public enum TrackConstraintKind
