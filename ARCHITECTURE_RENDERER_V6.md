@@ -33,8 +33,8 @@ Roslyn semantic analysis
   provisional straight runs and collective endpoint/turn demand;
 - domain-local horizontal/vertical lane allocations, endpoint and approach
   ordering, turn/crossing records and provenance-bearing capacity constraints;
-- deterministic physical track extents, relative node/project/grid/subtree
-  geometry and diagram-level project footprint placement;
+- authoritative logical grid rows/columns, odd node footprints and nested
+  subtree reservations; physical sizing and relative geometry are deferred;
 - immutable `PlannedArchitectureDiagram`, request/policy contracts and diagnostics.
 
 The route-step, endpoint, transition, straight-run, lane and demand models are
@@ -54,8 +54,8 @@ The following stages are not active and must not be inferred from metadata:
 Logical node placement, topology classification, abstract grid routes,
 destination approaches, project transitions, straight-run compilation,
 collective demand, logical lane allocation, routing-capacity constraints,
-physical track sizing and relative geometry are active. Absolute route geometry
-and rendering are not.
+logical lane allocation and routing-capacity constraints are active. Physical
+track sizing, relative geometry, absolute route geometry and rendering are not.
 
 The previous coordinate-first route builder, candidate scoring, rectangle-derived
 lane selection, sequential route reservation and degraded fallback route have been
@@ -78,8 +78,9 @@ CLI and VSIX continue to resolve the V6 Architecture planner/renderer boundary.
 `IPlannedArchitectureDiagramValidator` and immutable diagnostics remain available
 for completed plans. The intentionally incomplete structural plan is not passed
 through completed-geometry validation because it has no placements or geometry.
-The planner reports `V6GeometryDeferred`; capacity constraints and relative
-geometry are complete while absolute geometry remains deferred.
+The planner reports `V6PhysicalSizingDeferred` and `V6AbsoluteGeometryDeferred`;
+logical placement and capacity constraints are complete while physical sizing
+and geometry remain deferred.
 The renderer reports logical-placement and abstract-route completion, the
 minimal-page state and deferred link emission.
 

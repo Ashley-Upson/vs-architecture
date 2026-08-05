@@ -13,6 +13,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private readonly Dictionary<string, PlannedNodePlacement> placements;
     private readonly Dictionary<string, PhysicalNodePlacementMetadata> metadata;
     private readonly Dictionary<PlanningGridId, MutableGrid> grids;
+    private readonly Dictionary<string, int> rowOrderByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> columnOrderByNode = new(StringComparer.Ordinal);
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
 
     public ArchitectureV6AbstractRoutePlanner(
@@ -29,6 +31,12 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         this.placements = placements.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         this.metadata = metadata.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         grids = projectGrids.ToDictionary(item => item.Grid.Id, MutableGrid.From, EqualityComparer<PlanningGridId>.Default);
+        foreach (var placement in placements)
+        {
+            var grid = projectGrids.Single(item => item.Grid.Id.Equals(placement.GridId)).Grid;
+            rowOrderByNode[placement.PhysicalNodeId] = grid.Rows.Single(row => row.Id.Equals(placement.AnchorCellId.RowId)).LogicalOrder;
+            columnOrderByNode[placement.PhysicalNodeId] = grid.Columns.Single(column => column.Id.Equals(placement.AnchorCellId.ColumnId)).LogicalOrder;
+        }
     }
 
     public AbstractRoutePlanningResult Build()
@@ -40,10 +48,10 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
 
         foreach (var link in links.OrderBy(item => ProjectOf(item.SourcePhysicalNodeId), StringComparer.Ordinal)
                      .ThenBy(item => Classify(item))
-                     .ThenBy(item => metadata[item.SourcePhysicalNodeId].PhysicalRow)
-                     .ThenBy(item => metadata[item.SourcePhysicalNodeId].PhysicalColumn)
-                     .ThenBy(item => metadata[item.DestinationPhysicalNodeId].PhysicalRow)
-                     .ThenBy(item => metadata[item.DestinationPhysicalNodeId].PhysicalColumn)
+                     .ThenBy(item => rowOrderByNode[item.SourcePhysicalNodeId])
+                     .ThenBy(item => columnOrderByNode[item.SourcePhysicalNodeId])
+                     .ThenBy(item => rowOrderByNode[item.DestinationPhysicalNodeId])
+                     .ThenBy(item => columnOrderByNode[item.DestinationPhysicalNodeId])
                      .ThenBy(item => item.PhysicalLinkId, StringComparer.Ordinal))
         {
             var route = BuildRoute(link, approaches, transitions);
@@ -227,13 +235,13 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private RouteTopologyFamily Classify(PlannedPhysicalLink link)
     {
         if (link.SourceProjectId != link.DestinationProjectId) return RouteTopologyFamily.CrossProject;
-        var source = metadata[link.SourcePhysicalNodeId];
-        var target = metadata[link.DestinationPhysicalNodeId];
+        var sourceRow = rowOrderByNode[link.SourcePhysicalNodeId];
+        var targetRow = rowOrderByNode[link.DestinationPhysicalNodeId];
         if (nodes.Single(node => node.PhysicalNodeId == link.DestinationPhysicalNodeId).IsExternal) return RouteTopologyFamily.External;
-        if (target.PhysicalRow == source.PhysicalRow)
-            return source.PositionalOwnerId == target.PositionalOwnerId ? RouteTopologyFamily.OwnershipLocalReturn : RouteTopologyFamily.SameLayer;
-        if (target.PhysicalRow > source.PhysicalRow)
-            return target.PhysicalRow == source.PhysicalRow + 1 ? RouteTopologyFamily.AdjacentDownward : RouteTopologyFamily.LongDownward;
+        if (targetRow == sourceRow)
+            return metadata[link.SourcePhysicalNodeId].PositionalOwnerId == metadata[link.DestinationPhysicalNodeId].PositionalOwnerId ? RouteTopologyFamily.OwnershipLocalReturn : RouteTopologyFamily.SameLayer;
+        if (targetRow > sourceRow)
+            return targetRow == sourceRow + 1 ? RouteTopologyFamily.AdjacentDownward : RouteTopologyFamily.LongDownward;
         return RouteTopologyFamily.Upward;
     }
 
@@ -250,9 +258,10 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private PlanningGridId GridOf(PlannedPhysicalNode node) => new($"project:{ProjectOf(node.PhysicalNodeId)}");
     private string ProjectOf(string physicalNodeId) => nodes.Single(node => node.PhysicalNodeId == physicalNodeId).ProjectId ?? "external";
     private static bool IsVertical(PlannedGridRouteStep step) => step.EntrySide == GridSide.Top || step.EntrySide == GridSide.Bottom;
-    private int Column(PlannedPhysicalNode node) => Parse(node.PhysicalNodeId, placements[node.PhysicalNodeId].CentreColumnId.Value);
-    private int DepartureColumn(PlannedPhysicalNode source, PlannedPhysicalNode destination) => Column(source) <= Column(destination) ? Column(source) + placements[source.PhysicalNodeId].ColumnSpan / 2 + 1 : Column(source) - placements[source.PhysicalNodeId].ColumnSpan / 2 - 1;
-    private static int Parse(string _, string value) => int.TryParse(value.Substring(value.LastIndexOf(':') + 1), out var result) ? result : 0;
+    private int Column(PlannedPhysicalNode node) => columnOrderByNode[node.PhysicalNodeId];
+    private int DepartureColumn(PlannedPhysicalNode source, PlannedPhysicalNode destination) => Column(source) <= Column(destination)
+        ? Column(source) + placements[source.PhysicalNodeId].ColumnSpan / 2 + 1
+        : Column(source) - placements[source.PhysicalNodeId].ColumnSpan / 2 - 1;
 
     private sealed class MutableGrid
     {

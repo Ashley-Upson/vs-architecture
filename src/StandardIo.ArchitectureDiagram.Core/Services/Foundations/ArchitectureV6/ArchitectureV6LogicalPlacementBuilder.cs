@@ -12,6 +12,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private const int LogicalGap = 1;
     private readonly ArchitecturePlanningRequest request;
     private readonly ArchitectureProjectionResult projection;
+    private readonly IReadOnlyDictionary<string, int> requiredSpans;
     private readonly Dictionary<string, PlannedPhysicalNode> nodes;
     private readonly Dictionary<string, int> order;
     private readonly Dictionary<string, string?> ownerByNode = new(StringComparer.Ordinal);
@@ -20,15 +21,18 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, List<string>> semanticChildrenByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> depthByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> rowByNode = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Position> positionByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GridSlot> slotByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, LogicalProjectGrid> gridsByProject = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> spanByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> spanReasonByNode = new(StringComparer.Ordinal);
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
 
-    public ArchitectureV6LogicalPlacementBuilder(ArchitecturePlanningRequest request, ArchitectureProjectionResult projection)
+    public ArchitectureV6LogicalPlacementBuilder(ArchitecturePlanningRequest request, ArchitectureProjectionResult projection,
+        IReadOnlyDictionary<string, int>? requiredSpans = null)
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.projection = projection ?? throw new ArgumentNullException(nameof(projection));
+        this.requiredSpans = requiredSpans ?? new Dictionary<string, int>(StringComparer.Ordinal);
         nodes = projection.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         order = projection.PhysicalNodes.Select((node, index) => (node.PhysicalNodeId, index))
             .ToDictionary(item => item.PhysicalNodeId, item => item.index, StringComparer.Ordinal);
@@ -48,15 +52,15 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var projectNodes = nodes.Values.Where(node => ProjectOf(node) == projectId).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
             var roots = projectNodes.Where(node => ownerByNode[node.PhysicalNodeId] is null).ToArray();
-            var cursor = 0;
+            var logicalGrid = new LogicalProjectGrid(new PlanningGridId($"project:{projectId}"));
+            gridsByProject[projectId] = logicalGrid;
             foreach (var root in roots.Where(node => !node.IsStandalone))
             {
-                var width = SubtreeWidth(root.PhysicalNodeId);
-                PlaceSubtree(root.PhysicalNodeId, cursor);
-                cursor += width + LogicalGap;
+                var region = logicalGrid.ReserveRegion(SubtreeColumnSpan(root.PhysicalNodeId));
+                PlaceSubtree(root.PhysicalNodeId, region);
             }
 
-            PlaceStandaloneRegion(projectNodes.Where(node => node.IsStandalone).ToArray(), cursor);
+            PlaceStandaloneRegion(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray());
             var placements = projectNodes.Select(BuildPlacement).OrderBy(item => order[item.PhysicalNodeId]).ToArray();
             projectPlacements[projectId] = placements.ToList();
         }
@@ -100,7 +104,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var owner = ownerByNode[node.PhysicalNodeId];
             if (owner is null) continue;
-            if (rowByNode[node.PhysicalNodeId] <= rowByNode[owner] || positionByNode[node.PhysicalNodeId].Centre != positionByNode[owner].Centre)
+            if (CompareRows(slotByNode[node.PhysicalNodeId].RowId, slotByNode[owner].RowId) <= 0 ||
+                !slotByNode[node.PhysicalNodeId].AnchorColumn.Equals(slotByNode[owner].AnchorColumn))
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalNotLocal", "An external node with one positional owner must be directly below and centred on that owner.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         }
 
@@ -141,6 +146,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             }
 
             ownerByNode[node.PhysicalNodeId] = semanticParentsByNode[node.PhysicalNodeId]
+                .Where(parent => ProjectOf(nodes[parent]) == ProjectOf(node))
                 .Where(parent => order[parent] < order[node.PhysicalNodeId])
                 .OrderBy(parent => order[parent])
                 .ThenBy(parent => parent, StringComparer.Ordinal)
@@ -203,60 +209,65 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var requested = Math.Max(MinimumFootprintSpan, ((node.SemanticName ?? node.SemanticNodeId).Length + 19) / 20 * 2 + 1);
             if (degree > 4) requested = Math.Max(requested, 5);
             if (degree > 8) requested = Math.Max(requested, 7);
+            if (requiredSpans.TryGetValue(node.PhysicalNodeId, out var required)) requested = Math.Max(requested, required);
             spanByNode[node.PhysicalNodeId] = requested % 2 == 0 ? requested + 1 : requested;
             spanReasonByNode[node.PhysicalNodeId] = degree == 0 ? "minimum" : $"label-and-degree:{degree}";
         }
     }
 
-    private int SubtreeWidth(string id)
+    private int SubtreeColumnSpan(string id)
     {
         var children = childrenByNode[id].Where(child => !nodes[child].IsStandalone).ToArray();
         if (children.Length == 0) return spanByNode[id];
-        return Math.Max(spanByNode[id], children.Sum(SubtreeWidth) + (children.Length - 1) * LogicalGap);
+        return Math.Max(spanByNode[id], children.Sum(SubtreeColumnSpan) + (children.Length - 1) * LogicalGap);
     }
 
-    private void PlaceSubtree(string id, int start)
+    private void PlaceSubtree(string id, IReadOnlyList<PlanningGridColumnId> region)
     {
-        if (positionByNode.ContainsKey(id)) return;
-        var width = SubtreeWidth(id);
+        if (slotByNode.ContainsKey(id)) return;
+        var grid = gridsByProject[ProjectOf(nodes[id])];
         var children = childrenByNode[id].Where(child => !nodes[child].IsStandalone).ToArray();
-        var childWidth = children.Length == 0 ? 0 : children.Sum(SubtreeWidth) + (children.Length - 1) * LogicalGap;
-        var centre = start + Math.Max(0, width - spanByNode[id]) / 2 + spanByNode[id] / 2;
-        positionByNode[id] = new Position(centre, start, start + width - 1);
-        var childStart = start + Math.Max(0, (width - childWidth) / 2);
+        var childWidth = children.Length == 0 ? 0 : children.Sum(SubtreeColumnSpan) + (children.Length - 1) * LogicalGap;
+        var nodeStart = Math.Max(0, (region.Count - spanByNode[id]) / 2);
+        var nodeColumns = region.Skip(nodeStart).Take(spanByNode[id]).ToArray();
+        var rowId = grid.EnsureRow(rowByNode[id], $"layer:{rowByNode[id]}");
+        slotByNode[id] = new GridSlot(rowId, nodeColumns);
+        var childStart = Math.Max(0, (region.Count - childWidth) / 2);
         foreach (var child in children)
         {
-            PlaceSubtree(child, childStart);
-            childStart += SubtreeWidth(child) + LogicalGap;
+            var childWidthForRegion = SubtreeColumnSpan(child);
+            PlaceSubtree(child, region.Skip(childStart).Take(childWidthForRegion).ToArray());
+            childStart += childWidthForRegion + LogicalGap;
         }
     }
 
-    private void PlaceStandaloneRegion(IReadOnlyList<PlannedPhysicalNode> standalone, int hierarchyEnd)
+    private void PlaceStandaloneRegion(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> standalone)
     {
         if (standalone.Count == 0) return;
-        var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalone.Count)));
-        var start = hierarchyEnd + LogicalGap * 2;
+        var columnsPerRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalone.Count)));
+        var region = grid.ReserveRegion(standalone.Sum(node => spanByNode[node.PhysicalNodeId]) + Math.Max(0, columnsPerRow - 1) * LogicalGap);
         var standaloneRow = rowByNode.Values.DefaultIfEmpty(0).Max() + LogicalGap;
         for (var index = 0; index < standalone.Count; index++)
         {
             var node = standalone[index];
-            var x = start + (index % columns) * (spanByNode[node.PhysicalNodeId] + LogicalGap);
-            positionByNode[node.PhysicalNodeId] = new Position(x + spanByNode[node.PhysicalNodeId] / 2, x, x + spanByNode[node.PhysicalNodeId] - 1);
-            rowByNode[node.PhysicalNodeId] = standaloneRow + index / columns;
+            var row = standaloneRow + index / columnsPerRow;
+            rowByNode[node.PhysicalNodeId] = row;
+            var start = Math.Min(region.Count - spanByNode[node.PhysicalNodeId],
+                (index % columnsPerRow) * (spanByNode[node.PhysicalNodeId] + LogicalGap));
+            slotByNode[node.PhysicalNodeId] = new GridSlot(grid.EnsureRow(row, $"standalone:{index / columnsPerRow}"),
+                region.Skip(start).Take(spanByNode[node.PhysicalNodeId]).ToArray());
         }
     }
 
     private PlannedNodePlacement BuildPlacement(PlannedPhysicalNode node)
     {
-        var position = positionByNode[node.PhysicalNodeId];
-        var gridId = new PlanningGridId($"project:{ProjectOf(node)}");
-        var row = rowByNode[node.PhysicalNodeId];
-        var footprint = Enumerable.Range(position.Start, spanByNode[node.PhysicalNodeId])
-            .Select(column => new PlanningGridCellId(gridId, new PlanningGridRowId($"row:{row}"), new PlanningGridColumnId($"column:{column}")))
+        var slot = slotByNode[node.PhysicalNodeId];
+        var gridId = gridsByProject[ProjectOf(node)].Id;
+        var footprint = slot.Columns
+            .Select(column => new PlanningGridCellId(gridId, slot.RowId, column))
             .ToArray();
-        return new PlannedNodePlacement(node.PhysicalNodeId, gridId, footprint[spanByNode[node.PhysicalNodeId] / 2],
-            spanByNode[node.PhysicalNodeId], 1, footprint,
-            new PlanningGridColumnId($"column:{position.Centre}"), spanReasonByNode[node.PhysicalNodeId]);
+        return new PlannedNodePlacement(node.PhysicalNodeId, gridId, footprint[slot.Columns.Count / 2],
+            slot.Columns.Count, 1, footprint, slot.AnchorColumn, spanReasonByNode[node.PhysicalNodeId]);
     }
 
     private IReadOnlyList<SubtreeReservation> BuildReservations()
@@ -264,17 +275,16 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         var result = new List<SubtreeReservation>();
         foreach (var node in nodes.Values.OrderBy(item => order[item.PhysicalNodeId]))
         {
-            var members = SubtreeMembers(node.PhysicalNodeId).Where(positionByNode.ContainsKey).ToArray();
+            var members = SubtreeMembers(node.PhysicalNodeId).Where(slotByNode.ContainsKey).ToArray();
             if (members.Length == 0) continue;
-            var min = members.Min(id => positionByNode[id].Start);
-            var max = members.Max(id => positionByNode[id].End);
-            var rows = members.Select(id => rowByNode[id]).Distinct().OrderBy(row => row).ToArray();
-            var gridId = new PlanningGridId($"project:{ProjectOf(node)}");
-            var cells = rows.SelectMany(row => Enumerable.Range(min, max - min + 1)
-                .Select(column => new PlanningGridCellId(gridId, new PlanningGridRowId($"row:{row}"), new PlanningGridColumnId($"column:{column}"))))
+            var grid = gridsByProject[ProjectOf(node)];
+            var columns = members.SelectMany(id => slotByNode[id].Columns).Distinct().OrderBy(grid.ColumnOrder).ToArray();
+            var rows = members.Select(id => slotByNode[id].RowId).Distinct().ToArray();
+            var cells = rows.SelectMany(row => columns
+                .Select(column => new PlanningGridCellId(grid.Id, row, column)))
                 .ToArray();
             var owner = ownerByNode[node.PhysicalNodeId];
-            result.Add(new SubtreeReservation($"subtree:{node.PhysicalNodeId}", node.PhysicalNodeId, gridId, cells,
+            result.Add(new SubtreeReservation($"subtree:{node.PhysicalNodeId}", node.PhysicalNodeId, grid.Id, cells,
                 owner is null ? null : $"subtree:{owner}"));
         }
         return result;
@@ -307,10 +317,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                     cells[cell] = Cell(cell, cells.TryGetValue(cell, out var existing) ? existing : null,
                         null, isAnchor ? null : placement.PhysicalNodeId, isAnchor ? CellOccupancy.NodeAnchor : CellOccupancy.Empty);
                 }
-            var rows = cells.Keys.Select(cell => cell.RowId).Distinct().OrderBy(id => id.Value, StringComparer.Ordinal)
-                .Select((id, index) => new PlanningGridRow(id, index, 1, 1, 1, index, index)).ToArray();
-            var columns = cells.Keys.Select(cell => cell.ColumnId).Distinct().OrderBy(id => Parse(id.Value))
-                .Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index)).ToArray();
+            var logicalGrid = gridsByProject[projectId];
+            var rows = logicalGrid.Rows.Select((id, index) => new PlanningGridRow(id, index, 1, 1, 1, index, index)).ToArray();
+            var columns = logicalGrid.Columns.Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index)).ToArray();
             var grid = new PlanningGrid(gridId, rows, columns, cells, new GridTransform(gridId, new RelativePoint(0, 0)));
             var owned = projectNodes.Select(node => node.PhysicalNodeId).ToArray();
             return new ProjectRoutingGrid(projectId, grid, reservations.Where(item => item.GridId.Equals(gridId)).ToArray(), null,
@@ -343,7 +352,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 reservations.Where(item => item.SubtreeId == subtree.SubtreeId || item.AncestorReservationId == subtree.SubtreeId).Select(item => item.SubtreeId).ToArray(),
                 node.ProjectId, depthByNode[node.PhysicalNodeId], baseline, node.IsExternal, node.IsStandalone,
                 spanReasonByNode[node.PhysicalNodeId], depthByNode[node.PhysicalNodeId], role, 0, ProjectOf(node), owner is null ? $"root:{ProjectOf(node)}" : $"owner:{owner}",
-                "sibling", "logical-row", rowByNode[node.PhysicalNodeId], positionByNode[node.PhysicalNodeId].Centre,
+                "sibling", "logical-row", rowByNode[node.PhysicalNodeId], gridsByProject[ProjectOf(node)].ColumnOrder(slotByNode[node.PhysicalNodeId].AnchorColumn),
                 rootByNode.TryGetValue(node.PhysicalNodeId, out var rootId) ? rootId : node.PhysicalNodeId, owner, depthByNode[node.PhysicalNodeId] - (owner is null ? 0 : depthByNode[owner]),
                 0, owner is null ? order[node.PhysicalNodeId] : childrenByNode[owner].IndexOf(node.PhysicalNodeId), 0, subtree.SubtreeId);
         }).ToArray();
@@ -355,12 +364,11 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
     private IReadOnlyList<PlannedPhysicalLinkMetadata> BuildLinkMetadata() => projection.PhysicalLinks.Select(link =>
     {
-        var source = positionByNode[link.SourcePhysicalNodeId];
-        var target = positionByNode[link.DestinationPhysicalNodeId];
         var sourceNode = nodes[link.SourcePhysicalNodeId];
         var targetNode = nodes[link.DestinationPhysicalNodeId];
         var vertical = rowByNode[link.DestinationPhysicalNodeId].CompareTo(rowByNode[link.SourcePhysicalNodeId]);
-        var horizontal = target.Centre.CompareTo(source.Centre);
+        var horizontal = gridsByProject[ProjectOf(sourceNode)].ColumnOrder(slotByNode[link.DestinationPhysicalNodeId].AnchorColumn)
+            .CompareTo(gridsByProject[ProjectOf(sourceNode)].ColumnOrder(slotByNode[link.SourcePhysicalNodeId].AnchorColumn));
         return new PlannedPhysicalLinkMetadata(link.PhysicalLinkId, link.SemanticLinkId, link.SourcePhysicalNodeId, link.DestinationPhysicalNodeId,
             link.SourceProjectId, link.DestinationProjectId, depthByNode[link.SourcePhysicalNodeId], depthByNode[link.DestinationPhysicalNodeId],
             link.SourceProjectId != link.DestinationProjectId ? "CrossProject" : vertical > 0 ? "Downward" : vertical < 0 ? "Upward" : horizontal == 0 ? "SameColumn" : horizontal < 0 ? "Left" : "Right",
@@ -373,7 +381,10 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private string ProjectOf(PlannedPhysicalNode node) => node.ProjectId ?? "external";
     private IEnumerable<string> ProjectOrder() => (request.SelectedScope.SelectedProjectIds ?? Array.Empty<string>())
         .Concat(nodes.Values.Select(ProjectOf)).Distinct(StringComparer.Ordinal);
-    private static int Parse(string value) => int.TryParse(value.Substring(value.LastIndexOf(':') + 1), out var result) ? result : 0;
+    private int CompareRows(PlanningGridRowId left, PlanningGridRowId right) =>
+        ParseLogicalOrder(left.Value).CompareTo(ParseLogicalOrder(right.Value));
+
+    private static int ParseLogicalOrder(string value) => int.TryParse(value.Split(':').Last(), out var result) ? result : 0;
     private static Regex ToRegex(string? value)
     {
         var pattern = string.IsNullOrWhiteSpace(value) ? ".*" : value!;
@@ -382,7 +393,43 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         return new Regex("^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
-    private sealed record Position(int Centre, int Start, int End);
+    private sealed record GridSlot(PlanningGridRowId RowId, IReadOnlyList<PlanningGridColumnId> Columns)
+    {
+        public PlanningGridColumnId AnchorColumn => Columns[Columns.Count / 2];
+    }
+
+    private sealed class LogicalProjectGrid
+    {
+        private int nextColumn;
+        private readonly List<PlanningGridColumnId> columns = new();
+        private readonly List<PlanningGridRowId> rows = new();
+
+        public LogicalProjectGrid(PlanningGridId id) => Id = id;
+        public PlanningGridId Id { get; }
+        public IReadOnlyList<PlanningGridColumnId> Columns => columns;
+        public IReadOnlyList<PlanningGridRowId> Rows => rows;
+
+        public IReadOnlyList<PlanningGridColumnId> ReserveRegion(int count)
+        {
+            if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+            if (count % 2 == 0) count++;
+            var region = Enumerable.Range(nextColumn, count)
+                .Select(index => new PlanningGridColumnId($"column:{index}"))
+                .ToArray();
+            columns.AddRange(region);
+            nextColumn += count + LogicalGap;
+            return region;
+        }
+
+        public PlanningGridRowId EnsureRow(int logicalOrder, string token)
+        {
+            var row = new PlanningGridRowId($"row:{logicalOrder}:{token}");
+            if (!rows.Contains(row)) rows.Add(row);
+            return row;
+        }
+
+        public int ColumnOrder(PlanningGridColumnId id) => columns.IndexOf(id);
+    }
 }
 
 internal sealed record LogicalPlacementResult(

@@ -45,7 +45,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_marks_sizing_complete_and_absolute_geometry_deferred()
+    public void Planner_defers_physical_sizing_and_geometry_after_grid_planning()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
 
@@ -53,16 +53,15 @@ public sealed class ArchitectureV6StructuralTests
         Assert.True(plan.StageStatus.LogicalPlacementCompleted);
         Assert.True(plan.StageStatus.AbstractRoutingCompleted);
         Assert.False(plan.StageStatus.LaneAllocationDeferred);
-        Assert.False(plan.StageStatus.SizingDeferred);
-        Assert.True(plan.StageStatus.SizingCompleted);
+        Assert.True(plan.StageStatus.SizingDeferred);
+        Assert.False(plan.StageStatus.SizingCompleted);
         Assert.True(plan.StageStatus.CapacityConstraintsCompleted);
-        Assert.False(plan.StageStatus.PhysicalSizingDeferred);
+        Assert.True(plan.StageStatus.PhysicalSizingDeferred);
         Assert.True(plan.StageStatus.AbsoluteGeometryDeferred);
         Assert.False(plan.StageStatus.AbsoluteGeometryCompleted);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6SizingDeferred");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6GeometryDeferred");
+        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6PhysicalSizingDeferred");
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6AbsoluteGeometryDeferred");
     }
 
@@ -236,13 +235,8 @@ public sealed class ArchitectureV6StructuralTests
             Assert.NotEmpty(allocation.Provenance);
         });
         Assert.NotEmpty(plan.Sizing.Constraints);
-        Assert.NotNull(plan.RelativeGeometry);
-        Assert.Equal(plan.PhysicalNodes.Count, plan.RelativeGeometry!.Nodes.Count);
-        Assert.NotEmpty(plan.RelativeGeometry.Projects);
-        Assert.True(plan.RelativeGeometry.DiagramBounds.Width > 0);
-        Assert.True(plan.RelativeGeometry.DiagramBounds.Height > 0);
-        Assert.All(plan.Sizing.Rows, track => Assert.True(track.FinalExtent > 0));
-        Assert.All(plan.Sizing.Columns, track => Assert.True(track.FinalExtent > 0));
+        Assert.Null(plan.RelativeGeometry);
+        Assert.NotNull(plan.Sizing);
         Assert.Equal(plan.SubtreeReservations.Count, plan.ProjectGrids.SelectMany(grid => grid.SubtreeReservations).Count());
         Assert.True(new ArchitectureDiagramV6Validator().Validate(plan).IsValid);
     }
