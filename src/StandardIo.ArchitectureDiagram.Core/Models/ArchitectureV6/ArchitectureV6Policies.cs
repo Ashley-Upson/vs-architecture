@@ -53,6 +53,17 @@ public sealed record ArchitectureGenerationSettingsSnapshot(
     IReadOnlyList<string> ExcludedNamespaces,
     IReadOnlyList<string> ExcludedNames);
 
+public sealed record ArchitectureV6StyleRule(
+    string Match,
+    string FillColor,
+    string StrokeColor,
+    string FontColor,
+    string Shape,
+    bool Shadow,
+    string? ExtraStyle);
+
+public sealed record ArchitectureV6StyleOverride(string FullName, ArchitectureV6StyleRule Style);
+
 public sealed record ArchitecturePlanningRequest(
     Architectures.ArchitectureDiagram SemanticModel,
     ArchitectureSelectionScope SelectedScope,
@@ -64,4 +75,8 @@ public sealed record ArchitecturePlanningRequest(
     GridSizingPolicy GridSizing,
     ValidationPolicy Validation,
     IReadOnlyList<string> StyleRules,
-    IReadOnlyList<string> StyleOverrides);
+    IReadOnlyList<string> StyleOverrides,
+    IReadOnlyList<ArchitectureV6StyleRule>? StylePolicies = null,
+    IReadOnlyList<ArchitectureV6StyleOverride>? StyleOverridesWithValues = null,
+    ArchitectureV6StyleRule? ProjectContainerStyle = null,
+    ArchitectureV6StyleRule? ExternalDependencyStyle = null);

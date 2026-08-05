@@ -39,6 +39,7 @@ public sealed record PlannedPhysicalNode(
     bool IsStandalone)
 {
     public string SemanticName { get; init; } = string.Empty;
+    public string SemanticFullName { get; init; } = string.Empty;
 }
 
 public sealed record PlannedPhysicalLink(

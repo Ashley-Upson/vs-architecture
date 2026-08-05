@@ -7,6 +7,7 @@ Roslyn semantic analysis
     -> ArchitecturePlanningRequest
     -> IArchitectureDiagramPlanner
     -> PlannedArchitectureDiagram
+    -> V6 Draw.io vertex projection
     -> IArchitectureDiagramRenderer<DrawioPage>
     -> Draw.io document composition
 ```
@@ -28,16 +29,17 @@ Roslyn semantic analysis
 - Track constraints represent single-track, span, lane, clearance, node and project requirements. Solving is deferred.
 - `ArchitectureV6GeometryBuilder` converts logical rows and columns into deterministic track extents and offsets. Node rectangles are sized from the node label, minimum node policy and grid sizing inputs; project regions include padding and reserved header space.
 - `PlannedPhysicalNodeGeometry`, `PlannedProjectGeometry`, `PlannedGridGeometry` and `PlannedSubtreeGeometry` preserve physical projection identity, positional ownership and project ownership through local and absolute bounds. The project grids are laid out in selected-project order followed by remaining projects in discovery order.
-- Geometry validation checks positive dimensions, node collision, project containment, page bounds and one geometry record per physical node. The renderer receives this immutable geometry but does not make layout decisions.
+- Geometry validation checks positive dimensions, node collision, project containment, page bounds and one geometry record per physical node. `DrawioArchitectureV6Renderer` projects each planned physical node exactly once into a deterministic vertex cell, using absolute geometry for page-level nodes and project-relative geometry for nodes under project containers.
+- Vertex metadata retains physical and semantic identity, full name, projection mode, project ownership, positional ownership and duplicate provenance. Labels are XML-escaped by `XElement` serialization. Project geometry is emitted as a swimlane-style boundary cell when containers are enabled.
 
 ## Validation and diagnostics
 
 `IPlannedArchitectureDiagramValidator` is the boundary for planning-model, physical-scene and renderer-reconstruction validation. The active validator checks node placement, footprint ownership, physical link endpoints, canonical cardinality, duplicate provenance, geometry dimensions, containment, bounds and collisions. Diagnostics and metrics are renderer-independent and can attribute future findings to semantic, physical, grid, cell, route, lane, constraint and segment identities.
 
-The V6 renderer emits a minimal valid Draw.io page while route planning and Architecture node/link emission are deferred. This is an explicit deferred state, not a fallback architecture diagram. Geometry is available in the completed plan and in CLI planning metrics.
+The V6 renderer emits a valid Draw.io page containing planned project boundaries and physical node vertices. Route planning and edge emission remain deferred. Renderer diagnostics report emitted/skipped vertex counts, style fallbacks and output bounds.
 
 ## Deferred logic
 
-Topology classification, terminal allocation, inter-layer slot allocation, destination/return column allocation, route materialisation, route-aware physical validation, Draw.io node/link projection and reconstruction are intentionally not implemented. Logical node projection, layer assignment, positional ownership, anchor placement, nested subtree reservations, track sizing and relative-to-absolute geometry compilation are active.
+Topology classification, terminal allocation, inter-layer slot allocation, destination/return column allocation, route materialisation, route-aware physical validation, Draw.io edge projection and reconstruction are intentionally not implemented. Logical node projection, layer assignment, positional ownership, anchor placement, nested subtree reservations, track sizing, relative-to-absolute geometry compilation and physical vertex projection are active.
 
 The generic `DiagramModel` Draw.io renderer remains for non-Architecture diagram workflows. Architecture generation resolves only `DrawioArchitectureV6Renderer`.

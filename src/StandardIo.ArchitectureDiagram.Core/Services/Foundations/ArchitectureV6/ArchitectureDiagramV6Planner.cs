@@ -140,7 +140,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var physicalId = PhysicalId(id, 0);
                 var node = new PlannedPhysicalNode(physicalId, id, PhysicalNodeProjectionMode.Canonical, null, projectId, null, info.IsExternal, standalone)
                 {
-                    SemanticName = info.Name
+                    SemanticName = info.Name,
+                    SemanticFullName = info.FullName
                 };
                 physicalNodes.Add(node);
                 physicalBySemantic[id] = node;
@@ -175,7 +176,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                         nodes[link.TargetId].IsExternal,
                         false)
                     {
-                        SemanticName = nodes[link.TargetId].Name
+                        SemanticName = nodes[link.TargetId].Name,
+                        SemanticFullName = nodes[link.TargetId].FullName
                     };
                     physicalNodes.Add(target);
                     semanticToPhysical[link.TargetId].Add(duplicateId);
@@ -216,13 +218,13 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 foreach (var node in project.Nodes)
                 {
                     if (selectedNodes.Count > 0 && !selectedNodes.Contains(node.Id)) continue;
-                    nodes[node.Id] = new SemanticInfo(node.Id, node.Name, project.Id, false);
+                    nodes[node.Id] = new SemanticInfo(node.Id, node.Name, node.FullName, project.Id, false);
                     order.Add(node.Id);
                 }
             }
             foreach (var external in request.SemanticModel.ExternalNodes)
             {
-                nodes[external.Id] = new SemanticInfo(external.Id, external.Name, null, true);
+                nodes[external.Id] = new SemanticInfo(external.Id, external.Name, external.FullName, null, true);
                 order.Add(external.Id);
             }
         }
@@ -262,7 +264,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             return new Regex(expression, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
         private static string PhysicalId(string semanticId, int ordinal) => ordinal == 0 ? $"physical:{semanticId}" : $"physical:{semanticId}:duplicate:{ordinal}";
-        private sealed record SemanticInfo(string Id, string Name, string? ProjectId, bool IsExternal);
+        private sealed record SemanticInfo(string Id, string Name, string FullName, string? ProjectId, bool IsExternal);
     }
 
     private sealed class LogicalPlacementBuilder

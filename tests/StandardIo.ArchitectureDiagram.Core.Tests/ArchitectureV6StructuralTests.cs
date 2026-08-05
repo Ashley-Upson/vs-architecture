@@ -98,14 +98,16 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void V6_renderer_consumes_completed_plan_and_emits_only_document_primitives()
+    public void V6_renderer_emits_vertices_from_completed_geometry_without_edges()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request(NodeProjectionMode.Canonical));
         var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
 
         Assert.Equal("architecture", page.StablePageKey);
         Assert.Equal("mxGraphModel", page.GraphModel.Name.LocalName);
-        Assert.Empty(page.Diagnostics);
+        Assert.Equal(0, page.GraphModel.Descendants("mxCell").Count(cell => (string?)cell.Attribute("edge") == "1"));
+        Assert.Equal(plan.PhysicalNodes.Count, page.GraphModel.Descendants("mxCell").Count(cell => (string?)cell.Attribute("vertex") == "1"));
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6VertexCount");
     }
 
     [Fact]
@@ -257,6 +259,50 @@ public sealed class ArchitectureV6StructuralTests
                     Assert.False(Intersects(owned[left].RelativeBounds, owned[right].RelativeBounds));
         }
     }
+
+    [Fact]
+    public void V6_renderer_preserves_hierarchy_identity_and_xml_escapes_labels()
+    {
+        var request = GraphRequest(NodeProjectionMode.Canonical) with
+        {
+            SemanticModel = new ArchitectureDiagramModel(
+                new[] { new ArchitectureProject("project:p", "Project", new[]
+                {
+                    new ArchitectureNode("special", "project:p", "A&B <Service>", "Project.A&B <Service>", "Class", "special", Array.Empty<string>()),
+                    new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>())
+                }, "project:p") },
+                Array.Empty<ArchitectureExternalNode>(),
+                new[] { new ArchitectureLink("special-child", "special", "child", "internal") }, null)
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var vertices = page.GraphModel.Descendants("mxCell").Where(cell => (string?)cell.Attribute("vertex") == "1").ToArray();
+        var special = Assert.Single(vertices, cell => (string?)cell.Attribute("semanticNodeId") == "special");
+
+        Assert.NotEqual("1", special.Attribute("parent")!.Value);
+        Assert.Contains(vertices, cell => cell.Attribute("id")!.Value == special.Attribute("parent")!.Value && (string?)cell.Attribute("projectId") == "project:p");
+        Assert.Equal("physical:special", special.Attribute("physicalNodeId")!.Value);
+        Assert.Contains("A&amp;B &lt;Service&gt;", page.GraphModel.ToString());
+        Assert.DoesNotContain(page.GraphModel.Descendants("mxCell"), cell => (string?)cell.Attribute("edge") == "1");
+    }
+
+    [Fact]
+    public void V6_renderer_uses_stable_ids_for_duplicate_physical_nodes()
+    {
+        var request = GraphRequest(NodeProjectionMode.DuplicateBranches) with
+        {
+            NodeProjection = new NodeProjectionPolicy(NodeProjectionMode.DuplicateBranches, new[] { "Shared" })
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var physicalIds = plan.PhysicalNodes.Select(node => node.PhysicalNodeId).ToArray();
+        var cells = page.GraphModel.Descendants("mxCell").Where(cell => (string?)cell.Attribute("vertex") == "1" && cell.Attribute("physicalNodeId") is not null).ToArray();
+
+        Assert.Equal(physicalIds.Length, cells.Length);
+        Assert.Equal(cells.Length, cells.Select(cell => cell.Attribute("id")!.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(cells, cell => (string?)cell.Attribute("projectionMode") == "DuplicateBranch" && cell.Attribute("duplicationReason") is not null);
+    }
+
 
     private static bool Intersects(RelativeRectangle left, RelativeRectangle right) =>
         left.X < right.X + right.Width && right.X < left.X + left.Width && left.Y < right.Y + right.Height && right.Y < left.Y + left.Height;
