@@ -20,6 +20,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, List<string>> childrenByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<string>> semanticParentsByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<string>> semanticChildrenByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> treeRootByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> branchOrderByRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> depthByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> rowRoleByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, GridSlot> slotByNode = new(StringComparer.Ordinal);
@@ -53,6 +55,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         BuildSemanticRelationships();
         SelectPositionalOwners();
         BuildPositionalChildren();
+        BuildTreeRoots();
         CalculateDepths();
         CalculateRows();
         CalculateSpans();
@@ -65,11 +68,17 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var logicalGrid = new LogicalProjectGrid(new PlanningGridId($"project:{projectId}"), rowRankByRole);
             gridsByProject[projectId] = logicalGrid;
             var occupied = new List<ProfileInterval>();
-            foreach (var root in roots.Where(node => !node.IsStandalone))
+            var mainRoots = roots.Where(node => !node.IsStandalone).ToArray();
+            var rootsPerBand = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(mainRoots.Length)));
+            var bandCursors = new Dictionary<int, int>();
+            foreach (var pair in mainRoots.Select((root, index) => (root, index)))
             {
-                var profile = BuildProfile(root.PhysicalNodeId);
-                var shift = FindCompatibleShift(profile.Intervals, occupied);
+                var profile = BuildProfile(pair.root.PhysicalNodeId);
+                var band = pair.index / rootsPerBand;
+                var shift = bandCursors.TryGetValue(band, out var cursor) ? cursor : 0;
                 MaterializeProfile(logicalGrid, profile, shift, occupied);
+                var profileWidth = profile.Intervals.Max(interval => interval.End + 1);
+                bandCursors[band] = shift + profileWidth + LogicalGap;
             }
 
             PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);
@@ -116,9 +125,37 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             if (!placedIds.Contains(link.SourcePhysicalNodeId) || !placedIds.Contains(link.DestinationPhysicalNodeId))
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementLinkEndpointMissing", "Every projected physical link endpoint must have a logical placement.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
 
-        var baselineRows = rowRoleByNode.Where(item => IsBaseline(item.Key)).Select(item => item.Value).Distinct().ToArray();
-        if (baselineRows.Length > 1)
-            diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementBaselineMisalignment", "Configured baseline nodes must share one logical row.", PlanningDiagnosticSubject.PhysicalNode, null));
+        foreach (var baselineGroup in rowRoleByNode.Where(item => IsBaseline(item.Key)).GroupBy(item => treeRootByNode[item.Key]))
+            if (baselineGroup.Select(item => item.Value).Distinct(StringComparer.Ordinal).Count() > 1)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementBaselineMisalignment", "Baseline nodes within one ownership branch must share one logical row.", PlanningDiagnosticSubject.PhysicalNode, baselineGroup.Key));
+
+        var reservationByOwner = reservations.ToDictionary(item => item.PositionalOwnerId, StringComparer.Ordinal);
+        foreach (var node in nodes.Values)
+        {
+            var owner = ownerByNode[node.PhysicalNodeId];
+            if (owner is null || !reservationByOwner.TryGetValue(owner, out var ownerReservation)) continue;
+            if (slotByNode[node.PhysicalNodeId].Columns.Any(column => !ownerReservation.Cells.Any(cell => cell.ColumnId.Equals(column))))
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementChildOutsideOwnerEnvelope", "A positional child lies outside its owner subtree envelope.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+        }
+
+        foreach (var parent in childrenByNode.Keys)
+        {
+            foreach (var siblingRow in childrenByNode[parent]
+                .Where(slotByNode.ContainsKey)
+                .GroupBy(child => slotByNode[child].RowId))
+            {
+                var siblings = siblingRow.OrderBy(child => gridsByProject[ProjectOf(nodes[child])].ColumnOrder(slotByNode[child].Columns[0])).ToArray();
+                for (var index = 1; index < siblings.Length; index++)
+                {
+                    var grid = gridsByProject[ProjectOf(nodes[siblings[index]])];
+                    var previous = slotByNode[siblings[index - 1]].Columns.Last();
+                    var current = slotByNode[siblings[index]].Columns.First();
+                    var gap = grid.ColumnOrder(current) - grid.ColumnOrder(previous) - 1;
+                    if (gap > LogicalGap)
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSiblingGap", "A sibling group contains an unexplained gap.", PlanningDiagnosticSubject.PhysicalNode, parent));
+                }
+            }
+        }
 
         foreach (var node in nodes.Values.Where(item => item.IsExternal))
         {
@@ -184,6 +221,27 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 : string.CompareOrdinal(left, right));
     }
 
+    private void BuildTreeRoots()
+    {
+        treeRootByNode.Clear();
+        foreach (var node in nodes.Values.OrderBy(item => order[item.PhysicalNodeId]))
+        {
+            var current = node.PhysicalNodeId;
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            while (ownerByNode.TryGetValue(current, out var owner) && owner is not null && visited.Add(current))
+                current = owner;
+            treeRootByNode[node.PhysicalNodeId] = current;
+        }
+
+        branchOrderByRoot.Clear();
+        var next = 0;
+        foreach (var projectId in ProjectOrder())
+            foreach (var root in nodes.Values
+                .Where(node => ProjectOf(node) == projectId && treeRootByNode[node.PhysicalNodeId] == node.PhysicalNodeId)
+                .OrderBy(node => order[node.PhysicalNodeId]))
+                branchOrderByRoot[root.PhysicalNodeId] = next++;
+    }
+
     private void CalculateDepths()
     {
         foreach (var node in nodes.Values) depthByNode[node.PhysicalNodeId] = 0;
@@ -207,22 +265,25 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     {
         var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
         var baseline = nodes.Values.Where(node => baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)).ToArray();
-        var baselineRow = baseline.Length == 0 ? -1 : baseline.Max(node => depthByNode[node.PhysicalNodeId]);
         foreach (var node in nodes.Values)
+        {
+            var branch = treeRootByNode[node.PhysicalNodeId];
             rowRoleByNode[node.PhysicalNodeId] = baseline.Contains(node)
-                ? $"baseline:{baselineRow}"
-                : $"layer:{depthByNode[node.PhysicalNodeId]}";
+                ? $"branch:{branch}:baseline"
+                : $"branch:{branch}:depth:{depthByNode[node.PhysicalNodeId]}";
+        }
 
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
             var owner = ownerByNode[node.PhysicalNodeId];
             if (owner is not null && !node.IsExternal && !IsBaselineNode(node) && rowRoleByNode[node.PhysicalNodeId] == rowRoleByNode[owner])
-                rowRoleByNode[node.PhysicalNodeId] = $"layer:{depthByNode[owner] + 1}";
+                rowRoleByNode[node.PhysicalNodeId] = $"branch:{treeRootByNode[node.PhysicalNodeId]}:depth:{depthByNode[owner] + 1}";
         }
 
         rowRankByRole.Clear();
         foreach (var role in rowRoleByNode
-            .OrderBy(item => depthByNode[item.Key])
+            .OrderBy(item => branchOrderByRoot[treeRootByNode[item.Key]])
+            .ThenBy(item => depthByNode[item.Key])
             .ThenBy(item => order[item.Key])
             .Select(item => item.Value)
             .Distinct(StringComparer.Ordinal))
@@ -431,7 +492,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             };
             rows.AddRange(placementRows.Select((id, index) => new PlanningGridRow(id, index * 2 + 1, 1, 1, 1, index * 2 + 1, index * 2 + 1,
                 id.Value.StartsWith("standalone:", StringComparison.Ordinal) ? PlanningGridTrackRole.StandaloneRegion :
-                id.Value.StartsWith("baseline:", StringComparison.Ordinal) ? PlanningGridTrackRole.BaselineNode : PlanningGridTrackRole.NodeBearing,
+                id.Value.Contains(":baseline", StringComparison.Ordinal) ? PlanningGridTrackRole.BaselineNode : PlanningGridTrackRole.NodeBearing,
                 "placement", "logical node placement", projectId)));
             for (var index = 0; index < placementRows.Length - 1; index++)
             {
