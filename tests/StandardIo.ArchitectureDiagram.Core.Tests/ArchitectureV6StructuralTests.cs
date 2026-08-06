@@ -474,6 +474,7 @@ public sealed class ArchitectureV6StructuralTests
                 route.RawPoints is not null && route.Components is not null));
         Assert.Equal(scene.Metrics.DiagonalSegmentCount,
             scene.AttemptedSegments.Count(attempt => attempt.FailureCode == "DiagonalComponentConnection"));
+        Assert.Equal(0, scene.Metrics.DiagonalSegmentCount);
         Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
             Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
         // Malformed logical endpoint tails remain diagnostics, but the active

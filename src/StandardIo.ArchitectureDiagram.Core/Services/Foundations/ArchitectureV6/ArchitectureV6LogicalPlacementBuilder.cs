@@ -69,17 +69,11 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             gridsByProject[projectId] = logicalGrid;
             var occupied = new List<ProfileInterval>();
             var mainRoots = roots.Where(node => !node.IsStandalone).ToArray();
-            var rootsPerBand = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(mainRoots.Length)));
-            var bandCursors = new Dictionary<int, int>();
-            foreach (var pair in mainRoots.Select((root, index) => (root, index)))
+            foreach (var root in mainRoots)
             {
-                var profile = BuildProfile(pair.root.PhysicalNodeId);
-                var band = pair.index / rootsPerBand;
-                var shift = bandCursors.TryGetValue(band, out var cursor) ? cursor : 0;
-                shift = FindCompatibleShift(profile.Intervals, occupied, shift);
+                var profile = BuildProfile(root.PhysicalNodeId);
+                var shift = FindCompatibleShift(profile.Intervals, occupied);
                 MaterializeProfile(logicalGrid, profile, shift, occupied);
-                var profileWidth = profile.Intervals.Max(interval => interval.End + 1);
-                bandCursors[band] = shift + profileWidth + LogicalGap;
             }
 
             PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);

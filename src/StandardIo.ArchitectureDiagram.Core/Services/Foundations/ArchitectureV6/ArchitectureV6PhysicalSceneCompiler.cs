@@ -463,7 +463,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 {
                     routeInvalid = true;
                     AddMaterialisationAttempt(route, preceding, owner, start, end,
-                        "DiagonalComponentConnection", "A complete cell-and-lane centreline must be orthogonal.", spanCells);
+                        "DiagonalComponentConnection",
+                        $"A complete cell-and-lane centreline must be orthogonal. precedingRole={preceding.Role}; ownerRole={owner.Role}; precedingSides={preceding.EntrySide}->{preceding.ExitSide}; ownerSides={owner.EntrySide}->{owner.ExitSide}; precedingLane={preceding.Lane?.Value ?? "none"}; ownerLane={owner.Lane?.Value ?? "none"}; before={before.Provenance}; after={after.Provenance}.", spanCells);
                     continue;
                 }
                 var axis = start.X == end.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
@@ -617,7 +618,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         var firstCell = orderedSteps.FirstOrDefault()?.CellId ?? component.Cells.FirstOrDefault();
         var lastCell = orderedSteps.LastOrDefault()?.CellId ?? component.Cells.LastOrDefault();
         var points = new List<PlannedPhysicalRoutePoint>();
-
         if (component.Kind == PlannedRouteComponentKind.SourceNodeAnchor)
         {
             var boundary = NodeFootprintBoundary(route.Source.PhysicalNodeId, GridSide.Bottom, sourceTerminal, transforms);
@@ -780,14 +780,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
         var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
-        var lane = step.AllocatedLane ?? component.Lane;
-        var laneAllocation = lane is null
-            ? null
-            : allocation.HorizontalLanes.Concat(allocation.VerticalLanes)
-                .FirstOrDefault(item => item.Lane.Equals(lane.Value));
-        var laneCell = laneAllocation?.Cells.FirstOrDefault();
-        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(laneCell?.RowId ?? step.CellId.RowId));
-        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(laneCell?.ColumnId ?? step.CellId.ColumnId));
+        var lane = component.Lane ?? step.AllocatedLane;
+        // Lane coordinates are local to the cell being compiled. The lane
+        // allocation may span many cells, so its first cell is not a valid
+        // geometric authority for this step.
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(step.CellId.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(step.CellId.ColumnId));
         if (row is null || column is null || lane is null || !transforms.TryGetValue(step.GridId, out var transform))
             return boundary;
         var horizontal = component.Kind == PlannedRouteComponentKind.HorizontalStraightRun;
