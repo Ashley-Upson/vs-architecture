@@ -1268,7 +1268,7 @@ public sealed class ArchitectureV6StructuralTests
                 new ArchitectureV6StyleRule("*Service", "#112233", "#445566", "#778899", "ellipse", false, "align=left;"),
                 new ArchitectureV6StyleRule("Root*", "#abcdef", "#fedcba", "#010203", "rhombus", true, null)
             },
-            ConnectorStyle = new ArchitectureV6ConnectorStyle("#123456", 7, true, true, "9 4", "open", "diamond", 2, 81, "#654321", true)
+            ConnectorStyle = new ArchitectureV6ConnectorStyle("#123456", 7, true, true, "9 4", "open", "diamond", 2, 81, "#654321", true, false, true, "linkTextColor=#abcdef;")
         };
 
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
@@ -1290,6 +1290,11 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains("dashed=1", (string)edge.Attribute("style")!);
         Assert.Contains("startArrow=open", (string)edge.Attribute("style")!);
         Assert.Contains("endArrow=diamond", (string)edge.Attribute("style")!);
+        Assert.Contains("startFill=0", (string)edge.Attribute("style")!);
+        Assert.Contains("endFill=1", (string)edge.Attribute("style")!);
+        Assert.Contains("startSize=2", (string)edge.Attribute("style")!);
+        Assert.Contains("fontColor=#654321", (string)edge.Attribute("style")!);
+        Assert.Contains("linkTextColor=#abcdef", (string)edge.Attribute("style")!);
     }
 
     [Fact]

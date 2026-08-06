@@ -59,6 +59,7 @@ public static class ArchitecturePlanningRequestFactory
             new ArchitectureV6ConnectorStyle(rendering.Connector.StrokeColor, rendering.Connector.StrokeWidth, rendering.Connector.Rounded,
                 rendering.Connector.Dashed, rendering.Connector.DashPattern, rendering.Connector.StartArrow,
                 rendering.Connector.EndArrow, rendering.Connector.ArrowSize, rendering.Connector.Opacity,
-                rendering.Connector.FontColor, rendering.Connector.ShowLabels));
+                rendering.Connector.FontColor, rendering.Connector.ShowLabels, rendering.Connector.StartFill,
+                rendering.Connector.EndFill, rendering.Connector.ExtraStyle));
     }
 }

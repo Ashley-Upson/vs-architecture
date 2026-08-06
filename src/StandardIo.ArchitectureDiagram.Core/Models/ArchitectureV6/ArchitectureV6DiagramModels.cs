@@ -70,6 +70,7 @@ public sealed record PlannedPhysicalLink(
     public string Kind { get; init; } = string.Empty;
     public string? DisplayLabel { get; init; }
     public ArchitectureV6ConnectorStyle? ResolvedStyle { get; init; }
+    public string ResolvedStyleSource { get; init; } = "connector-default";
 }
 
 public sealed record PlannedPhysicalLinkMetadata(

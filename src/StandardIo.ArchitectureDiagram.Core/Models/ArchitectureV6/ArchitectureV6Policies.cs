@@ -93,7 +93,10 @@ public sealed record ArchitectureV6ConnectorStyle(
     int ArrowSize = 1,
     int Opacity = 100,
     string FontColor = "#000000",
-    bool ShowLabels = false);
+    bool ShowLabels = false,
+    bool StartFill = true,
+    bool EndFill = true,
+    string? ExtraStyle = null);
 
 public sealed record ArchitectureV6StyleRule(
     string Match,

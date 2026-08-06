@@ -98,7 +98,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         diagnostics.Add(new DiagramDiagnostic("V6RelationshipsEmitted", $"Emitted {emittedEdges} physical relationship edges.", null));
         diagnostics.Add(new DiagramDiagnostic("V6InvalidRoutesEmitted", $"Emitted {geometry.Routes.Count(route => route.IsInvalid)} invalid routes with retained geometry.", null));
         diagnostics.Add(new DiagramDiagnostic("V6NodeStyleSummary", $"Resolved node styles: {string.Join(", ", diagram.PhysicalNodes.GroupBy(node => node.ResolvedStyle?.Match ?? "<fallback>").OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.Key + "=" + group.Count()))}.", null));
-        diagnostics.Add(new DiagramDiagnostic("V6LinkStyleSummary", $"Resolved relationship style is carried on all {diagram.PhysicalLinks.Count} physical links.", null));
+        diagnostics.Add(new DiagramDiagnostic("V6LinkStyleSummary", $"Resolved relationship style is carried on all {diagram.PhysicalLinks.Count} physical links. Sources: {string.Join(", ", diagram.PhysicalLinks.GroupBy(link => link.ResolvedStyleSource).OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.Key + "=" + group.Count()))}.", null));
         diagnostics.Add(new DiagramDiagnostic("V6LogicalPlacementComplete", "The renderer consumed the planner's completed logical and physical geometry.", null));
         diagnostics.Add(new DiagramDiagnostic("V6RendererMechanicalProjection", "Draw.io geometry was projected from the physical scene without placement or routing decisions.", null));
         return Page(root, geometry.AbsoluteDiagramBounds, diagnostics);
@@ -124,15 +124,21 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 new XAttribute("y", point.Point.Y.ToString(CultureInfo.InvariantCulture))))
             .ToArray();
         var style = connector ?? new ArchitectureV6ConnectorStyle("#6c8ebf", 1, false);
-        var styleText = $"edgeStyle=none;orthogonal=0;curved=0;rounded={(style.Rounded ? 1 : 0)};startArrow={style.StartArrow};endArrow={style.EndArrow};endFill=1;strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};opacity={style.Opacity};";
+        var styleText = $"edgeStyle=none;orthogonal=0;curved=0;rounded={(style.Rounded ? 1 : 0)};startArrow={style.StartArrow};endArrow={style.EndArrow};startFill={(style.StartFill ? 1 : 0)};endFill={(style.EndFill ? 1 : 0)};startSize={style.ArrowSize};endSize={style.ArrowSize};strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};opacity={style.Opacity};fontColor={style.FontColor};html=1;";
         if (style.Dashed) styleText += $"dashed=1;dashPattern={style.DashPattern ?? "3 3"};";
+        if (!style.ShowLabels) styleText += "labelPosition=none;";
+        if (!string.IsNullOrWhiteSpace(style.ExtraStyle)) styleText += style.ExtraStyle!.TrimEnd(';') + ";";
         var attributes = new Dictionary<string, string>
         {
             ["id"] = CellId("edge", link.PhysicalLinkId), ["physicalLinkId"] = link.PhysicalLinkId,
             ["semanticLinkId"] = link.SemanticLinkId, ["sourcePhysicalNodeId"] = link.SourcePhysicalNodeId,
             ["targetPhysicalNodeId"] = link.DestinationPhysicalNodeId, ["edge"] = "1", ["parent"] = "1",
-            ["source"] = source, ["target"] = target, ["style"] = styleText
+            ["source"] = source, ["target"] = target, ["style"] = styleText,
+            ["resolvedStyleSource"] = link.ResolvedStyleSource,
+            ["resolvedStrokeColor"] = style.StrokeColor,
+            ["resolvedStrokeWidth"] = style.StrokeWidth.ToString(CultureInfo.InvariantCulture)
         };
+        if (style.ShowLabels && !string.IsNullOrWhiteSpace(link.DisplayLabel)) attributes["value"] = link.DisplayLabel!;
         if (route?.IsInvalid == true) attributes["invalidRoute"] = "1";
         if (route is not null) attributes["topologyFamily"] = route.TopologyFamily.ToString();
         return new XElement("mxCell", attributes.Select(item => new XAttribute(item.Key, item.Value)),

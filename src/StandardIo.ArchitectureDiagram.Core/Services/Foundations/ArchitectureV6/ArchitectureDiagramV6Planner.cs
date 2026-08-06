@@ -370,7 +370,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     source.PhysicalNodeId, target.PhysicalNodeId, source.ProjectId, target.ProjectId)
                 {
                     Kind = link.Kind,
-                    ResolvedStyle = request.ConnectorStyle
+                    ResolvedStyle = request.ConnectorStyle,
+                    ResolvedStyleSource = "connector-default"
                 });
             }
             var physicalLinks = physicalLinksBuilder.ToArray();

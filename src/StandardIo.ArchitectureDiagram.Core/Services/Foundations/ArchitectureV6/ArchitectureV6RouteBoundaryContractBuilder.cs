@@ -145,6 +145,15 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 components[index] = before with { ExitBoundary = canonical };
                 components[index + 1] = after with { EntryBoundary = canonical };
             }
+            else if (route.Transitions.Any(transition =>
+                transition.SourceGridId == before.ExitBoundary!.GridId &&
+                transition.DestinationGridId == after.EntryBoundary!.GridId))
+            {
+                // Cross-grid continuity is materialised by the physical scene
+                // compiler from one shared transition boundary. The ordinary
+                // component contract cannot canonicalise two grid authorities
+                // into a single cell boundary.
+            }
             else
             {
                 Add(routeFindings, route, "GenuineBoundaryDiscontinuity", before.ComponentId, after.ComponentId,

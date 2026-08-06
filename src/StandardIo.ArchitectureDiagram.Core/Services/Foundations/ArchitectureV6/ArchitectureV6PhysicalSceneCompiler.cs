@@ -233,9 +233,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     }
 
     private bool SegmentWithinCells(AbsolutePoint start, AbsolutePoint end, IReadOnlyList<PlanningGridCellId> cells,
-        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms, int boundaryTolerance = 0)
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms, int boundaryTolerance = 0,
+        IReadOnlyList<AbsoluteRectangle>? additionalBounds = null)
     {
-        var rectangles = cells.Select(cell => CellBounds(cell, transforms)).Where(rectangle => rectangle.Width > 0 && rectangle.Height > 0).ToArray();
+        var rectangles = cells.Select(cell => CellBounds(cell, transforms))
+            .Concat(additionalBounds ?? Array.Empty<AbsoluteRectangle>())
+            .Where(rectangle => rectangle.Width > 0 && rectangle.Height > 0).ToArray();
         if (rectangles.Length != cells.Count) return false;
         var left = rectangles.Min(rectangle => rectangle.X) - boundaryTolerance;
         var top = rectangles.Min(rectangle => rectangle.Y) - boundaryTolerance;
@@ -480,7 +483,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 var boundaryTolerance = route.Transitions.Count > 0 && owner.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal)
                     ? request.RoutePlanning.MinimumParallelSpacing + request.GridSizing.ContainerPadding
                     : 0;
-                if (spanCells.Length == 0 || !SegmentWithinCells(start, end, spanCells, transforms, boundaryTolerance))
+                var endpointBounds = route.Transitions.Count > 0 && owner.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal)
+                    ? placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId) is { } destinationPlacement &&
+                      relative.Nodes.SingleOrDefault(item => item.PhysicalNodeId == destinationPlacement.PhysicalNodeId) is { } destinationNode &&
+                      transforms.TryGetValue(destinationNode.GridId, out var destinationTransform)
+                        ? new[] { Translate(destinationNode.Bounds, destinationTransform.Origin) }
+                        : Array.Empty<AbsoluteRectangle>()
+                    : Array.Empty<AbsoluteRectangle>();
+                if (spanCells.Length == 0 || !SegmentWithinCells(start, end, spanCells, transforms, boundaryTolerance, endpointBounds))
                 {
                     routeInvalid = true;
                     AddMaterialisationAttempt(route, preceding, owner, start, end,

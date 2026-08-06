@@ -16,6 +16,10 @@ public sealed class ConnectorStyle
 
     public string EndArrow { get; set; } = "block";
 
+    public bool StartFill { get; set; } = true;
+
+    public bool EndFill { get; set; } = true;
+
     public int ArrowSize { get; set; } = 1;
 
     public int Opacity { get; set; } = 100;
@@ -23,4 +27,6 @@ public sealed class ConnectorStyle
     public string FontColor { get; set; } = "#000000";
 
     public bool ShowLabels { get; set; } = false;
+
+    public string? ExtraStyle { get; set; }
 }
