@@ -144,23 +144,37 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             item.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
         var destinationApproach = components.FirstOrDefault(item => item.Role == RouteStepRole.DestinationEntry &&
             item.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
-        if (sourceDeparture?.EntryPoint is not null && sourceDeparture.ExitPoint is not null &&
-            (sourceDeparture.ExitPoint.Value.X != sourceDeparture.EntryPoint.Value.X ||
-             sourceDeparture.ExitPoint.Value.Y <= sourceDeparture.EntryPoint.Value.Y))
+        var sourcePath = Array.Empty<PlannedPhysicalRoutePoint>();
+        if (sourceDeparture is not null)
+        {
+            var points = sourceDeparture.Points;
+            sourcePath = points.Where((point, index) => index == 0 || point.Point != points[index - 1].Point).ToArray();
+        }
+        var destinationPath = Array.Empty<PlannedPhysicalRoutePoint>();
+        if (destinationApproach is not null)
+        {
+            var points = destinationApproach.Points;
+            destinationPath = points.Where((point, index) => index == 0 || point.Point != points[index - 1].Point).ToArray();
+        }
+        var sourceDepartureInvalid = sourcePath.Length >= 2 &&
+            (sourcePath[1].Point.X != sourcePath[0].Point.X || sourcePath[1].Point.Y <= sourcePath[0].Point.Y);
+        if (sourceDepartureInvalid && sourceDeparture is not null)
         {
             invalid = true;
             attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, sourceDeparture.ComponentId,
-                sourceDeparture.PrecedingComponentId, sourceDeparture.FollowingComponentId, sourceDeparture.EntryPoint.Value, sourceDeparture.ExitPoint.Value,
+                sourceDeparture.PrecedingComponentId, sourceDeparture.FollowingComponentId, sourcePath[0].Point, sourcePath[1].Point,
                 "SourceDepartureDirectionInvalid", "Source departures must descend vertically from the source bottom terminal.", sourceDeparture.AllocatedCells));
             findings.Add(new ArchitecturePlanningDiagnostic("SourceDepartureDirectionInvalid", "Source departures must descend vertically from the source bottom terminal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
-        if (destinationApproach?.EntryPoint is not null && destinationApproach.ExitPoint is not null &&
-            (destinationApproach.ExitPoint.Value.X != destinationApproach.EntryPoint.Value.X ||
-             destinationApproach.ExitPoint.Value.Y >= destinationApproach.EntryPoint.Value.Y))
+        var destinationDepartureInvalid = destinationPath.Length >= 2 &&
+            (destinationPath[destinationPath.Length - 1].Point.X != destinationPath[destinationPath.Length - 2].Point.X ||
+             destinationPath[destinationPath.Length - 1].Point.Y <= destinationPath[destinationPath.Length - 2].Point.Y);
+        if (destinationDepartureInvalid && destinationApproach is not null)
         {
             invalid = true;
             attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, destinationApproach.ComponentId,
-                destinationApproach.PrecedingComponentId, destinationApproach.FollowingComponentId, destinationApproach.EntryPoint.Value, destinationApproach.ExitPoint.Value,
+                destinationApproach.PrecedingComponentId, destinationApproach.FollowingComponentId,
+                destinationPath[destinationPath.Length - 2].Point, destinationPath[destinationPath.Length - 1].Point,
                 "DestinationApproachDirectionInvalid", "Destination approaches must reach the destination top terminal vertically.", destinationApproach.AllocatedCells));
             findings.Add(new ArchitecturePlanningDiagnostic("DestinationApproachDirectionInvalid", "Destination approaches must reach the destination top terminal vertically.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
@@ -371,39 +385,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (routeInvalid)
                 AddMaterialisationFinding(route, "UnsupportedAbstractRoute", route.UnsupportedReason ?? "The abstract route is not structurally supported.");
 
-            void AddSegment(PlannedPhysicalRouteComponent owner, PlannedPhysicalRoutePoint beforePoint, PlannedPhysicalRoutePoint afterPoint, PlannedPhysicalRouteComponent? preceding, PlannedPhysicalRouteComponent? following)
-            {
-                if (beforePoint.Point == afterPoint.Point) return;
-                var start = beforePoint.Point;
-                var end = afterPoint.Point;
-                if (start.X != end.X && start.Y != end.Y)
-                {
-                    routeInvalid = true;
-                    AddMaterialisationAttempt(route, preceding ?? owner, following ?? owner, start, end,
-                        "DiagonalComponentConnection", "A physical component connection must be orthogonal.", owner.AllocatedCells);
-                    return;
-                }
-                var axis = start.X == end.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
-                var cells = owner.AllocatedCells;
-                if (cells.Count == 0 || !SegmentWithinCells(start, end, cells, transforms))
-                {
-                    routeInvalid = true;
-                    AddMaterialisationAttempt(route, preceding ?? owner, following ?? owner, start, end,
-                        "ComponentCorridorEscape", "A physical component connection leaves its allocated cell corridor.", cells);
-                    return;
-                }
-                segments.Add(new PlannedPhysicalRouteSegment(route.PhysicalLinkId, RelativePointFor(start, beforePoint.GridId, transforms), RelativePointFor(end, afterPoint.GridId, transforms), start, end,
-                    afterPoint.GridId, axis, owner.Role, owner.Lane ?? new LaneId("component:" + owner.ComponentId), route.TopologyFamily,
-                    owner.ComponentId, owner.RouteStepOrder, owner.StraightRunId, owner.LaneDomainId, cells,
-                    cells.Select(cell => cell.RowId).Distinct().Count() == 1 ? cells.Select(cell => cell.RowId).Distinct().First() : null,
-                    cells.Select(cell => cell.ColumnId).Distinct().Count() == 1 ? cells.Select(cell => cell.ColumnId).Distinct().First() : null,
-                    beforePoint.Provenance, afterPoint.Provenance));
-            }
-
-            foreach (var component in components)
-                for (var pointIndex = 1; pointIndex < component.Points.Count; pointIndex++)
-                    AddSegment(component, component.Points[pointIndex - 1], component.Points[pointIndex], component, component);
-
             for (var index = 1; index < components.Count; index++)
             {
                 var before = components[index - 1];
@@ -418,6 +399,60 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 // Component endpoints are canonical boundary points. There is
                 // no connector to invent between two accepted components.
             }
+
+            // Materialise one complete centreline for the route. Component
+            // boundaries remain provenance, but are not independent point-to-
+            // point paths: a turn or endpoint bend is part of the same ordered
+            // orthogonal sequence as the ordinary cell runs.
+            var reducedPoints = RemoveRedundantCollinearPoints(rawPoints);
+            var rawPointIndexes = rawPoints.Select((point, index) => new { point.PointId, index })
+                .ToDictionary(item => item.PointId, item => item.index, StringComparer.Ordinal);
+            for (var pointIndex = 1; pointIndex < reducedPoints.Count; pointIndex++)
+            {
+                var before = reducedPoints[pointIndex - 1];
+                var after = reducedPoints[pointIndex];
+                if (before.Point == after.Point) continue;
+
+                var owner = components.First(component => component.ComponentId == after.ComponentId);
+                var preceding = components.First(component => component.ComponentId == before.ComponentId);
+                var beforeRawIndex = rawPointIndexes[before.PointId];
+                var afterRawIndex = rawPointIndexes[after.PointId];
+                var spanCells = rawPoints
+                    .Skip(beforeRawIndex)
+                    .Take(afterRawIndex - beforeRawIndex + 1)
+                    .Select(point => point.CellId)
+                    .Where(cell => cell is not null)
+                    .Select(cell => cell!.Value)
+                    .Concat(owner.AllocatedCells)
+                    .Concat(preceding.AllocatedCells)
+                    .Distinct()
+                    .ToArray();
+                var start = before.Point;
+                var end = after.Point;
+                if (start.X != end.X && start.Y != end.Y)
+                {
+                    routeInvalid = true;
+                    AddMaterialisationAttempt(route, preceding, owner, start, end,
+                        "DiagonalComponentConnection", "A complete cell-and-lane centreline must be orthogonal.", spanCells);
+                    continue;
+                }
+                var axis = start.X == end.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
+                if (spanCells.Length == 0 || !SegmentWithinCells(start, end, spanCells, transforms))
+                {
+                    routeInvalid = true;
+                    AddMaterialisationAttempt(route, preceding, owner, start, end,
+                        "ComponentCorridorEscape", "A materialised centreline segment leaves its allocated cell corridor.", spanCells);
+                    continue;
+                }
+                segments.Add(new PlannedPhysicalRouteSegment(route.PhysicalLinkId,
+                    RelativePointFor(start, before.GridId, transforms), RelativePointFor(end, after.GridId, transforms),
+                    start, end, after.GridId, axis, owner.Role,
+                    owner.Lane ?? new LaneId("component:" + owner.ComponentId), route.TopologyFamily,
+                    owner.ComponentId, owner.RouteStepOrder, owner.StraightRunId, owner.LaneDomainId, spanCells,
+                    spanCells.Select(cell => cell.RowId).Distinct().Count() == 1 ? spanCells.Select(cell => cell.RowId).Distinct().First() : null,
+                    spanCells.Select(cell => cell.ColumnId).Distinct().Count() == 1 ? spanCells.Select(cell => cell.ColumnId).Distinct().First() : null,
+                    before.Provenance, after.Provenance));
+            }
             ValidateEndpointDirection(route, sourceTerminal, destinationTerminal, components, ref routeInvalid);
             if (routeInvalid)
             {
@@ -428,9 +463,32 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             result.Add(new PlannedPhysicalRoute(route.PhysicalLinkId, links.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId)?.SemanticLinkId ?? string.Empty,
                 route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId, route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId,
                 route.TopologyFamily, segments, components.Count(component => component.Role == RouteStepRole.Turn), length, false, false, false,
-                rawPoints, components, rawPoints.Length, 0, 0));
+                rawPoints, components, reducedPoints.Count, rawPoints.Length - reducedPoints.Count,
+                rawPoints.Length - reducedPoints.Count));
         }
         return result;
+    }
+
+    private static IReadOnlyList<PlannedPhysicalRoutePoint> RemoveRedundantCollinearPoints(
+        IReadOnlyList<PlannedPhysicalRoutePoint> rawPoints)
+    {
+        if (rawPoints.Count < 3) return rawPoints.ToArray();
+
+        var reduced = new List<PlannedPhysicalRoutePoint> { rawPoints[0] };
+        for (var index = 1; index < rawPoints.Count - 1; index++)
+        {
+            var previous = reduced[reduced.Count - 1];
+            var current = rawPoints[index];
+            var next = rawPoints[index + 1];
+            var sameHorizontal = previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y;
+            var sameVertical = previous.Point.X == current.Point.X && current.Point.X == next.Point.X;
+            var isProtected = current.Role is RouteStepRole.Turn or RouteStepRole.SourceExit or RouteStepRole.DestinationEntry ||
+                              current.TurnIdentity is not null || current.TransitionIdentity is not null;
+            if (!(sameHorizontal || sameVertical) || isProtected)
+                reduced.Add(current);
+        }
+        reduced.Add(rawPoints[rawPoints.Count - 1]);
+        return reduced;
     }
 
     private IReadOnlyList<PlannedPhysicalRouteComponent> BuildComponentsFromContract(
@@ -493,19 +551,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             }
             else
             {
-                var entry = CompileBoundary(component.EntryBoundary, transforms, compiledBoundaries, boundaryContradictions);
-                var exit = CompileBoundary(component.ExitBoundary, transforms, compiledBoundaries, boundaryContradictions);
-                if (entry is null || exit is null)
-                {
-                    findings.Add(new ArchitecturePlanningDiagnostic("UnresolvedCanonicalBoundary", "A route component has an unresolved canonical boundary.", PlanningDiagnosticSubject.RouteStep, component.ComponentId));
-                    continue;
-                }
-                var firstCell = component.Cells.FirstOrDefault();
-                var lastCell = component.Cells.LastOrDefault();
-                points.Add(Point(route, firstCell.GridId, entry.Value, RoleForComponent(component.Kind), component.ComponentId + ":entry",
-                    component.Order, component.RunId, component.TurnId, firstCell, "canonical entry boundary", component.ComponentId));
-                points.Add(Point(route, lastCell.GridId, exit.Value, RoleForComponent(component.Kind), component.ComponentId + ":exit",
-                component.Order, component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
+                points.AddRange(BuildRawComponentPoints(route, component, sourceTerminal, destinationTerminal,
+                    transforms, compiledBoundaries, boundaryContradictions));
             }
 
             result.Add(new PlannedPhysicalRouteComponent(component.ComponentId, component.PhysicalLinkId,
@@ -518,6 +565,157 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         return result;
     }
+
+    private IReadOnlyList<PlannedPhysicalRoutePoint> BuildRawComponentPoints(
+        PlannedGridRoute route,
+        PlannedRouteComponentContract component,
+        PlannedPhysicalTerminal sourceTerminal,
+        PlannedPhysicalTerminal destinationTerminal,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms,
+        IDictionary<GridBoundaryIdentity, AbsolutePoint> compiledBoundaries,
+        ISet<string> boundaryContradictions)
+    {
+        var role = RoleForComponent(component.Kind);
+        var entry = CompileBoundary(component.EntryBoundary, transforms, compiledBoundaries, boundaryContradictions);
+        var exit = CompileBoundary(component.ExitBoundary, transforms, compiledBoundaries, boundaryContradictions);
+        if (entry is null || exit is null)
+        {
+            findings.Add(new ArchitecturePlanningDiagnostic("UnresolvedCanonicalBoundary", "A route component has an unresolved canonical boundary.", PlanningDiagnosticSubject.RouteStep, component.ComponentId));
+            return Array.Empty<PlannedPhysicalRoutePoint>();
+        }
+
+        var orderedSteps = route.Steps
+            .Where(step => component.Cells.Contains(step.CellId))
+            .OrderBy(step => step.Order)
+            .ToArray();
+        var firstCell = orderedSteps.FirstOrDefault()?.CellId ?? component.Cells.FirstOrDefault();
+        var lastCell = orderedSteps.LastOrDefault()?.CellId ?? component.Cells.LastOrDefault();
+        var points = new List<PlannedPhysicalRoutePoint>();
+
+        if (component.Kind == PlannedRouteComponentKind.SourceDeparture)
+        {
+            var source = Point(route, component.EntryBoundary?.GridId ?? route.Source.GridId ?? new PlanningGridId("unknown"),
+                sourceTerminal.Point, role, component.ComponentId + ":terminal", component.Order, component.RunId, component.TurnId,
+                component.EntryBoundary?.CellId, "source bottom terminal", component.ComponentId);
+            points.Add(source);
+            AppendEndpointBend(points, route, component, sourceTerminal.Point, exit.Value, true, lastCell);
+            return points;
+        }
+
+        if (component.Kind == PlannedRouteComponentKind.DestinationApproach)
+        {
+            var start = Point(route, component.EntryBoundary?.GridId ?? route.Destination.GridId ?? new PlanningGridId("unknown"),
+                entry.Value, role, component.ComponentId + ":entry", component.Order, component.RunId, component.TurnId,
+                firstCell, "destination approach entry boundary", component.ComponentId);
+            points.Add(start);
+            AppendEndpointBend(points, route, component, entry.Value, destinationTerminal.Point, false, firstCell);
+            return points;
+        }
+
+        points.Add(Point(route, firstCell.GridId, entry.Value, role, component.ComponentId + ":entry", component.Order,
+            component.RunId, component.TurnId, firstCell, "canonical entry boundary", component.ComponentId));
+        if (orderedSteps.Length > 0 && component.Lane is not null)
+        {
+            var entryLanePoint = ComponentLanePoint(component, orderedSteps[0], entry.Value, transforms);
+            points.Add(Point(route, orderedSteps[0].GridId, entryLanePoint, role, component.ComponentId + ":lane-entry",
+                component.Order, component.RunId, component.TurnId, firstCell, "entry aligned to component lane", component.ComponentId));
+        }
+        for (var index = 0; index < orderedSteps.Length - 1; index++)
+        {
+            var current = orderedSteps[index];
+            var next = orderedSteps[index + 1];
+            var transition = CompileCellTransition(route, component, current, next, transforms, compiledBoundaries, boundaryContradictions);
+            if (transition is null)
+                continue;
+            points.Add(transition);
+        }
+        if (orderedSteps.Length > 0 && component.Lane is not null)
+        {
+            var exitLanePoint = ComponentLanePoint(component, orderedSteps[orderedSteps.Length - 1], exit.Value, transforms);
+            points.Add(Point(route, orderedSteps[orderedSteps.Length - 1].GridId, exitLanePoint, role, component.ComponentId + ":lane-exit",
+                component.Order, component.RunId, component.TurnId, lastCell, "exit aligned to component lane", component.ComponentId));
+        }
+        points.Add(Point(route, lastCell.GridId, exit.Value, role, component.ComponentId + ":exit", component.Order,
+            component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
+        return points;
+    }
+
+    private AbsolutePoint ComponentLanePoint(PlannedRouteComponentContract component,
+        PlannedGridRouteStep step, AbsolutePoint boundary,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(step.CellId.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(step.CellId.ColumnId));
+        if (row is null || column is null || component.Lane is null || !transforms.TryGetValue(step.GridId, out var transform))
+            return boundary;
+        var horizontal = component.Kind == PlannedRouteComponentKind.HorizontalStraightRun;
+        if (horizontal)
+        {
+            var y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, component.Lane.Value.Value) + transform.Origin.Y;
+            return new AbsolutePoint(boundary.X, y);
+        }
+        var x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, component.Lane.Value.Value) + transform.Origin.X;
+        return new AbsolutePoint(x, boundary.Y);
+    }
+
+    private void AppendEndpointBend(List<PlannedPhysicalRoutePoint> points, PlannedGridRoute route,
+        PlannedRouteComponentContract component, AbsolutePoint start, AbsolutePoint end, bool source,
+        PlanningGridCellId cell)
+    {
+        if (start.X != end.X && start.Y != end.Y)
+        {
+            var bend = source ? new AbsolutePoint(start.X, end.Y) : new AbsolutePoint(end.X, start.Y);
+            points.Add(Point(route, cell.GridId, bend, source ? RouteStepRole.SourceExit : RouteStepRole.DestinationEntry,
+                component.ComponentId + ":endpoint-bend", component.Order, component.RunId, component.TurnId, cell,
+                source ? "derived source endpoint lane intersection" : "derived destination endpoint lane intersection",
+                component.ComponentId));
+        }
+        points.Add(Point(route, cell.GridId, end, source ? RouteStepRole.SourceExit : RouteStepRole.DestinationEntry,
+            component.ComponentId + ":boundary", component.Order, component.RunId, component.TurnId, cell,
+            source ? "first ordinary run boundary" : "destination top terminal", component.ComponentId));
+    }
+
+    private PlannedPhysicalRoutePoint? CompileCellTransition(PlannedGridRoute route,
+        PlannedRouteComponentContract component, PlannedGridRouteStep current, PlannedGridRouteStep next,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms,
+        IDictionary<GridBoundaryIdentity, AbsolutePoint> compiledBoundaries,
+        ISet<string> boundaryContradictions)
+    {
+        if (current.GridId != next.GridId)
+        {
+            findings.Add(new ArchitecturePlanningDiagnostic("ComponentCellGridTransition", "A component changes grid ownership without an explicit transition component.", PlanningDiagnosticSubject.RouteStep, component.ComponentId));
+            return null;
+        }
+        var currentColumn = GridColumn(current.CellId);
+        var nextColumn = GridColumn(next.CellId);
+        var currentRow = GridRow(current.CellId);
+        var nextRow = GridRow(next.CellId);
+        GridSide side;
+        if (current.CellId.RowId == next.CellId.RowId && currentColumn is not null && nextColumn is not null)
+            side = currentColumn.LogicalOrder < nextColumn.LogicalOrder ? GridSide.Right : GridSide.Left;
+        else if (current.CellId.ColumnId == next.CellId.ColumnId && currentRow is not null && nextRow is not null)
+            side = currentRow.LogicalOrder < nextRow.LogicalOrder ? GridSide.Bottom : GridSide.Top;
+        else
+        {
+            findings.Add(new ArchitecturePlanningDiagnostic("NonOrthogonalCellTransition", "Adjacent component cells do not share a row or column.", PlanningDiagnosticSubject.RouteStep, component.ComponentId));
+            return null;
+        }
+        var lane = component.Lane;
+        var identity = new GridBoundaryIdentity(current.GridId, current.CellId, side, lane,
+            component.OwnershipScope, "cell-transition", next.CellId);
+        var point = CompileBoundary(identity, transforms, compiledBoundaries, boundaryContradictions);
+        if (point is null) return null;
+        var role = side is GridSide.Left or GridSide.Right ? RouteStepRole.HorizontalPassThrough : RouteStepRole.VerticalPassThrough;
+        return Point(route, current.GridId, point.Value, role, component.ComponentId + ":cell:" + current.Order,
+            current.Order, component.RunId, component.TurnId, current.CellId, "shared cell boundary lane crossing", component.ComponentId);
+    }
+
+    private PlanningGridColumn? GridColumn(PlanningGridCellId cell) => relative.Grids
+        .SingleOrDefault(grid => grid.GridId.Equals(cell.GridId))?.Columns.SingleOrDefault(column => column.Id.Equals(cell.ColumnId));
+
+    private PlanningGridRow? GridRow(PlanningGridCellId cell) => relative.Grids
+        .SingleOrDefault(grid => grid.GridId.Equals(cell.GridId))?.Rows.SingleOrDefault(row => row.Id.Equals(cell.RowId));
 
     private void RegisterBoundary(GridBoundaryIdentity? boundary, AbsolutePoint point,
         IDictionary<GridBoundaryIdentity, AbsolutePoint> compiledBoundaries, ISet<string> contradictions)

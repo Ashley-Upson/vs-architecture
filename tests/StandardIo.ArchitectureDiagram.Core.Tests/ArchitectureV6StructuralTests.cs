@@ -430,7 +430,14 @@ public sealed class ArchitectureV6StructuralTests
             scene.AttemptedSegments.Count(attempt => attempt.FailureCode == "DiagonalComponentConnection"));
         Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
             Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.Contains(scene.AttemptedSegments, attempt => attempt.FailureCode is "DiagonalComponentConnection" or "ComponentContinuityMismatch");
+        Assert.DoesNotContain(scene.AttemptedSegments, attempt =>
+            attempt.FailureCode == "DiagonalComponentConnection" &&
+            (attempt.ComponentId.Contains(":source-departure", StringComparison.Ordinal) ||
+             attempt.ComponentId.Contains(":destination-approach", StringComparison.Ordinal)));
+        Assert.Contains(scene.AttemptedSegments, attempt => attempt.FailureCode is
+            "DiagonalComponentConnection" or "ComponentContinuityMismatch" or
+            "SourceDepartureDirectionInvalid" or "DestinationApproachDirectionInvalid" or
+            "ComponentCorridorEscape");
     }
 
     [Fact]
