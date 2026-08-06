@@ -154,6 +154,14 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 // component contract cannot canonicalise two grid authorities
                 // into a single cell boundary.
             }
+            else if (route.Transitions.Count >= 2 &&
+                route.Transitions[0].SourceGridId == before.ExitBoundary!.GridId &&
+                route.Transitions.Last().DestinationGridId == after.EntryBoundary!.GridId)
+            {
+                // The physical compiler materialises the complete chained
+                // handoff through the diagram grid. There is no direct
+                // project-to-project cell boundary to canonicalise here.
+            }
             else
             {
                 Add(routeFindings, route, "GenuineBoundaryDiscontinuity", before.ComponentId, after.ComponentId,

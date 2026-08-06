@@ -236,10 +236,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         IReadOnlyDictionary<PlanningGridId, GridTransform> transforms, int boundaryTolerance = 0,
         IReadOnlyList<AbsoluteRectangle>? additionalBounds = null)
     {
-        var rectangles = cells.Select(cell => CellBounds(cell, transforms))
+        var cellRectangles = cells.Select(cell => CellBounds(cell, transforms)).ToArray();
+        if (cellRectangles.Length != cells.Count || cellRectangles.Any(rectangle => rectangle.Width <= 0 || rectangle.Height <= 0))
+            return false;
+        var rectangles = cellRectangles
             .Concat(additionalBounds ?? Array.Empty<AbsoluteRectangle>())
             .Where(rectangle => rectangle.Width > 0 && rectangle.Height > 0).ToArray();
-        if (rectangles.Length != cells.Count) return false;
         var left = rectangles.Min(rectangle => rectangle.X) - boundaryTolerance;
         var top = rectangles.Min(rectangle => rectangle.Y) - boundaryTolerance;
         var right = rectangles.Max(rectangle => rectangle.X + rectangle.Width) + boundaryTolerance;
@@ -326,13 +328,16 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
             var x = node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
             var route = routes.SingleOrDefault(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
-            if (route is not null && route.Steps.Count > 0 && transforms.TryGetValue(route.Steps[0].GridId, out var routeTransform))
+            if (route is not null && route.Steps.Count > 0)
             {
                 var endpointStep = endpoint.Side == GridSide.Bottom
                     ? route.Steps.OrderBy(item => item.Order).First()
                     : route.Steps.OrderBy(item => item.Order).Last();
-                var endpointSide = endpoint.Side == GridSide.Bottom ? endpointStep.ExitSide : endpointStep.EntrySide;
-                x = BoundaryPoint(route, endpointStep, endpointSide, routeTransform).X;
+                if (transforms.TryGetValue(endpointStep.GridId, out var endpointTransform))
+                {
+                    var endpointSide = endpoint.Side == GridSide.Bottom ? endpointStep.ExitSide : endpointStep.EntrySide;
+                    x = BoundaryPoint(route, endpointStep, endpointSide, endpointTransform).X;
+                }
             }
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
@@ -702,7 +707,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         {
             var firstDestinationOrder = destinationComponent.RouteStepOrder;
             var destinationCells = route.Steps
-                .Where(step => step.GridId == destinationGrid && step.Order >= firstDestinationOrder)
+                .Where(step => step.GridId == destinationGrid && step.Order >= firstDestinationOrder - 1)
                 .Select(step => step.CellId)
                 .Distinct()
                 .ToArray();
