@@ -478,7 +478,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 }
                 var axis = start.X == end.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
                 var boundaryTolerance = route.Transitions.Count > 0 && owner.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal)
-                    ? request.RoutePlanning.MinimumParallelSpacing
+                    ? request.RoutePlanning.MinimumParallelSpacing + request.GridSizing.ContainerPadding
                     : 0;
                 if (spanCells.Length == 0 || !SegmentWithinCells(start, end, spanCells, transforms, boundaryTolerance))
                 {
@@ -618,15 +618,20 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         if (route.Transitions.Count < 2 || components.Count == 0)
             return components;
 
+        // The contract builder retains transition records for diagnostics. The
+        // physical route uses the explicit source, diagram and destination
+        // components below as its sole cross-grid representation.
+        components = components
+            .Where(component => component.Role != RouteStepRole.ProjectTransition ||
+                !component.ComponentId.Contains(":transition:", StringComparison.Ordinal))
+            .ToArray();
+
         var sourceGrid = route.Transitions[0].SourceGridId;
         var destinationGrid = route.Transitions[1].DestinationGridId;
         var firstDestinationIndex = -1;
         for (var index = 0; index < components.Count; index++)
         {
-            if (!components[index].ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal) &&
-                !components[index].ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal) &&
-                !components[index].ComponentId.EndsWith(":destination-terminal", StringComparison.Ordinal) &&
-                components[index].AllocatedCells.Any(cell => cell.GridId == destinationGrid))
+            if (components[index].AllocatedCells.Any(cell => cell.GridId == destinationGrid))
             {
                 firstDestinationIndex = index;
                 break;
