@@ -73,12 +73,13 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         }
 
         var last = routeComponents.LastOrDefault();
-        var lastExit = last is null ? null : StepBoundary(last, last.ExitSide, last.AllocatedLane, "destination-approach-entry");
+        var lastComponent = components.LastOrDefault();
+        var lastExit = lastComponent?.ExitBoundary;
         var approachId = route.PhysicalLinkId + ":destination-approach";
         components.Add(new PlannedRouteComponentContract(approachId, route.PhysicalLinkId,
             PlannedRouteComponentKind.DestinationApproach, int.MaxValue - 1,
             last is null ? Array.Empty<PlanningGridCellId>() : new[] { last.CellId }, lastExit, destinationBoundary,
-            last?.ExitSide, GridSide.Top, last?.AllocatedLane, last?.StraightRunId, null,
+            lastComponent?.ExitSide, GridSide.Top, lastComponent?.Lane, lastComponent?.RunId, null,
             Ownership(route.Destination), components.LastOrDefault()?.ComponentId, route.PhysicalLinkId + ":destination-terminal",
             "derived from destination approach and terminal endpoint"));
         if (last is null)
@@ -112,7 +113,7 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 Add(routeFindings, route, "MissingComponentBoundary", before.ComponentId, after.ComponentId,
                     "Adjacent components do not both expose an authoritative boundary.", before.ExitBoundary, after.EntryBoundary);
             }
-            else if (TryCanonicalize(before.ExitBoundary, after.EntryBoundary, out var canonical))
+            else if (TryCanonicalize(route, before, after, out var canonical))
             {
                 components[index] = before with { ExitBoundary = canonical };
                 components[index + 1] = after with { EntryBoundary = canonical };
@@ -136,7 +137,7 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         var first = group[0];
         var last = group[group.Count - 1];
         var turn = first.Role == RouteStepRole.Turn
-            ? allocation.Turns.SingleOrDefault(item => item.RouteId == route.PhysicalLinkId && item.CellId == first.CellId.ToString())
+            ? allocation.Turns.FirstOrDefault(item => item.RouteId == route.PhysicalLinkId && item.CellId == first.CellId.ToString())
             : null;
         var kind = first.Role == RouteStepRole.Turn
             ? PlannedRouteComponentKind.Turn
@@ -146,13 +147,13 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         var exitLane = lane;
         if (turn is not null)
         {
-            entryLane = turn.HorizontalRunId is null ? null : LaneForRun(turn.HorizontalRunId);
-            var followingVertical = route.Steps.OrderBy(step => step.Order)
-                .SkipWhile(step => step.Order <= first.Order)
-                .FirstOrDefault(step => IsVertical(step) && step.AllocatedLane is not null);
-            exitLane = turn.VerticalRunId is null
-                ? followingVertical?.AllocatedLane
-                : LaneForRun(turn.VerticalRunId);
+            var ordered = route.Steps.OrderBy(step => step.Order).ToArray();
+            var preceding = ordered.LastOrDefault(step => step.Order < first.Order && IsOrdinaryRouteStep(step));
+            var following = ordered.FirstOrDefault(step => step.Order > first.Order && IsOrdinaryRouteStep(step));
+            entryLane = preceding?.Role == RouteStepRole.Turn ? LaneForSide(first.EntrySide, turn, null) : preceding?.AllocatedLane;
+            entryLane ??= LaneForSide(first.EntrySide, turn, null);
+            exitLane = following?.Role == RouteStepRole.Turn ? LaneForSide(first.ExitSide, turn, null) : following?.AllocatedLane;
+            exitLane ??= LaneForSide(first.ExitSide, turn, null);
             if (entryLane is null || exitLane is null)
                 Add(routeFindings, route, "IncompleteTurnAllocation", route.PhysicalLinkId + ":turn:" + first.Order, null,
                     "An allocated turn does not bind both horizontal and vertical lanes.", null, null);
@@ -187,6 +188,12 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         .Select(item => (LaneId?)item.Lane)
         .FirstOrDefault();
 
+    private LaneId? LaneForSide(GridSide side, PlannedTurnAllocation turn, LaneId? adjacentLane)
+    {
+        var runId = side is GridSide.Left or GridSide.Right ? turn.HorizontalRunId : turn.VerticalRunId;
+        return runId is null ? adjacentLane : LaneForRun(runId) ?? adjacentLane;
+    }
+
     private static IReadOnlyList<IReadOnlyList<PlannedGridRouteStep>> GroupSteps(IReadOnlyList<PlannedGridRouteStep> steps)
     {
         var groups = new List<IReadOnlyList<PlannedGridRouteStep>>();
@@ -211,10 +218,13 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
     private static bool IsVertical(PlannedGridRouteStep step) =>
         step.EntrySide is GridSide.Top or GridSide.Bottom && step.ExitSide is GridSide.Top or GridSide.Bottom;
 
-    private static bool TryCanonicalize(GridBoundaryIdentity? before, GridBoundaryIdentity? after,
+    private static bool TryCanonicalize(PlannedGridRoute route, PlannedRouteComponentContract beforeComponent,
+        PlannedRouteComponentContract afterComponent,
         out GridBoundaryIdentity? canonical)
     {
         canonical = null;
+        var before = beforeComponent.ExitBoundary;
+        var after = afterComponent.EntryBoundary;
         if (before is null || after is null || before.GridId != after.GridId || before.OwnershipScope != after.OwnershipScope || before.Lane != after.Lane)
             return false;
         if (before.CellId == after.CellId && before.Side == after.Side)
@@ -223,8 +233,37 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 before.OwnershipScope, "canonical-cell-boundary");
             return true;
         }
-        return GridBoundaryIdentity.TryCreateShared(before, after, out canonical);
+        if (before.CellId == after.CellId && AreComplementary(before.Side, after.Side))
+        {
+            canonical = new GridBoundaryIdentity(before.GridId, before.CellId, before.Side, before.Lane,
+                before.OwnershipScope, "canonical-cell-connection");
+            return true;
+        }
+
+        if (!AreComplementary(before.Side, after.Side)) return false;
+        var beforeIndex = route.Steps.OrderBy(step => step.Order)
+            .Select((step, index) => (step, index))
+            .Where(item => beforeComponent.Cells.Contains(item.step.CellId))
+            .Select(item => item.index)
+            .DefaultIfEmpty(-1)
+            .Max();
+        var afterIndex = route.Steps.OrderBy(step => step.Order)
+            .Select((step, index) => (step, index))
+            .Where(item => afterComponent.Cells.Contains(item.step.CellId))
+            .Select(item => item.index)
+            .DefaultIfEmpty(-1)
+            .Min();
+        if (beforeIndex < 0 || afterIndex != beforeIndex + 1) return false;
+        canonical = new GridBoundaryIdentity(before.GridId, before.CellId, before.Side, before.Lane,
+            before.OwnershipScope, "ordered-route-boundary", after.CellId);
+        return true;
     }
+
+    private static bool AreComplementary(GridSide first, GridSide second) =>
+        (first == GridSide.Left && second == GridSide.Right) ||
+        (first == GridSide.Right && second == GridSide.Left) ||
+        (first == GridSide.Top && second == GridSide.Bottom) ||
+        (first == GridSide.Bottom && second == GridSide.Top);
 
     private GridBoundaryIdentity? EndpointBoundary(PlannedGridRoute route, NodeEndpoint endpoint, GridSide side, string authority)
     {

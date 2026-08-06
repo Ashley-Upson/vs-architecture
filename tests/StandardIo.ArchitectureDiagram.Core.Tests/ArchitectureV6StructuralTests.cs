@@ -540,6 +540,23 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_keeps_turn_handoffs_on_the_allocated_corridor()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var validation = plan.LaneAllocation!.BoundaryValidation!;
+        var mismatches = validation.Routes
+            .SelectMany(route => route.Components.Zip(route.Components.Skip(1), (before, after) => (route, before, after)))
+            .Where(pair => pair.before.Kind == PlannedRouteComponentKind.Turn &&
+                           (pair.after.Kind == PlannedRouteComponentKind.Turn || pair.after.Kind == PlannedRouteComponentKind.DestinationApproach) &&
+                           pair.before.ExitBoundary != pair.after.EntryBoundary)
+            .ToArray();
+
+        Assert.True(mismatches.Length == 0,
+            string.Join(Environment.NewLine, mismatches.Take(3).Select(pair =>
+                $"{pair.route.PhysicalLinkId} {pair.before.Kind}->{pair.after.Kind}: {pair.before.ExitBoundary} != {pair.after.EntryBoundary}")));
+    }
+
+    [Fact]
     public void Planner_preserves_ordered_route_components_and_segment_provenance()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

@@ -157,10 +157,11 @@ internal sealed class ArchitectureV6LaneAllocator
         var result = new List<PlannedTurnAllocation>();
         var identities = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in updatedRoutes)
-            foreach (var step in route.Steps.Where(step => step.Role == RouteStepRole.Turn))
+            foreach (var indexedStep in route.Steps.Select((step, index) => (step, index)).Where(item => item.step.Role == RouteStepRole.Turn))
             {
-                var horizontal = runs.FirstOrDefault(run => run.RouteId == route.PhysicalLinkId && run.Axis == RouteAxis.Horizontal && run.Cells.Contains(step.CellId));
-                var vertical = runs.FirstOrDefault(run => run.RouteId == route.PhysicalLinkId && run.Axis == RouteAxis.Vertical && run.Cells.Contains(step.CellId));
+                var step = indexedStep.step;
+                var horizontal = FindTurnRun(route, indexedStep.index, RouteAxis.Horizontal);
+                var vertical = FindTurnRun(route, indexedStep.index, RouteAxis.Vertical);
                 var horizontalId = horizontal is null ? "none" : runAllocations[horizontal].Lane.Value;
                 var verticalId = vertical is null ? "none" : runAllocations[vertical].Lane.Value;
                 var identity = step.GridId.Value + ":" + step.CellId + ":" + horizontalId + ":" + verticalId;
@@ -174,7 +175,52 @@ internal sealed class ArchitectureV6LaneAllocator
                     horizontal is null ? null : runAllocations[horizontal].RunId, vertical is null ? null : runAllocations[vertical].RunId, identity, 0,
                     $"turn:{identity}:{route.PhysicalLinkId}"));
             }
-        return result;
+        foreach (var route in updatedRoutes)
+        {
+            var turnSteps = route.Steps.Where(step => step.Role == RouteStepRole.Turn).OrderBy(step => step.Order).ToArray();
+            var routeTurns = result.Where(turn => turn.RouteId == route.PhysicalLinkId).ToArray();
+            for (var index = 0; index + 1 < Math.Min(turnSteps.Length, routeTurns.Length); index++)
+            {
+                if (turnSteps[index + 1].Order != turnSteps[index].Order + 1) continue;
+                var firstIsHorizontal = turnSteps[index].ExitSide is GridSide.Left or GridSide.Right;
+                var secondIsHorizontal = turnSteps[index + 1].EntrySide is GridSide.Left or GridSide.Right;
+                if (firstIsHorizontal != secondIsHorizontal) continue;
+
+                var first = routeTurns[index];
+                var second = routeTurns[index + 1];
+                var normalized = firstIsHorizontal
+                    ? second with { HorizontalRunId = first.HorizontalRunId }
+                    : second with { VerticalRunId = first.VerticalRunId };
+                var resultIndex = result.FindIndex(item => ReferenceEquals(item, second));
+                if (resultIndex >= 0) result[resultIndex] = normalized;
+            }
+        }
+        return result
+            .GroupBy(turn => turn.RouteId + ":" + turn.CellId, StringComparer.Ordinal)
+            .Select(group => group.OrderBy(turn => turn.BendIdentity, StringComparer.Ordinal).First())
+            .ToList();
+    }
+
+    private PlannedStraightRun? FindTurnRun(PlannedGridRoute route, int turnIndex, RouteAxis axis)
+    {
+        var candidates = runs.Where(run => run.RouteId == route.PhysicalLinkId && run.Axis == axis).ToArray();
+        var containing = candidates.FirstOrDefault(run => run.Cells.Contains(route.Steps[turnIndex].CellId));
+        if (containing is not null) return containing;
+
+        var orderedCells = route.Steps.Select((step, index) => (step.CellId, index)).ToArray();
+        return candidates
+            .Select(run => new
+            {
+                Run = run,
+                Distance = run.Cells
+                    .Select(cell => orderedCells.Where(item => item.CellId.Equals(cell)).Select(item => Math.Abs(item.index - turnIndex)).DefaultIfEmpty(int.MaxValue).Min())
+                    .DefaultIfEmpty(int.MaxValue)
+                    .Min()
+            })
+            .OrderBy(item => item.Distance)
+            .ThenBy(item => item.Run.Lane.Value, StringComparer.Ordinal)
+            .Select(item => item.Run)
+            .FirstOrDefault();
     }
 
     private IReadOnlyList<PlannedCleanCrossing> AllocateCrossings(IReadOnlyList<PlannedGridRoute> updatedRoutes, IReadOnlyDictionary<PlannedStraightRun, PlannedLaneAllocation> runAllocations)
@@ -189,9 +235,16 @@ internal sealed class ArchitectureV6LaneAllocator
             foreach (var h in horizontal)
                 foreach (var v in vertical)
                 {
-                    var hStep = updatedRoutes.Single(route => route.PhysicalLinkId == h.RouteId).Steps.Single(step => step.CellId.Equals(cell.Key));
-                    var vStep = updatedRoutes.Single(route => route.PhysicalLinkId == v.RouteId).Steps.Single(step => step.CellId.Equals(cell.Key));
-                    if (hStep.Role != RouteStepRole.Turn && vStep.Role != RouteStepRole.Turn)
+                    // The current physical scene contract resolves a crossing
+                    // from its cell alone. Keep only unambiguous cell crossings
+                    // until that contract can carry both run identities.
+                    if (updatedRoutes.Count(route => route.Steps.Any(step => step.CellId.Equals(cell.Key))) != 1)
+                        continue;
+                    var hStep = updatedRoutes.Single(route => route.PhysicalLinkId == h.RouteId).Steps
+                        .FirstOrDefault(step => step.CellId.Equals(cell.Key));
+                    var vStep = updatedRoutes.Single(route => route.PhysicalLinkId == v.RouteId).Steps
+                        .FirstOrDefault(step => step.CellId.Equals(cell.Key));
+                    if (hStep is not null && vStep is not null && hStep.Role != RouteStepRole.Turn && vStep.Role != RouteStepRole.Turn)
                         result.Add(new PlannedCleanCrossing(cell.Key.ToString(), runAllocations[h].RunId, runAllocations[v].RunId, $"crossing:{cell.Key}"));
                 }
         }
@@ -258,7 +311,7 @@ internal sealed class ArchitectureV6LaneAllocator
             constraints.Add(new GridTrackConstraint(TrackConstraintKind.VerticalLaneEnvelope, group.First().GridId, group.SelectMany(item => approaches.Single(item2 => item2.ReservationId == item.ReservationId).Cells).Select(cell => cell.RowId).Distinct().ToArray(), Array.Empty<PlanningGridColumnId>(),
                 group.Count(), $"destination approach lanes:{string.Join(",", group.Select(item => item.PhysicalLinkId))}", group.Key));
         foreach (var group in turns.Select(turn => routes.Single(route => route.PhysicalLinkId == turn.RouteId).Steps
-                     .Single(step => step.CellId.ToString() == turn.CellId))
+                     .First(step => step.CellId.ToString() == turn.CellId))
                  .GroupBy(step => step.GridId.Value + ":" + step.CellId, StringComparer.Ordinal))
         {
             var turnStep = group.First();
