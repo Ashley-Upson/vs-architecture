@@ -186,6 +186,9 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         var completion = CompleteTurnCorridor(sourceGrid, steps, topology, link);
         steps = completion.Steps.ToList();
         steps = steps.Select((step, index) => step with { Order = index }).ToList();
+        if (completion.Evidence.OriginalGapType == "alternate-column" &&
+            completion.Evidence.SelectedTransitionColumn is { } selectedColumn)
+            destinationEndpoint = destinationEndpoint with { PreferredTrack = new PlanningGridColumnId(selectedColumn) };
 
         var legality = ValidateSteps(steps, link, topology);
         var supported = legality.IsSupported && completion.Evidence.IsValid;
@@ -263,9 +266,48 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         if (turnColumn == originalTargetColumn)
         {
             var verticalPath = new List<PlanningGridCellId> { turn.CellId };
-            if (!AppendVertical(verticalPath, gridId, grid, turnRow, targetRow, turnColumn, link))
-                return CompletionResult.Unsupported(original, "same-column", turn, following,
-                    "The same-column corridor contains a non-routable or unrelated occupied cell.");
+            if (!CanTraverseVertical(grid, turnRow, targetRow, turnColumn))
+            {
+                var alternate = SelectAlternateColumn(grid, turnRow, targetRow, destinationRow, turnColumn, link);
+                if (alternate.ColumnIndex < 0)
+                    return CompletionResult.Unsupported(original, "same-column", turn, following,
+                        "The same-column corridor is blocked and no authorised existing alternate column can complete the route.",
+                        alternate.Candidates, alternate.Rejections);
+
+                var alternatePath = new List<PlanningGridCellId> { turn.CellId };
+                if (!AppendVertical(alternatePath, gridId, grid, turnRow, alternate.TransitionRowIndex, turnColumn, link) ||
+                    !AppendHorizontal(alternatePath, gridId, grid, alternate.TransitionRowIndex, turnColumn, alternate.ColumnIndex, link) ||
+                    !AppendVertical(alternatePath, gridId, grid, alternate.TransitionRowIndex, targetRow, alternate.ColumnIndex, link))
+                    return CompletionResult.Unsupported(original, "alternate-column", turn, following,
+                        "The selected alternate column became unavailable while materialising the authorised traversal.",
+                        alternate.Candidates, alternate.Rejections);
+
+                var alternateGenerated = DeriveTraversalSteps(alternatePath, turn, following, topology, grid, false);
+                var approachCell = UseCell(gridId, destination.CellId.RowId, grid.ColumnOrder[alternate.ColumnIndex], CellOccupancy.Empty);
+                var completedAlternate = original.Take(turnIndex).ToList();
+                completedAlternate.AddRange(alternateGenerated);
+                completedAlternate.Add(destination with { CellId = approachCell });
+                var alternateOriginalCells = new HashSet<PlanningGridCellId>(original.Select(step => step.CellId));
+                var alternateInserted = alternatePath.Where(cell => !alternateOriginalCells.Contains(cell)).Select(cell => cell.ToString()).Append(approachCell.ToString()).ToArray();
+                var alternateInsertedTurns = alternateGenerated.Where(step => step.Role == RouteStepRole.Turn && step.CellId != turn.CellId)
+                    .Select(step => step.CellId.ToString()).ToArray();
+                diagnostics.Add(new ArchitecturePlanningDiagnostic(
+                    "AlternateColumnCompletion",
+                    $"Selected existing transition row {grid.RowOrder[alternate.TransitionRowIndex].Value} and column {grid.ColumnOrder[alternate.ColumnIndex].Value}; " +
+                    $"candidates={string.Join(",", alternate.Candidates)}; rejected={string.Join(";", alternate.Rejections)}; " +
+                    $"cells={string.Join("|", alternatePath.Select(cell => cell.ToString()))}|{approachCell}",
+                    PlanningDiagnosticSubject.PhysicalLink,
+                    link.PhysicalLinkId));
+                return new CompletionResult(completedAlternate, new PlannedRouteCompletionEvidence(
+                    "alternate-column", turn.CellId.ToString(), following.CellId.ToString(),
+                    grid.RowOrder[alternate.TransitionRowIndex].Value, grid.ColumnOrder[alternate.ColumnIndex].Value,
+                    alternateInserted, alternateInsertedTurns.Select(cell => $"run:{cell}").ToArray(), alternateInsertedTurns,
+                    $"{topology}:existing-transition-row-alternate-column", true,
+                    "The blocked destination corridor was rebound to the nearest authorised existing column.",
+                    alternate.Candidates, alternate.Rejections));
+            }
+
+            AppendVertical(verticalPath, gridId, grid, turnRow, targetRow, turnColumn, link);
 
             var completedSameColumn = original.Take(turnIndex).ToList();
             completedSameColumn.AddRange(DeriveTraversalSteps(verticalPath, turn, following, topology, grid, false));
@@ -385,6 +427,67 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return true;
     }
 
+    private bool CanTraverseVertical(MutableGrid grid, int startRow, int endRow, int column)
+    {
+        var direction = endRow >= startRow ? 1 : -1;
+        for (var row = startRow; row != endRow + direction; row += direction)
+            if (!CanUseAuthorisedCell(grid, grid.RowOrder[row], grid.ColumnOrder[column])) return false;
+        return true;
+    }
+
+    private bool CanTraverseHorizontal(MutableGrid grid, int row, int startColumn, int endColumn)
+    {
+        var direction = endColumn >= startColumn ? 1 : -1;
+        for (var column = startColumn; column != endColumn + direction; column += direction)
+            if (!CanUseAuthorisedCell(grid, grid.RowOrder[row], grid.ColumnOrder[column])) return false;
+        return true;
+    }
+
+    private bool CanUseAuthorisedCell(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId)
+    {
+        var cellId = new PlanningGridCellId(grid.Id, rowId, columnId);
+        if (!grid.RowOrder.Contains(rowId) || !grid.ColumnOrder.Contains(columnId)) return false;
+        if (occupancy.Resolve(cellId).IsOccupied) return false;
+        return !grid.Cells.TryGetValue(cellId, out var existing) || (existing.Capabilities & CellCapability.RoutingAllowed) != 0;
+    }
+
+    private AlternateColumnSelection SelectAlternateColumn(
+        MutableGrid grid,
+        int startRow,
+        int targetRow,
+        int destinationRow,
+        int originalColumn,
+        PlannedPhysicalLink link)
+    {
+        var transitionRow = grid.Rows.Values
+            .Where(row => row.Id.Value == "routing:inter-layer:6" && row.Role == PlanningGridTrackRole.InterLayerRouting)
+            .Select(row => grid.RowOrder.IndexOf(row.Id))
+            .DefaultIfEmpty(-1)
+            .First();
+        if (transitionRow < 0)
+            return new AlternateColumnSelection(-1, -1, Array.Empty<string>(), new[] { "routing:inter-layer:6=missing" });
+
+        var originalLogicalOrder = grid.Columns[grid.ColumnOrder[originalColumn]].LogicalOrder;
+        var ordered = grid.Columns.Values.OrderBy(column => column.LogicalOrder).ToArray();
+        var candidates = ordered.Where(column => column.LogicalOrder > originalLogicalOrder)
+            .Concat(ordered.Where(column => column.LogicalOrder < originalLogicalOrder).Reverse())
+            .ToArray();
+        var considered = new List<string>();
+        var rejections = new List<string>();
+        foreach (var column in candidates)
+        {
+            if (column.Id == grid.ColumnOrder[originalColumn]) continue;
+            considered.Add(column.Id.Value);
+            var index = grid.ColumnOrder.IndexOf(column.Id);
+            var reason = !CanTraverseVertical(grid, startRow, transitionRow, originalColumn) ? "source-to-transition blocked" :
+                !CanTraverseHorizontal(grid, transitionRow, originalColumn, index) ? "transition row blocked" :
+                !CanTraverseVertical(grid, transitionRow, targetRow, index) ? "destination corridor blocked" : null;
+            if (reason is null) return new AlternateColumnSelection(index, transitionRow, considered, rejections);
+            rejections.Add($"{column.Id.Value}={reason}");
+        }
+        return new AlternateColumnSelection(-1, transitionRow, considered, rejections);
+    }
+
     private bool TryUseAuthorisedCell(PlanningGridId gridId, MutableGrid grid, PlanningGridRowId rowId,
         PlanningGridColumnId columnId, PlannedPhysicalLink link, out PlanningGridCellId cell)
     {
@@ -461,12 +564,19 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 "none", true, message));
 
         public static CompletionResult Unsupported(IReadOnlyList<PlannedGridRouteStep> steps, string gapType,
-            PlannedGridRouteStep turn, PlannedGridRouteStep target, string message) =>
+            PlannedGridRouteStep turn, PlannedGridRouteStep target, string message,
+            IReadOnlyList<string>? candidates = null, IReadOnlyList<string>? rejections = null) =>
             new(steps.ToArray(), new PlannedRouteCompletionEvidence(
                 gapType, turn.CellId.ToString(), target.CellId.ToString(), target.CellId.RowId.Value,
                 target.CellId.ColumnId.Value, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(),
-                "ordered-manhattan-traversal", false, message));
+                "ordered-manhattan-traversal", false, message, candidates, rejections));
     }
+
+    private sealed record AlternateColumnSelection(
+        int ColumnIndex,
+        int TransitionRowIndex,
+        IReadOnlyList<string> Candidates,
+        IReadOnlyList<string> Rejections);
 
     private bool IsUnrelatedFootprint(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId, PlannedPhysicalLink link)
     {

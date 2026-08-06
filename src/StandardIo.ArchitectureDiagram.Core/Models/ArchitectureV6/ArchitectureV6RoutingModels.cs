@@ -97,7 +97,9 @@ public sealed record PlannedRouteCompletionEvidence(
     IReadOnlyList<string> InsertedTurnIdentities,
     string CompletionTopology,
     bool IsValid,
-    string? ValidationMessage);
+    string? ValidationMessage,
+    IReadOnlyList<string>? CandidateColumns = null,
+    IReadOnlyList<string>? CandidateRejectionReasons = null);
 
 public enum RouteAxis
 {
