@@ -18,6 +18,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     private readonly GridTrackSizingPlan sizing;
     private readonly PlannedArchitectureRelativeGeometry relative;
     private readonly ArchitectureLaneAllocationResult allocation;
+    private readonly IReadOnlyList<PlannedRouteBoundaryContract> boundaryContracts;
     private readonly IReadOnlyList<SubtreeReservation> subtreeReservations;
     private readonly List<ArchitecturePlanningDiagnostic> findings = new();
     private readonly List<PlannedPhysicalMaterialisationAttempt> attemptedSegments = new();
@@ -34,7 +35,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         GridTrackSizingPlan sizing,
         PlannedArchitectureRelativeGeometry relative,
         ArchitectureLaneAllocationResult allocation,
-        IReadOnlyList<SubtreeReservation> subtreeReservations)
+        IReadOnlyList<SubtreeReservation> subtreeReservations,
+        IReadOnlyList<PlannedRouteBoundaryContract>? boundaryContracts = null)
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
@@ -46,6 +48,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         this.sizing = sizing ?? throw new ArgumentNullException(nameof(sizing));
         this.relative = relative ?? throw new ArgumentNullException(nameof(relative));
         this.allocation = allocation ?? throw new ArgumentNullException(nameof(allocation));
+        this.boundaryContracts = boundaryContracts ?? allocation.BoundaryValidation?.Routes ?? Array.Empty<PlannedRouteBoundaryContract>();
         this.subtreeReservations = subtreeReservations ?? throw new ArgumentNullException(nameof(subtreeReservations));
     }
 
@@ -137,25 +140,29 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     private void ValidateEndpointDirection(PlannedGridRoute route, PlannedPhysicalTerminal sourceTerminal,
         PlannedPhysicalTerminal destinationTerminal, IReadOnlyList<PlannedPhysicalRouteComponent> components, ref bool invalid)
     {
-        var sourceStub = components.FirstOrDefault(item => item.ComponentId.EndsWith(":source-stub", StringComparison.Ordinal));
-        var destinationStub = components.FirstOrDefault(item => item.ComponentId.EndsWith(":destination-stub", StringComparison.Ordinal));
-        if (sourceStub?.EntryPoint is not null && sourceStub.ExitPoint is not null &&
-            (sourceStub.ExitPoint.Value.X != sourceStub.EntryPoint.Value.X || sourceStub.ExitPoint.Value.Y <= sourceStub.EntryPoint.Value.Y))
+        var sourceDeparture = components.FirstOrDefault(item => item.Role == RouteStepRole.SourceExit &&
+            item.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
+        var destinationApproach = components.FirstOrDefault(item => item.Role == RouteStepRole.DestinationEntry &&
+            item.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
+        if (sourceDeparture?.EntryPoint is not null && sourceDeparture.ExitPoint is not null &&
+            (sourceDeparture.ExitPoint.Value.X != sourceDeparture.EntryPoint.Value.X ||
+             sourceDeparture.ExitPoint.Value.Y <= sourceDeparture.EntryPoint.Value.Y))
         {
             invalid = true;
-            attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, sourceStub.ComponentId,
-                sourceStub.PrecedingComponentId, sourceStub.FollowingComponentId, sourceStub.EntryPoint.Value, sourceStub.ExitPoint.Value,
-                "SourceStubDirectionInvalid", "Source stubs must descend vertically from the source bottom terminal.", sourceStub.AllocatedCells));
-            findings.Add(new ArchitecturePlanningDiagnostic("SourceStubDirectionInvalid", "Source stubs must descend vertically from the source bottom terminal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+            attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, sourceDeparture.ComponentId,
+                sourceDeparture.PrecedingComponentId, sourceDeparture.FollowingComponentId, sourceDeparture.EntryPoint.Value, sourceDeparture.ExitPoint.Value,
+                "SourceDepartureDirectionInvalid", "Source departures must descend vertically from the source bottom terminal.", sourceDeparture.AllocatedCells));
+            findings.Add(new ArchitecturePlanningDiagnostic("SourceDepartureDirectionInvalid", "Source departures must descend vertically from the source bottom terminal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
-        if (destinationStub?.EntryPoint is not null && destinationStub.ExitPoint is not null &&
-            (destinationStub.ExitPoint.Value.X != destinationStub.EntryPoint.Value.X || destinationStub.ExitPoint.Value.Y >= destinationStub.EntryPoint.Value.Y))
+        if (destinationApproach?.EntryPoint is not null && destinationApproach.ExitPoint is not null &&
+            (destinationApproach.ExitPoint.Value.X != destinationApproach.EntryPoint.Value.X ||
+             destinationApproach.ExitPoint.Value.Y >= destinationApproach.EntryPoint.Value.Y))
         {
             invalid = true;
-            attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, destinationStub.ComponentId,
-                destinationStub.PrecedingComponentId, destinationStub.FollowingComponentId, destinationStub.EntryPoint.Value, destinationStub.ExitPoint.Value,
-                "DestinationStubDirectionInvalid", "Destination stubs must approach vertically from above into the destination top terminal.", destinationStub.AllocatedCells));
-            findings.Add(new ArchitecturePlanningDiagnostic("DestinationStubDirectionInvalid", "Destination stubs must approach vertically from above into the destination top terminal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+            attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, destinationApproach.ComponentId,
+                destinationApproach.PrecedingComponentId, destinationApproach.FollowingComponentId, destinationApproach.EntryPoint.Value, destinationApproach.ExitPoint.Value,
+                "DestinationApproachDirectionInvalid", "Destination approaches must reach the destination top terminal vertically.", destinationApproach.AllocatedCells));
+            findings.Add(new ArchitecturePlanningDiagnostic("DestinationApproachDirectionInvalid", "Destination approaches must reach the destination top terminal vertically.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
         if (sourceTerminal.Side != GridSide.Bottom || destinationTerminal.Side != GridSide.Top)
         {
@@ -176,7 +183,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         attemptedSegments.Add(new PlannedPhysicalMaterialisationAttempt(route.PhysicalLinkId, after.ComponentId,
             before.ComponentId, after.ComponentId, start, end, code, message, cells ?? after.AllocatedCells,
             after.Points.FirstOrDefault()?.PointId, after.StraightRunId));
-        AddMaterialisationFinding(route, code, message);
+        AddMaterialisationFinding(route, code,
+            $"{message} component={after.ComponentId}; start=({start.X},{start.Y}); end=({end.X},{end.Y}); " +
+            $"cells={string.Join("|", (cells ?? after.AllocatedCells).Select(cell => cell.ToString()))}");
     }
 
     private bool SegmentWithinCells(AbsolutePoint start, AbsolutePoint end, IReadOnlyList<PlanningGridCellId> cells,
@@ -328,6 +337,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         IReadOnlyList<PlannedPhysicalTerminal> terminals, IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
         var result = new List<PlannedPhysicalRoute>();
+        var compiledBoundaries = new Dictionary<GridBoundaryIdentity, AbsolutePoint>();
+        var boundaryContradictions = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in allocation.Routes.OrderBy(item => item.PhysicalLinkId, StringComparer.Ordinal))
         {
             var sourceTerminal = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
@@ -337,7 +348,23 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 findings.Add(new ArchitecturePlanningDiagnostic("RouteTerminalMissing", "Route could not be materialised without both terminals.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
                 continue;
             }
-            var components = BuildComponents(route, sourceTerminal, destinationTerminal, transforms);
+            var contract = boundaryContracts.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId);
+            if (contract is not null)
+            {
+                var sourceBoundary = contract.Components.FirstOrDefault(item => item.Kind == PlannedRouteComponentKind.SourceTerminal)?.EntryBoundary;
+                var destinationBoundary = contract.Components.FirstOrDefault(item => item.Kind == PlannedRouteComponentKind.DestinationTerminal)?.EntryBoundary;
+                RegisterBoundary(sourceBoundary, sourceTerminal.Point, compiledBoundaries, boundaryContradictions);
+                RegisterBoundary(destinationBoundary, destinationTerminal.Point, compiledBoundaries, boundaryContradictions);
+            }
+            var components = contract is null
+                ? Array.Empty<PlannedPhysicalRouteComponent>()
+                : BuildComponentsFromContract(route, contract, sourceTerminal, destinationTerminal, transforms, compiledBoundaries, boundaryContradictions);
+            if (contract is null)
+            {
+                findings.Add(new ArchitecturePlanningDiagnostic("MissingPhysicalBoundaryContract", "A route has no accepted component boundary contract.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+                invalidRouteIds.Add(route.PhysicalLinkId);
+                continue;
+            }
             var rawPoints = components.SelectMany(component => component.Points).ToArray();
             var segments = new List<PlannedPhysicalRouteSegment>();
             var routeInvalid = !route.IsStructurallySupported;
@@ -388,7 +415,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                         "ComponentContinuityMismatch", "Adjacent physical components do not share an exact boundary point.");
                     continue;
                 }
-                AddSegment(after, before.Points.Last(), after.Points.First(), before, after);
+                // Component endpoints are canonical boundary points. There is
+                // no connector to invent between two accepted components.
             }
             ValidateEndpointDirection(route, sourceTerminal, destinationTerminal, components, ref routeInvalid);
             if (routeInvalid)
@@ -404,6 +432,143 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         return result;
     }
+
+    private IReadOnlyList<PlannedPhysicalRouteComponent> BuildComponentsFromContract(
+        PlannedGridRoute route,
+        PlannedRouteBoundaryContract contract,
+        PlannedPhysicalTerminal sourceTerminal,
+        PlannedPhysicalTerminal destinationTerminal,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms,
+        IDictionary<GridBoundaryIdentity, AbsolutePoint> compiledBoundaries,
+        ISet<string> boundaryContradictions)
+    {
+        // Turn aliases are registered before ordinary component boundaries so
+        // every run touching a turn receives the exact turn point, rather than
+        // independently calculating a cell edge and a cell centre.
+        foreach (var turn in contract.Components.Where(item => item.Kind == PlannedRouteComponentKind.Turn))
+        {
+            if (turn.Cells.Count == 0 || !transforms.TryGetValue(turn.EntryBoundary?.GridId ?? new PlanningGridId("missing"), out var transform))
+                continue;
+            var step = route.Steps.SingleOrDefault(item => item.CellId.Equals(turn.Cells[0]));
+            var turnPoint = step is null ? (AbsolutePoint?)null : TurnPoint(route, step, transform);
+            if (turnPoint is null) continue;
+            RegisterBoundary(turn.EntryBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
+            RegisterBoundary(turn.ExitBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
+        }
+
+        var result = new List<PlannedPhysicalRouteComponent>();
+        foreach (var component in contract.Components.OrderBy(item => item.Order))
+        {
+            var points = new List<PlannedPhysicalRoutePoint>();
+            var ownedCells = component.Cells
+                .Concat(component.EntryBoundary is null ? Array.Empty<PlanningGridCellId>() : new[] { component.EntryBoundary.CellId })
+                .Concat(component.EntryBoundary?.AdjacentCellId is { } entryAdjacent ? new[] { entryAdjacent } : Array.Empty<PlanningGridCellId>())
+                .Concat(component.ExitBoundary is null ? Array.Empty<PlanningGridCellId>() : new[] { component.ExitBoundary.CellId })
+                .Concat(component.ExitBoundary?.AdjacentCellId is { } exitAdjacent ? new[] { exitAdjacent } : Array.Empty<PlanningGridCellId>())
+                .Distinct()
+                .ToArray();
+            if (component.Kind == PlannedRouteComponentKind.SourceTerminal)
+            {
+                points.Add(Point(route, route.Source.GridId ?? new PlanningGridId("unknown"), sourceTerminal.Point,
+                    RouteStepRole.SourceExit, component.ComponentId, component.Order, null, null, null,
+                    "canonical source terminal", component.ComponentId));
+            }
+            else if (component.Kind == PlannedRouteComponentKind.DestinationTerminal)
+            {
+                points.Add(Point(route, route.Destination.GridId ?? new PlanningGridId("unknown"), destinationTerminal.Point,
+                    RouteStepRole.DestinationEntry, component.ComponentId, component.Order, null, null, null,
+                    "canonical destination terminal", component.ComponentId));
+            }
+            else if (component.Kind == PlannedRouteComponentKind.Turn)
+            {
+                var boundary = component.EntryBoundary ?? component.ExitBoundary;
+                var point = CompileBoundary(boundary, transforms, compiledBoundaries, boundaryContradictions);
+                if (point is null)
+                {
+                    findings.Add(new ArchitecturePlanningDiagnostic("UnresolvedCanonicalBoundary", "A turn has no compilable canonical boundary.", PlanningDiagnosticSubject.RouteStep, component.ComponentId));
+                    continue;
+                }
+                points.Add(Point(route, component.Cells[0].GridId, point.Value, RouteStepRole.Turn, component.ComponentId,
+                    component.Order, component.RunId, component.TurnId, component.Cells[0], "canonical turn point", component.ComponentId));
+            }
+            else
+            {
+                var entry = CompileBoundary(component.EntryBoundary, transforms, compiledBoundaries, boundaryContradictions);
+                var exit = CompileBoundary(component.ExitBoundary, transforms, compiledBoundaries, boundaryContradictions);
+                if (entry is null || exit is null)
+                {
+                    findings.Add(new ArchitecturePlanningDiagnostic("UnresolvedCanonicalBoundary", "A route component has an unresolved canonical boundary.", PlanningDiagnosticSubject.RouteStep, component.ComponentId));
+                    continue;
+                }
+                var firstCell = component.Cells.FirstOrDefault();
+                var lastCell = component.Cells.LastOrDefault();
+                points.Add(Point(route, firstCell.GridId, entry.Value, RoleForComponent(component.Kind), component.ComponentId + ":entry",
+                    component.Order, component.RunId, component.TurnId, firstCell, "canonical entry boundary", component.ComponentId));
+                points.Add(Point(route, lastCell.GridId, exit.Value, RoleForComponent(component.Kind), component.ComponentId + ":exit",
+                component.Order, component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
+            }
+
+            result.Add(new PlannedPhysicalRouteComponent(component.ComponentId, component.PhysicalLinkId,
+                component.Kind == PlannedRouteComponentKind.Turn ? RouteStepRole.Turn : RoleForComponent(component.Kind),
+                component.Order, component.RunId, null, component.Lane,
+                component.Kind == PlannedRouteComponentKind.Turn ? component.Cells : ownedCells, points,
+                component.TurnId, null, component.OwnershipScope, "accepted boundary contract",
+                points.FirstOrDefault()?.Point, points.LastOrDefault()?.Point, component.EntrySide, component.ExitSide,
+                component.PrecedingComponentId, component.FollowingComponentId, component.EntryBoundary?.ToString()));
+        }
+        return result;
+    }
+
+    private void RegisterBoundary(GridBoundaryIdentity? boundary, AbsolutePoint point,
+        IDictionary<GridBoundaryIdentity, AbsolutePoint> compiledBoundaries, ISet<string> contradictions)
+    {
+        if (boundary is null) return;
+        if (compiledBoundaries.TryGetValue(boundary, out var existing) && existing != point && contradictions.Add(boundary.ToString()))
+        {
+            findings.Add(new ArchitecturePlanningDiagnostic("CanonicalBoundaryContradiction", "Equivalent canonical boundaries compiled to different physical points.", PlanningDiagnosticSubject.PhysicalSegment, boundary.ToString()));
+            return;
+        }
+        compiledBoundaries[boundary] = point;
+    }
+
+    private AbsolutePoint? CompileBoundary(GridBoundaryIdentity? boundary,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms,
+        IDictionary<GridBoundaryIdentity, AbsolutePoint> compiledBoundaries,
+        ISet<string> contradictions)
+    {
+        if (boundary is null || !transforms.TryGetValue(boundary.GridId, out var transform)) return null;
+        if (compiledBoundaries.TryGetValue(boundary, out var cached)) return cached;
+        var point = BoundaryPoint(boundary, transform);
+        RegisterBoundary(boundary, point, compiledBoundaries, contradictions);
+        return point;
+    }
+
+    private AbsolutePoint BoundaryPoint(GridBoundaryIdentity boundary, GridTransform transform)
+    {
+        var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(boundary.GridId));
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(boundary.CellId.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(boundary.CellId.ColumnId));
+        if (row is null || column is null) return new AbsolutePoint(transform.Origin.X, transform.Origin.Y);
+        var x = column.RelativeOffset + column.FinalExtent / 2;
+        var y = row.RelativeOffset + row.FinalExtent / 2;
+        if (boundary.Orientation == GridBoundaryOrientation.Horizontal)
+            x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, boundary.Lane?.Value ?? string.Empty);
+        else
+            y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, boundary.Lane?.Value ?? string.Empty);
+        if (boundary.Side == GridSide.Left) x = column.RelativeOffset;
+        if (boundary.Side == GridSide.Right) x = column.RelativeOffset + column.FinalExtent;
+        if (boundary.Side == GridSide.Top) y = row.RelativeOffset;
+        if (boundary.Side == GridSide.Bottom) y = row.RelativeOffset + row.FinalExtent;
+        return new AbsolutePoint(transform.Origin.X + x, transform.Origin.Y + y);
+    }
+
+    private static RouteStepRole RoleForComponent(PlannedRouteComponentKind kind) => kind switch
+    {
+        PlannedRouteComponentKind.SourceDeparture => RouteStepRole.SourceExit,
+        PlannedRouteComponentKind.DestinationApproach => RouteStepRole.DestinationEntry,
+        PlannedRouteComponentKind.ProjectTransition => RouteStepRole.ProjectTransition,
+        _ => kind == PlannedRouteComponentKind.HorizontalStraightRun ? RouteStepRole.HorizontalPassThrough : RouteStepRole.VerticalPassThrough
+    };
 
     private IReadOnlyList<PlannedPhysicalRouteComponent> BuildComponents(PlannedGridRoute route,
         PlannedPhysicalTerminal sourceTerminal, PlannedPhysicalTerminal destinationTerminal,
@@ -635,8 +800,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             DiagonalSegmentCount: attemptedSegments.Count(item => item.FailureCode == "DiagonalComponentConnection"),
             CorridorEscapeCount: attemptedSegments.Count(item => item.FailureCode == "ComponentCorridorEscape"),
             ComponentContinuityFailureCount: attemptedSegments.Count(item => item.FailureCode == "ComponentContinuityMismatch"),
-            SourceStubDirectionFailureCount: findings.Count(item => item.Code == "SourceStubDirectionInvalid"),
-            DestinationStubDirectionFailureCount: findings.Count(item => item.Code == "DestinationStubDirectionInvalid"));
+            SourceStubDirectionFailureCount: findings.Count(item => item.Code == "SourceStubDirectionInvalid" || item.Code == "SourceDepartureDirectionInvalid"),
+            DestinationStubDirectionFailureCount: findings.Count(item => item.Code == "DestinationStubDirectionInvalid" || item.Code == "DestinationApproachDirectionInvalid"));
     }
 
     private static AbsoluteRectangle Translate(RelativeRectangle rectangle, RelativePoint origin) => new(rectangle.X + origin.X, rectangle.Y + origin.Y, rectangle.Width, rectangle.Height);

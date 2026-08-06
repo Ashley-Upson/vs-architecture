@@ -817,6 +817,23 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_keeps_endpoint_boundaries_distinct_per_physical_link()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var contracts = plan.LaneAllocation!.BoundaryValidation!.Routes;
+        var sourceBoundaries = contracts.Select(route => route.Components
+                .Single(component => component.Kind == PlannedRouteComponentKind.SourceTerminal)
+                .EntryBoundary)
+            .Where(boundary => boundary is not null)
+            .Select(boundary => boundary!.ToString())
+            .ToArray();
+
+        Assert.Equal(plan.PhysicalLinks.Count, sourceBoundaries.Length);
+        Assert.Equal(sourceBoundaries.Length, sourceBoundaries.Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "CanonicalBoundaryContradiction");
+    }
+
+    [Fact]
     public void Planner_reports_collective_lane_ordering_without_changing_structural_tracks()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

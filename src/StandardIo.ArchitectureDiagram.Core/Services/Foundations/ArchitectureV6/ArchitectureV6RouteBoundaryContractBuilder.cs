@@ -356,8 +356,8 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
     {
         var placement = placements.SingleOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
         if (placement is null) return null;
-        var lane = allocation.Endpoints.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == side)?.Endpoint.PreferredTrack is { } preferred
-            ? new LaneId("endpoint:" + preferred.Value)
+        var lane = allocation.Endpoints.Any(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == side)
+            ? new LaneId($"endpoint:{route.PhysicalLinkId}:{side}")
             : (LaneId?)null;
         return new GridBoundaryIdentity(placement.AnchorCellId.GridId, placement.AnchorCellId, side, lane,
             Ownership(endpoint), authority);

@@ -83,7 +83,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         PlannedArchitecturePhysicalScene physicalScene = null!;
         TimeStage("absoluteGeometry", () => physicalScene = new ArchitectureV6PhysicalSceneCompiler(request, projection.PhysicalNodes,
             projection.PhysicalLinks, diagramGrid, projectGrids, placement.NodePlacements, allocation.Routes, sizedPlan,
-            sizing.RelativeGeometry, allocation, placement.SubtreeReservations).Compile());
+            sizing.RelativeGeometry, allocation, placement.SubtreeReservations, boundaryValidation.Routes).Compile());
         var cardinalityFindings = structuralRowsBeforeRouting != structuralRowsAfterRouting || structuralColumnsBeforeRouting != structuralColumnsAfterRouting
             ? new[] { Deferred("StructuralGridCardinalityChanged", PlanningDiagnosticSubject.Grid, "Abstract routing changed structural row or column cardinality.") }
             : Array.Empty<ArchitecturePlanningDiagnostic>();
