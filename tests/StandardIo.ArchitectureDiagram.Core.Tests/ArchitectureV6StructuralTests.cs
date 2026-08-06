@@ -63,6 +63,31 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_routes_use_contiguous_authoritative_cells_without_adjacent_turns()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var grids = plan.ProjectGrids.Select(item => item.Grid).ToDictionary(item => item.Id);
+
+        Assert.All(plan.Routes, route =>
+        {
+            Assert.True(route.IsStructurallySupported);
+            for (var index = 1; index < route.Steps.Count; index++)
+            {
+                var previous = route.Steps[index - 1];
+                var current = route.Steps[index];
+                if (previous.GridId != current.GridId) continue;
+                var grid = grids[previous.GridId];
+                var rowDistance = Math.Abs(grid.Rows.Single(row => row.Id.Equals(previous.CellId.RowId)).LogicalOrder -
+                    grid.Rows.Single(row => row.Id.Equals(current.CellId.RowId)).LogicalOrder);
+                var columnDistance = Math.Abs(grid.Columns.Single(column => column.Id.Equals(previous.CellId.ColumnId)).LogicalOrder -
+                    grid.Columns.Single(column => column.Id.Equals(current.CellId.ColumnId)).LogicalOrder);
+                Assert.Equal(1, rowDistance + columnDistance);
+                Assert.False(previous.Role == RouteStepRole.Turn && current.Role == RouteStepRole.Turn);
+            }
+        });
+    }
+
+    [Fact]
     public void Planner_freezes_structural_track_cardinality_before_abstract_routes()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
@@ -1076,7 +1101,10 @@ public sealed class ArchitectureV6StructuralTests
         var departure = route.Steps[1];
 
         Assert.True(route.IsStructurallySupported);
-        Assert.DoesNotContain(sourcePlacement.Footprint, cell => cell.ColumnId.Equals(departure.CellId.ColumnId));
+        var sourceRow = sourceGrid.Grid.Rows.Single(row => row.Id.Equals(sourcePlacement.AnchorCellId.RowId));
+        var departureRow = sourceGrid.Grid.Rows.Single(row => row.Id.Equals(departure.CellId.RowId));
+        Assert.True(departureRow.LogicalOrder > sourceRow.LogicalOrder);
+        Assert.Contains(departure.CellId, sourceGrid.Grid.Cells.Keys);
         Assert.Null(sourceGrid.Grid.Cells[departure.CellId].FootprintOwnerId);
         Assert.Empty(plan.LaneAllocation!.Conflicts);
         Assert.Equal(0, plan.Diagnostics.Metrics.UnsupportedRouteCount);

@@ -157,41 +157,58 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 "exit", link.SourceProjectId, null, true, request.ProjectPlacement.ShowProjectContainers));
             transitions.Add(new GridTransition(diagramId, diagramBoundary, destinationGrid, destinationBoundary, "diagram-to-project", link.SemanticLinkId,
                 "entry", null, link.DestinationProjectId, true, request.ProjectPlacement.ShowProjectContainers));
-            steps.Add(Step(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId, GridSide.Top, GridSide.Bottom, RouteStepRole.SourceExit, 0, topology));
-            steps.Add(Step(sourceGrid, sourceBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.ProjectExit, 1, topology));
-            steps.Add(Step(diagramId, diagramBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.DiagramGridPassage, 2, topology));
-            steps.Add(Step(destinationGrid, destinationBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.ProjectEntry, 3, topology));
-            steps.Add(Step(destinationGrid, approach.Cells[0], GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, 4, topology));
-            steps.Add(Step(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId,
-                GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, 5, topology));
+            var sourceMutable = grids[sourceGrid];
+            var destinationMutable = grids[destinationGrid];
+            var sourcePath = new List<PlanningGridCellId> { placements[source.PhysicalNodeId].AnchorCellId };
+            var sourceRow = sourceMutable.RowOrder.IndexOf(sourcePath[0].RowId);
+            var sourceBoundaryRow = sourceMutable.RowOrder.IndexOf(sourceBoundary.RowId);
+            var sourceColumn = sourceMutable.ColumnOrder.IndexOf(sourcePath[0].ColumnId);
+            var sourceBoundaryColumn = sourceMutable.ColumnOrder.IndexOf(sourceBoundary.ColumnId);
+            var sourcePathValid = sourceRow >= 0 && sourceBoundaryRow >= 0 && sourceColumn >= 0 && sourceBoundaryColumn >= 0 &&
+                AppendVertical(sourcePath, sourceGrid, sourceMutable, sourceRow, sourceBoundaryRow, sourceColumn, link) &&
+                AppendHorizontal(sourcePath, sourceGrid, sourceMutable, sourceBoundaryRow, sourceColumn, sourceBoundaryColumn, link);
+
+            var destinationPath = new List<PlanningGridCellId> { destinationBoundary };
+            var destinationRow = destinationMutable.RowOrder.IndexOf(destinationPath[0].RowId);
+            var destinationAnchorRow = destinationMutable.RowOrder.IndexOf(placements[destination.PhysicalNodeId].AnchorCellId.RowId);
+            var destinationColumn = destinationMutable.ColumnOrder.IndexOf(destinationPath[0].ColumnId);
+            var destinationAnchorColumn = destinationMutable.ColumnOrder.IndexOf(placements[destination.PhysicalNodeId].AnchorCellId.ColumnId);
+            var destinationPathValid = destinationRow >= 0 && destinationAnchorRow > destinationRow && destinationColumn >= 0 && destinationAnchorColumn >= 0 &&
+                AppendHorizontal(destinationPath, destinationGrid, destinationMutable, destinationRow, destinationColumn, destinationAnchorColumn, link) &&
+                AppendVertical(destinationPath, destinationGrid, destinationMutable, destinationRow, destinationAnchorRow - 1, destinationAnchorColumn, link);
+            if (destinationPathValid) destinationPath.Add(placements[destination.PhysicalNodeId].AnchorCellId);
+            if (!sourcePathValid || !destinationPathValid)
+            {
+                steps.Clear();
+            }
+            else
+            {
+                steps.AddRange(BuildStepsFromPath(sourcePath, topology, grids[sourceGrid]));
+                steps[steps.Count - 1] = steps[steps.Count - 1] with { Role = RouteStepRole.ProjectExit };
+                steps.Add(Step(diagramId, diagramBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.DiagramGridPassage, steps.Count, topology));
+                var destinationSteps = BuildStepsFromPath(destinationPath, topology, grids[destinationGrid]).ToList();
+                destinationSteps[0] = destinationSteps[0] with { Role = RouteStepRole.ProjectEntry };
+                steps.AddRange(destinationSteps.Select((step, index) => step with { Order = steps.Count + index }));
+            }
         }
         else
         {
-            var departureColumn = topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn
-                ? ColumnForOwnerRole(sourceGrid, PlanningGridTrackRole.OwnershipLocalReturn, source.PhysicalNodeId,
-                    ColumnAt(sourceGrid, DepartureColumn(source, destination)))
-                : ColumnAt(sourceGrid, DepartureColumn(source, destination));
-            var sourcePlacement = placements[source.PhysicalNodeId];
-            var departure = UseCell(sourceGrid, ExteriorRowBelow(grids[sourceGrid], sourcePlacement),
-                departureColumn, CellOccupancy.Empty);
-            var routeRow = UseCell(sourceGrid, RoutingRow(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
-                placements[destination.PhysicalNodeId].AnchorCellId.RowId), ColumnId(destination), CellOccupancy.Empty);
-            steps.Add(Step(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId, GridSide.Top, topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn ? GridSide.Right : GridSide.Bottom,
-                RouteStepRole.SourceExit, 0, topology));
-            if (topology == RouteTopologyFamily.SameLayer || topology == RouteTopologyFamily.Upward || topology == RouteTopologyFamily.OwnershipLocalReturn)
+            var path = FindOrthogonalPath(grids[sourceGrid], placements[source.PhysicalNodeId].AnchorCellId,
+                placements[destination.PhysicalNodeId].AnchorCellId, link);
+            if (path.Count == 0)
             {
-                steps.Add(Step(sourceGrid, departure, GridSide.Left, GridSide.Bottom, RouteStepRole.Turn, 1, topology));
-                steps.Add(Step(sourceGrid, routeRow, GridSide.Top, GridSide.Bottom, RouteStepRole.VerticalPassThrough, 2, topology));
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("UnsupportedAbstractRoute", "No contiguous orthogonal path exists in the authoritative project grid.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
+                steps.Clear();
             }
             else
-                steps.Add(Step(sourceGrid, departure, GridSide.Top, GridSide.Bottom, RouteStepRole.VerticalPassThrough, 1, topology));
-            steps.Add(Step(sourceGrid, approach.Cells[0], GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry,
-                steps.Count, topology));
-            steps.Add(Step(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId,
-                GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, steps.Count, topology));
+                steps.AddRange(BuildStepsFromPath(path, topology, grids[sourceGrid]));
         }
 
-        var completion = CompleteTurnCorridor(sourceGrid, steps, topology, link);
+        var completion = steps.Count == 0
+            ? new CompletionResult(steps, new PlannedRouteCompletionEvidence("grid-search", null, null, null, null,
+                Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), "none", false,
+                "No contiguous orthogonal path exists in the authoritative project grid."))
+            : CompletionResult.Unchanged(steps, "authoritative-grid-path", "The route was constructed from a contiguous authoritative cell path.");
         steps = completion.Steps.ToList();
         steps = steps.Select((step, index) => step with { Order = index }).ToList();
         if (completion.Evidence.OriginalGapType == "alternate-column" &&
@@ -209,9 +226,131 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             completion.Evidence with { IsValid = supported && completion.Evidence.IsValid, ValidationMessage = supported ? completion.Evidence.ValidationMessage : legality.Message });
     }
 
+    private IReadOnlyList<PlanningGridCellId> FindOrthogonalPath(
+        MutableGrid grid,
+        PlanningGridCellId source,
+        PlanningGridCellId destination,
+        PlannedPhysicalLink link,
+        bool destinationRequiresTopEntry = true)
+    {
+        if (source == destination) return new[] { source };
+        var queue = new SortedSet<PathCandidate>(Comparer<PathCandidate>.Create((left, right) =>
+        {
+            var score = left.Score.CompareTo(right.Score);
+            return score != 0 ? score : left.Sequence.CompareTo(right.Sequence);
+        }));
+        var previous = new Dictionary<PlanningGridCellId, PlanningGridCellId?>();
+        var distances = new Dictionary<PlanningGridCellId, int> { [source] = 0 };
+        var sequence = 0L;
+        queue.Add(new PathCandidate(source, 0, Manhattan(grid, source, destination), sequence++));
+        previous[source] = null;
+        while (queue.Count > 0)
+        {
+            var candidate = queue.Min!;
+            queue.Remove(candidate);
+            var current = candidate.Cell;
+            if (!distances.TryGetValue(current, out var currentDistance) || currentDistance != candidate.Distance) continue;
+            foreach (var next in Neighbours(grid, current, source, destination, destinationRequiresTopEntry))
+            {
+                if (!CanTraversePathCell(grid, next, source, destination)) continue;
+                var distance = currentDistance + 1;
+                if (distances.TryGetValue(next, out var existingDistance) && existingDistance <= distance) continue;
+                distances[next] = distance;
+                previous[next] = current;
+                if (next == destination)
+                {
+                    var path = new List<PlanningGridCellId>();
+                    PlanningGridCellId? cursor = next;
+                    while (cursor.HasValue)
+                    {
+                        path.Add(cursor.Value);
+                        cursor = previous[cursor.Value];
+                    }
+                    path.Reverse();
+                    return path;
+                }
+                queue.Add(new PathCandidate(next, distance, distance + Manhattan(grid, next, destination), sequence++));
+            }
+        }
+        diagnostics.Add(new ArchitecturePlanningDiagnostic("NoContiguousOrthogonalPath", "The authoritative grid has no contiguous orthogonal path for the relationship.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
+        return Array.Empty<PlanningGridCellId>();
+    }
+
+    private static int Manhattan(MutableGrid grid, PlanningGridCellId left, PlanningGridCellId right) =>
+        Math.Abs(grid.RowOrder.IndexOf(left.RowId) - grid.RowOrder.IndexOf(right.RowId)) +
+        Math.Abs(grid.ColumnOrder.IndexOf(left.ColumnId) - grid.ColumnOrder.IndexOf(right.ColumnId));
+
+    private IEnumerable<PlanningGridCellId> Neighbours(
+        MutableGrid grid,
+        PlanningGridCellId current,
+        PlanningGridCellId source,
+        PlanningGridCellId destination,
+        bool destinationRequiresTopEntry)
+    {
+        var row = grid.RowOrder.IndexOf(current.RowId);
+        var column = grid.ColumnOrder.IndexOf(current.ColumnId);
+        var candidates = new List<(int row, int column)>();
+        if (current == source)
+            candidates.Add((row + 1, column));
+        else
+        {
+            candidates.Add((row + 1, column));
+            candidates.Add((row, column - 1));
+            candidates.Add((row, column + 1));
+            candidates.Add((row - 1, column));
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (candidate.row < 0 || candidate.row >= grid.RowOrder.Count || candidate.column < 0 || candidate.column >= grid.ColumnOrder.Count)
+                continue;
+            var cell = new PlanningGridCellId(grid.Id, grid.RowOrder[candidate.row], grid.ColumnOrder[candidate.column]);
+            if (cell == destination)
+            {
+                var destinationRow = grid.RowOrder.IndexOf(destination.RowId);
+                var destinationColumn = grid.ColumnOrder.IndexOf(destination.ColumnId);
+                var topEntry = column == destinationColumn && row == destinationRow - 1;
+                var horizontalEntry = candidate.row == destinationRow && candidate.column != destinationColumn;
+                if (destinationRequiresTopEntry ? !topEntry : !topEntry && !horizontalEntry) continue;
+            }
+            yield return cell;
+        }
+    }
+
+    private bool CanTraversePathCell(MutableGrid grid, PlanningGridCellId cell, PlanningGridCellId source, PlanningGridCellId destination)
+    {
+        if (cell == source || cell == destination) return true;
+        if (IsOccupiedFootprint(grid, cell.RowId, cell.ColumnId)) return false;
+        return !grid.Cells.TryGetValue(cell, out var existing) || (existing.Capabilities & CellCapability.RoutingAllowed) != 0;
+    }
+
+    private IReadOnlyList<PlannedGridRouteStep> BuildStepsFromPath(
+        IReadOnlyList<PlanningGridCellId> path,
+        RouteTopologyFamily topology,
+        MutableGrid grid)
+    {
+        var result = new List<PlannedGridRouteStep>(path.Count);
+        for (var index = 0; index < path.Count; index++)
+        {
+            var previous = index == 0 ? (PlanningGridCellId?)null : path[index - 1];
+            var next = index == path.Count - 1 ? (PlanningGridCellId?)null : path[index + 1];
+            var entry = previous is null ? GridSide.Top : EntrySide(previous.Value, path[index], grid);
+            var exit = next is null ? GridSide.Bottom : ExitSide(path[index], next.Value, grid);
+            var role = index == 0 ? RouteStepRole.SourceExit : index == path.Count - 1 ? RouteStepRole.DestinationEntry :
+                IsHorizontal(entry, exit) ? RouteStepRole.HorizontalPassThrough :
+                entry is GridSide.Top or GridSide.Bottom && exit is GridSide.Top or GridSide.Bottom
+                    ? RouteStepRole.VerticalPassThrough : RouteStepRole.Turn;
+            result.Add(Step(grid.Id, path[index], entry, exit, role, index, topology));
+        }
+        return result;
+    }
+
     private RouteLegalityResult ValidateSteps(IReadOnlyList<PlannedGridRouteStep> steps, PlannedPhysicalLink link, RouteTopologyFamily topology)
     {
         if (steps.Count == 0) return new RouteLegalityResult(false, "No route steps were produced.");
+        for (var index = 1; index < steps.Count; index++)
+            if (steps[index - 1].GridId == steps[index].GridId && !AreAdjacent(steps[index - 1].CellId, steps[index].CellId))
+                return new RouteLegalityResult(false, Trace(link, topology, steps, steps[index], "non-contiguous cell transition"));
         foreach (var step in steps)
         {
             if (!grids.TryGetValue(step.GridId, out var grid) && step.GridId.Value != "diagram")
@@ -595,6 +734,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 "ordered-manhattan-traversal", false, message, candidates, rejections));
     }
 
+    private sealed record PathCandidate(PlanningGridCellId Cell, int Distance, int Score, long Sequence);
+
     private sealed record AlternateColumnSelection(
         int ColumnIndex,
         int TransitionRowIndex,
@@ -646,41 +787,35 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         {
             var current = new List<PlanningGridCellId>();
             RouteAxis? axis = null;
-            foreach (var step in route.Steps)
+            void Flush()
             {
-                var stepAxis = IsVertical(step) ? RouteAxis.Vertical : RouteAxis.Horizontal;
-                if (axis is not null && axis != stepAxis && current.Count > 0)
+                if (axis is null || current.Count == 0) return;
+                result.Add(new PlannedStraightRun(route.PhysicalLinkId, current[0].GridId, axis.Value, current.ToArray(),
+                    "step-start", "step-end", new LaneId($"provisional:{route.PhysicalLinkId}:{result.Count}")));
+                current = new List<PlanningGridCellId>();
+            }
+
+            foreach (var step in route.Steps.OrderBy(item => item.Order))
+            {
+                if (step.Role == RouteStepRole.Turn)
                 {
-                    result.Add(new PlannedStraightRun(route.PhysicalLinkId, route.Steps.First(item => current.Contains(item.CellId)).GridId,
-                        axis.Value, current.ToArray(), "step-start", "step-end", new LaneId($"provisional:{route.PhysicalLinkId}:{result.Count}")));
-                    current = new List<PlanningGridCellId>();
+                    var incoming = step.EntrySide is GridSide.Left or GridSide.Right ? RouteAxis.Horizontal : RouteAxis.Vertical;
+                    var outgoing = step.ExitSide is GridSide.Left or GridSide.Right ? RouteAxis.Horizontal : RouteAxis.Vertical;
+                    if (axis is not null && axis != incoming) Flush();
+                    axis = incoming;
+                    current.Add(step.CellId);
+                    Flush();
+                    axis = outgoing;
+                    current.Add(step.CellId);
+                    continue;
                 }
+
+                var stepAxis = IsVertical(step) ? RouteAxis.Vertical : RouteAxis.Horizontal;
+                if (axis is not null && axis != stepAxis) Flush();
                 axis = stepAxis;
                 current.Add(step.CellId);
             }
-            if (axis is not null && current.Count > 0)
-                result.Add(new PlannedStraightRun(route.PhysicalLinkId, route.Steps.First(item => current.Contains(item.CellId)).GridId,
-                    axis.Value, current.ToArray(), "step-start", "step-end", new LaneId($"provisional:{route.PhysicalLinkId}:{result.Count}")));
-
-            // Two adjacent turn cells still contain one real movement between
-            // them. Keep the traversal unchanged and represent that movement
-            // as a two-cell straight run for lane and boundary ownership.
-            var ordered = route.Steps.OrderBy(step => step.Order).ToArray();
-            for (var index = 0; index + 1 < ordered.Length; index++)
-            {
-                var first = ordered[index];
-                var second = ordered[index + 1];
-                if (first.Role != RouteStepRole.Turn || second.Role != RouteStepRole.Turn ||
-                    first.GridId != second.GridId || !AreAdjacent(first.CellId, second.CellId))
-                    continue;
-
-                var sharedAxis = first.CellId.RowId == second.CellId.RowId
-                    ? RouteAxis.Horizontal
-                    : RouteAxis.Vertical;
-                result.Add(new PlannedStraightRun(route.PhysicalLinkId, first.GridId, sharedAxis,
-                    new[] { first.CellId, second.CellId }, "turn-exit", "turn-entry",
-                    new LaneId($"provisional:{route.PhysicalLinkId}:adjacent-turn:{index}")));
-            }
+            Flush();
         }
         return result;
     }

@@ -184,9 +184,17 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         params PlannedRouteComponentKind[] kinds)
     {
         var result = new List<PlannedPhysicalRoutePoint>();
-        foreach (var kind in kinds)
+        var ordered = components.OrderBy(item => item.RouteStepOrder).ToArray();
+        for (var kindIndex = 0; kindIndex < kinds.Length; kindIndex++)
         {
-            foreach (var component in components.Where(item => ComponentKind(item) == kind).OrderBy(item => item.ComponentId, StringComparer.Ordinal))
+            var kind = kinds[kindIndex];
+            var matches = components.Where(item => ComponentKind(item) == kind).OrderBy(item => item.RouteStepOrder).ToArray();
+            var selected = matches.Length > 0
+                ? matches
+                : kindIndex < ordered.Length
+                    ? new[] { ordered[kindIndex] }
+                    : Array.Empty<PlannedPhysicalRouteComponent>();
+            foreach (var component in selected)
             {
                 foreach (var point in component.Points)
                 {
@@ -644,8 +652,20 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 component.EntryBoundary?.CellId, "source footprint bottom exterior boundary", component.ComponentId));
             if (orderedSteps.Length <= 1)
             {
-                AppendEndpointBend(points, route, component, start, end, true, firstCell);
+                var verticalEnd = new AbsolutePoint(start.X, end.Y);
+                points.Add(Point(route, firstCell.GridId, verticalEnd, role, component.ComponentId + ":vertical-departure", component.Order,
+                    component.RunId, component.TurnId, firstCell, "source bottom vertical departure", component.ComponentId));
+                if (verticalEnd.X != end.X)
+                    points.Add(Point(route, firstCell.GridId, end, role, component.ComponentId + ":horizontal-alignment", component.Order,
+                        component.RunId, component.TurnId, firstCell, "source departure lane alignment", component.ComponentId));
                 return points;
+            }
+            if (component.Lane is not null)
+            {
+                var firstLanePoint = ComponentLanePoint(component, orderedSteps[0], start, transforms);
+                var verticalDeparture = new AbsolutePoint(start.X, firstLanePoint.Y);
+                points.Add(Point(route, boundary.GridId, verticalDeparture, role, component.ComponentId + ":vertical-departure", component.Order,
+                    component.RunId, component.TurnId, firstCell, "source bottom vertical departure", component.ComponentId));
             }
         }
         else if (component.Kind == PlannedRouteComponentKind.DestinationApproach && orderedSteps.Length > 0)
