@@ -204,6 +204,17 @@ internal sealed class ArchitectureV6LaneAllocator
     private PlannedStraightRun? FindTurnRun(PlannedGridRoute route, int turnIndex, RouteAxis axis)
     {
         var candidates = runs.Where(run => run.RouteId == route.PhysicalLinkId && run.Axis == axis).ToArray();
+        var adjacentTurn = turnIndex > 0 && route.Steps[turnIndex - 1].Role == RouteStepRole.Turn
+            ? route.Steps[turnIndex - 1]
+            : turnIndex + 1 < route.Steps.Count && route.Steps[turnIndex + 1].Role == RouteStepRole.Turn
+                ? route.Steps[turnIndex + 1]
+                : null;
+        if (adjacentTurn is not null)
+        {
+            var shared = candidates.FirstOrDefault(run => run.Cells.Count == 2 &&
+                run.Cells.Contains(route.Steps[turnIndex].CellId) && run.Cells.Contains(adjacentTurn.CellId));
+            if (shared is not null) return shared;
+        }
         var containing = candidates.FirstOrDefault(run => run.Cells.Contains(route.Steps[turnIndex].CellId));
         if (containing is not null) return containing;
 

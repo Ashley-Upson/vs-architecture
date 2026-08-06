@@ -1016,6 +1016,103 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(GridSide.Top, route.Destination.Side);
     }
 
+    [Theory]
+    [InlineData(RouteAxis.Vertical)]
+    [InlineData(RouteAxis.Horizontal)]
+    public void Boundary_contract_represents_adjacent_turns_with_a_one_cell_run(RouteAxis sharedAxis)
+    {
+        var contract = BuildAdjacentTurnContract(sharedAxis, includeSharedRun: true);
+        var turnIndex = Array.FindIndex(contract.Components.ToArray(), component => component.Kind == PlannedRouteComponentKind.Turn);
+        var first = contract.Components[turnIndex];
+        var run = contract.Components[turnIndex + 1];
+        var second = contract.Components[turnIndex + 2];
+
+        Assert.True(contract.IsValid, string.Join("; ", contract.Findings.Select(finding => finding.Code + ":" + finding.Message + ": expected=" + finding.ExpectedBoundary + ": actual=" + finding.ActualBoundary)));
+        Assert.Equal(PlannedRouteComponentKind.Turn, first.Kind);
+        Assert.Equal(sharedAxis == RouteAxis.Horizontal
+            ? PlannedRouteComponentKind.HorizontalStraightRun
+            : PlannedRouteComponentKind.VerticalStraightRun, run.Kind);
+        Assert.Equal(PlannedRouteComponentKind.Turn, second.Kind);
+        Assert.Equal(2, run.Cells.Count);
+        Assert.Equal("lane:shared", run.Lane!.Value.Value);
+        Assert.Equal(first.ExitBoundary, run.EntryBoundary);
+        Assert.Equal(run.ExitBoundary, second.EntryBoundary);
+        Assert.NotEqual(first.Cells.Single(), second.Cells.Single());
+        Assert.DoesNotContain(contract.Components.Zip(contract.Components.Skip(1)), pair =>
+            pair.First.Kind == PlannedRouteComponentKind.Turn && pair.Second.Kind == PlannedRouteComponentKind.Turn);
+    }
+
+    [Fact]
+    public void Boundary_contract_rejects_adjacent_turns_when_the_shared_run_is_missing()
+    {
+        var contract = BuildAdjacentTurnContract(RouteAxis.Vertical, includeSharedRun: false);
+
+        Assert.False(contract.IsValid);
+        Assert.Contains(contract.Findings, finding => finding.Code == "MissingAdjacentTurnRun");
+        Assert.Contains(contract.Findings, finding => finding.Code == "AdjacentTurnComponents");
+    }
+
+    private static PlannedRouteBoundaryContract BuildAdjacentTurnContract(RouteAxis sharedAxis, bool includeSharedRun)
+    {
+        var gridId = new PlanningGridId("project:p");
+        var row0 = new PlanningGridRowId("row:0");
+        var row1 = new PlanningGridRowId("row:1");
+        var column0 = new PlanningGridColumnId("column:0");
+        var column1 = new PlanningGridColumnId("column:1");
+        var column2 = new PlanningGridColumnId("column:2");
+        var firstCell = new PlanningGridCellId(gridId, sharedAxis == RouteAxis.Vertical ? row0 : row1, column1);
+        var secondCell = new PlanningGridCellId(gridId, sharedAxis == RouteAxis.Vertical ? row1 : row1, sharedAxis == RouteAxis.Vertical ? column1 : column2);
+        var source = new PlannedPhysicalNode("physical:source", "source", PhysicalNodeProjectionMode.Canonical, null, "p", null, false, false);
+        var destination = new PlannedPhysicalNode("physical:destination", "destination", PhysicalNodeProjectionMode.Canonical, null, "p", null, false, false);
+        var placements = new[]
+        {
+            new PlannedNodePlacement(source.PhysicalNodeId, gridId, firstCell, 1, 1, new[] { firstCell }, column1),
+            new PlannedNodePlacement(destination.PhysicalNodeId, gridId, secondCell, 1, 1, new[] { secondCell }, secondCell.ColumnId)
+        };
+        var sourceStep = new PlannedGridRouteStep(gridId, firstCell, GridSide.Top, GridSide.Bottom, RouteStepRole.SourceExit, 0);
+        var firstTurn = sharedAxis == RouteAxis.Vertical
+            ? new PlannedGridRouteStep(gridId, firstCell, GridSide.Left, GridSide.Top, RouteStepRole.Turn, 1)
+            : new PlannedGridRouteStep(gridId, firstCell, GridSide.Top, GridSide.Right, RouteStepRole.Turn, 1);
+        var secondTurn = sharedAxis == RouteAxis.Vertical
+            ? new PlannedGridRouteStep(gridId, secondCell, GridSide.Bottom, GridSide.Right, RouteStepRole.Turn, 2)
+            : new PlannedGridRouteStep(gridId, secondCell, GridSide.Left, GridSide.Bottom, RouteStepRole.Turn, 2);
+        firstTurn = firstTurn with { AllocatedLane = new LaneId("lane:pre") };
+        secondTurn = secondTurn with { AllocatedLane = new LaneId("lane:post") };
+        var destinationStep = new PlannedGridRouteStep(gridId, secondCell, GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, 3);
+        var route = new PlannedGridRoute("physical-link:adjacent", 
+            new NodeEndpoint(source.PhysicalNodeId, GridSide.Bottom, "source", 0, gridId),
+            new[] { sourceStep, firstTurn, secondTurn, destinationStep }, Array.Empty<GridTransition>(),
+            new NodeEndpoint(destination.PhysicalNodeId, GridSide.Top, "destination", 0, gridId),
+            RouteTopologyFamily.Upward, "p", "p");
+
+        var preAxis = sharedAxis == RouteAxis.Vertical ? RouteAxis.Horizontal : RouteAxis.Vertical;
+        var postAxis = preAxis;
+        var preRun = new PlannedStraightRun(route.PhysicalLinkId, gridId, preAxis, new[] { firstCell }, "pre", "pre", new LaneId("lane:pre"));
+        var sharedRun = new PlannedStraightRun(route.PhysicalLinkId, gridId, sharedAxis, new[] { firstCell, secondCell }, "shared", "shared", new LaneId("lane:shared"));
+        var postRun = new PlannedStraightRun(route.PhysicalLinkId, gridId, postAxis, new[] { secondCell }, "post", "post", new LaneId("lane:post"));
+        var runs = includeSharedRun ? new[] { preRun, sharedRun, postRun } : new[] { preRun, postRun };
+        var lanes = runs.Select(run => new PlannedLaneAllocation(run.Lane.Value, route.PhysicalLinkId, gridId, run.Axis,
+            gridId.Value + ":" + run.Axis, 0, run.Lane, run.Cells, 0, 1, route.TopologyFamily, "project:p", "test"));
+        var turns = new[]
+        {
+            new PlannedTurnAllocation(route.PhysicalLinkId, firstCell.ToString(), firstTurn.EntrySide, firstTurn.ExitSide,
+                sharedAxis == RouteAxis.Horizontal ? "lane:shared" : "lane:pre", sharedAxis == RouteAxis.Vertical ? "lane:shared" : "lane:pre", "turn:first", 0, "test"),
+            new PlannedTurnAllocation(route.PhysicalLinkId, secondCell.ToString(), secondTurn.EntrySide, secondTurn.ExitSide,
+                sharedAxis == RouteAxis.Horizontal ? "lane:shared" : "lane:post", sharedAxis == RouteAxis.Vertical ? "lane:shared" : "lane:post", "turn:second", 0, "test")
+        };
+        var allocation = new ArchitectureLaneAllocationResult(new[] { route }, runs,
+            lanes.Where(item => item.Axis == RouteAxis.Horizontal).ToArray(), lanes.Where(item => item.Axis == RouteAxis.Vertical).ToArray(),
+            Array.Empty<PlannedEndpointAllocation>(), Array.Empty<PlannedDestinationApproachAllocation>(), turns,
+            Array.Empty<PlannedCleanCrossing>(), Array.Empty<PlannedProjectTransitionAllocation>(), Array.Empty<LaneAllocationConflict>(),
+            Array.Empty<NodeFootprintExpansionRequirement>(), new GridTrackSizingPlan(Array.Empty<PlanningGridRow>(), Array.Empty<PlanningGridColumn>(), Array.Empty<GridTrackConstraint>(), null),
+            Array.Empty<ArchitecturePlanningDiagnostic>());
+
+        var contract = new ArchitectureV6RouteBoundaryContractBuilder(allocation, new[] { source, destination }, placements).Build().Routes.Single();
+        Assert.Equal(4, route.Steps.Count);
+        Assert.Equal(2, route.Steps.Count(step => step.Role == RouteStepRole.Turn));
+        return contract;
+    }
+
     private static ArchitecturePlanningRequest Request() => new(
         new ArchitectureDiagramModel(
             new[]

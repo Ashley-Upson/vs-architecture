@@ -72,6 +72,8 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 previousRun = component;
         }
 
+        InsertAdjacentTurnRuns(route, components, routeFindings);
+
         var last = routeComponents.LastOrDefault();
         var lastComponent = components.LastOrDefault();
         var lastExit = lastComponent?.ExitBoundary;
@@ -125,9 +127,94 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
             }
         }
 
+        ValidateComponentGrammar(route, components, routeFindings);
+
         return new PlannedRouteBoundaryContract(route.PhysicalLinkId, route.TopologyFamily, components,
             routeFindings, routeFindings.Count == 0, "boundary contract derived from allocated cells, sides and lanes");
     }
+
+    private void InsertAdjacentTurnRuns(PlannedGridRoute route,
+        List<PlannedRouteComponentContract> components,
+        List<RouteBoundaryContractFinding> routeFindings)
+    {
+        for (var index = 1; index < components.Count; index++)
+        {
+            var first = components[index - 1];
+            var second = components[index];
+            if (first.Kind != PlannedRouteComponentKind.Turn || second.Kind != PlannedRouteComponentKind.Turn)
+                continue;
+
+            var firstCell = first.Cells.Single();
+            var secondCell = second.Cells.Single();
+            var run = allocation.StraightRuns.FirstOrDefault(candidate => candidate.RouteId == route.PhysicalLinkId &&
+                candidate.Cells.Count == 2 && candidate.Cells.Contains(firstCell) && candidate.Cells.Contains(secondCell));
+            if (run is null)
+            {
+                Add(routeFindings, route, "MissingAdjacentTurnRun", first.ComponentId, second.ComponentId,
+                    "Adjacent turn cells have no allocated one-cell straight run.", first.ExitBoundary, second.EntryBoundary);
+                continue;
+            }
+
+            var allocationForLane = allocation.HorizontalLanes.Concat(allocation.VerticalLanes)
+                .SingleOrDefault(item => item.Lane == run.Lane && item.RouteId == route.PhysicalLinkId);
+            var entry = first.ExitBoundary is null ? null : new GridBoundaryIdentity(
+                first.ExitBoundary.GridId, first.ExitBoundary.CellId, first.ExitBoundary.Side,
+                run.Lane, first.ExitBoundary.OwnershipScope, "one-cell-run-entry");
+            var exit = second.EntryBoundary is null ? null : new GridBoundaryIdentity(
+                second.EntryBoundary.GridId, second.EntryBoundary.CellId, second.EntryBoundary.Side,
+                run.Lane, second.EntryBoundary.OwnershipScope, "one-cell-run-exit");
+            var kind = run.Axis == RouteAxis.Horizontal
+                ? PlannedRouteComponentKind.HorizontalStraightRun
+                : PlannedRouteComponentKind.VerticalStraightRun;
+            var component = new PlannedRouteComponentContract(
+                route.PhysicalLinkId + ":one-cell-run:" + first.Order,
+                route.PhysicalLinkId,
+                kind,
+                first.Order,
+                run.Cells,
+                entry,
+                exit,
+                first.ExitSide,
+                second.EntrySide,
+                run.Lane,
+                allocationForLane?.RunId ?? run.RouteId + ":one-cell-run",
+                null,
+                run.GridId.Value,
+                null,
+                null,
+                "one-cell straight run across adjacent turn-cell boundary");
+            components.Insert(index, component);
+            index++;
+        }
+    }
+
+    private static void ValidateComponentGrammar(PlannedGridRoute route,
+        IReadOnlyList<PlannedRouteComponentContract> components,
+        List<RouteBoundaryContractFinding> findings)
+    {
+        for (var index = 0; index + 1 < components.Count; index++)
+        {
+            var before = components[index];
+            var after = components[index + 1];
+            if (before.Kind == PlannedRouteComponentKind.Turn && after.Kind == PlannedRouteComponentKind.Turn)
+            {
+                Add(findings, route, "AdjacentTurnComponents", before.ComponentId, after.ComponentId,
+                    "Distinct adjacent turn cells must be separated by a one-cell straight run.", before.ExitBoundary, after.EntryBoundary);
+            }
+
+            if (IsHorizontalRun(before) && IsVerticalRun(after) || IsVerticalRun(before) && IsHorizontalRun(after))
+            {
+                Add(findings, route, "MissingTurnBetweenRuns", before.ComponentId, after.ComponentId,
+                    "Straight runs of opposite orientation require an intervening turn.", before.ExitBoundary, after.EntryBoundary);
+            }
+        }
+    }
+
+    private static bool IsHorizontalRun(PlannedRouteComponentContract component) =>
+        component.Kind == PlannedRouteComponentKind.HorizontalStraightRun;
+
+    private static bool IsVerticalRun(PlannedRouteComponentContract component) =>
+        component.Kind == PlannedRouteComponentKind.VerticalStraightRun;
 
     private PlannedRouteComponentContract BuildStepComponent(PlannedGridRoute route,
         IReadOnlyList<PlannedGridRouteStep> group,

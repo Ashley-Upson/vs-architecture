@@ -518,8 +518,49 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             if (axis is not null && current.Count > 0)
                 result.Add(new PlannedStraightRun(route.PhysicalLinkId, route.Steps.First(item => current.Contains(item.CellId)).GridId,
                     axis.Value, current.ToArray(), "step-start", "step-end", new LaneId($"provisional:{route.PhysicalLinkId}:{result.Count}")));
+
+            // Two adjacent turn cells still contain one real movement between
+            // them. Keep the traversal unchanged and represent that movement
+            // as a two-cell straight run for lane and boundary ownership.
+            var ordered = route.Steps.OrderBy(step => step.Order).ToArray();
+            for (var index = 0; index + 1 < ordered.Length; index++)
+            {
+                var first = ordered[index];
+                var second = ordered[index + 1];
+                if (first.Role != RouteStepRole.Turn || second.Role != RouteStepRole.Turn ||
+                    first.GridId != second.GridId || !AreAdjacent(first.CellId, second.CellId))
+                    continue;
+
+                var sharedAxis = first.CellId.RowId == second.CellId.RowId
+                    ? RouteAxis.Horizontal
+                    : RouteAxis.Vertical;
+                result.Add(new PlannedStraightRun(route.PhysicalLinkId, first.GridId, sharedAxis,
+                    new[] { first.CellId, second.CellId }, "turn-exit", "turn-entry",
+                    new LaneId($"provisional:{route.PhysicalLinkId}:adjacent-turn:{index}")));
+            }
         }
         return result;
+    }
+
+    private bool AreAdjacent(PlanningGridCellId first, PlanningGridCellId second)
+    {
+        if (first.GridId != second.GridId) return false;
+        if (!grids.TryGetValue(first.GridId, out var grid)) return false;
+        var sameRow = first.RowId == second.RowId;
+        var sameColumn = first.ColumnId == second.ColumnId;
+        if (sameRow)
+        {
+            var firstIndex = grid.ColumnOrder.IndexOf(first.ColumnId);
+            var secondIndex = grid.ColumnOrder.IndexOf(second.ColumnId);
+            return firstIndex >= 0 && secondIndex >= 0 && Math.Abs(firstIndex - secondIndex) == 1;
+        }
+        if (sameColumn)
+        {
+            var firstIndex = grid.RowOrder.IndexOf(first.RowId);
+            var secondIndex = grid.RowOrder.IndexOf(second.RowId);
+            return firstIndex >= 0 && secondIndex >= 0 && Math.Abs(firstIndex - secondIndex) == 1;
+        }
+        return false;
     }
 
     private DiagramRoutingGrid BuildDiagramGrid(IReadOnlyList<GridTransition> transitions)
