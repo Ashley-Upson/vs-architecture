@@ -101,7 +101,8 @@ public sealed record PlannedPhysicalRoute(
     int NormalizedPointCount = 0,
     int RemovedDuplicatePointCount = 0,
     int MergedCollinearSegmentCount = 0,
-    bool IsInvalid = false);
+    bool IsInvalid = false,
+    IReadOnlyList<PlannedPhysicalRoutePoint>? ReducedPoints = null);
 
 public sealed record PlannedPhysicalTerminal(
     string TerminalId,

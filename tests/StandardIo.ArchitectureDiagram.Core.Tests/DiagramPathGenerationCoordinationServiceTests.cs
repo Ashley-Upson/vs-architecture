@@ -30,7 +30,8 @@ public sealed class DiagramPathGenerationCoordinationServiceTests
         var document = XDocument.Parse(result.Content);
 
         Assert.Equal("drawio", result.RendererId);
-        Assert.Equal(2, document.Descendants("mxCell").Count());
+        Assert.True(document.Descendants("mxCell").Count() > 2);
+        Assert.Contains(document.Descendants("mxCell"), cell => (string?)cell.Attribute("vertex") == "1");
     }
 
     [Fact]

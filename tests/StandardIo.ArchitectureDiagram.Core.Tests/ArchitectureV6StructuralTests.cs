@@ -1135,27 +1135,26 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Renderer_emits_only_minimal_page_shell()
+    public void Renderer_emits_physical_scene_vertices_and_edges()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
         var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
         var cells = page.GraphModel.Descendants("mxCell").ToArray();
 
         Assert.Equal("architecture", page.StablePageKey);
-        Assert.Equal(2, cells.Length);
-        Assert.DoesNotContain(cells, cell => (string?)cell.Attribute("vertex") == "1");
-        Assert.DoesNotContain(cells, cell => (string?)cell.Attribute("edge") == "1");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6MinimalPage");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6LinkEmissionDeferred");
+        Assert.Equal(plan.PhysicalScene!.Geometry.Nodes.Count, cells.Count(cell => (string?)cell.Attribute("vertex") == "1") - plan.PhysicalScene.Geometry.Projects.Count);
+        Assert.Equal(plan.PhysicalLinks.Count, cells.Count(cell => (string?)cell.Attribute("edge") == "1"));
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6PhysicalNodesEmitted");
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6RelationshipsEmitted");
     }
 
     [Fact]
-    public void Renderer_does_not_reconstruct_or_invent_geometry()
+    public void Renderer_projects_existing_geometry_without_reconstructing_layout()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
         var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
 
-        Assert.DoesNotContain(page.GraphModel.Descendants(), element => element.Name.LocalName == "mxGeometry" && element.Parent?.Name.LocalName == "mxCell");
+        Assert.Contains(page.GraphModel.Descendants(), element => element.Name.LocalName == "mxGeometry" && element.Parent?.Name.LocalName == "mxCell");
         Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6LogicalPlacementComplete");
     }
 

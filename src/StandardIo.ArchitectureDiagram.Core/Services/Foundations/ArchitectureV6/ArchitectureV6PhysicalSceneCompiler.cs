@@ -485,7 +485,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId, route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId,
                 route.TopologyFamily, segments, components.Count(component => component.Role == RouteStepRole.Turn), length, false, false, false,
                 rawPoints, components, reducedPoints.Count, rawPoints.Length - reducedPoints.Count,
-                rawPoints.Length - reducedPoints.Count, routeInvalid));
+                rawPoints.Length - reducedPoints.Count, routeInvalid, reducedPoints));
         }
         return result;
     }
