@@ -972,6 +972,76 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Occupancy_authority_resolves_anchor_and_footprint_cells_once()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
+            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
+
+        Assert.Empty(authority.Diagnostics);
+        foreach (var placement in plan.NodePlacements)
+        {
+            var anchor = authority.Resolve(placement.AnchorCellId);
+            Assert.Equal(ArchitectureV6OccupancyStatus.Occupied, anchor.Status);
+            Assert.Equal(new[] { placement.PhysicalNodeId }, anchor.PhysicalNodeIds);
+            Assert.All(placement.Footprint, cell =>
+            {
+                var resolution = authority.Resolve(cell);
+                Assert.Equal(ArchitectureV6OccupancyStatus.Occupied, resolution.Status);
+                Assert.Equal(new[] { placement.PhysicalNodeId }, resolution.PhysicalNodeIds);
+            });
+        }
+    }
+
+    [Fact]
+    public void Planner_and_validator_reject_unrelated_anchor_traversal()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
+            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
+
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RouteEntersUnrelatedFootprint");
+        Assert.All(plan.Routes.SelectMany(route => route.Steps), step =>
+        {
+            var resolution = authority.Resolve(step.CellId);
+            if (!resolution.IsOccupied) return;
+            var link = plan.PhysicalLinks.Single(item => item.PhysicalLinkId == plan.Routes.Single(route => route.Steps.Contains(step)).PhysicalLinkId);
+            Assert.True(authority.IsExactEndpointCell(step.CellId, step, link));
+        });
+    }
+
+    [Fact]
+    public void Endpoint_exception_is_limited_to_the_exact_endpoint_component()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
+            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
+        var route = plan.Routes.First(item => item.Steps.Count > 2);
+        var link = plan.PhysicalLinks.Single(item => item.PhysicalLinkId == route.PhysicalLinkId);
+        var sourceAnchor = plan.NodePlacements.Single(item => item.PhysicalNodeId == link.SourcePhysicalNodeId).AnchorCellId;
+        var destinationAnchor = plan.NodePlacements.Single(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId).AnchorCellId;
+        var source = route.Steps[0] with { CellId = sourceAnchor, Role = RouteStepRole.SourceExit };
+        var destination = route.Steps[^1] with { CellId = destinationAnchor, Role = RouteStepRole.DestinationEntry };
+        var ordinary = source with { Role = RouteStepRole.Turn };
+
+        Assert.True(authority.IsExactEndpointCell(sourceAnchor, source, link));
+        Assert.True(authority.IsExactEndpointCell(destinationAnchor, destination, link));
+        Assert.False(authority.IsExactEndpointCell(sourceAnchor, ordinary, link));
+    }
+
+    [Fact]
+    public void Occupancy_authority_reports_orphaned_anchor_metadata()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var missing = plan.NodePlacements[0].PhysicalNodeId;
+        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes,
+            plan.NodePlacements.Where(item => item.PhysicalNodeId != missing).ToArray(),
+            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
+
+        Assert.Contains(authority.Diagnostics, finding => finding.Code == "OrphanedNodeAnchor");
+    }
+
+    [Fact]
     public void Renderer_emits_only_minimal_page_shell()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

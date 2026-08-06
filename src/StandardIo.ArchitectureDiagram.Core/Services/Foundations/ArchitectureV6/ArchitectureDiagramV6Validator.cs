@@ -17,6 +17,9 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
         var gridsById = diagram.ProjectGrids.ToDictionary(grid => grid.Grid.Id.Value, StringComparer.Ordinal);
         var allGridsById = diagram.ProjectGrids.Select(item => item.Grid).Concat(new[] { diagram.DiagramGrid.Grid })
             .ToDictionary(grid => grid.Id.Value, StringComparer.Ordinal);
+        var occupancy = new ArchitectureV6OccupancyAuthority(diagram.PhysicalNodes, diagram.NodePlacements,
+            diagram.ProjectGrids.Select(item => item.Grid).Append(diagram.DiagramGrid.Grid));
+        findings.AddRange(occupancy.Diagnostics);
         foreach (var placement in diagram.NodePlacements)
         {
             if (!nodesById.ContainsKey(placement.PhysicalNodeId))
@@ -39,7 +42,8 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
         }
         foreach (var route in diagram.Routes)
         {
-            if (!diagram.PhysicalLinks.Any(link => link.PhysicalLinkId == route.PhysicalLinkId))
+            var routeLink = diagram.PhysicalLinks.SingleOrDefault(link => link.PhysicalLinkId == route.PhysicalLinkId);
+            if (routeLink is null)
                 findings.Add(new ArchitecturePlanningDiagnostic("UnknownPhysicalLink", "A planned route does not reference a physical link.", PlanningDiagnosticSubject.RouteStep, route.PhysicalLinkId));
             if (route.Source.Side != GridSide.Bottom || route.Destination.Side != GridSide.Top)
                 findings.Add(new ArchitecturePlanningDiagnostic("InvalidRouteEndpointSide", "Abstract routes must leave node bottoms and enter node tops.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
@@ -57,8 +61,12 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
                 {
                     if ((cell.Capabilities & CellCapability.RoutingAllowed) == 0)
                         findings.Add(new ArchitecturePlanningDiagnostic("RouteCellNotRoutable", "A route step uses a cell without routing capability.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
-                    if (cell.FootprintOwnerId is not null && cell.FootprintOwnerId != route.Source.PhysicalNodeId && cell.FootprintOwnerId != route.Destination.PhysicalNodeId)
-                        findings.Add(new ArchitecturePlanningDiagnostic("RouteEntersUnrelatedFootprint", "A route may not pass through an unrelated node footprint.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
+                    var resolution = occupancy.Resolve(step.CellId);
+                    if (resolution.Status is ArchitectureV6OccupancyStatus.Ambiguous or ArchitectureV6OccupancyStatus.Inconsistent)
+                        findings.Add(new ArchitecturePlanningDiagnostic("InvalidNodeFootprintOwnership",
+                            resolution.Message ?? "A route cell has invalid node footprint ownership.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
+                    else if (routeLink is not null && resolution.IsOccupied && !occupancy.IsExactEndpointCell(step.CellId, step, routeLink))
+                        findings.Add(new ArchitecturePlanningDiagnostic("RouteEntersUnrelatedFootprint", "A route may not pass through an occupied node footprint.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
                 }
             }
             var physicalLink = diagram.PhysicalLinks.SingleOrDefault(link => link.PhysicalLinkId == route.PhysicalLinkId);

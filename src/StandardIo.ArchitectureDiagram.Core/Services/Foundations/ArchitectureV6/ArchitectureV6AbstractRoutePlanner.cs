@@ -13,6 +13,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private readonly Dictionary<string, PlannedNodePlacement> placements;
     private readonly Dictionary<string, PhysicalNodePlacementMetadata> metadata;
     private readonly Dictionary<PlanningGridId, MutableGrid> grids;
+    private readonly ArchitectureV6OccupancyAuthority occupancy;
     private readonly Dictionary<string, int> rowOrderByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> columnOrderByNode = new(StringComparer.Ordinal);
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
@@ -33,6 +34,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         this.metadata = metadata.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         grids = projectGrids.ToDictionary(item => item.Grid.Id, MutableGrid.From, EqualityComparer<PlanningGridId>.Default);
         grids[diagramGrid.Grid.Id] = MutableGrid.From(diagramGrid.Grid);
+        occupancy = new ArchitectureV6OccupancyAuthority(nodes, placements, projectGrids.Select(item => item.Grid).Append(diagramGrid.Grid));
+        diagnostics.AddRange(occupancy.Diagnostics);
         foreach (var placement in placements)
         {
             var grid = projectGrids.Single(item => item.Grid.Id.Equals(placement.GridId)).Grid;
@@ -204,10 +207,16 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 return new RouteLegalityResult(false, Trace(link, topology, steps, step, "missing grid"));
             if (step.EntrySide == step.ExitSide)
                 return new RouteLegalityResult(false, Trace(link, topology, steps, step, "entry and exit sides are identical"));
-            if (step.Role != RouteStepRole.SourceExit && step.Role != RouteStepRole.DestinationEntry &&
-                grid!.Cells.TryGetValue(step.CellId, out var cell) && cell.FootprintOwnerId is not null)
-                return new RouteLegalityResult(false, Trace(link, topology, steps, step,
-                    $"unrelated node footprint owner '{cell.FootprintOwnerId}'"));
+            if (grid is not null)
+            {
+                var resolution = occupancy.Resolve(step.CellId);
+                if (resolution.Status is ArchitectureV6OccupancyStatus.Ambiguous or ArchitectureV6OccupancyStatus.Inconsistent)
+                    return new RouteLegalityResult(false, Trace(link, topology, steps, step,
+                        resolution.Message ?? "invalid node footprint ownership"));
+                if (resolution.IsOccupied && !occupancy.IsExactEndpointCell(step.CellId, step, link))
+                    return new RouteLegalityResult(false, Trace(link, topology, steps, step,
+                        $"occupied node footprint '{resolution.PhysicalNodeIds.SingleOrDefault() ?? "unknown"}'"));
+            }
         }
         if (steps[0].Role != RouteStepRole.SourceExit || steps[steps.Count - 1].Role != RouteStepRole.DestinationEntry)
             return new RouteLegalityResult(false, Trace(link, topology, steps, null, "invalid route terminals"));
@@ -462,16 +471,17 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private bool IsUnrelatedFootprint(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId, PlannedPhysicalLink link)
     {
         var cellId = new PlanningGridCellId(grid.Id, rowId, columnId);
-        return grid.Cells.TryGetValue(cellId, out var cell)
-            && cell.FootprintOwnerId is not null
-            && !string.Equals(cell.FootprintOwnerId, link.SourcePhysicalNodeId, StringComparison.Ordinal)
-            && !string.Equals(cell.FootprintOwnerId, link.DestinationPhysicalNodeId, StringComparison.Ordinal);
+        var resolution = occupancy.Resolve(cellId);
+        return resolution.IsOccupied &&
+            resolution.PhysicalNodeIds.All(owner =>
+                !string.Equals(owner, link.SourcePhysicalNodeId, StringComparison.Ordinal) &&
+                !string.Equals(owner, link.DestinationPhysicalNodeId, StringComparison.Ordinal));
     }
 
-    private static bool IsOccupiedFootprint(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId)
+    private bool IsOccupiedFootprint(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId)
     {
         var cellId = new PlanningGridCellId(grid.Id, rowId, columnId);
-        return grid.Cells.TryGetValue(cellId, out var cell) && cell.FootprintOwnerId is not null;
+        return occupancy.Resolve(cellId).IsOccupied;
     }
 
     private string Trace(PlannedPhysicalLink link, RouteTopologyFamily topology, IReadOnlyList<PlannedGridRouteStep> steps,
