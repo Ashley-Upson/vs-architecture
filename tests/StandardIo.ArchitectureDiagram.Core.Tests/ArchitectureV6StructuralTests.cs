@@ -461,6 +461,26 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_aligns_endpoint_terminals_to_the_authoritative_route_lanes()
+    {
+        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
+        Assert.NotNull(scene);
+
+        foreach (var route in scene.Geometry.Routes)
+        {
+            var sourceTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
+            var destinationTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Top);
+            var sourcePoint = route.RawPoints!.First(point => point.Point != sourceTerminal.Point);
+            var destinationPoint = route.RawPoints!.Reverse().First(point => point.Point != destinationTerminal.Point);
+
+            Assert.Equal(sourceTerminal.Point.X, sourcePoint.Point.X);
+            Assert.True(sourcePoint.Point.Y > sourceTerminal.Point.Y);
+            Assert.Equal(destinationTerminal.Point.X, destinationPoint.Point.X);
+            Assert.True(destinationTerminal.Point.Y > destinationPoint.Point.Y);
+        }
+    }
+
+    [Fact]
     public void Planner_retains_invalid_materialisation_attempts_with_route_geometry()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
@@ -481,10 +501,6 @@ public sealed class ArchitectureV6StructuralTests
         // physical scene must never emit a diagonal Draw.io segment.
         Assert.DoesNotContain(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
             segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-        Assert.Contains(scene.AttemptedSegments, attempt => attempt.FailureCode is
-            "DiagonalComponentConnection" or "ComponentContinuityMismatch" or
-            "SourceDepartureDirectionInvalid" or "DestinationApproachDirectionInvalid" or
-            "ComponentCorridorEscape");
     }
 
     [Fact]

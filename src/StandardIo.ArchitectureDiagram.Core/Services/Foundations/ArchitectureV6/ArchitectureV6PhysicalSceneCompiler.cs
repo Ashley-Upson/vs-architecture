@@ -322,6 +322,15 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (node is null || !transforms.TryGetValue(node.GridId, out var transform)) continue;
             var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
             var x = node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
+            var route = routes.SingleOrDefault(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
+            if (route is not null && route.Steps.Count > 0 && transforms.TryGetValue(route.Steps[0].GridId, out var routeTransform))
+            {
+                var endpointStep = endpoint.Side == GridSide.Bottom
+                    ? route.Steps.OrderBy(item => item.Order).First()
+                    : route.Steps.OrderBy(item => item.Order).Last();
+                var endpointSide = endpoint.Side == GridSide.Bottom ? endpointStep.ExitSide : endpointStep.EntrySide;
+                x = BoundaryPoint(route, endpointStep, endpointSide, routeTransform).X;
+            }
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
             var id = endpoint.PhysicalLinkId + ":" + endpoint.Side;
