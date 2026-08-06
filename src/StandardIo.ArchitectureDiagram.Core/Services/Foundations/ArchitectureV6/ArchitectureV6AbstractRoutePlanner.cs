@@ -180,17 +180,19 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 steps.Count, topology));
         }
 
-        steps = CompleteTurnCorridor(sourceGrid, steps, topology, link);
+        var completion = CompleteTurnCorridor(sourceGrid, steps, topology, link);
+        steps = completion.Steps.ToList();
         steps = steps.Select((step, index) => step with { Order = index }).ToList();
 
         var legality = ValidateSteps(steps, link, topology);
-        var supported = legality.IsSupported;
-        var unsupportedReason = supported ? null : legality.Message;
+        var supported = legality.IsSupported && completion.Evidence.IsValid;
+        var unsupportedReason = supported ? null : completion.Evidence.ValidationMessage ?? legality.Message;
         if (!supported)
             diagnostics.Add(new ArchitecturePlanningDiagnostic("UnsupportedAbstractRoute", unsupportedReason!, PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
         return new PlannedGridRoute(link.PhysicalLinkId, sourceEndpoint, steps, transitions.Where(item => item.SemanticLinkId == link.SemanticLinkId).ToArray(),
             destinationEndpoint, topology, link.SourceProjectId, link.DestinationProjectId,
-            $"{topology}: deterministic topology-owned route", approach.ReservationId, supported, unsupportedReason);
+            $"{topology}: deterministic topology-owned route", approach.ReservationId, supported, unsupportedReason,
+            completion.Evidence with { IsValid = supported && completion.Evidence.IsValid, ValidationMessage = supported ? completion.Evidence.ValidationMessage : legality.Message });
     }
 
     private RouteLegalityResult ValidateSteps(IReadOnlyList<PlannedGridRouteStep> steps, PlannedPhysicalLink link, RouteTopologyFamily topology)
@@ -212,226 +214,157 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return new RouteLegalityResult(true, null);
     }
 
-    private List<PlannedGridRouteStep> CompleteTurnCorridor(
+    private CompletionResult CompleteTurnCorridor(
         PlanningGridId gridId,
         IReadOnlyList<PlannedGridRouteStep> original,
         RouteTopologyFamily topology,
         PlannedPhysicalLink link)
     {
         var turnIndex = original.ToList().FindIndex(step => step.Role == RouteStepRole.Turn);
-        if (turnIndex < 0) return original.ToList();
+        if (turnIndex < 0)
+            return CompletionResult.Unchanged(original, "none", "Route has no turn requiring corridor completion.");
 
         var turn = original[turnIndex];
         var followingIndex = Enumerable.Range(turnIndex + 1, original.Count - turnIndex - 1)
             .FirstOrDefault(index => original[index].Role == RouteStepRole.VerticalPassThrough);
-        if (followingIndex == 0) return original.ToList();
+        if (followingIndex == 0)
+            return CompletionResult.Unchanged(original, "none", "Route has no destination-side vertical corridor.");
 
         var following = original[followingIndex];
         if (turn.GridId != following.GridId || turn.CellId.RowId == following.CellId.RowId && turn.CellId.ColumnId == following.CellId.ColumnId)
-            return original.ToList();
+            return CompletionResult.Unchanged(original, "none", "The existing turn and vertical corridor require no completion.");
 
         var grid = grids[gridId];
         var turnRow = grid.RowOrder.ToList().IndexOf(turn.CellId.RowId);
-        var targetRow = grid.RowOrder.ToList().IndexOf(following.CellId.RowId);
         var turnColumn = grid.ColumnOrder.ToList().IndexOf(turn.CellId.ColumnId);
+        var targetRow = grid.RowOrder.ToList().IndexOf(following.CellId.RowId);
         var targetColumn = grid.ColumnOrder.ToList().IndexOf(following.CellId.ColumnId);
-        if (turnRow < 0 || targetRow < 0 || turnColumn < 0 || targetColumn < 0)
-            return original.ToList();
-        var sameRow = targetRow == turnRow;
-        var movingDown = targetRow > turnRow;
-        var rowDirection = movingDown ? 1 : -1;
-        var sourceExit = original.First(step => step.Role == RouteStepRole.SourceExit);
-        var sourceColumn = grid.ColumnOrder.ToList().IndexOf(sourceExit.CellId.ColumnId);
-        var destination = original.FirstOrDefault(step => step.Role == RouteStepRole.DestinationEntry);
-        var destinationRow = destination is null ? targetRow : grid.RowOrder.ToList().IndexOf(destination.CellId.RowId);
-        var selectedBandRow = SelectClearBandRow(grid, turnRow, targetRow, destinationRow, sourceExit.CellId.RowId,
-            sourceColumn, targetColumn, turnColumn, link);
-        if (selectedBandRow >= 0) targetRow = selectedBandRow;
-        var corridorColumn = SelectClearCorridorColumn(grid, turnRow, targetRow, sourceExit.CellId.RowId,
-            grid.RowOrder[targetRow], sourceColumn, targetColumn, turnColumn, link);
-        if (corridorColumn >= 0)
-        {
-            turnColumn = corridorColumn;
-            turn = turn with { CellId = turn.CellId with { ColumnId = grid.ColumnOrder[corridorColumn] } };
-        }
-        var columnDirection = targetColumn >= turnColumn ? 1 : -1;
-        var completed = original.Take(turnIndex).ToList();
-
-        completed.Add(turn with
-        {
-            ExitSide = sameRow
-                ? (columnDirection > 0 ? GridSide.Right : GridSide.Left)
-                : (movingDown ? GridSide.Bottom : GridSide.Top),
-            EndpointRelationship = "selected-corridor-turn"
-        });
-
-        for (var row = turnRow + rowDirection; !sameRow && row != targetRow; row += rowDirection)
-        {
-            var rowId = grid.RowOrder[row];
-            var cell = UseCell(gridId, rowId, turn.CellId.ColumnId, CellOccupancy.Empty);
-            completed.Add(new PlannedGridRouteStep(gridId, cell,
-                movingDown ? GridSide.Top : GridSide.Bottom,
-                movingDown ? GridSide.Bottom : GridSide.Top,
-                RouteStepRole.VerticalPassThrough, 0, topology.ToString(), "corridor-completion"));
-        }
-
-        if (turnColumn != targetColumn)
-        {
-            var bandRow = following.CellId.RowId;
-            if (!sameRow)
-            {
-                var turnBandCell = UseCell(gridId, bandRow, turn.CellId.ColumnId, CellOccupancy.Empty);
-                completed.Add(new PlannedGridRouteStep(gridId, turnBandCell,
-                    movingDown ? GridSide.Top : GridSide.Bottom,
-                    columnDirection > 0 ? GridSide.Right : GridSide.Left,
-                    RouteStepRole.Turn, 0, topology.ToString(), "corridor-completion"));
-            }
-
-            for (var column = turnColumn + columnDirection; column != targetColumn; column += columnDirection)
-            {
-                var columnId = grid.ColumnOrder[column];
-                var cell = UseCell(gridId, bandRow, columnId, CellOccupancy.Empty);
-                completed.Add(new PlannedGridRouteStep(gridId, cell,
-                    columnDirection > 0 ? GridSide.Left : GridSide.Right,
-                    columnDirection > 0 ? GridSide.Right : GridSide.Left,
-                    RouteStepRole.HorizontalPassThrough, 0, topology.ToString(), "corridor-completion"));
-            }
-
-            var targetBandCell = UseCell(gridId, bandRow, following.CellId.ColumnId, CellOccupancy.Empty);
-            completed.Add(new PlannedGridRouteStep(gridId, targetBandCell,
-                columnDirection > 0 ? GridSide.Left : GridSide.Right,
-                GridSide.Bottom,
-                RouteStepRole.Turn, 0, topology.ToString(), "corridor-completion"));
-
-            // The target-band bend occupies the same cell as the first vertical
-            // step. Replace that step instead of emitting the same cell twice.
-        }
-
-        AppendDestinationCorridor(completed, original, followingIndex, gridId, topology);
-        return completed
-            .GroupBy(step => step.GridId.Value + ":" + step.CellId, StringComparer.Ordinal)
-            .Select(group => group.OrderBy(step => step.Order).First())
-            .OrderBy(step => step.Order)
-            .ToList();
-    }
-
-    private void AppendDestinationCorridor(
-        List<PlannedGridRouteStep> completed,
-        IReadOnlyList<PlannedGridRouteStep> original,
-        int replacedFollowingIndex,
-        PlanningGridId gridId,
-        RouteTopologyFamily topology)
-    {
-        var destinationIndex = Enumerable.Range(replacedFollowingIndex + 1, original.Count - replacedFollowingIndex - 1)
+        var destinationIndex = Enumerable.Range(followingIndex + 1, original.Count - followingIndex - 1)
             .FirstOrDefault(index => original[index].Role == RouteStepRole.DestinationEntry);
-        if (destinationIndex == 0)
-        {
-            completed.AddRange(original.Skip(replacedFollowingIndex + 1));
-            return;
-        }
+        if (destinationIndex == 0 || turnRow < 0 || targetRow < 0 || turnColumn < 0 || targetColumn < 0)
+            return CompletionResult.Unchanged(original, "none", "The route does not expose complete structural corridor coordinates.");
 
-        var last = completed.Last();
         var destination = original[destinationIndex];
-        if (last.GridId != destination.GridId || last.CellId.ColumnId != destination.CellId.ColumnId)
-        {
-            completed.AddRange(original.Skip(destinationIndex));
-            return;
-        }
-
-        var grid = grids[gridId];
-        var lastRow = grid.RowOrder.ToList().IndexOf(last.CellId.RowId);
         var destinationRow = grid.RowOrder.ToList().IndexOf(destination.CellId.RowId);
-        if (lastRow < 0 || destinationRow < 0 || lastRow == destinationRow)
+        var destinationColumn = grid.ColumnOrder.ToList().IndexOf(destination.CellId.ColumnId);
+        if (destinationRow < 0 || destinationColumn < 0)
+            return CompletionResult.Unsupported(original, "two-axis", turn, following, "The destination approach does not expose a structural row and column.");
+
+        var originalTargetColumn = grid.ColumnOrder.ToList().IndexOf(following.CellId.ColumnId);
+        if (turnColumn == originalTargetColumn)
         {
-            completed.AddRange(original.Skip(destinationIndex));
-            return;
+            var verticalPath = new List<PlanningGridCellId> { turn.CellId };
+            if (!AppendVertical(verticalPath, gridId, grid, turnRow, targetRow, turnColumn, link))
+                return CompletionResult.Unsupported(original, "same-column", turn, following,
+                    "The same-column corridor contains a non-routable or unrelated occupied cell.");
+
+            var completedSameColumn = original.Take(turnIndex).ToList();
+            completedSameColumn.AddRange(DeriveTraversalSteps(verticalPath, turn, following, topology, grid, false));
+            completedSameColumn.AddRange(original.Skip(followingIndex + 1));
+            var sameOriginalCells = new HashSet<PlanningGridCellId>(original.Select(step => step.CellId));
+            var sameInserted = verticalPath.Where(cell => !sameOriginalCells.Contains(cell)).Select(cell => cell.ToString()).ToArray();
+            return new CompletionResult(completedSameColumn, new PlannedRouteCompletionEvidence(
+                "same-column", turn.CellId.ToString(), following.CellId.ToString(), following.CellId.RowId.Value,
+                following.CellId.ColumnId.Value, sameInserted, Array.Empty<string>(), Array.Empty<string>(),
+                $"{topology}:ordered-vertical-traversal", true, null));
         }
 
-        var direction = destinationRow > lastRow ? 1 : -1;
-        for (var row = lastRow + direction; row != destinationRow; row += direction)
+        // The destination approach reservation is the authoritative final
+        // vertical corridor. The original anchor-column step is the incomplete
+        // predecessor that this traversal replaces.
+        targetColumn = destinationColumn;
+
+        var transitionRow = SelectTransitionRow(grid, turnRow, targetRow, destinationRow, turnColumn, targetColumn, link);
+        if (transitionRow < 0)
+            return CompletionResult.Unsupported(original, turnColumn == targetColumn ? "same-column" : "two-axis", turn, following,
+                "No authorised existing transition row can connect the source and destination corridors.");
+
+        var transitionRowId = grid.RowOrder[transitionRow];
+        var path = new List<PlanningGridCellId> { turn.CellId };
+        if (!AppendVertical(path, gridId, grid, turnRow, transitionRow, turnColumn, link) ||
+            !AppendHorizontal(path, gridId, grid, transitionRow, turnColumn, targetColumn, link) ||
+            !AppendVertical(path, gridId, grid, transitionRow, destinationRow, targetColumn, link))
         {
-            var rowId = grid.RowOrder[row];
-            var cell = UseCell(gridId, rowId, last.CellId.ColumnId, CellOccupancy.Empty);
-            completed.Add(new PlannedGridRouteStep(gridId, cell,
-                direction > 0 ? GridSide.Top : GridSide.Bottom,
-                direction > 0 ? GridSide.Bottom : GridSide.Top,
-                RouteStepRole.VerticalPassThrough, 0, topology.ToString(), "corridor-completion"));
+            return CompletionResult.Unsupported(original, turnColumn == targetColumn ? "same-column" : "two-axis", turn, following,
+                "The selected traversal contains a non-routable or unrelated occupied cell.");
         }
-        completed.AddRange(original.Skip(destinationIndex));
+
+        var completed = original.Take(turnIndex).ToList();
+        var generated = DeriveTraversalSteps(path, turn, destination, topology, grid, true);
+        completed.AddRange(generated);
+        var originalCells = new HashSet<PlanningGridCellId>(original.Select(step => step.CellId));
+        var inserted = path.Where(cell => !originalCells.Contains(cell)).Select(cell => cell.ToString()).ToArray();
+        var insertedTurns = generated
+            .Where(step => step.Role == RouteStepRole.Turn && step.CellId != turn.CellId)
+            .Select(step => step.CellId.ToString()).ToArray();
+        var evidence = new PlannedRouteCompletionEvidence(
+            turnColumn == targetColumn ? "same-column" : "two-axis",
+            turn.CellId.ToString(),
+            following.CellId.ToString(),
+            transitionRowId.Value,
+            grid.ColumnOrder[targetColumn].Value,
+            inserted,
+            insertedTurns.Select(cell => $"run:{cell}").ToArray(),
+            insertedTurns,
+            $"{topology}:ordered-manhattan-traversal",
+            true,
+            null);
+        return new CompletionResult(completed, evidence);
     }
 
-    private int SelectClearCorridorColumn(
-        MutableGrid grid,
-        int turnRow,
-        int targetRow,
-        PlanningGridRowId sourceRowId,
-        PlanningGridRowId bandRowId,
-        int sourceColumn,
-        int targetColumn,
-        int preferredColumn,
-        PlannedPhysicalLink link)
+    private int SelectTransitionRow(MutableGrid grid, int startRow, int targetRow, int destinationRow,
+        int startColumn, int targetColumn, PlannedPhysicalLink link)
     {
-        var sourceRow = grid.RowOrder.ToList().IndexOf(sourceRowId);
-        var bandRow = grid.RowOrder.ToList().IndexOf(bandRowId);
-        if (sourceRow < 0 || bandRow < 0) return preferredColumn;
-
-        var candidates = grid.ColumnOrder
-            .Select((column, index) => (column, index))
-            .OrderBy(item => item.index == preferredColumn ? 0 : 1)
-            .ThenBy(item => Math.Abs(item.index - preferredColumn))
-            .ThenBy(item => item.index)
-            .Select(item => item.index);
-        foreach (var candidate in candidates)
+        var preferred = grid.Rows.Values
+            .Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting)
+            .Select(row => grid.RowOrder.IndexOf(row.Id))
+            .Where(index => index >= 0)
+            .OrderBy(index => index == targetRow ? 0 : 1)
+            .ThenBy(index => Math.Abs(index - targetRow))
+            .ThenBy(index => index)
+            .ToArray();
+        foreach (var row in preferred
+            .Where(row => Math.Abs(row - startRow) >= 2 && Math.Abs(targetColumn - startColumn) >= 2)
+            .Concat(preferred)
+            .Distinct())
         {
-            if (candidate == sourceColumn || candidate == targetColumn) continue;
-            if (!ClearVertical(grid, candidate, turnRow, targetRow, link)) continue;
-            if (!ClearHorizontal(grid, sourceRow, sourceColumn, candidate, link)) continue;
-            if (!ClearHorizontal(grid, bandRow, candidate, targetColumn, link)) continue;
-            return candidate;
+            if (ClearVertical(grid, startRow, row, startColumn, link) &&
+                ClearHorizontal(grid, row, startColumn, targetColumn, link) &&
+                ClearVertical(grid, row, destinationRow, targetColumn, link))
+                return row;
         }
         return -1;
     }
 
-    private int SelectClearBandRow(
-        MutableGrid grid,
-        int turnRow,
-        int preferredRow,
-        int destinationRow,
-        PlanningGridRowId sourceRowId,
-        int sourceColumn,
-        int targetColumn,
-        int preferredColumn,
-        PlannedPhysicalLink link)
+    private bool AppendVertical(List<PlanningGridCellId> path, PlanningGridId gridId, MutableGrid grid,
+        int startRow, int endRow, int column, PlannedPhysicalLink link)
     {
-        var sourceRow = grid.RowOrder.ToList().IndexOf(sourceRowId);
-        if (sourceRow < 0) return preferredRow;
-        var candidates = grid.Rows.Values
-            .Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting)
-            .Select(row => grid.RowOrder.ToList().IndexOf(row.Id))
-            .Where(index => index >= 0)
-            .Distinct()
-            .OrderBy(index => index == preferredRow ? 0 : 1)
-            .ThenBy(index => Math.Abs(index - preferredRow))
-            .ThenBy(index => index)
-            .ToArray();
-        foreach (var row in candidates)
+        var direction = endRow >= startRow ? 1 : -1;
+        for (var row = startRow + direction; row != endRow + direction; row += direction)
         {
-            var column = SelectClearCorridorColumn(grid, turnRow, row, sourceRowId, grid.RowOrder[row],
-                sourceColumn, targetColumn, preferredColumn, link);
-            if (column < 0) continue;
-            if (destinationRow >= 0 && !ClearVertical(grid, targetColumn, row, destinationRow, link)) continue;
-            return row;
+            if (!TryUseAuthorisedCell(gridId, grid, grid.RowOrder[row], grid.ColumnOrder[column], link, out var cell)) return false;
+            path.Add(cell);
         }
-        return preferredRow;
+        return true;
     }
 
-    private bool ClearVertical(MutableGrid grid, int column, int startRow, int endRow, PlannedPhysicalLink link)
+    private bool AppendHorizontal(List<PlanningGridCellId> path, PlanningGridId gridId, MutableGrid grid,
+        int row, int startColumn, int endColumn, PlannedPhysicalLink link)
+    {
+        var direction = endColumn >= startColumn ? 1 : -1;
+        for (var column = startColumn + direction; column != endColumn + direction; column += direction)
+        {
+            if (!TryUseAuthorisedCell(gridId, grid, grid.RowOrder[row], grid.ColumnOrder[column], link, out var cell)) return false;
+            path.Add(cell);
+        }
+        return true;
+    }
+
+    private bool ClearVertical(MutableGrid grid, int startRow, int endRow, int column, PlannedPhysicalLink link)
     {
         var direction = endRow >= startRow ? 1 : -1;
         for (var row = startRow; row != endRow + direction; row += direction)
-        {
-            if (IsUnrelatedFootprint(grid, grid.RowOrder[row], grid.ColumnOrder[column], link)) return false;
-        }
+            if (IsOccupiedFootprint(grid, grid.RowOrder[row], grid.ColumnOrder[column])) return false;
         return true;
     }
 
@@ -439,10 +372,91 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     {
         var direction = endColumn >= startColumn ? 1 : -1;
         for (var column = startColumn; column != endColumn + direction; column += direction)
-        {
-            if (IsUnrelatedFootprint(grid, grid.RowOrder[row], grid.ColumnOrder[column], link)) return false;
-        }
+            if (IsOccupiedFootprint(grid, grid.RowOrder[row], grid.ColumnOrder[column])) return false;
         return true;
+    }
+
+    private bool TryUseAuthorisedCell(PlanningGridId gridId, MutableGrid grid, PlanningGridRowId rowId,
+        PlanningGridColumnId columnId, PlannedPhysicalLink link, out PlanningGridCellId cell)
+    {
+        cell = new PlanningGridCellId(gridId, rowId, columnId);
+        if (!grid.RowOrder.Contains(rowId) || !grid.ColumnOrder.Contains(columnId)) return false;
+        if (IsOccupiedFootprint(grid, rowId, columnId)) return false;
+        if (grid.Cells.TryGetValue(cell, out var existing) && (existing.Capabilities & CellCapability.RoutingAllowed) == 0) return false;
+        UseCell(gridId, rowId, columnId, CellOccupancy.Empty);
+        return true;
+    }
+
+    private IReadOnlyList<PlannedGridRouteStep> DeriveTraversalSteps(
+        IReadOnlyList<PlanningGridCellId> path,
+        PlannedGridRouteStep originalTurn,
+        PlannedGridRouteStep originalDestination,
+        RouteTopologyFamily topology,
+        MutableGrid grid,
+        bool destinationEntry)
+    {
+        var result = new List<PlannedGridRouteStep>();
+        for (var index = 0; index < path.Count; index++)
+        {
+            var previous = index == 0 ? (PlanningGridCellId?)null : path[index - 1];
+            var next = index == path.Count - 1 ? (PlanningGridCellId?)null : path[index + 1];
+            var entry = index == 0 ? originalTurn.EntrySide : EntrySide(previous!.Value, path[index], grid);
+            var exit = index == path.Count - 1
+                ? destinationEntry
+                    ? entry is GridSide.Top ? GridSide.Bottom : entry is GridSide.Bottom ? GridSide.Top : originalDestination.ExitSide
+                    : entry is GridSide.Top ? GridSide.Bottom : entry is GridSide.Bottom ? GridSide.Top : originalDestination.ExitSide
+                : ExitSide(path[index], next!.Value, grid);
+            var role = index == 0 ? RouteStepRole.Turn : index == path.Count - 1 && destinationEntry ? RouteStepRole.DestinationEntry :
+                IsHorizontal(entry, exit) ? RouteStepRole.HorizontalPassThrough :
+                entry is GridSide.Top or GridSide.Bottom && exit is GridSide.Top or GridSide.Bottom
+                    ? RouteStepRole.VerticalPassThrough
+                    : RouteStepRole.Turn;
+            result.Add(new PlannedGridRouteStep(path[index].GridId, path[index], entry, exit, role, index,
+                topology.ToString(), "ordered-corridor-completion"));
+        }
+        return result;
+    }
+
+    private static bool IsHorizontal(GridSide entry, GridSide exit) =>
+        entry is GridSide.Left or GridSide.Right && exit is GridSide.Left or GridSide.Right;
+
+    private static GridSide EntrySide(PlanningGridCellId previous, PlanningGridCellId current, MutableGrid grid)
+    {
+        var previousRow = grid.RowOrder.IndexOf(previous.RowId);
+        var currentRow = grid.RowOrder.IndexOf(current.RowId);
+        var previousColumn = grid.ColumnOrder.IndexOf(previous.ColumnId);
+        var currentColumn = grid.ColumnOrder.IndexOf(current.ColumnId);
+        if (currentRow > previousRow) return GridSide.Top;
+        if (currentRow < previousRow) return GridSide.Bottom;
+        return currentColumn > previousColumn ? GridSide.Left : GridSide.Right;
+    }
+
+    private static GridSide ExitSide(PlanningGridCellId current, PlanningGridCellId next, MutableGrid grid)
+    {
+        var currentRow = grid.RowOrder.IndexOf(current.RowId);
+        var nextRow = grid.RowOrder.IndexOf(next.RowId);
+        var currentColumn = grid.ColumnOrder.IndexOf(current.ColumnId);
+        var nextColumn = grid.ColumnOrder.IndexOf(next.ColumnId);
+        if (nextRow > currentRow) return GridSide.Bottom;
+        if (nextRow < currentRow) return GridSide.Top;
+        return nextColumn > currentColumn ? GridSide.Right : GridSide.Left;
+    }
+
+    private sealed record CompletionResult(
+        IReadOnlyList<PlannedGridRouteStep> Steps,
+        PlannedRouteCompletionEvidence Evidence)
+    {
+        public static CompletionResult Unchanged(IReadOnlyList<PlannedGridRouteStep> steps, string gapType, string message) =>
+            new(steps.ToArray(), new PlannedRouteCompletionEvidence(
+                gapType, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(),
+                "none", true, message));
+
+        public static CompletionResult Unsupported(IReadOnlyList<PlannedGridRouteStep> steps, string gapType,
+            PlannedGridRouteStep turn, PlannedGridRouteStep target, string message) =>
+            new(steps.ToArray(), new PlannedRouteCompletionEvidence(
+                gapType, turn.CellId.ToString(), target.CellId.ToString(), target.CellId.RowId.Value,
+                target.CellId.ColumnId.Value, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(),
+                "ordered-manhattan-traversal", false, message));
     }
 
     private bool IsUnrelatedFootprint(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId, PlannedPhysicalLink link)
@@ -452,6 +466,12 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             && cell.FootprintOwnerId is not null
             && !string.Equals(cell.FootprintOwnerId, link.SourcePhysicalNodeId, StringComparison.Ordinal)
             && !string.Equals(cell.FootprintOwnerId, link.DestinationPhysicalNodeId, StringComparison.Ordinal);
+    }
+
+    private static bool IsOccupiedFootprint(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId)
+    {
+        var cellId = new PlanningGridCellId(grid.Id, rowId, columnId);
+        return grid.Cells.TryGetValue(cellId, out var cell) && cell.FootprintOwnerId is not null;
     }
 
     private string Trace(PlannedPhysicalLink link, RouteTopologyFamily topology, IReadOnlyList<PlannedGridRouteStep> steps,

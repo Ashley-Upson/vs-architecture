@@ -83,7 +83,21 @@ public sealed record PlannedGridRoute(
     string Provenance = "",
     string? DestinationApproachReservationId = null,
     bool IsStructurallySupported = true,
-    string? UnsupportedReason = null);
+    string? UnsupportedReason = null,
+    PlannedRouteCompletionEvidence? CompletionEvidence = null);
+
+public sealed record PlannedRouteCompletionEvidence(
+    string OriginalGapType,
+    string? OriginalTurnCell,
+    string? TargetVerticalCell,
+    string? SelectedTransitionRow,
+    string? SelectedTransitionColumn,
+    IReadOnlyList<string> InsertedCellIds,
+    IReadOnlyList<string> InsertedRunIdentities,
+    IReadOnlyList<string> InsertedTurnIdentities,
+    string CompletionTopology,
+    bool IsValid,
+    string? ValidationMessage);
 
 public enum RouteAxis
 {
