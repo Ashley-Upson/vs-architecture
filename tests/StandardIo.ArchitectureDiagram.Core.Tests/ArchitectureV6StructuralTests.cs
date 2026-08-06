@@ -45,6 +45,24 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_adds_permanent_exterior_rows_around_authoritative_project_rows()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var grid = Assert.Single(plan.ProjectGrids).Grid;
+
+        Assert.Equal("routing:exterior:top", grid.Rows[0].Id.Value);
+        Assert.Equal("routing:exterior:bottom", grid.Rows[^1].Id.Value);
+        Assert.All(grid.Rows.Where(row => row.Id.Value.StartsWith("routing:exterior:", StringComparison.Ordinal)),
+            row => Assert.Equal(PlanningGridTrackRole.InterLayerRouting, row.Role));
+        Assert.All(plan.NodePlacements, placement =>
+        {
+            var row = grid.Rows.Single(item => item.Id.Equals(placement.AnchorCellId.RowId));
+            Assert.True(row.LogicalOrder > grid.Rows[0].LogicalOrder);
+            Assert.True(row.LogicalOrder < grid.Rows[^1].LogicalOrder);
+        });
+    }
+
+    [Fact]
     public void Planner_freezes_structural_track_cardinality_before_abstract_routes()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

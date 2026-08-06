@@ -477,13 +477,18 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         int originalColumn,
         PlannedPhysicalLink link)
     {
+        var low = Math.Min(startRow, targetRow);
+        var high = Math.Max(startRow, targetRow);
         var transitionRow = grid.Rows.Values
-            .Where(row => row.Id.Value == "routing:inter-layer:6" && row.Role == PlanningGridTrackRole.InterLayerRouting)
+            .Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting)
             .Select(row => grid.RowOrder.IndexOf(row.Id))
+            .Where(index => index >= low && index <= high)
+            .OrderBy(index => Math.Abs(index - destinationRow))
+            .ThenBy(index => index)
             .DefaultIfEmpty(-1)
             .First();
         if (transitionRow < 0)
-            return new AlternateColumnSelection(-1, -1, Array.Empty<string>(), new[] { "routing:inter-layer:6=missing" });
+            return new AlternateColumnSelection(-1, -1, Array.Empty<string>(), new[] { "no-existing-inter-layer-transition-row" });
 
         var originalLogicalOrder = grid.Columns[grid.ColumnOrder[originalColumn]].LogicalOrder;
         var ordered = grid.Columns.Values.OrderBy(column => column.LogicalOrder).ToArray();
