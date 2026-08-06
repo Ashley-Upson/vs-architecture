@@ -100,7 +100,8 @@ public sealed record PlannedPhysicalRoute(
     IReadOnlyList<PlannedPhysicalRouteComponent>? Components = null,
     int NormalizedPointCount = 0,
     int RemovedDuplicatePointCount = 0,
-    int MergedCollinearSegmentCount = 0);
+    int MergedCollinearSegmentCount = 0,
+    bool IsInvalid = false);
 
 public sealed record PlannedPhysicalTerminal(
     string TerminalId,

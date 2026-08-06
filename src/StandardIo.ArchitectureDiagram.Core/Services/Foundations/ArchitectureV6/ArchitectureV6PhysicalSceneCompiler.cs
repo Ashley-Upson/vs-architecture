@@ -140,22 +140,16 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     private void ValidateEndpointDirection(PlannedGridRoute route, PlannedPhysicalTerminal sourceTerminal,
         PlannedPhysicalTerminal destinationTerminal, IReadOnlyList<PlannedPhysicalRouteComponent> components, ref bool invalid)
     {
-        var sourceDeparture = components.FirstOrDefault(item => item.Role == RouteStepRole.SourceExit &&
-            item.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
-        var destinationApproach = components.FirstOrDefault(item => item.Role == RouteStepRole.DestinationEntry &&
-            item.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
-        var sourcePath = Array.Empty<PlannedPhysicalRoutePoint>();
-        if (sourceDeparture is not null)
-        {
-            var points = sourceDeparture.Points;
-            sourcePath = points.Where((point, index) => index == 0 || point.Point != points[index - 1].Point).ToArray();
-        }
-        var destinationPath = Array.Empty<PlannedPhysicalRoutePoint>();
-        if (destinationApproach is not null)
-        {
-            var points = destinationApproach.Points;
-            destinationPath = points.Where((point, index) => index == 0 || point.Point != points[index - 1].Point).ToArray();
-        }
+        var sourceDeparture = components.FirstOrDefault(item => item.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
+        var destinationApproach = components.FirstOrDefault(item => item.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
+        var sourcePath = EndpointPoints(components,
+            PlannedRouteComponentKind.SourceTerminal,
+            PlannedRouteComponentKind.SourceNodeAnchor,
+            PlannedRouteComponentKind.SourceDeparture);
+        var destinationPath = EndpointPoints(components,
+            PlannedRouteComponentKind.DestinationApproach,
+            PlannedRouteComponentKind.DestinationNodeAnchor,
+            PlannedRouteComponentKind.DestinationTerminal);
         var sourceDepartureInvalid = sourcePath.Length >= 2 &&
             (sourcePath[1].Point.X != sourcePath[0].Point.X || sourcePath[1].Point.Y <= sourcePath[0].Point.Y);
         if (sourceDepartureInvalid && sourceDeparture is not null)
@@ -184,6 +178,34 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             findings.Add(new ArchitecturePlanningDiagnostic("InvalidPhysicalTerminalDirection", "Physical routes must leave source bottoms and enter destination tops.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
     }
+
+    private static PlannedPhysicalRoutePoint[] EndpointPoints(
+        IReadOnlyList<PlannedPhysicalRouteComponent> components,
+        params PlannedRouteComponentKind[] kinds)
+    {
+        var result = new List<PlannedPhysicalRoutePoint>();
+        foreach (var kind in kinds)
+        {
+            foreach (var component in components.Where(item => ComponentKind(item) == kind).OrderBy(item => item.ComponentId, StringComparer.Ordinal))
+            {
+                foreach (var point in component.Points)
+                {
+                    if (result.Count == 0 || result[result.Count - 1].Point != point.Point)
+                        result.Add(point);
+                }
+            }
+        }
+        return result.ToArray();
+    }
+
+    private static PlannedRouteComponentKind ComponentKind(PlannedPhysicalRouteComponent component) =>
+        component.ComponentId.EndsWith(":source-terminal", StringComparison.Ordinal) ? PlannedRouteComponentKind.SourceTerminal :
+        component.ComponentId.EndsWith(":source-node-anchor", StringComparison.Ordinal) ? PlannedRouteComponentKind.SourceNodeAnchor :
+        component.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal) ? PlannedRouteComponentKind.SourceDeparture :
+        component.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal) ? PlannedRouteComponentKind.DestinationApproach :
+        component.ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal) ? PlannedRouteComponentKind.DestinationNodeAnchor :
+        component.ComponentId.EndsWith(":destination-terminal", StringComparison.Ordinal) ? PlannedRouteComponentKind.DestinationTerminal :
+        PlannedRouteComponentKind.HorizontalStraightRun;
 
     private void AddMaterialisationFinding(PlannedGridRoute route, string code, string message)
     {
@@ -457,14 +479,13 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (routeInvalid)
             {
                 invalidRouteIds.Add(route.PhysicalLinkId);
-                continue;
             }
             var length = segments.Sum(segment => Math.Abs(segment.End.X - segment.Start.X) + Math.Abs(segment.End.Y - segment.Start.Y));
             result.Add(new PlannedPhysicalRoute(route.PhysicalLinkId, links.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId)?.SemanticLinkId ?? string.Empty,
                 route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId, route.Source.PhysicalNodeId, route.Destination.PhysicalNodeId,
                 route.TopologyFamily, segments, components.Count(component => component.Role == RouteStepRole.Turn), length, false, false, false,
                 rawPoints, components, reducedPoints.Count, rawPoints.Length - reducedPoints.Count,
-                rawPoints.Length - reducedPoints.Count));
+                rawPoints.Length - reducedPoints.Count, routeInvalid));
         }
         return result;
     }
@@ -592,13 +613,37 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         var lastCell = orderedSteps.LastOrDefault()?.CellId ?? component.Cells.LastOrDefault();
         var points = new List<PlannedPhysicalRoutePoint>();
 
+        if (component.Kind == PlannedRouteComponentKind.SourceNodeAnchor)
+        {
+            var boundary = NodeFootprintBoundary(route.Source.PhysicalNodeId, GridSide.Bottom, sourceTerminal, transforms);
+            points.Add(Point(route, route.Source.GridId ?? boundary.GridId, sourceTerminal.Point, RouteStepRole.SourceExit,
+                component.ComponentId + ":terminal", component.Order, component.RunId, component.TurnId,
+                component.Cells.FirstOrDefault(), "source terminal to complete footprint bottom edge", component.ComponentId));
+            points.Add(Point(route, boundary.GridId, boundary.Point, RouteStepRole.SourceExit,
+                component.ComponentId + ":footprint-bottom", component.Order, component.RunId, component.TurnId,
+                component.Cells.FirstOrDefault(), "source complete footprint bottom edge", component.ComponentId));
+            return points;
+        }
+
+        if (component.Kind == PlannedRouteComponentKind.DestinationNodeAnchor)
+        {
+            var boundary = NodeFootprintBoundary(route.Destination.PhysicalNodeId, GridSide.Top, destinationTerminal, transforms);
+            points.Add(Point(route, boundary.GridId, boundary.Point, RouteStepRole.DestinationEntry,
+                component.ComponentId + ":footprint-top", component.Order, component.RunId, component.TurnId,
+                component.Cells.FirstOrDefault(), "destination complete footprint top edge", component.ComponentId));
+            points.Add(Point(route, route.Destination.GridId ?? boundary.GridId, destinationTerminal.Point, RouteStepRole.DestinationEntry,
+                component.ComponentId + ":terminal", component.Order, component.RunId, component.TurnId,
+                component.Cells.FirstOrDefault(), "destination footprint top edge to terminal", component.ComponentId));
+            return points;
+        }
+
         if (component.Kind == PlannedRouteComponentKind.SourceDeparture)
         {
-            var source = Point(route, component.EntryBoundary?.GridId ?? route.Source.GridId ?? new PlanningGridId("unknown"),
-                sourceTerminal.Point, role, component.ComponentId + ":terminal", component.Order, component.RunId, component.TurnId,
-                component.EntryBoundary?.CellId, "source bottom terminal", component.ComponentId);
+            var boundary = NodeFootprintBoundary(route.Source.PhysicalNodeId, GridSide.Bottom, sourceTerminal, transforms);
+            var source = Point(route, boundary.GridId, boundary.Point, role, component.ComponentId + ":footprint-bottom", component.Order, component.RunId, component.TurnId,
+                component.EntryBoundary?.CellId, "source footprint bottom exterior boundary", component.ComponentId);
             points.Add(source);
-            AppendEndpointBend(points, route, component, sourceTerminal.Point, exit.Value, true, lastCell);
+            AppendEndpointBend(points, route, component, boundary.Point, exit.Value, true, lastCell);
             return points;
         }
 
@@ -608,7 +653,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 entry.Value, role, component.ComponentId + ":entry", component.Order, component.RunId, component.TurnId,
                 firstCell, "destination approach entry boundary", component.ComponentId);
             points.Add(start);
-            AppendEndpointBend(points, route, component, entry.Value, destinationTerminal.Point, false, firstCell);
+            var boundary = NodeFootprintBoundary(route.Destination.PhysicalNodeId, GridSide.Top, destinationTerminal, transforms);
+            AppendEndpointBend(points, route, component, entry.Value, boundary.Point, false, firstCell);
             return points;
         }
 
@@ -638,6 +684,22 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         points.Add(Point(route, lastCell.GridId, exit.Value, role, component.ComponentId + ":exit", component.Order,
             component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
         return points;
+    }
+
+    private (PlanningGridId GridId, AbsolutePoint Point) NodeFootprintBoundary(
+        string physicalNodeId,
+        GridSide side,
+        PlannedPhysicalTerminal terminal,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        var node = relative.Nodes.SingleOrDefault(item => item.PhysicalNodeId == physicalNodeId);
+        if (node is null || !transforms.TryGetValue(node.GridId, out var transform))
+            return (new PlanningGridId("unknown"), terminal.Point);
+
+        var y = side == GridSide.Bottom
+            ? node.Bounds.Y + node.Bounds.Height + transform.Origin.Y
+            : node.Bounds.Y + transform.Origin.Y;
+        return (node.GridId, new AbsolutePoint(terminal.Point.X, y));
     }
 
     private AbsolutePoint ComponentLanePoint(PlannedRouteComponentContract component,
@@ -762,7 +824,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
 
     private static RouteStepRole RoleForComponent(PlannedRouteComponentKind kind) => kind switch
     {
+        PlannedRouteComponentKind.SourceTerminal => RouteStepRole.SourceExit,
+        PlannedRouteComponentKind.SourceNodeAnchor => RouteStepRole.SourceExit,
         PlannedRouteComponentKind.SourceDeparture => RouteStepRole.SourceExit,
+        PlannedRouteComponentKind.DestinationNodeAnchor => RouteStepRole.DestinationEntry,
+        PlannedRouteComponentKind.DestinationTerminal => RouteStepRole.DestinationEntry,
         PlannedRouteComponentKind.DestinationApproach => RouteStepRole.DestinationEntry,
         PlannedRouteComponentKind.ProjectTransition => RouteStepRole.ProjectTransition,
         _ => kind == PlannedRouteComponentKind.HorizontalStraightRun ? RouteStepRole.HorizontalPassThrough : RouteStepRole.VerticalPassThrough

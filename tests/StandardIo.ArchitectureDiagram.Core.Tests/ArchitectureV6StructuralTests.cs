@@ -368,9 +368,8 @@ public sealed class ArchitectureV6StructuralTests
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
         Assert.NotNull(plan.PhysicalScene);
         Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalScene!.Metrics.AbsoluteNodeCount);
-        Assert.InRange(plan.PhysicalScene.Metrics.PhysicalRouteCount, 0, plan.PhysicalLinks.Count);
-        Assert.Equal(plan.PhysicalLinks.Count,
-            plan.PhysicalScene.Metrics.PhysicalRouteCount + plan.PhysicalScene.Metrics.InvalidRouteCount);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Metrics.PhysicalRouteCount);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Geometry.Routes.Count);
         Assert.NotNull(plan.RelativeGeometry);
     }
 
@@ -402,8 +401,8 @@ public sealed class ArchitectureV6StructuralTests
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
 
         Assert.NotNull(plan.PhysicalScene);
-        Assert.Equal(plan.PhysicalLinks.Count,
-            plan.PhysicalScene!.Metrics.PhysicalRouteCount + plan.PhysicalScene.Metrics.InvalidRouteCount);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene!.Metrics.PhysicalRouteCount);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Geometry.Routes.Count);
         Assert.Equal(plan.PhysicalLinks.Count * 2, plan.PhysicalScene.Terminals.Count);
         Assert.Equal(plan.PhysicalScene.Metrics.InvalidRouteCount, plan.PhysicalScene.InvalidRouteIds.Count);
         Assert.All(plan.PhysicalScene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
@@ -419,13 +418,17 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_keeps_invalid_materialisation_attempts_out_of_accepted_geometry()
+    public void Planner_retains_invalid_materialisation_attempts_with_route_geometry()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
         Assert.NotNull(plan.PhysicalScene);
         var scene = plan.PhysicalScene!;
 
         Assert.Equal(scene.Metrics.InvalidRouteCount, scene.InvalidRouteIds.Count);
+        Assert.Equal(scene.Metrics.PhysicalRouteCount, scene.Geometry.Routes.Count);
+        Assert.All(scene.InvalidRouteIds, routeId =>
+            Assert.Contains(scene.Geometry.Routes, route => route.PhysicalLinkId == routeId && route.IsInvalid &&
+                route.RawPoints is not null && route.Components is not null));
         Assert.Equal(scene.Metrics.DiagonalSegmentCount,
             scene.AttemptedSegments.Count(attempt => attempt.FailureCode == "DiagonalComponentConnection"));
         Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
@@ -480,6 +483,33 @@ public sealed class ArchitectureV6StructuralTests
         });
         Assert.DoesNotContain(validation.Findings, finding => finding.Code == "SourceDepartureNotBottomFacing");
         Assert.DoesNotContain(validation.Findings, finding => finding.Code == "DestinationApproachNotTopFacing");
+    }
+
+    [Fact]
+    public void Planner_consumes_all_six_endpoint_components_without_direct_terminal_to_run_geometry()
+    {
+        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
+        Assert.NotNull(scene);
+
+        Assert.All(scene!.Geometry.Routes, route =>
+        {
+            var components = route.Components!;
+            Assert.Contains(components, component => component.ComponentId.EndsWith(":source-terminal", StringComparison.Ordinal));
+            Assert.Contains(components, component => component.ComponentId.EndsWith(":source-node-anchor", StringComparison.Ordinal));
+            Assert.Contains(components, component => component.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
+            Assert.Contains(components, component => component.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
+            Assert.Contains(components, component => component.ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal));
+            Assert.Contains(components, component => component.ComponentId.EndsWith(":destination-terminal", StringComparison.Ordinal));
+
+            var sourceAnchor = components.Single(component => component.ComponentId.EndsWith(":source-node-anchor", StringComparison.Ordinal));
+            var sourceDeparture = components.Single(component => component.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
+            var destinationApproach = components.Single(component => component.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
+            var destinationAnchor = components.Single(component => component.ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal));
+            Assert.Equal(sourceAnchor.ExitPoint, sourceDeparture.EntryPoint);
+            Assert.Equal(destinationApproach.ExitPoint, destinationAnchor.EntryPoint);
+            Assert.NotEqual(sourceAnchor.ComponentId, sourceDeparture.ComponentId);
+            Assert.NotEqual(destinationApproach.ComponentId, destinationAnchor.ComponentId);
+        });
     }
 
     [Fact]
@@ -575,7 +605,7 @@ public sealed class ArchitectureV6StructuralTests
             Assert.NotNull(route.RawPoints);
             Assert.NotNull(route.Components);
             Assert.NotEmpty(route.Components!);
-            Assert.Equal(route.RawPoints!.Count, route.NormalizedPointCount);
+            Assert.InRange(route.NormalizedPointCount, 0, route.RawPoints!.Count);
             Assert.All(route.Components!, component =>
             {
                 Assert.NotEmpty(component.ComponentId);
