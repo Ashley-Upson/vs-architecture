@@ -605,10 +605,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             return Array.Empty<PlannedPhysicalRoutePoint>();
         }
 
-        var orderedSteps = route.Steps
-            .Where(step => component.Cells.Contains(step.CellId))
-            .OrderBy(step => step.Order)
-            .ToArray();
+        var orderedSteps = ComponentSteps(route, component);
         var firstCell = orderedSteps.FirstOrDefault()?.CellId ?? component.Cells.FirstOrDefault();
         var lastCell = orderedSteps.LastOrDefault()?.CellId ?? component.Cells.LastOrDefault();
         var points = new List<PlannedPhysicalRoutePoint>();
@@ -637,32 +634,69 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             return points;
         }
 
+        var start = entry.Value;
+        var end = exit.Value;
         if (component.Kind == PlannedRouteComponentKind.SourceDeparture)
         {
             var boundary = NodeFootprintBoundary(route.Source.PhysicalNodeId, GridSide.Bottom, sourceTerminal, transforms);
-            var source = Point(route, boundary.GridId, boundary.Point, role, component.ComponentId + ":footprint-bottom", component.Order, component.RunId, component.TurnId,
-                component.EntryBoundary?.CellId, "source footprint bottom exterior boundary", component.ComponentId);
-            points.Add(source);
-            AppendEndpointBend(points, route, component, boundary.Point, exit.Value, true, lastCell);
-            return points;
+            start = boundary.Point;
+            points.Add(Point(route, boundary.GridId, start, role, component.ComponentId + ":footprint-bottom", component.Order, component.RunId, component.TurnId,
+                component.EntryBoundary?.CellId, "source footprint bottom exterior boundary", component.ComponentId));
+            if (orderedSteps.Length <= 1)
+            {
+                AppendEndpointBend(points, route, component, start, end, true, firstCell);
+                return points;
+            }
         }
-
-        if (component.Kind == PlannedRouteComponentKind.DestinationApproach)
+        else if (component.Kind == PlannedRouteComponentKind.DestinationApproach && orderedSteps.Length > 0)
         {
-            var start = Point(route, component.EntryBoundary?.GridId ?? route.Destination.GridId ?? new PlanningGridId("unknown"),
-                entry.Value, role, component.ComponentId + ":entry", component.Order, component.RunId, component.TurnId,
-                firstCell, "destination approach entry boundary", component.ComponentId);
-            points.Add(start);
-            var boundary = NodeFootprintBoundary(route.Destination.PhysicalNodeId, GridSide.Top, destinationTerminal, transforms);
-            AppendEndpointBend(points, route, component, entry.Value, boundary.Point, false, firstCell);
+            var firstStep = orderedSteps[0];
+            if (transforms.TryGetValue(firstStep.GridId, out var firstTransform))
+            {
+                points.Add(Point(route, component.EntryBoundary?.GridId ?? firstStep.GridId, start, role,
+                    component.ComponentId + ":boundary", component.Order, component.RunId, component.TurnId,
+                    component.EntryBoundary?.CellId, "canonical boundary before owned destination approach", component.ComponentId));
+                var selectedBoundary = BoundaryPoint(route, firstStep, firstStep.EntrySide, firstTransform);
+                var approachStart = ComponentLanePoint(component, firstStep, selectedBoundary, transforms);
+                points.Add(Point(route, firstStep.GridId, approachStart, role, component.ComponentId + ":entry", component.Order,
+                    component.RunId, component.TurnId, firstStep.CellId, "destination approach first owned cell entry", component.ComponentId));
+
+                // The endpoint component owns the approach cell. Align to the
+                // destination terminal before descending into its top edge.
+                if (approachStart.X != end.X)
+                {
+                    points.Add(Point(route, firstStep.GridId, new AbsolutePoint(end.X, approachStart.Y), role,
+                        component.ComponentId + ":endpoint-bend", component.Order, component.RunId, component.TurnId,
+                        firstStep.CellId, "destination terminal alignment before top-edge descent", component.ComponentId));
+                }
+                points.Add(Point(route, firstStep.GridId, end, role, component.ComponentId + ":exit", component.Order,
+                    component.RunId, component.TurnId, firstStep.CellId, "destination top edge after owned approach", component.ComponentId));
+                return points;
+            }
+        }
+        else
+        {
+            points.Add(Point(route, firstCell.GridId, start, role, component.ComponentId + ":entry", component.Order,
+                component.RunId, component.TurnId, firstCell,
+                component.Kind == PlannedRouteComponentKind.DestinationApproach
+                    ? "destination approach entry boundary"
+                    : "canonical entry boundary", component.ComponentId));
+        }
+
+        if (orderedSteps.Length == 0)
+        {
+            if (component.Kind is PlannedRouteComponentKind.SourceDeparture or PlannedRouteComponentKind.DestinationApproach)
+                AppendEndpointBend(points, route, component, start, end,
+                    component.Kind == PlannedRouteComponentKind.SourceDeparture, firstCell);
+            else
+                points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":exit", component.Order,
+                    component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
             return points;
         }
 
-        points.Add(Point(route, firstCell.GridId, entry.Value, role, component.ComponentId + ":entry", component.Order,
-            component.RunId, component.TurnId, firstCell, "canonical entry boundary", component.ComponentId));
         if (orderedSteps.Length > 0 && component.Lane is not null)
         {
-            var entryLanePoint = ComponentLanePoint(component, orderedSteps[0], entry.Value, transforms);
+            var entryLanePoint = ComponentLanePoint(component, orderedSteps[0], start, transforms);
             points.Add(Point(route, orderedSteps[0].GridId, entryLanePoint, role, component.ComponentId + ":lane-entry",
                 component.Order, component.RunId, component.TurnId, firstCell, "entry aligned to component lane", component.ComponentId));
         }
@@ -677,13 +711,32 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         if (orderedSteps.Length > 0 && component.Lane is not null)
         {
-            var exitLanePoint = ComponentLanePoint(component, orderedSteps[orderedSteps.Length - 1], exit.Value, transforms);
+            var exitLanePoint = ComponentLanePoint(component, orderedSteps[orderedSteps.Length - 1], end, transforms);
             points.Add(Point(route, orderedSteps[orderedSteps.Length - 1].GridId, exitLanePoint, role, component.ComponentId + ":lane-exit",
                 component.Order, component.RunId, component.TurnId, lastCell, "exit aligned to component lane", component.ComponentId));
         }
-        points.Add(Point(route, lastCell.GridId, exit.Value, role, component.ComponentId + ":exit", component.Order,
+        points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":exit", component.Order,
             component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
         return points;
+    }
+
+    private PlannedGridRouteStep[] ComponentSteps(PlannedGridRoute route, PlannedRouteComponentContract component)
+    {
+        var cells = component.Kind == PlannedRouteComponentKind.DestinationApproach
+            ? new HashSet<PlanningGridCellId>()
+            : new HashSet<PlanningGridCellId>(component.Cells);
+        if (component.Kind == PlannedRouteComponentKind.DestinationApproach)
+        {
+            var destinationAnchor = placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId)?.AnchorCellId;
+            foreach (var step in route.Steps.Where(step => step.Role == RouteStepRole.DestinationEntry &&
+                         (!destinationAnchor.HasValue || !step.CellId.Equals(destinationAnchor.Value))))
+                cells.Add(step.CellId);
+        }
+
+        return route.Steps
+            .Where(step => cells.Contains(step.CellId))
+            .OrderBy(step => step.Order)
+            .ToArray();
     }
 
     private (PlanningGridId GridId, AbsolutePoint Point) NodeFootprintBoundary(
@@ -707,17 +760,23 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
         var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
-        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(step.CellId.RowId));
-        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(step.CellId.ColumnId));
-        if (row is null || column is null || component.Lane is null || !transforms.TryGetValue(step.GridId, out var transform))
+        var lane = step.AllocatedLane ?? component.Lane;
+        var laneAllocation = lane is null
+            ? null
+            : allocation.HorizontalLanes.Concat(allocation.VerticalLanes)
+                .FirstOrDefault(item => item.Lane.Equals(lane.Value));
+        var laneCell = laneAllocation?.Cells.FirstOrDefault();
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(laneCell?.RowId ?? step.CellId.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(laneCell?.ColumnId ?? step.CellId.ColumnId));
+        if (row is null || column is null || lane is null || !transforms.TryGetValue(step.GridId, out var transform))
             return boundary;
         var horizontal = component.Kind == PlannedRouteComponentKind.HorizontalStraightRun;
         if (horizontal)
         {
-            var y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, component.Lane.Value.Value) + transform.Origin.Y;
+            var y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, lane.Value.Value) + transform.Origin.Y;
             return new AbsolutePoint(boundary.X, y);
         }
-        var x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, component.Lane.Value.Value) + transform.Origin.X;
+        var x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, lane.Value.Value) + transform.Origin.X;
         return new AbsolutePoint(x, boundary.Y);
     }
 
