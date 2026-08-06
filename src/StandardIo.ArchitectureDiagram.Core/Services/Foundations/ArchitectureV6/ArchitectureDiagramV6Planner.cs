@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
+using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 
@@ -330,7 +331,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     !parents.ContainsKey(id) && !children.ContainsKey(id))
                 {
                     SemanticName = info.Name,
-                    SemanticFullName = info.FullName
+                    SemanticFullName = info.FullName,
+                    ResolvedStyle = ResolveNodeStyle(info.Name, info.FullName, info.IsExternal)
                 };
             }).ToList();
             var bySemantic = physicalNodes.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
@@ -357,14 +359,19 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                         nodes[link.TargetId].IsExternal, false)
                     {
                         SemanticName = nodes[link.TargetId].Name,
-                        SemanticFullName = nodes[link.TargetId].FullName
+                        SemanticFullName = nodes[link.TargetId].FullName,
+                        ResolvedStyle = ResolveNodeStyle(nodes[link.TargetId].Name, nodes[link.TargetId].FullName, nodes[link.TargetId].IsExternal)
                     };
                     physicalNodes.Add(target);
                     nodeMapBuilder[link.TargetId].Add(target.PhysicalNodeId);
                 }
                 targetUses[link.TargetId] = targetUses.TryGetValue(link.TargetId, out var count) ? count + 1 : 1;
                 physicalLinksBuilder.Add(new PlannedPhysicalLink($"physical-link:{link.Id}:{physicalLinksBuilder.Count}", link.Id,
-                    source.PhysicalNodeId, target.PhysicalNodeId, source.ProjectId, target.ProjectId) { Kind = link.Kind });
+                    source.PhysicalNodeId, target.PhysicalNodeId, source.ProjectId, target.ProjectId)
+                {
+                    Kind = link.Kind,
+                    ResolvedStyle = request.ConnectorStyle
+                });
             }
             var physicalLinks = physicalLinksBuilder.ToArray();
             var nodeMap = nodeMapBuilder.ToDictionary(item => item.Key, item => (IReadOnlyList<string>)item.Value.ToArray(), StringComparer.Ordinal);
@@ -391,6 +398,17 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 unaccountedNodes,
                 unaccountedLinks,
                 diagnostics);
+        }
+
+        private ArchitectureV6StyleRule ResolveNodeStyle(string name, string fullName, bool external)
+        {
+            var exact = request.StyleOverridesWithValues?.FirstOrDefault(item =>
+                string.Equals(item.FullName, fullName, StringComparison.Ordinal));
+            if (exact is not null) return exact.Style;
+            if (external && request.ExternalDependencyStyle is not null) return request.ExternalDependencyStyle;
+            return request.StylePolicies?.FirstOrDefault(rule =>
+                GlobMatcher.IsMatch(name, rule.Match) || GlobMatcher.IsMatch(fullName, rule.Match))
+                ?? new ArchitectureV6StyleRule("<fallback>", "#dae8fc", "#6c8ebf", "#111111", "rounded", true, null);
         }
 
         private void ReadSemanticNodes()

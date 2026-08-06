@@ -56,6 +56,7 @@ public sealed record PlannedPhysicalNode(
 {
     public string SemanticName { get; init; } = string.Empty;
     public string SemanticFullName { get; init; } = string.Empty;
+    public ArchitectureV6StyleRule? ResolvedStyle { get; init; }
 }
 
 public sealed record PlannedPhysicalLink(
@@ -68,6 +69,7 @@ public sealed record PlannedPhysicalLink(
 {
     public string Kind { get; init; } = string.Empty;
     public string? DisplayLabel { get; init; }
+    public ArchitectureV6ConnectorStyle? ResolvedStyle { get; init; }
 }
 
 public sealed record PlannedPhysicalLinkMetadata(

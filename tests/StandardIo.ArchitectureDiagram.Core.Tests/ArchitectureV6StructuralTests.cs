@@ -1205,6 +1205,73 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_resolves_node_and_relationship_styles_before_rendering()
+    {
+        var request = Request() with
+        {
+            StylePolicies = new[]
+            {
+                new ArchitectureV6StyleRule("*Service", "#112233", "#445566", "#778899", "ellipse", false, "align=left;"),
+                new ArchitectureV6StyleRule("Root*", "#abcdef", "#fedcba", "#010203", "rhombus", true, null)
+            },
+            ConnectorStyle = new ArchitectureV6ConnectorStyle("#123456", 7, true, true, "9 4", "open", "diamond", 2, 81, "#654321", true)
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var root = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root");
+        var shared = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "shared");
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var rootCell = page.GraphModel.Descendants("mxCell").Single(cell => (string?)cell.Attribute("physicalNodeId") == root.PhysicalNodeId);
+        var sharedCell = page.GraphModel.Descendants("mxCell").Single(cell => (string?)cell.Attribute("physicalNodeId") == shared.PhysicalNodeId);
+        var edge = page.GraphModel.Descendants("mxCell").First(cell => (string?)cell.Attribute("edge") == "1");
+
+        Assert.Equal("#112233", root.ResolvedStyle!.FillColor);
+        Assert.Equal("#112233", shared.ResolvedStyle!.FillColor);
+        Assert.All(plan.PhysicalLinks, link => Assert.Same(request.ConnectorStyle, link.ResolvedStyle));
+        Assert.Contains("shape=ellipse", (string)rootCell.Attribute("style")!);
+        Assert.Contains("align=left;", (string)rootCell.Attribute("style")!);
+        Assert.Contains("fillColor=#112233", (string)rootCell.Attribute("style")!);
+        Assert.Contains("strokeColor=#123456", (string)edge.Attribute("style")!);
+        Assert.Contains("strokeWidth=7", (string)edge.Attribute("style")!);
+        Assert.Contains("dashed=1", (string)edge.Attribute("style")!);
+        Assert.Contains("startArrow=open", (string)edge.Attribute("style")!);
+        Assert.Contains("endArrow=diamond", (string)edge.Attribute("style")!);
+    }
+
+    [Fact]
+    public void Planner_uses_one_visual_row_for_equal_analysed_depth_across_branches()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("left", "project:p", "LeftController", "Project.LeftController", "Class", "left", Array.Empty<string>()),
+                        new ArchitectureNode("right", "project:p", "RightController", "Project.RightController", "Class", "right", Array.Empty<string>()),
+                        new ArchitectureNode("left-child", "project:p", "LeftService", "Project.LeftService", "Class", "left-child", Array.Empty<string>()),
+                        new ArchitectureNode("right-child", "project:p", "RightService", "Project.RightService", "Class", "right-child", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("left-link", "left", "left-child", "internal"),
+                    new ArchitectureLink("right-link", "right", "right-child", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var children = plan.NodeMetadata.Where(node => node.SemanticDepth == 1).ToArray();
+
+        Assert.Equal(2, children.Length);
+        Assert.Single(children.Select(node => node.PhysicalRow).Distinct());
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentChildRowViolation");
+    }
+
+    [Fact]
     public void Structural_route_models_remain_available_without_an_active_route_builder()
     {
         var grid = new PlanningGridId("project:p");

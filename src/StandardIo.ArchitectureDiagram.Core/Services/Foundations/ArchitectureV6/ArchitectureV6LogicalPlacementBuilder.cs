@@ -76,6 +76,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 var profile = BuildProfile(pair.root.PhysicalNodeId);
                 var band = pair.index / rootsPerBand;
                 var shift = bandCursors.TryGetValue(band, out var cursor) ? cursor : 0;
+                shift = FindCompatibleShift(profile.Intervals, occupied, shift);
                 MaterializeProfile(logicalGrid, profile, shift, occupied);
                 var profileWidth = profile.Intervals.Max(interval => interval.End + 1);
                 bandCursors[band] = shift + profileWidth + LogicalGap;
@@ -269,21 +270,21 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var branch = treeRootByNode[node.PhysicalNodeId];
             rowRoleByNode[node.PhysicalNodeId] = baseline.Contains(node)
-                ? $"branch:{branch}:baseline"
-                : $"branch:{branch}:depth:{depthByNode[node.PhysicalNodeId]}";
+                ? "baseline"
+                : $"depth:{depthByNode[node.PhysicalNodeId]}";
         }
 
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
             var owner = ownerByNode[node.PhysicalNodeId];
             if (owner is not null && !node.IsExternal && !IsBaselineNode(node) && rowRoleByNode[node.PhysicalNodeId] == rowRoleByNode[owner])
-                rowRoleByNode[node.PhysicalNodeId] = $"branch:{treeRootByNode[node.PhysicalNodeId]}:depth:{depthByNode[owner] + 1}";
+                rowRoleByNode[node.PhysicalNodeId] = $"depth:{depthByNode[owner] + 1}";
         }
 
         rowRankByRole.Clear();
         foreach (var role in rowRoleByNode
-            .OrderBy(item => branchOrderByRoot[treeRootByNode[item.Key]])
-            .ThenBy(item => depthByNode[item.Key])
+            .OrderBy(item => item.Value == "baseline" ? -1 : depthByNode[item.Key])
+            .ThenBy(item => item.Value, StringComparer.Ordinal)
             .ThenBy(item => order[item.Key])
             .Select(item => item.Value)
             .Distinct(StringComparer.Ordinal))
@@ -397,9 +398,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     }
 
     private int FindCompatibleShift(IReadOnlyList<ProfileInterval> candidate,
-        IEnumerable<ProfileInterval> occupied)
+        IEnumerable<ProfileInterval> occupied, int minimumShift = 0)
     {
-        var shift = 0;
+        var shift = minimumShift;
         while (true)
         {
             var conflict = occupied.FirstOrDefault(existing => candidate.Any(item =>

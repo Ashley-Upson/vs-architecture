@@ -58,14 +58,16 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 ? new AbsoluteRectangle(node.AbsoluteBounds.X - project.AbsoluteBounds.X, node.AbsoluteBounds.Y - project.AbsoluteBounds.Y,
                     node.AbsoluteBounds.Width, node.AbsoluteBounds.Height)
                 : node.AbsoluteBounds;
-            var styleRule = ResolveStyle(diagram, physicalNode, node);
+            var styleRule = physicalNode?.ResolvedStyle ?? ResolveStyle(diagram, physicalNode, node);
             var metadata = new Dictionary<string, string>
             {
                 ["physicalNodeId"] = node.PhysicalNodeId,
                 ["semanticNodeId"] = node.SemanticNodeId,
                 ["projectionMode"] = node.ProjectionMode.ToString(),
                 ["isExternal"] = node.IsExternal ? "1" : "0",
-                ["isStandalone"] = node.IsStandalone ? "1" : "0"
+                ["isStandalone"] = node.IsStandalone ? "1" : "0",
+                ["resolvedStyleRule"] = styleRule.Match,
+                ["styleFallback"] = string.Equals(styleRule.Match, "<fallback>", StringComparison.OrdinalIgnoreCase) ? "1" : "0"
             };
             if (!string.IsNullOrWhiteSpace(node.PositionalOwnerId)) metadata["positionalOwnerId"] = node.PositionalOwnerId!;
             if (physicalNode?.DuplicationProvenance is { } provenance)
@@ -88,13 +90,15 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 continue;
             }
             var route = geometry.Routes.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId);
-            root.Add(Edge(link, route, source, target, diagram.Request.ConnectorStyle));
+            root.Add(Edge(link, route, source, target, link.ResolvedStyle ?? diagram.Request.ConnectorStyle));
             emittedEdges++;
         }
 
         diagnostics.Add(new DiagramDiagnostic("V6PhysicalNodesEmitted", $"Emitted {geometry.Nodes.Count} physical node vertices.", null));
         diagnostics.Add(new DiagramDiagnostic("V6RelationshipsEmitted", $"Emitted {emittedEdges} physical relationship edges.", null));
         diagnostics.Add(new DiagramDiagnostic("V6InvalidRoutesEmitted", $"Emitted {geometry.Routes.Count(route => route.IsInvalid)} invalid routes with retained geometry.", null));
+        diagnostics.Add(new DiagramDiagnostic("V6NodeStyleSummary", $"Resolved node styles: {string.Join(", ", diagram.PhysicalNodes.GroupBy(node => node.ResolvedStyle?.Match ?? "<fallback>").OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.Key + "=" + group.Count()))}.", null));
+        diagnostics.Add(new DiagramDiagnostic("V6LinkStyleSummary", $"Resolved relationship style is carried on all {diagram.PhysicalLinks.Count} physical links.", null));
         diagnostics.Add(new DiagramDiagnostic("V6LogicalPlacementComplete", "The renderer consumed the planner's completed logical and physical geometry.", null));
         diagnostics.Add(new DiagramDiagnostic("V6RendererMechanicalProjection", "Draw.io geometry was projected from the physical scene without placement or routing decisions.", null));
         return Page(root, geometry.AbsoluteDiagramBounds, diagnostics);
