@@ -139,6 +139,7 @@ public enum GridBoundaryOrientation
 public enum PlannedRouteComponentKind
 {
     SourceTerminal,
+    SourceNodeAnchor,
     SourceDeparture,
     HorizontalStraightRun,
     VerticalStraightRun,
@@ -146,6 +147,7 @@ public enum PlannedRouteComponentKind
     OwnershipTransition,
     ProjectTransition,
     DestinationApproach,
+    DestinationNodeAnchor,
     DestinationTerminal
 }
 

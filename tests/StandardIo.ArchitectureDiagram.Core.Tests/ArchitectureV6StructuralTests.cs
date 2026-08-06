@@ -841,6 +841,45 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_uses_symmetric_endpoint_anchor_components_and_exterior_rows()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var contracts = plan.LaneAllocation!.BoundaryValidation!.Routes;
+
+        Assert.All(contracts, contract =>
+        {
+            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.SourceTerminal);
+            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.SourceNodeAnchor);
+            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.SourceDeparture);
+            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.DestinationApproach);
+            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.DestinationNodeAnchor);
+            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.DestinationTerminal);
+        });
+
+        Assert.All(plan.Routes, route =>
+        {
+            var sourcePlacement = plan.NodePlacements.Single(item => item.PhysicalNodeId == route.Source.PhysicalNodeId);
+            var destinationPlacement = plan.NodePlacements.Single(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId);
+            var grid = plan.ProjectGrids.Single(item => item.Grid.Id.Equals(sourcePlacement.GridId)).Grid;
+            var sourceRow = grid.Rows.Single(item => item.Id.Equals(sourcePlacement.AnchorCellId.RowId));
+            var destinationRow = grid.Rows.Single(item => item.Id.Equals(destinationPlacement.AnchorCellId.RowId));
+            var sourceExterior = route.Steps[1];
+            var destinationAnchor = route.Steps[route.Steps.Count - 1];
+            var approach = route.Steps[route.Steps.Count - 2];
+
+            Assert.Equal(route.Source.PhysicalNodeId, plan.PhysicalNodes.Single(item => item.PhysicalNodeId == route.Source.PhysicalNodeId).PhysicalNodeId);
+            Assert.Equal(sourcePlacement.AnchorCellId, route.Steps[0].CellId);
+            var sourceExteriorRow = grid.Rows.Single(item => item.Id.Equals(sourceExterior.CellId.RowId));
+            if (grid.Rows.Any(item => item.Role == PlanningGridTrackRole.InterLayerRouting && item.LogicalOrder > sourceRow.LogicalOrder))
+                Assert.True(sourceExteriorRow.LogicalOrder > sourceRow.LogicalOrder);
+            Assert.Equal(destinationPlacement.AnchorCellId, destinationAnchor.CellId);
+            var approachRow = grid.Rows.Single(item => item.Id.Equals(approach.CellId.RowId));
+            if (grid.Rows.Any(item => item.Role == PlanningGridTrackRole.InterLayerRouting && item.LogicalOrder < destinationRow.LogicalOrder))
+                Assert.True(approachRow.LogicalOrder < destinationRow.LogicalOrder);
+        });
+    }
+
+    [Fact]
     public void Planner_reports_collective_lane_ordering_without_changing_structural_tracks()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

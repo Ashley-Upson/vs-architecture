@@ -45,17 +45,29 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         var sourceTerminalId = route.PhysicalLinkId + ":source-terminal";
         components.Add(new PlannedRouteComponentContract(sourceTerminalId, route.PhysicalLinkId,
             PlannedRouteComponentKind.SourceTerminal, -1, Array.Empty<PlanningGridCellId>(), sourceBoundary, sourceBoundary,
-            null, GridSide.Bottom, null, null, null, Ownership(route.Source), route.PhysicalLinkId + ":source-departure", null,
+            null, GridSide.Bottom, null, null, null, Ownership(route.Source), route.PhysicalLinkId + ":source-node-anchor", null,
             "allocated source endpoint"));
 
         var routeComponents = ordered.Where(IsOrdinaryRouteStep).ToArray();
         var first = routeComponents.FirstOrDefault();
         var firstEntry = first is null ? null : StepBoundary(first, first.EntrySide, first.AllocatedLane, "source-departure-entry");
+        var sourceAnchor = ordered.FirstOrDefault(step => step.Role == RouteStepRole.SourceExit &&
+            step.CellId.Equals(placements.SingleOrDefault(item => item.PhysicalNodeId == route.Source.PhysicalNodeId)?.AnchorCellId));
+        var sourceAnchorId = route.PhysicalLinkId + ":source-node-anchor";
+        components.Add(new PlannedRouteComponentContract(sourceAnchorId, route.PhysicalLinkId,
+            PlannedRouteComponentKind.SourceNodeAnchor, -0,
+            sourceAnchor is null ? Array.Empty<PlanningGridCellId>() : new[] { sourceAnchor.CellId },
+            sourceBoundary, sourceBoundary, GridSide.Bottom, GridSide.Bottom, null, null, null,
+            Ownership(route.Source), sourceTerminalId, route.PhysicalLinkId + ":source-departure",
+            "source physical node anchor endpoint cell"));
+        if (sourceAnchor is null)
+            Add(routeFindings, route, "MissingSourceNodeAnchor", sourceAnchorId, null,
+                "A route must explicitly contain its source physical node anchor cell.", sourceBoundary, null);
         var departureId = route.PhysicalLinkId + ":source-departure";
         components.Add(new PlannedRouteComponentContract(departureId, route.PhysicalLinkId,
-            PlannedRouteComponentKind.SourceDeparture, 0, ordered.TakeWhile(step => !IsOrdinaryRouteStep(step)).Select(step => step.CellId).ToArray(),
+            PlannedRouteComponentKind.SourceDeparture, 1, first is null ? Array.Empty<PlanningGridCellId>() : new[] { first.CellId },
             sourceBoundary, firstEntry, GridSide.Bottom, first?.EntrySide, first?.AllocatedLane, null, null,
-            Ownership(route.Source), sourceTerminalId, null, "derived from source endpoint and first route cell"));
+            Ownership(route.Source), sourceAnchorId, null, "source exterior departure from node anchor to first route cell"));
         if (first is null)
             Add(routeFindings, route, "MissingFirstRouteStep", departureId, null, "A source departure has no first routing component.", null, null);
         else if (sourceBoundary is null || sourceBoundary.Side != GridSide.Bottom)
@@ -89,6 +101,19 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         else if (destinationBoundary is null || destinationBoundary.Side != GridSide.Top)
             Add(routeFindings, route, "DestinationApproachNotTopFacing", approachId, null,
                 "The destination approach does not expose the required top-facing node boundary.", lastExit, destinationBoundary);
+
+        var destinationAnchor = ordered.LastOrDefault(step => step.Role == RouteStepRole.DestinationEntry &&
+            step.CellId.Equals(placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId)?.AnchorCellId));
+        var destinationAnchorId = route.PhysicalLinkId + ":destination-node-anchor";
+        components.Add(new PlannedRouteComponentContract(destinationAnchorId, route.PhysicalLinkId,
+            PlannedRouteComponentKind.DestinationNodeAnchor, int.MaxValue,
+            destinationAnchor is null ? Array.Empty<PlanningGridCellId>() : new[] { destinationAnchor.CellId },
+            destinationBoundary, destinationBoundary, GridSide.Top, GridSide.Top, null, null, null,
+            Ownership(route.Destination), approachId, route.PhysicalLinkId + ":destination-terminal",
+            "destination physical node anchor endpoint cell"));
+        if (destinationAnchor is null)
+            Add(routeFindings, route, "MissingDestinationNodeAnchor", destinationAnchorId, null,
+                "A route must explicitly contain its destination physical node anchor cell.", destinationBoundary, null);
 
         var destinationTerminalId = route.PhysicalLinkId + ":destination-terminal";
         components.Add(new PlannedRouteComponentContract(destinationTerminalId, route.PhysicalLinkId,

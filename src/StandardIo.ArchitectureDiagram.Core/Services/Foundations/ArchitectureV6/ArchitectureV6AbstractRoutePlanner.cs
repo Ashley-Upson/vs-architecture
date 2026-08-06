@@ -117,9 +117,12 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return nodes.OrderBy(node => node.PhysicalNodeId, StringComparer.Ordinal).Select(node =>
         {
             var gridId = GridOf(node);
-            var cell = UseCell(gridId, placements[node.PhysicalNodeId].AnchorCellId.RowId,
+            var placement = placements[node.PhysicalNodeId];
+            var grid = grids[gridId];
+            var approachRow = ExteriorRowAbove(grid, placement);
+            var cell = UseCell(gridId, approachRow,
                 ColumnForOwnerRole(gridId, PlanningGridTrackRole.DestinationApproach, node.PhysicalNodeId,
-                    placements[node.PhysicalNodeId].AnchorCellId.ColumnId), CellOccupancy.Empty);
+                    placement.AnchorCellId.ColumnId), CellOccupancy.Empty);
             var linkIds = links.Where(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId)
                 .OrderBy(link => link.PhysicalLinkId, StringComparer.Ordinal).Select(link => link.PhysicalLinkId).ToArray();
             return new DestinationApproachReservation($"approach:{node.PhysicalNodeId}", node.PhysicalNodeId, gridId,
@@ -144,11 +147,11 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
 
         if (!sourceGrid.Equals(destinationGrid))
         {
-            var sourceBoundary = UseCell(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
+            var sourceBoundary = UseCell(sourceGrid, ExteriorRowBelow(grids[sourceGrid], placements[source.PhysicalNodeId]),
                 ColumnForRole(sourceGrid, PlanningGridTrackRole.ProjectBoundaryTransition, ColumnId(source)), CellOccupancy.Empty);
             var diagramId = new PlanningGridId("diagram");
             var diagramBoundary = UseCell(diagramId, grids[diagramId].RowOrder[0], grids[diagramId].ColumnOrder[0], CellOccupancy.Empty);
-            var destinationBoundary = UseCell(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId.RowId,
+            var destinationBoundary = UseCell(destinationGrid, ExteriorRowAbove(grids[destinationGrid], placements[destination.PhysicalNodeId]),
                 ColumnForRole(destinationGrid, PlanningGridTrackRole.ProjectBoundaryTransition, ColumnId(destination)), CellOccupancy.Empty);
             transitions.Add(new GridTransition(sourceGrid, sourceBoundary, diagramId, diagramBoundary, "project-to-diagram", link.SemanticLinkId,
                 "exit", link.SourceProjectId, null, true, request.ProjectPlacement.ShowProjectContainers));
@@ -159,6 +162,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             steps.Add(Step(diagramId, diagramBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.DiagramGridPassage, 2, topology));
             steps.Add(Step(destinationGrid, destinationBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.ProjectEntry, 3, topology));
             steps.Add(Step(destinationGrid, approach.Cells[0], GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, 4, topology));
+            steps.Add(Step(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId,
+                GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, 5, topology));
         }
         else
         {
@@ -166,7 +171,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 ? ColumnForOwnerRole(sourceGrid, PlanningGridTrackRole.OwnershipLocalReturn, source.PhysicalNodeId,
                     ColumnAt(sourceGrid, DepartureColumn(source, destination)))
                 : ColumnAt(sourceGrid, DepartureColumn(source, destination));
-            var departure = UseCell(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
+            var sourcePlacement = placements[source.PhysicalNodeId];
+            var departure = UseCell(sourceGrid, ExteriorRowBelow(grids[sourceGrid], sourcePlacement),
                 departureColumn, CellOccupancy.Empty);
             var routeRow = UseCell(sourceGrid, RoutingRow(sourceGrid, placements[source.PhysicalNodeId].AnchorCellId.RowId,
                 placements[destination.PhysicalNodeId].AnchorCellId.RowId), ColumnId(destination), CellOccupancy.Empty);
@@ -181,6 +187,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 steps.Add(Step(sourceGrid, departure, GridSide.Top, GridSide.Bottom, RouteStepRole.VerticalPassThrough, 1, topology));
             steps.Add(Step(sourceGrid, approach.Cells[0], GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry,
                 steps.Count, topology));
+            steps.Add(Step(destinationGrid, placements[destination.PhysicalNodeId].AnchorCellId,
+                GridSide.Top, GridSide.Bottom, RouteStepRole.DestinationEntry, steps.Count, topology));
         }
 
         var completion = CompleteTurnCorridor(sourceGrid, steps, topology, link);
@@ -232,6 +240,16 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         RouteTopologyFamily topology,
         PlannedPhysicalLink link)
     {
+        // The explicit destination anchor is an endpoint-owned occupied cell,
+        // not another ordinary corridor target. Once an exterior approach is
+        // already present immediately before it, preserve that endpoint-local
+        // handoff and leave ordinary completion unchanged.
+        if (original.Count >= 2 &&
+            original[original.Count - 1].Role == RouteStepRole.DestinationEntry &&
+            original[original.Count - 2].Role == RouteStepRole.DestinationEntry &&
+            original[original.Count - 1].CellId != original[original.Count - 2].CellId)
+            return CompletionResult.Unchanged(original, "endpoint-anchor", "The explicit destination anchor already follows an exterior approach.");
+
         var turnIndex = original.ToList().FindIndex(step => step.Role == RouteStepRole.Turn);
         if (turnIndex < 0)
             return CompletionResult.Unchanged(original, "none", "Route has no turn requiring corridor completion.");
@@ -252,7 +270,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         var targetRow = grid.RowOrder.ToList().IndexOf(following.CellId.RowId);
         var targetColumn = grid.ColumnOrder.ToList().IndexOf(following.CellId.ColumnId);
         var destinationIndex = Enumerable.Range(followingIndex + 1, original.Count - followingIndex - 1)
-            .FirstOrDefault(index => original[index].Role == RouteStepRole.DestinationEntry);
+            .LastOrDefault(index => original[index].Role == RouteStepRole.DestinationEntry);
         if (destinationIndex == 0 || turnRow < 0 || targetRow < 0 || turnColumn < 0 || targetColumn < 0)
             return CompletionResult.Unchanged(original, "none", "The route does not expose complete structural corridor coordinates.");
 
@@ -752,6 +770,26 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             .OrderBy(row => Math.Abs(row.LogicalOrder - (grid.Rows[source].LogicalOrder + grid.Rows[destination].LogicalOrder) / 2))
             .FirstOrDefault();
         return preferred?.Id ?? destination;
+    }
+
+    private PlanningGridRowId ExteriorRowBelow(MutableGrid grid, PlannedNodePlacement placement)
+    {
+        var placementRow = grid.Rows[placement.AnchorCellId.RowId];
+        var lastFootprintRow = placementRow.LogicalOrder + Math.Max(0, placement.RowSpan - 1);
+        return grid.Rows.Values
+            .Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting && row.LogicalOrder > lastFootprintRow)
+            .OrderBy(row => row.LogicalOrder)
+            .FirstOrDefault()?.Id ?? placement.AnchorCellId.RowId;
+    }
+
+    private PlanningGridRowId ExteriorRowAbove(MutableGrid grid, PlannedNodePlacement placement)
+    {
+        var placementRow = grid.Rows[placement.AnchorCellId.RowId];
+        var firstFootprintRow = placementRow.LogicalOrder;
+        return grid.Rows.Values
+            .Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting && row.LogicalOrder < firstFootprintRow)
+            .OrderByDescending(row => row.LogicalOrder)
+            .FirstOrDefault()?.Id ?? placement.AnchorCellId.RowId;
     }
     private int DepartureColumn(PlannedPhysicalNode source, PlannedPhysicalNode destination)
     {
