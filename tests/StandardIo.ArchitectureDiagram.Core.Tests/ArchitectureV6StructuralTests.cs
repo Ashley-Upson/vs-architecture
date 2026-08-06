@@ -1048,6 +1048,43 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_materialises_cross_project_handoffs_as_orthogonal_owned_components()
+    {
+        var request = Request() with
+        {
+            SemanticModel = new ArchitectureDiagramModel(
+                new[]
+                {
+                    new ArchitectureProject("project:a", "A", new[]
+                    {
+                        new ArchitectureNode("source", "project:a", "Source", "A.Source", "Class", "source", Array.Empty<string>())
+                    }, "project:a"),
+                    new ArchitectureProject("project:b", "B", new[]
+                    {
+                        new ArchitectureNode("target", "project:b", "Target", "B.Target", "Class", "target", Array.Empty<string>())
+                    }, "project:b")
+                },
+                Array.Empty<ArchitectureExternalNode>(),
+                new[] { new ArchitectureLink("cross", "source", "target", "cross-project") },
+                null),
+            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "project:a", "project:b" }, Array.Empty<string>())
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var route = Assert.Single(plan.PhysicalScene!.Geometry.Routes);
+        var repeated = new ArchitectureDiagramV6Planner().Plan(request);
+        var repeatedRoute = Assert.Single(repeated.PhysicalScene!.Geometry.Routes);
+
+        Assert.Equal(3, route.Components!.Count(component => component.Role == RouteStepRole.ProjectTransition));
+        Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+        Assert.Equal(0, plan.PhysicalScene.Metrics.DiagonalSegmentCount);
+        Assert.Equal(route.RawPoints, repeatedRoute.RawPoints);
+        Assert.Equal(
+            route.Components.Select(component => (component.ComponentId, component.Role, component.OwnershipScope, component.EntryPoint, component.ExitPoint)),
+            repeatedRoute.Components.Select(component => (component.ComponentId, component.Role, component.OwnershipScope, component.EntryPoint, component.ExitPoint)));
+    }
+
+    [Fact]
     public void Planner_project_transforms_are_deterministic_and_preserve_local_dimensions()
     {
         var request = Request() with

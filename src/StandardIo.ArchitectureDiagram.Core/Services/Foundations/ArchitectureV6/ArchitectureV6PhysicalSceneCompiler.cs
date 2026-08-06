@@ -233,14 +233,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     }
 
     private bool SegmentWithinCells(AbsolutePoint start, AbsolutePoint end, IReadOnlyList<PlanningGridCellId> cells,
-        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms, int boundaryTolerance = 0)
     {
         var rectangles = cells.Select(cell => CellBounds(cell, transforms)).Where(rectangle => rectangle.Width > 0 && rectangle.Height > 0).ToArray();
         if (rectangles.Length != cells.Count) return false;
-        var left = rectangles.Min(rectangle => rectangle.X);
-        var top = rectangles.Min(rectangle => rectangle.Y);
-        var right = rectangles.Max(rectangle => rectangle.X + rectangle.Width);
-        var bottom = rectangles.Max(rectangle => rectangle.Y + rectangle.Height);
+        var left = rectangles.Min(rectangle => rectangle.X) - boundaryTolerance;
+        var top = rectangles.Min(rectangle => rectangle.Y) - boundaryTolerance;
+        var right = rectangles.Max(rectangle => rectangle.X + rectangle.Width) + boundaryTolerance;
+        var bottom = rectangles.Max(rectangle => rectangle.Y + rectangle.Height) + boundaryTolerance;
         if (start.X == end.X)
             return start.X >= left && start.X <= right && Math.Min(start.Y, end.Y) >= top && Math.Max(start.Y, end.Y) <= bottom;
         if (start.Y == end.Y)
@@ -477,7 +477,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                     continue;
                 }
                 var axis = start.X == end.X ? RouteAxis.Vertical : RouteAxis.Horizontal;
-                if (spanCells.Length == 0 || !SegmentWithinCells(start, end, spanCells, transforms))
+                var boundaryTolerance = route.Transitions.Count > 0 && owner.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal)
+                    ? request.RoutePlanning.MinimumParallelSpacing
+                    : 0;
+                if (spanCells.Length == 0 || !SegmentWithinCells(start, end, spanCells, transforms, boundaryTolerance))
                 {
                     routeInvalid = true;
                     AddMaterialisationAttempt(route, preceding, owner, start, end,
@@ -602,7 +605,158 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 points.FirstOrDefault()?.Point, points.LastOrDefault()?.Point, component.EntrySide, component.ExitSide,
                 component.PrecedingComponentId, component.FollowingComponentId, component.EntryBoundary?.ToString()));
         }
+        return route.Transitions.Count == 0
+            ? result
+            : InsertCrossProjectTransitionComponents(route, result, transforms);
+    }
+
+    private IReadOnlyList<PlannedPhysicalRouteComponent> InsertCrossProjectTransitionComponents(
+        PlannedGridRoute route,
+        IReadOnlyList<PlannedPhysicalRouteComponent> components,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        if (route.Transitions.Count < 2 || components.Count == 0)
+            return components;
+
+        var sourceGrid = route.Transitions[0].SourceGridId;
+        var destinationGrid = route.Transitions[1].DestinationGridId;
+        var firstDestinationIndex = -1;
+        for (var index = 0; index < components.Count; index++)
+        {
+            if (!components[index].ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal) &&
+                !components[index].ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal) &&
+                !components[index].ComponentId.EndsWith(":destination-terminal", StringComparison.Ordinal) &&
+                components[index].AllocatedCells.Any(cell => cell.GridId == destinationGrid))
+            {
+                firstDestinationIndex = index;
+                break;
+            }
+        }
+
+        if (firstDestinationIndex <= 0 || firstDestinationIndex >= components.Count)
+            return components;
+
+        var sourceComponent = components[firstDestinationIndex - 1];
+        var destinationComponent = components[firstDestinationIndex];
+        if (sourceComponent.ExitPoint is null || destinationComponent.EntryPoint is null ||
+            !transforms.TryGetValue(route.Transitions[0].DestinationGridId, out var sourceDiagramTransform) ||
+            !transforms.TryGetValue(route.Transitions[1].SourceGridId, out var destinationDiagramTransform))
+            return components;
+
+        var sourceDiagramCell = DiagramProjectCell(route.Transitions[0].SourceProjectId);
+        var destinationDiagramCell = DiagramProjectCell(route.Transitions[1].DestinationProjectId);
+        if (sourceDiagramCell is null || destinationDiagramCell is null)
+            return components;
+
+        var sourceSide = sourceComponent.ExitPoint.Value.X >= destinationComponent.EntryPoint.Value.X ? GridSide.Right : GridSide.Left;
+        var destinationSide = destinationComponent.EntryPoint.Value.X >= sourceComponent.ExitPoint.Value.X ? GridSide.Left : GridSide.Right;
+        var sourceBoundary = BoundaryPoint(new GridBoundaryIdentity(sourceDiagramCell.Value.GridId, sourceDiagramCell.Value,
+            sourceSide, null, sourceDiagramCell.Value.GridId.Value, "diagram-project-boundary"), sourceDiagramTransform);
+        var destinationBoundary = BoundaryPoint(new GridBoundaryIdentity(destinationDiagramCell.Value.GridId, destinationDiagramCell.Value,
+            destinationSide, null, destinationDiagramCell.Value.GridId.Value, "diagram-project-boundary"), destinationDiagramTransform);
+
+        var transitionOrdinal = allocation.ProjectTransitions
+            .Where(item => item.PhysicalLinkId == route.PhysicalLinkId)
+            .Select(item => item.Ordinal)
+            .DefaultIfEmpty(0)
+            .First();
+        var diagramRow = relative.Grids.Single(item => item.GridId == sourceDiagramCell.Value.GridId).Rows
+            .Single(item => item.Id == sourceDiagramCell.Value.RowId);
+        var transitionY = Math.Min(diagramRow.RelativeOffset + diagramRow.FinalExtent - 1,
+            diagramRow.RelativeOffset + transitionOrdinal);
+        sourceBoundary = new AbsolutePoint(sourceBoundary.X, sourceDiagramTransform.Origin.Y + transitionY);
+        destinationBoundary = new AbsolutePoint(destinationBoundary.X, destinationDiagramTransform.Origin.Y + transitionY);
+        var sourceEdge = new AbsolutePoint(sourceBoundary.X, sourceComponent.ExitPoint.Value.Y);
+        var destinationEdge = new AbsolutePoint(destinationBoundary.X, destinationComponent.EntryPoint.Value.Y);
+        var firstTransition = TransitionComponent(route, "source-project-transition", sourceComponent.ExitPoint.Value,
+            sourceEdge, sourceBoundary, sourceGrid, sourceGrid, sourceGrid, route.Transitions[0].SourceBoundaryCellId, sourceDiagramCell.Value,
+            sourceComponent, sourceComponent.RouteStepOrder);
+        var diagramTransition = TransitionComponent(route, "diagram-transition", sourceBoundary, destinationBoundary,
+            destinationBoundary, route.Transitions[0].DestinationGridId, route.Transitions[0].DestinationGridId, route.Transitions[0].DestinationGridId,
+            sourceDiagramCell.Value, destinationDiagramCell.Value,
+            null, sourceComponent.RouteStepOrder + 1);
+        var destinationTransition = TransitionComponent(route, "destination-project-transition", destinationBoundary,
+            destinationEdge, destinationComponent.EntryPoint.Value, route.Transitions[1].SourceGridId, destinationGrid, destinationGrid,
+            destinationDiagramCell.Value,
+            route.Transitions[1].DestinationBoundaryCellId, destinationComponent, destinationComponent.RouteStepOrder - 1);
+
+        var result = new List<PlannedPhysicalRouteComponent>(components.Count + 3);
+        var mutableComponents = components.ToArray();
+        var approachIndex = Array.FindIndex(mutableComponents, item => item.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
+        if (approachIndex >= 0)
+        {
+            var firstDestinationOrder = destinationComponent.RouteStepOrder;
+            var destinationCells = route.Steps
+                .Where(step => step.GridId == destinationGrid && step.Order >= firstDestinationOrder)
+                .Select(step => step.CellId)
+                .Distinct()
+                .ToArray();
+            if (destinationCells.Length > 0)
+            {
+                var approach = mutableComponents[approachIndex];
+                var destinationPlacement = placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId);
+                if (destinationPlacement is not null)
+                {
+                    destinationCells = destinationCells
+                        .Concat(destinationPlacement.Footprint.Select(cell => cell))
+                        .Distinct()
+                        .ToArray();
+                }
+                mutableComponents[approachIndex] = approach with
+                {
+                    AllocatedCells = destinationCells,
+                };
+            }
+        }
+        result.AddRange(mutableComponents.Take(firstDestinationIndex));
+        result.Add(firstTransition);
+        result.Add(diagramTransition);
+        result.Add(destinationTransition);
+        result.AddRange(mutableComponents.Skip(firstDestinationIndex));
+        for (var index = 0; index < result.Count; index++)
+            result[index] = result[index] with
+            {
+                PrecedingComponentId = index == 0 ? null : result[index - 1].ComponentId,
+                FollowingComponentId = index == result.Count - 1 ? null : result[index + 1].ComponentId
+            };
         return result;
+    }
+
+    private PlannedPhysicalRouteComponent TransitionComponent(
+        PlannedGridRoute route,
+        string suffix,
+        AbsolutePoint entry,
+        AbsolutePoint bend,
+        AbsolutePoint exit,
+        PlanningGridId entryGridId,
+        PlanningGridId bendGridId,
+        PlanningGridId exitGridId,
+        PlanningGridCellId firstCell,
+        PlanningGridCellId secondCell,
+        PlannedPhysicalRouteComponent? adjacent,
+        int order)
+    {
+        var id = route.PhysicalLinkId + ":" + suffix;
+        var points = new List<PlannedPhysicalRoutePoint>
+        {
+            Point(route, entryGridId, entry, RouteStepRole.ProjectTransition, id + ":entry", order, null, suffix, firstCell,
+                "explicit project-grid transition entry", id)
+        };
+        if (bend != entry && bend != exit)
+            points.Add(Point(route, bendGridId, bend, RouteStepRole.ProjectTransition, id + ":bend", order, null, suffix, firstCell,
+                "explicit transition bend", id));
+        points.Add(Point(route, exitGridId, exit, RouteStepRole.ProjectTransition, id + ":exit", order, null, suffix, secondCell,
+            "explicit project-grid transition exit", id));
+        return new PlannedPhysicalRouteComponent(id, route.PhysicalLinkId, RouteStepRole.ProjectTransition, order, null, null, null,
+            new[] { firstCell, secondCell }.Distinct().ToArray(), points, null, suffix, entryGridId.Value, "explicit cross-project transition",
+            entry, exit, adjacent?.ExitSide, adjacent?.ExitSide, null, null, "explicit shared transition boundary");
+    }
+
+    private PlanningGridCellId? DiagramProjectCell(string? projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId)) return null;
+        var column = diagramGrid.Grid.Columns.FirstOrDefault(item => string.Equals(item.OwnerId, projectId, StringComparison.Ordinal));
+        return column is null ? null : new PlanningGridCellId(diagramGrid.Grid.Id, diagramGrid.Grid.Rows[0].Id, column.Id);
     }
 
     private IReadOnlyList<PlannedPhysicalRoutePoint> BuildRawComponentPoints(
