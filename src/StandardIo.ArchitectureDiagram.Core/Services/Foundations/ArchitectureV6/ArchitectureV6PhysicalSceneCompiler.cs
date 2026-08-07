@@ -453,6 +453,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             // point paths: a turn or endpoint bend is part of the same ordered
             // orthogonal sequence as the ordinary cell runs.
             var reducedPoints = RemoveRedundantCollinearPoints(rawPoints);
+            ValidateEndpointBacktracking(route, reducedPoints, ref routeInvalid);
             var rawPointIndexes = rawPoints.Select((point, index) => new { point.PointId, index })
                 .ToDictionary(item => item.PointId, item => item.index, StringComparer.Ordinal);
             for (var pointIndex = 1; pointIndex < reducedPoints.Count; pointIndex++)
@@ -530,6 +531,32 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 rawPoints.Length - reducedPoints.Count, routeInvalid, reducedPoints));
         }
         return result;
+    }
+
+    private void ValidateEndpointBacktracking(PlannedGridRoute route,
+        IReadOnlyList<PlannedPhysicalRoutePoint> points, ref bool routeInvalid)
+    {
+        if (points.Count < 3) return;
+        var endpointWindow = Math.Min(points.Count - 1, 6);
+        var findingsInWindow = new HashSet<int>();
+        for (var index = 1; index < points.Count - 1; index++)
+        {
+            var previous = points[index - 1].Point;
+            var current = points[index].Point;
+            var next = points[index + 1].Point;
+            var horizontalReversal = previous.Y == current.Y && current.Y == next.Y &&
+                (current.X < Math.Min(previous.X, next.X) || current.X > Math.Max(previous.X, next.X));
+            var verticalReversal = previous.X == current.X && current.X == next.X &&
+                (current.Y < Math.Min(previous.Y, next.Y) || current.Y > Math.Max(previous.Y, next.Y));
+            var sourceLocal = index <= endpointWindow;
+            var destinationLocal = index >= points.Count - endpointWindow - 1;
+            if (!(horizontalReversal || verticalReversal) || (!sourceLocal && !destinationLocal)) continue;
+            if (!findingsInWindow.Add(index)) continue;
+            routeInvalid = true;
+            findings.Add(new ArchitecturePlanningDiagnostic("RedundantEndpointBacktracking",
+                $"Endpoint-local route geometry reverses after overshooting its target axis at point {index}.",
+                PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
+        }
     }
 
     private static IReadOnlyList<PlannedPhysicalRoutePoint> RemoveRedundantCollinearPoints(

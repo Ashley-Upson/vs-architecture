@@ -77,7 +77,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var structuralRowsAfterRouting = projectGrids.Sum(grid => grid.Grid.Rows.Count);
         var structuralColumnsAfterRouting = projectGrids.Sum(grid => grid.Grid.Columns.Count);
         PhysicalSizingResult sizing = null!;
-        TimeStage("relativeSizing", () => sizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes,
+        TimeStage("relativeSizing", () => sizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
             placement.NodePlacements, placement.NodeMetadata, projectGrids, placement.SubtreeReservations,
             allocation.Sizing.Constraints, diagramGrid).Build());
         var sizedPlan = sizing.Sizing;

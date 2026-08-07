@@ -2077,7 +2077,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Final_plan_visible_size_does_not_grow_with_terminal_demand()
+    public void Final_plan_visible_size_grows_for_terminal_capacity()
     {
         var nodes = new List<ArchitectureNode>
         {
@@ -2085,7 +2085,7 @@ public sealed class ArchitectureV6StructuralTests
             new("high", "project:p", "SameService", "Project.High", "Class", "high", Array.Empty<string>())
         };
         var links = new List<ArchitectureLink>();
-        for (var index = 0; index < 8; index++)
+        for (var index = 0; index < 16; index++)
         {
             var id = "child-" + index;
             nodes.Add(new ArchitectureNode(id, "project:p", "ChildService" + index, "Project.Child" + index, "Class", id, Array.Empty<string>()));
@@ -2107,9 +2107,12 @@ public sealed class ArchitectureV6StructuralTests
             .ToArray();
 
         Assert.Equal(2, geometries.Length);
-        Assert.Equal(geometries[0].AbsoluteBounds.Width, geometries[1].AbsoluteBounds.Width);
+        var low = geometries.Single(node => node.SemanticNodeId == "low");
+        var high = geometries.Single(node => node.SemanticNodeId == "high");
+        Assert.True(high.AbsoluteBounds.Width > low.AbsoluteBounds.Width,
+            $"high fan-out width={high.AbsoluteBounds.Width}; low width={low.AbsoluteBounds.Width}");
         Assert.Equal(geometries[0].AbsoluteBounds.Height, geometries[1].AbsoluteBounds.Height);
-        Assert.NotEqual(geometries[0].AbsoluteRoutingBounds!.Value.Width, geometries[1].AbsoluteRoutingBounds!.Value.Width);
+        Assert.True(high.AbsoluteRoutingBounds!.Value.Width > low.AbsoluteRoutingBounds!.Value.Width);
     }
 
     [Fact]

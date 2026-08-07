@@ -401,84 +401,92 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private void CalculateRows()
     {
         var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
-        var baselineSet = new HashSet<string>(nodes.Values
-            .Where(node => baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId))
-            .Select(node => node.PhysicalNodeId), StringComparer.Ordinal);
         var orderedRules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
             .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal).ToArray();
         var roleByNode = nodes.Values.ToDictionary(node => node.PhysicalNodeId, node => ResolveRole(node.SemanticName), StringComparer.Ordinal);
         var standaloneNodes = nodes.Values.Where(node => node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
         var standaloneColumnsPerRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standaloneNodes.Length)));
         categoryByNode.Clear();
+        var reservedRank = orderedRules.Select((rule, index) => (rule.Name, index))
+            .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
+        var reservedCount = orderedRules.Length;
+        var externalLayer = Math.Max(1, reservedCount * 100 + nodes.Count + 1);
+        var layerByNode = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        // Reserved role bands are anchors. Ordinary nodes are then solved from
+        // their dependency children, with insertion points chosen between those
+        // anchors rather than being assigned a stale global analysis depth.
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
             var role = roleByNode[node.PhysicalNodeId];
-            var hasConfiguredRole = orderedRules.Any(rule => string.Equals(rule.Name, role, StringComparison.Ordinal));
             categoryByNode[node.PhysicalNodeId] = node.IsExternal
                 ? "external"
                 : node.IsStandalone
                 ? $"standalone:{order[node.PhysicalNodeId] / standaloneColumnsPerRow}"
-                : hasConfiguredRole
+                : reservedRank.ContainsKey(role)
                 ? $"role:{role}"
-                : baselineSet.Contains(node.PhysicalNodeId)
+                : baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)
                 ? "baseline"
                 : $"depth:{structuralDepthByNode[node.PhysicalNodeId]}";
         }
 
-        var categories = categoryByNode.Values.Distinct(StringComparer.Ordinal).ToArray();
-        var edges = categories.ToDictionary(category => category, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
-        var roleRank = orderedRules.Select((rule, index) => (rule.Name, index))
-            .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
-        var roleCategories = orderedRules
-            .Where(rule => categories.Contains($"role:{rule.Name}", StringComparer.Ordinal))
-            .Select(rule => (Category: $"role:{rule.Name}", rule.Order, Rank: roleRank[rule.Name]))
-            .ToArray();
-        var baselineRoleRanks = nodes.Values.Where(node => baselineSet.Contains(node.PhysicalNodeId))
-            .Select(node => roleRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var rank) ? rank : -1)
-            .Where(rank => rank >= 0).ToArray();
-        var baselineMinRank = baselineRoleRanks.DefaultIfEmpty(0).Min();
-        var baselineMaxRank = baselineRoleRanks.DefaultIfEmpty(-1).Max();
-
-        for (var index = 1; index < roleCategories.Length; index++)
-            AddCategoryEdge(edges, roleCategories[index - 1].Category, roleCategories[index].Category);
-        if (categories.Contains("baseline", StringComparer.Ordinal))
+        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
-            foreach (var role in roleCategories.Where(item => item.Rank < baselineMinRank))
-                AddCategoryEdge(edges, role.Category, "baseline");
-            foreach (var role in roleCategories.Where(item => item.Rank > baselineMaxRank))
-                AddCategoryEdge(edges, "baseline", role.Category);
+            if (node.IsExternal)
+            {
+                layerByNode[node.PhysicalNodeId] = externalLayer;
+                continue;
+            }
+            if (reservedRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var fixedLayer))
+            {
+                layerByNode[node.PhysicalNodeId] = fixedLayer * 100;
+                continue;
+            }
+            layerByNode[node.PhysicalNodeId] = 0;
         }
 
-        var depthCategories = categories.Where(category => category.StartsWith("depth:", StringComparison.Ordinal))
-            .OrderBy(category => int.Parse(category.Substring("depth:".Length)))
-            .ToArray();
-        for (var index = 1; index < depthCategories.Length; index++)
-            AddCategoryEdge(edges, depthCategories[index - 1], depthCategories[index]);
+        // A positional owner can be discovered after a semantic child in a
+        // cycle. Relax ordinary layers deterministically until all ordinary
+        // parent/child constraints are represented, then report any cycle.
+        for (var pass = 0; pass < nodes.Count; pass++)
+        {
+            var changed = false;
+            foreach (var parent in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+                foreach (var childId in semanticChildrenByNode[parent.PhysicalNodeId].OrderBy(id => order[id]))
+                {
+                    if (!layerByNode.TryGetValue(parent.PhysicalNodeId, out var parentLayer) ||
+                        !layerByNode.TryGetValue(childId, out var childLayer) || parentLayer < childLayer) continue;
+                    if (reservedRank.ContainsKey(roleByNode[parent.PhysicalNodeId]) && reservedRank.ContainsKey(roleByNode[childId]))
+                    {
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementReservedOrderConflict",
+                            "Configured reserved role order conflicts with a dependency edge.", PlanningDiagnosticSubject.PhysicalLink,
+                            parent.PhysicalNodeId + "->" + childId));
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementCategoryOrderCycle",
+                            "Configured and hierarchy category constraints contain a cycle.", PlanningDiagnosticSubject.Grid,
+                            parent.PhysicalNodeId + "->" + childId));
+                        continue;
+                    }
+                    if (!reservedRank.ContainsKey(roleByNode[childId]))
+                    {
+                        layerByNode[childId] = parentLayer + 1;
+                        changed = true;
+                    }
+                    else if (!reservedRank.ContainsKey(roleByNode[parent.PhysicalNodeId]) &&
+                             parentLayer >= childLayer)
+                    {
+                        layerByNode[parent.PhysicalNodeId] = childLayer - 1;
+                        changed = true;
+                    }
+                }
+            if (!changed) break;
+        }
 
-        foreach (var parent in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
-            foreach (var child in childrenByNode[parent.PhysicalNodeId])
-            {
-                var parentCategory = categoryByNode[parent.PhysicalNodeId];
-                var childCategory = categoryByNode[child];
-                if (!string.Equals(parentCategory, childCategory, StringComparison.Ordinal))
-                    AddCategoryEdge(edges, parentCategory, childCategory);
-            }
-
-        var mainCategories = categories.Where(category => category != "external" && !category.StartsWith("standalone:", StringComparison.Ordinal)).ToArray();
-        foreach (var standaloneCategory in categories.Where(category => category.StartsWith("standalone:", StringComparison.Ordinal)))
-            foreach (var mainCategory in mainCategories)
-                AddCategoryEdge(edges, mainCategory, standaloneCategory);
-        foreach (var standaloneCategory in categories.Where(category => category.StartsWith("standalone:", StringComparison.Ordinal)))
-            AddCategoryEdge(edges, standaloneCategory, "external");
-        foreach (var category in mainCategories)
-            AddCategoryEdge(edges, category, "external");
-
-        var categoryOrder = TopologicallyOrderCategories(categories, edges, categoryByNode);
-        var categoryLayer = categoryOrder.Select((category, index) => (category, index))
-            .ToDictionary(item => item.category, item => item.index, StringComparer.Ordinal);
+        var layerValues = layerByNode.Values.Concat(new[] { externalLayer }).Distinct().OrderBy(value => value).ToArray();
+        var layerMap = layerValues.Select((value, index) => (value, index))
+            .ToDictionary(item => item.value, item => item.index);
         finalVisualLayerByNode.Clear();
         foreach (var node in nodes.Values)
-            finalVisualLayerByNode[node.PhysicalNodeId] = categoryLayer[categoryByNode[node.PhysicalNodeId]];
+            finalVisualLayerByNode[node.PhysicalNodeId] = layerMap[layerByNode[node.PhysicalNodeId]];
 
         foreach (var node in nodes.Values)
         {
@@ -488,9 +496,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 ? "external"
                 : node.IsStandalone
                 ? $"standalone:{layer}"
-                : categoryByNode[node.PhysicalNodeId].StartsWith("role:", StringComparison.Ordinal)
+                : reservedRank.ContainsKey(role)
                 ? $"role:{role}"
-                : baselineSet.Contains(node.PhysicalNodeId)
+                : baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)
                 ? "baseline"
                 : $"depth:{layer}";
         }
@@ -566,11 +574,16 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var degree = projection.PhysicalLinks.Count(link => link.SourcePhysicalNodeId == node.PhysicalNodeId || link.DestinationPhysicalNodeId == node.PhysicalNodeId);
             var requested = Math.Max(MinimumFootprintSpan, ((node.SemanticName ?? node.SemanticNodeId).Length + 19) / 20 * 2 + 1);
+            var portInset = Math.Max(request.RoutePlanning.MinimumPortSpacing, request.GridSizing.NodeToRouteClearance);
+            var terminalWidth = degree == 0 ? 0 : checked(portInset * 2 + Math.Max(0, degree - 1) * request.RoutePlanning.MinimumPortSpacing);
+            var cellWidth = Math.Max(1, request.GridSizing.CellWidth);
+            var terminalSpan = terminalWidth == 0 ? 0 : (int)Math.Ceiling((double)terminalWidth / cellWidth);
+            requested = Math.Max(requested, terminalSpan);
             if (degree > 4) requested = Math.Max(requested, 5);
             if (degree > 8) requested = Math.Max(requested, 7);
             if (requiredSpans.TryGetValue(node.PhysicalNodeId, out var required)) requested = Math.Max(requested, required);
             spanByNode[node.PhysicalNodeId] = requested % 2 == 0 ? requested + 1 : requested;
-            spanReasonByNode[node.PhysicalNodeId] = degree == 0 ? "minimum" : $"label-and-degree:{degree}";
+            spanReasonByNode[node.PhysicalNodeId] = degree == 0 ? "minimum" : $"label-and-terminal-capacity:{degree}";
         }
     }
 

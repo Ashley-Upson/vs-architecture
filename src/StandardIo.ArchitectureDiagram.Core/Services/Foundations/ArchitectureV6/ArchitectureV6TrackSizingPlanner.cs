@@ -11,6 +11,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 {
     private readonly ArchitecturePlanningRequest request;
     private readonly IReadOnlyList<PlannedPhysicalNode> nodes;
+    private readonly IReadOnlyList<PlannedPhysicalLink> links;
     private readonly IReadOnlyList<PlannedNodePlacement> placements;
     private readonly IReadOnlyList<ProjectRoutingGrid> projectGrids;
     private readonly IReadOnlyList<SubtreeReservation> reservations;
@@ -28,6 +29,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     public ArchitectureV6TrackSizingPlanner(
         ArchitecturePlanningRequest request,
         IReadOnlyList<PlannedPhysicalNode> nodes,
+        IReadOnlyList<PlannedPhysicalLink> links,
         IReadOnlyList<PlannedNodePlacement> placements,
         IReadOnlyList<PhysicalNodePlacementMetadata> metadata,
         IReadOnlyList<ProjectRoutingGrid> projectGrids,
@@ -37,6 +39,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
+        this.links = links ?? throw new ArgumentNullException(nameof(links));
         this.placements = placements ?? throw new ArgumentNullException(nameof(placements));
         this.metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         this.projectGrids = projectGrids ?? throw new ArgumentNullException(nameof(projectGrids));
@@ -287,7 +290,11 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var label = node.DisplayLabel ?? node.SemanticName;
         var longestLine = label.Split(new[] { '\n' }, StringSplitOptions.None)
             .DefaultIfEmpty(string.Empty).Max(line => line.Length);
-        return Math.Max(request.NodePlacement.MinimumNodeWidth, longestLine * 8 + 44);
+        var labelWidth = Math.Max(request.NodePlacement.MinimumNodeWidth, longestLine * 8 + 44);
+        var degree = links.Count(link => link.SourcePhysicalNodeId == node.PhysicalNodeId || link.DestinationPhysicalNodeId == node.PhysicalNodeId);
+        var inset = Math.Max(request.RoutePlanning.MinimumPortSpacing, request.GridSizing.NodeToRouteClearance);
+        var terminalWidth = degree == 0 ? 0 : checked(inset * 2 + Math.Max(0, degree - 1) * request.RoutePlanning.MinimumPortSpacing);
+        return Math.Max(labelWidth, terminalWidth);
     }
 
     private RelativeRectangle VisibleBounds(PlannedPhysicalNode node, RelativeRectangle routingBounds)
