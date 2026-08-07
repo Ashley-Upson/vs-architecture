@@ -132,7 +132,11 @@ internal sealed class ArchitectureV6LaneAllocator
         foreach (var approach in approaches.OrderBy(item => item.PhysicalNodeId, StringComparer.Ordinal))
         {
             var ordered = approach.PhysicalLinkIds ?? Array.Empty<string>();
-            var linksForNode = ordered.OrderBy(id => IsDirectDownward(id) ? 0 : 1).ThenBy(id => id, StringComparer.Ordinal).ToArray();
+            var linksForNode = ordered
+                .OrderBy(id => OtherEndpointColumn(id, GridSide.Top))
+                .ThenBy(id => IsDirectDownward(id) ? 0 : 1)
+                .ThenBy(id => id, StringComparer.Ordinal)
+                .ToArray();
             for (var index = 0; index < linksForNode.Length; index++)
             {
                 var offset = PortOffset(index, linksForNode.Length);
@@ -383,6 +387,18 @@ internal sealed class ArchitectureV6LaneAllocator
         var link = links.SingleOrDefault(item => item.PhysicalLinkId == demand.PhysicalLinkId);
         if (link is null) return int.MaxValue;
         var otherNodeId = demand.Endpoint.Side == GridSide.Bottom
+            ? link.DestinationPhysicalNodeId
+            : link.SourcePhysicalNodeId;
+        return metadata.TryGetValue(otherNodeId, out var other)
+            ? other.PhysicalColumn
+            : int.MaxValue;
+    }
+
+    private int OtherEndpointColumn(string physicalLinkId, GridSide side)
+    {
+        var link = links.SingleOrDefault(item => item.PhysicalLinkId == physicalLinkId);
+        if (link is null) return int.MaxValue;
+        var otherNodeId = side == GridSide.Bottom
             ? link.DestinationPhysicalNodeId
             : link.SourcePhysicalNodeId;
         return metadata.TryGetValue(otherNodeId, out var other)

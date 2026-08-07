@@ -977,6 +977,44 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Final_pipeline_centres_parent_over_immediate_children_not_deepest_descendant()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("parent", "project:p", "ParentController", "Project.ParentController", "Class", "parent", Array.Empty<string>()),
+                        new ArchitectureNode("left", "project:p", "LeftService", "Project.LeftService", "Class", "left", Array.Empty<string>()),
+                        new ArchitectureNode("left-child", "project:p", "LeftChildService", "Project.LeftChildService", "Class", "left-child", Array.Empty<string>()),
+                        new ArchitectureNode("right", "project:p", "RightService", "Project.RightService", "Class", "right", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("parent-left", "parent", "left", "internal"),
+                    new ArchitectureLink("left-child", "left", "left-child", "internal"),
+                    new ArchitectureLink("parent-right", "parent", "right", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId);
+        var parent = metadata["parent"];
+        var left = metadata["left"];
+        var right = metadata["right"];
+        Assert.Equal((left.PhysicalColumn + right.PhysicalColumn) / 2, parent.PhysicalColumn);
+        Assert.True(plan.PhysicalScene!.Geometry.Nodes.Single(node => node.PhysicalNodeId == parent.PhysicalNodeId).AbsoluteBounds.Y <
+            plan.PhysicalScene.Geometry.Nodes.Single(node => node.PhysicalNodeId == left.PhysicalNodeId).AbsoluteBounds.Y);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotCentered");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSubtreeInterleave");
+    }
+
+    [Fact]
     public void Planner_resolves_compact_labels_before_sizing_and_rendering()
     {
         var request = Request() with
@@ -2110,7 +2148,8 @@ public sealed class ArchitectureV6StructuralTests
             Assert.Contains(terminals, terminal => terminal.Side == GridSide.Top);
             Assert.All(terminals, terminal => Assert.True(terminal.Ordinal >= 0));
         });
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "TerminalOrderingChangedAfterAllocation");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding =>
+            finding.Code is "SourceTerminalOrderInversion" or "DestinationTerminalOrderInversion");
     }
 
     [Fact]

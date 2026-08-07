@@ -1332,6 +1332,39 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 if (ordered[index - 1].X != ordered[index].X && ordered[index - 1].Y != ordered[index].Y)
                     findings.Add(new ArchitecturePlanningDiagnostic("TerminalJoinDiagonal", "A final route segment, including a terminal join, is diagonal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
+        ValidateTerminalOrdering(geometry, terminals, routes);
+    }
+
+    private void ValidateTerminalOrdering(
+        PlannedArchitectureGeometry geometry,
+        IReadOnlyList<PlannedPhysicalTerminal> terminals,
+        IReadOnlyList<PlannedPhysicalRoute> routes)
+    {
+        foreach (var group in terminals.GroupBy(item => item.PhysicalNodeId + ":" + item.Side, StringComparer.Ordinal))
+        {
+            var side = group.First().Side;
+            var ordered = group
+                .Select(terminal =>
+                {
+                    var route = routes.SingleOrDefault(item => item.PhysicalLinkId == terminal.PhysicalLinkId);
+                    var otherId = side == GridSide.Bottom ? route?.DestinationProjection : route?.SourceProjection;
+                    var other = geometry.Nodes.SingleOrDefault(item => item.PhysicalNodeId == otherId);
+                    var otherCentre = other is null ? int.MaxValue : other.AbsoluteBounds.X + other.AbsoluteBounds.Width / 2;
+                    return (terminal, otherCentre);
+                })
+                .OrderBy(item => item.otherCentre)
+                .ThenBy(item => item.terminal.PhysicalLinkId, StringComparer.Ordinal)
+                .ToArray();
+            for (var index = 1; index < ordered.Length; index++)
+            {
+                if (ordered[index - 1].terminal.Point.X <= ordered[index].terminal.Point.X) continue;
+                findings.Add(new ArchitecturePlanningDiagnostic(
+                    side == GridSide.Bottom ? "SourceTerminalOrderInversion" : "DestinationTerminalOrderInversion",
+                    "Terminal X order does not follow the final geometric approach order.",
+                    PlanningDiagnosticSubject.PhysicalNode, group.Key));
+                break;
+            }
+        }
     }
 
     private PlannedPhysicalSceneMetrics BuildMetrics(PlannedArchitectureGeometry geometry, IReadOnlyList<PlannedPhysicalTerminal> terminals,

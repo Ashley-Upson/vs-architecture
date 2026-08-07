@@ -592,16 +592,19 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
         else if (childProfiles.Count > 1)
         {
-            // Reserve and centre over each complete child subtree envelope so
-            // unrelated peers cannot consume the width needed by descendants.
-            var childContours = childProfiles.Select(child =>
+            // Reserve the complete child envelopes, but centre over the
+            // immediate child nodes. Descendants determine the space reserved
+            // for each child; they do not redefine the parent's visual
+            // relationship to its direct children.
+            var childNodes = childProfiles.Select(child =>
             {
-                var start = child.Profile.Intervals.Min(interval => interval.Start) + child.Shift;
-                var end = child.Profile.Intervals.Max(interval => interval.End) + child.Shift;
+                var childNode = child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId);
+                var start = childNode.Start + child.Shift;
+                var end = childNode.End + child.Shift;
                 return (Start: start, End: end);
             }).ToArray();
-            var childStart = childContours.Min(interval => interval.Start);
-            var childEnd = childContours.Max(interval => interval.End);
+            var childStart = childNodes.Min(interval => interval.Start);
+            var childEnd = childNodes.Max(interval => interval.End);
             parentStart = childStart + Math.Max(0, ((childEnd - childStart + 1) - spanByNode[id]) / 2);
         }
         var parent = new ProfileInterval(rowRoleByNode[id], parentStart, parentStart + spanByNode[id] - 1,
