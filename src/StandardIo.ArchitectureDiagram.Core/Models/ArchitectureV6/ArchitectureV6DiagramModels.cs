@@ -42,7 +42,8 @@ public sealed record PhysicalNodePlacementMetadata(
     int ConfiguredRoleOrder = 0,
     int SiblingOrder = 0,
     int BranchOrder = 0,
-    string PlacementGroup = "");
+    string PlacementGroup = "",
+    int FinalVisualLayerOrdinal = 0);
 
 public sealed record PlannedPhysicalNode(
     string PhysicalNodeId,

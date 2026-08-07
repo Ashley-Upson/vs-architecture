@@ -730,7 +730,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_keeps_baseline_members_on_one_row_without_changing_depth()
+    public void Planner_keeps_baseline_members_in_hierarchy_order_without_changing_depth()
     {
         var request = Request() with
         {
@@ -753,10 +753,12 @@ public sealed class ArchitectureV6StructuralTests
         var baseline = plan.NodeMetadata.Where(node => node.IsBaseline).ToArray();
 
         Assert.Equal(2, baseline.Length);
-        Assert.Single(baseline.Select(node => node.PhysicalRow).Distinct());
+        var root = baseline.Single(node => node.SemanticNodeId == "root");
+        var child = baseline.Single(node => node.SemanticNodeId == "child");
+        Assert.True(root.PhysicalRow < child.PhysicalRow);
         Assert.Equal(0, plan.NodeMetadata.Single(node => node.SemanticNodeId == "root").SemanticDepth);
         Assert.Equal(1, plan.NodeMetadata.Single(node => node.SemanticNodeId == "child").SemanticDepth);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementBaselineMisalignment");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotAboveChild");
     }
 
     [Fact]
@@ -924,6 +926,35 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(owner.PhysicalColumn, external.PhysicalColumn);
         Assert.True(external.PhysicalRow > owner.PhysicalRow);
         Assert.Equal(owner.PhysicalNodeId, external.PositionalOwnerId);
+    }
+
+    [Fact]
+    public void Planner_places_all_external_nodes_on_one_final_bottom_layer()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                ExternalNodes = new[]
+                {
+                    new ArchitectureExternalNode("external-a", "IA", "External", "external-a", "External.IA", "interface"),
+                    new ArchitectureExternalNode("external-b", "IB", "External", "external-b", "External.IB", "interface")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-a", "root", "external-a", "external"),
+                    new ArchitectureLink("root-b", "root", "external-b", "external")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
+        var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal).ToArray();
+
+        Assert.Single(external.Select(node => node.FinalVisualLayerOrdinal).Distinct());
+        Assert.True(external.Min(node => node.FinalVisualLayerOrdinal) > nonExternal.Max(node => node.FinalVisualLayerOrdinal));
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
     }
 
     [Fact]

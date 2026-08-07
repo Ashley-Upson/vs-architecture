@@ -24,6 +24,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, int> branchOrderByRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> depthByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> rowRoleByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> finalVisualLayerByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, GridSlot> slotByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SubtreeHorizontalProfile> profileByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, LogicalProjectGrid> gridsByProject = new(StringComparer.Ordinal);
@@ -120,9 +121,18 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             if (!placedIds.Contains(link.SourcePhysicalNodeId) || !placedIds.Contains(link.DestinationPhysicalNodeId))
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementLinkEndpointMissing", "Every projected physical link endpoint must have a logical placement.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
 
-        foreach (var baselineGroup in rowRoleByNode.Where(item => IsBaseline(item.Key)).GroupBy(item => treeRootByNode[item.Key]))
-            if (baselineGroup.Select(item => item.Value).Distinct(StringComparer.Ordinal).Count() > 1)
-                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementBaselineMisalignment", "Baseline nodes within one ownership branch must share one logical row.", PlanningDiagnosticSubject.PhysicalNode, baselineGroup.Key));
+        foreach (var node in nodes.Values)
+        {
+            var owner = ownerByNode[node.PhysicalNodeId];
+            if (owner is null || !finalVisualLayerByNode.TryGetValue(owner, out var parentLayer)) continue;
+            if (parentLayer >= finalVisualLayerByNode[node.PhysicalNodeId])
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementParentNotAboveChild", "Every positional parent must occupy an earlier final visual layer than its child.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+        }
+
+        var externalLayers = nodes.Values.Where(node => node.IsExternal).Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).Distinct().ToArray();
+        var bottomNonExternalLayer = nodes.Values.Where(node => !node.IsExternal).Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).DefaultIfEmpty(-1).Max();
+        if (externalLayers.Length > 0 && (externalLayers.Length != 1 || externalLayers[0] <= bottomNonExternalLayer))
+            diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalLayer", "External nodes must share one final layer below every non-external node.", PlanningDiagnosticSubject.PhysicalNode, null));
 
         var reservationByOwner = reservations.ToDictionary(item => item.PositionalOwnerId, StringComparer.Ordinal);
         foreach (var node in nodes.Values)
@@ -260,26 +270,72 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     {
         var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
         var baseline = nodes.Values.Where(node => baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)).ToArray();
-        foreach (var node in nodes.Values)
+        var baselineSet = new HashSet<PlannedPhysicalNode>(baseline);
+        var assigned = new Dictionary<string, int>(StringComparer.Ordinal);
+        var visiting = new HashSet<string>(StringComparer.Ordinal);
+        int AssignHierarchyLayer(string id)
         {
-            var branch = treeRootByNode[node.PhysicalNodeId];
-            rowRoleByNode[node.PhysicalNodeId] = node.IsExternal
-                ? "external"
-                : baseline.Contains(node)
-                ? "baseline:" + ResolveRole(node.SemanticName)
-                : $"depth:{depthByNode[node.PhysicalNodeId]}";
+            if (assigned.TryGetValue(id, out var known)) return known;
+            if (!visiting.Add(id))
+            {
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementLayerCycle", "A positional ownership cycle prevents a strict parent-above-child layer assignment; the cycle was terminated deterministically.", PlanningDiagnosticSubject.PhysicalNode, id));
+                return depthByNode[id];
+            }
+
+            var node = nodes[id];
+            var roleOffset = baselineSet.Contains(node) ? Math.Max(0, ConfiguredRoleOrder(node)) : 0;
+            var layer = depthByNode[id] + roleOffset;
+            var owner = ownerByNode[id];
+            if (owner is not null && nodes.ContainsKey(owner) && !nodes[owner].IsExternal && !nodes[owner].IsStandalone)
+                layer = Math.Max(layer, AssignHierarchyLayer(owner) + 1);
+
+            visiting.Remove(id);
+            assigned[id] = layer;
+            return layer;
         }
 
-        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+        foreach (var node in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]))
+            AssignHierarchyLayer(node.PhysicalNodeId);
+
+        var mainMax = assigned.Values.DefaultIfEmpty(-1).Max();
+        var standaloneNodes = nodes.Values.Where(node => node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
+        var standaloneColumnsPerRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standaloneNodes.Length)));
+        for (var index = 0; index < standaloneNodes.Length; index++)
+            assigned[standaloneNodes[index].PhysicalNodeId] = mainMax + 1 + index / standaloneColumnsPerRow;
+
+        var externalLayer = assigned.Values.DefaultIfEmpty(-1).Max() + 1;
+        foreach (var node in nodes.Values.Where(node => node.IsExternal))
+            assigned[node.PhysicalNodeId] = externalLayer;
+
+        // Remove unused numeric gaps without changing the relative layer order.
+        var layerRanks = assigned.Values.Distinct().OrderBy(value => value)
+            .Select((value, index) => (value, index)).ToDictionary(item => item.value, item => item.index);
+        finalVisualLayerByNode.Clear();
+        foreach (var item in assigned)
+            finalVisualLayerByNode[item.Key] = layerRanks[item.Value];
+
+        var baselineBandLayerByRole = baseline
+            .GroupBy(node => ResolveRole(node.SemanticName), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key,
+                group => group.Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).Min(),
+                StringComparer.Ordinal);
+
+        foreach (var node in nodes.Values)
         {
-            var owner = ownerByNode[node.PhysicalNodeId];
-            if (owner is not null && !node.IsExternal && !IsBaselineNode(node) && rowRoleByNode[node.PhysicalNodeId] == rowRoleByNode[owner])
-                rowRoleByNode[node.PhysicalNodeId] = $"depth:{depthByNode[owner] + 1}";
+            var layer = finalVisualLayerByNode[node.PhysicalNodeId];
+            var role = ResolveRole(node.SemanticName);
+            rowRoleByNode[node.PhysicalNodeId] = node.IsExternal
+                ? "external"
+                : node.IsStandalone
+                ? $"standalone:{layer}"
+                : baselineSet.Contains(node) && baselineBandLayerByRole[role] == layer
+                ? $"baseline:{role}"
+                : $"depth:{layer}";
         }
 
         rowRankByRole.Clear();
         foreach (var role in rowRoleByNode
-            .OrderBy(item => item.Value == "baseline" ? -1 : depthByNode[item.Key])
+            .OrderBy(item => finalVisualLayerByNode[item.Key])
             .ThenBy(item => item.Value, StringComparer.Ordinal)
             .ThenBy(item => order[item.Key])
             .Select(item => item.Value)
@@ -571,10 +627,11 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 childrenByNode[node.PhysicalNodeId].ToArray(), semanticParents, semanticChildren, subtree.SubtreeId,
                 reservations.Where(item => item.SubtreeId == subtree.SubtreeId || item.AncestorReservationId == subtree.SubtreeId).Select(item => item.SubtreeId).ToArray(),
                 node.ProjectId, depthByNode[node.PhysicalNodeId], baseline, node.IsExternal, node.IsStandalone,
-                spanReasonByNode[node.PhysicalNodeId], depthByNode[node.PhysicalNodeId], role, 0, ProjectOf(node), owner is null ? $"root:{ProjectOf(node)}" : $"owner:{owner}",
-                "sibling", rowRoleByNode[node.PhysicalNodeId], RowOrder(node.PhysicalNodeId), gridsByProject[ProjectOf(node)].ColumnOrder(slotByNode[node.PhysicalNodeId].AnchorColumn),
-                rootByNode.TryGetValue(node.PhysicalNodeId, out var rootId) ? rootId : node.PhysicalNodeId, owner, depthByNode[node.PhysicalNodeId] - (owner is null ? 0 : depthByNode[owner]),
-                0, owner is null ? order[node.PhysicalNodeId] : childrenByNode[owner].IndexOf(node.PhysicalNodeId), 0, subtree.SubtreeId);
+                 spanReasonByNode[node.PhysicalNodeId], depthByNode[node.PhysicalNodeId], role, 0, ProjectOf(node), owner is null ? $"root:{ProjectOf(node)}" : $"owner:{owner}",
+                 "sibling", rowRoleByNode[node.PhysicalNodeId], RowOrder(node.PhysicalNodeId), gridsByProject[ProjectOf(node)].ColumnOrder(slotByNode[node.PhysicalNodeId].AnchorColumn),
+                 rootByNode.TryGetValue(node.PhysicalNodeId, out var rootId) ? rootId : node.PhysicalNodeId, owner, depthByNode[node.PhysicalNodeId] - (owner is null ? 0 : depthByNode[owner]),
+                 0, owner is null ? order[node.PhysicalNodeId] : childrenByNode[owner].IndexOf(node.PhysicalNodeId), 0, subtree.SubtreeId,
+                 finalVisualLayerByNode[node.PhysicalNodeId]);
         }).ToArray();
     }
 
@@ -598,6 +655,12 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
     private string ResolveRole(string name) => (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
         .OrderBy(rule => rule.Order).FirstOrDefault(rule => ToRegex(rule.Pattern).IsMatch(name))?.Name ?? "Unmatched";
+
+    private int ConfiguredRoleOrder(PlannedPhysicalNode node) => (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+        .Where(rule => ToRegex(rule.Pattern).IsMatch(node.SemanticName))
+        .OrderBy(rule => rule.Order)
+        .Select(rule => rule.Order)
+        .FirstOrDefault();
 
     private string ProjectOf(PlannedPhysicalNode node) => node.ProjectId ?? "external";
     private IEnumerable<string> ProjectOrder() => (request.SelectedScope.SelectedProjectIds ?? Array.Empty<string>())
