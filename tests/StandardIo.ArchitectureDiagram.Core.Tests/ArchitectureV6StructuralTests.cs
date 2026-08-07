@@ -764,6 +764,104 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Final_pipeline_keeps_unrelated_root_subtrees_separate_on_shared_rows()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                BaselinePattern = "^does-not-match$",
+                RoleRules = Array.Empty<ArchitectureV6RoleRule>()
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root-a", "project:p", "RootA", "Project.RootA", "Class", "root-a", Array.Empty<string>()),
+                        new ArchitectureNode("child-a", "project:p", "ChildA", "Project.ChildA", "Class", "child-a", Array.Empty<string>()),
+                        new ArchitectureNode("root-b", "project:p", "RootB", "Project.RootB", "Class", "root-b", Array.Empty<string>()),
+                        new ArchitectureNode("child-b", "project:p", "ChildB", "Project.ChildB", "Class", "child-b", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-a-child-a", "root-a", "child-a", "internal"),
+                    new ArchitectureLink("root-b-child-b", "root-b", "child-b", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSubtreeInterleave");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSiblingInterleave");
+    }
+
+    [Fact]
+    public void Final_pipeline_uses_nearest_free_external_position_when_owner_column_is_occupied()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                ExternalNodes = new[]
+                {
+                    new ArchitectureExternalNode("external-a", "IA", "External", "external-a", "External.IA", "interface"),
+                    new ArchitectureExternalNode("external-b", "IB", "External", "external-b", "External.IB", "interface")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-a", "root", "external-a", "external"),
+                    new ArchitectureLink("root-b", "root", "external-b", "external")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
+        var owner = plan.NodeMetadata.Single(node => node.SemanticNodeId == "root");
+
+        Assert.Equal(2, external.Length);
+        Assert.Contains(external, node => node.PhysicalColumn == owner.PhysicalColumn);
+        Assert.Single(plan.Diagnostics.Findings.Where(finding => finding.Code == "LogicalPlacementExternalAffinityBlocked"));
+    }
+
+    [Fact]
+    public void Final_pipeline_reports_a_category_order_cycle_explicitly()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                BaselinePattern = "^does-not-match$",
+                RoleRules = new[]
+                {
+                    new ArchitectureV6RoleRule("Beta", "Beta$", 0),
+                    new ArchitectureV6RoleRule("Alpha", "Alpha$", 1)
+                }
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("alpha", "project:p", "Alpha", "Project.Alpha", "Class", "alpha", Array.Empty<string>()),
+                        new ArchitectureNode("beta", "project:p", "Beta", "Project.Beta", "Class", "beta", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[] { new ArchitectureLink("alpha-beta", "alpha", "beta", "internal") }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementCategoryOrderCycle");
+    }
+
+    [Fact]
     public void Planner_uses_baseline_pattern_and_role_rules_as_separate_visual_bands()
     {
         var request = Request() with

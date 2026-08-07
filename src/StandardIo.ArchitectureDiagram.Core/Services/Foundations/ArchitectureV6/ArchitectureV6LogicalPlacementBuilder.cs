@@ -24,6 +24,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, int> branchOrderByRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> depthByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> rowRoleByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> categoryByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> finalVisualLayerByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, GridSlot> slotByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SubtreeHorizontalProfile> profileByNode = new(StringComparer.Ordinal);
@@ -31,6 +32,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, int> spanByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> spanReasonByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> rowRankByRole = new(StringComparer.Ordinal);
+    private readonly HashSet<string> externalAffinityBlocked = new(StringComparer.Ordinal);
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
     private long profileComputationMilliseconds;
     private long profileCompositionMilliseconds;
@@ -76,9 +78,10 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 var shift = FindCompatibleShift(profile.Intervals, occupied);
                 MaterializeProfile(logicalGrid, profile, shift, occupied);
             }
+            ResolveRootRowConflicts(logicalGrid, mainRoots);
 
             PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);
-            AlignExternalProfiles(logicalGrid, projectNodes.Where(node => node.IsExternal).ToArray(), occupied);
+            PlaceExternalProfiles(logicalGrid, projectNodes.Where(node => node.IsExternal).ToArray(), occupied);
             logicalGrid.EnsureColumns(occupied.Count == 0 ? 0 : occupied.Max(interval => interval.End + 1));
             var placements = projectNodes.Select(BuildPlacement).OrderBy(item => order[item.PhysicalNodeId]).ToArray();
             projectPlacements[projectId] = placements.ToList();
@@ -126,7 +129,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var owner = ownerByNode[node.PhysicalNodeId];
             if (owner is null || !finalVisualLayerByNode.TryGetValue(owner, out var parentLayer)) continue;
-            if (parentLayer >= finalVisualLayerByNode[node.PhysicalNodeId])
+            if (parentLayer >= finalVisualLayerByNode[node.PhysicalNodeId] &&
+                !string.Equals(categoryByNode[owner], categoryByNode[node.PhysicalNodeId], StringComparison.Ordinal))
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementParentNotAboveChild", "Every positional parent must occupy an earlier final visual layer than its child.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         }
 
@@ -148,6 +152,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             foreach (var siblingRow in childrenByNode[parent]
                 .Where(slotByNode.ContainsKey)
+                .Where(child => !nodes[child].IsExternal && !nodes[child].IsStandalone)
                 .GroupBy(child => slotByNode[child].RowId))
             {
                 var siblings = siblingRow.OrderBy(child => gridsByProject[ProjectOf(nodes[child])].ColumnOrder(slotByNode[child].Columns[0])).ToArray();
@@ -167,8 +172,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var owner = ownerByNode[node.PhysicalNodeId];
             if (owner is null) continue;
-            if (CompareRows(slotByNode[node.PhysicalNodeId].RowId, slotByNode[owner].RowId) <= 0 ||
-                !slotByNode[node.PhysicalNodeId].AnchorColumn.Equals(slotByNode[owner].AnchorColumn))
+            if (!externalAffinityBlocked.Contains(node.PhysicalNodeId) &&
+                (CompareRows(slotByNode[node.PhysicalNodeId].RowId, slotByNode[owner].RowId) <= 0 ||
+                 !slotByNode[node.PhysicalNodeId].AnchorColumn.Equals(slotByNode[owner].AnchorColumn)))
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalNotLocal", "An external node with one positional owner must be directly below and centred on that owner.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         }
 
@@ -243,6 +249,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var parentSlot = slotByNode[parent.PhysicalNodeId];
             var parentCentre = (grid.ColumnOrder(parentSlot.Columns.First()) + grid.ColumnOrder(parentSlot.Columns.Last())) / 2.0;
             var childSlots = children.Select(id => slotByNode[id]).ToArray();
+            if (children.All(id => string.Equals(categoryByNode[id], categoryByNode[parent.PhysicalNodeId], StringComparison.Ordinal)))
+                continue;
             var groupStart = childSlots.Min(slot => grid.ColumnOrder(slot.Columns.First()));
             var groupEnd = childSlots.Max(slot => grid.ColumnOrder(slot.Columns.Last()));
             var expectedCentre = (groupStart + groupEnd) / 2.0;
@@ -255,13 +263,22 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementParentNotCentered",
                     $"A parent is {error:0.##} logical columns away from its immediate-child group centre.", PlanningDiagnosticSubject.PhysicalNode, parent.PhysicalNodeId));
 
-            var childIntervals = childSlots.Select(slot =>
-                (Start: grid.ColumnOrder(slot.Columns.First()), End: grid.ColumnOrder(slot.Columns.Last()))).ToArray();
-            for (var index = 0; index < childIntervals.Length; index++)
-                for (var other = index + 1; other < childIntervals.Length; other++)
-                    if (Intersects(childIntervals[index].Start, childIntervals[index].End, childIntervals[other].Start, childIntervals[other].End))
+            var childContours = children.SelectMany(child => SubtreeMembers(child)
+                    .Where(id => slotByNode.ContainsKey(id) && !nodes[id].IsExternal && !nodes[id].IsStandalone)
+                    .SelectMany(id => slotByNode[id].Columns.Select(column =>
+                        (Child: child, Row: slotByNode[id].RowId, Column: grid.ColumnOrder(column)))))
+                .GroupBy(item => (item.Child, item.Row))
+                .Select(group => (group.Key.Child, group.Key.Row,
+                    Start: group.Min(item => item.Column), End: group.Max(item => item.Column)))
+                .GroupBy(item => item.Row);
+            foreach (var rowContours in childContours)
+            {
+                var siblings = rowContours.OrderBy(item => item.Start).ToArray();
+                for (var index = 1; index < siblings.Length; index++)
+                    if (Intersects(siblings[index - 1].Start, siblings[index - 1].End, siblings[index].Start, siblings[index].End))
                         diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSiblingInterleave",
                             "Immediate sibling subtree intervals overlap after final placement.", PlanningDiagnosticSubject.PhysicalNode, parent.PhysicalNodeId));
+            }
         }
 
         var roots = nodes.Values.Where(node => ownerByNode[node.PhysicalNodeId] is null && !node.IsStandalone)
@@ -269,17 +286,23 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         foreach (var projectRoots in roots)
         {
             var grid = gridsByProject[projectRoots.Key];
-            var rootIntervals = projectRoots.Select(root =>
+            var rootContours = projectRoots.SelectMany(root => SubtreeMembers(root.PhysicalNodeId)
+                    .Where(id => slotByNode.ContainsKey(id) && !nodes[id].IsExternal && !nodes[id].IsStandalone)
+                    .SelectMany(id => slotByNode[id].Columns.Select(column =>
+                        (Root: root.PhysicalNodeId, Row: slotByNode[id].RowId, Column: grid.ColumnOrder(column)))))
+                .GroupBy(item => (item.Root, item.Row))
+                .Select(group => (group.Key.Root, group.Key.Row,
+                    Start: group.Min(item => item.Column), End: group.Max(item => item.Column)))
+                .GroupBy(item => item.Row);
+            foreach (var rowContours in rootContours)
             {
-                var members = SubtreeMembers(root.PhysicalNodeId).Where(slotByNode.ContainsKey).ToArray();
-                var columns = members.SelectMany(id => slotByNode[id].Columns).ToArray();
-                return (Root: root.PhysicalNodeId, Start: columns.Min(grid.ColumnOrder), End: columns.Max(grid.ColumnOrder));
-            }).OrderBy(item => item.Start).ToArray();
-            for (var index = 1; index < rootIntervals.Length; index++)
-                if (rootIntervals[index].Start <= rootIntervals[index - 1].End)
-                    diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSubtreeInterleave",
-                        "Completed root subtree contours overlap or interleave after final packing.", PlanningDiagnosticSubject.PhysicalNode,
-                        rootIntervals[index].Root));
+                var rootsOnRow = rowContours.OrderBy(item => item.Start).ToArray();
+                for (var index = 1; index < rootsOnRow.Length; index++)
+                    if (Intersects(rootsOnRow[index - 1].Start, rootsOnRow[index - 1].End, rootsOnRow[index].Start, rootsOnRow[index].End))
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSubtreeInterleave",
+                            "Completed root subtree intervals overlap on a logical row after final packing.", PlanningDiagnosticSubject.PhysicalNode,
+                            rootsOnRow[index].Root));
+            }
         }
     }
 
@@ -289,7 +312,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal).ToArray();
         foreach (var rule in rules)
         {
-            var members = nodes.Values.Where(node => string.Equals(ResolveRole(node.SemanticName), rule.Name, StringComparison.Ordinal)).ToArray();
+            var members = nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone &&
+                string.Equals(ResolveRole(node.SemanticName), rule.Name, StringComparison.Ordinal)).ToArray();
             var layers = members.Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).Distinct().ToArray();
             if (layers.Length > 1)
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementRoleLayerSplit",
@@ -298,7 +322,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
 
         var roleLayers = rules.ToDictionary(rule => rule.Name,
-            rule => nodes.Values.Where(node => string.Equals(ResolveRole(node.SemanticName), rule.Name, StringComparison.Ordinal))
+            rule => nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone &&
+                    string.Equals(ResolveRole(node.SemanticName), rule.Name, StringComparison.Ordinal))
                 .Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).DefaultIfEmpty(-1).Min(), StringComparer.Ordinal);
         for (var index = 0; index < rules.Length; index++)
             for (var other = index + 1; other < rules.Length; other++)
@@ -351,7 +376,6 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
     private void CalculateRows()
     {
-        var assigned = new Dictionary<string, int>(StringComparer.Ordinal);
         var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
         var baselineSet = new HashSet<string>(nodes.Values
             .Where(node => baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId))
@@ -359,88 +383,76 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         var orderedRules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
             .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal).ToArray();
         var roleByNode = nodes.Values.ToDictionary(node => node.PhysicalNodeId, node => ResolveRole(node.SemanticName), StringComparer.Ordinal);
-        var roleRank = orderedRules.Select((rule, index) => (rule.Name, index))
-            .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
-        // A configured role is a visual category, not a hint for per-node depth.
-        // Every member starts on the same band. Parent/child constraints are
-        // validated below; splitting a category would make the configured rule
-        // meaningless and would make the result depend on traversal order.
-        foreach (var node in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone))
-        {
-            var role = roleByNode[node.PhysicalNodeId];
-            assigned[node.PhysicalNodeId] = roleRank.TryGetValue(role, out var rank) ? rank + 1 : depthByNode[node.PhysicalNodeId];
-        }
-
-        if (baselineSet.Count > 0)
-        {
-            var baselineLayer = baselineSet.Select(id => assigned[id]).Max();
-            foreach (var id in baselineSet) assigned[id] = baselineLayer;
-        }
-
-        foreach (var parent in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]))
-        {
-            foreach (var childId in childrenByNode[parent.PhysicalNodeId])
-            {
-                if (!assigned.TryGetValue(childId, out var childLayer)) continue;
-                var parentLayer = assigned[parent.PhysicalNodeId];
-                if (parentLayer < childLayer) continue;
-
-                var parentRole = roleByNode[parent.PhysicalNodeId];
-                var childRole = roleByNode[childId];
-                if (baselineSet.Contains(parent.PhysicalNodeId) && baselineSet.Contains(childId))
-                {
-                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
-                        "LogicalPlacementBaselineHierarchyContradiction",
-                        "Baseline members are constrained to one final layer, which conflicts with strict parent-above-child placement.",
-                        PlanningDiagnosticSubject.PhysicalNode, childId));
-                    continue;
-                }
-                if (roleRank.ContainsKey(parentRole) && roleRank.ContainsKey(childRole) &&
-                    string.Equals(parentRole, childRole, StringComparison.Ordinal))
-                {
-                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
-                        "LogicalPlacementLayerCategoryContradiction",
-                        "A configured role category contains a positional parent and child; preserving one final category layer conflicts with strict parent-above-child placement.",
-                        PlanningDiagnosticSubject.PhysicalNode, childId));
-                    continue;
-                }
-
-                if (!roleRank.ContainsKey(childRole))
-                    assigned[childId] = parentLayer + 1;
-                else
-                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
-                        "LogicalPlacementLayerOrderContradiction",
-                        "Configured role order places a positional child at or above its parent; the configured category bands were retained.",
-                        PlanningDiagnosticSubject.PhysicalNode, childId));
-            }
-        }
-
-        // Reapply unmatched hierarchy depth after role bands are known. This
-        // keeps controllers and other uncategorised nodes above their first
-        // configured service band without splitting configured categories.
-        foreach (var node in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone && !roleRank.ContainsKey(roleByNode[node.PhysicalNodeId])))
-        {
-            var owner = ownerByNode[node.PhysicalNodeId];
-            if (owner is not null && assigned.TryGetValue(owner, out var parentLayer))
-                assigned[node.PhysicalNodeId] = Math.Max(assigned[node.PhysicalNodeId], parentLayer + 1);
-        }
-
-        var mainMax = assigned.Values.DefaultIfEmpty(-1).Max();
         var standaloneNodes = nodes.Values.Where(node => node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
         var standaloneColumnsPerRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standaloneNodes.Length)));
-        for (var index = 0; index < standaloneNodes.Length; index++)
-            assigned[standaloneNodes[index].PhysicalNodeId] = mainMax + 1 + index / standaloneColumnsPerRow;
+        categoryByNode.Clear();
+        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+        {
+            categoryByNode[node.PhysicalNodeId] = node.IsExternal
+                ? "external"
+                : node.IsStandalone
+                ? $"standalone:{order[node.PhysicalNodeId] / standaloneColumnsPerRow}"
+                : baselineSet.Contains(node.PhysicalNodeId)
+                ? "baseline"
+                : orderedRules.Any(rule => string.Equals(rule.Name, roleByNode[node.PhysicalNodeId], StringComparison.Ordinal))
+                ? $"role:{roleByNode[node.PhysicalNodeId]}"
+                : $"depth:{depthByNode[node.PhysicalNodeId]}";
+        }
 
-        var externalLayer = assigned.Values.DefaultIfEmpty(-1).Max() + 1;
-        foreach (var node in nodes.Values.Where(node => node.IsExternal))
-            assigned[node.PhysicalNodeId] = externalLayer;
+        var categories = categoryByNode.Values.Distinct(StringComparer.Ordinal).ToArray();
+        var edges = categories.ToDictionary(category => category, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
+        var roleRank = orderedRules.Select((rule, index) => (rule.Name, index))
+            .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
+        var roleCategories = orderedRules
+            .Where(rule => categories.Contains($"role:{rule.Name}", StringComparer.Ordinal))
+            .Select(rule => (Category: $"role:{rule.Name}", rule.Order, Rank: roleRank[rule.Name]))
+            .ToArray();
+        var baselineRoleRanks = nodes.Values.Where(node => baselineSet.Contains(node.PhysicalNodeId))
+            .Select(node => roleRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var rank) ? rank : -1)
+            .Where(rank => rank >= 0).ToArray();
+        var baselineMinRank = baselineRoleRanks.DefaultIfEmpty(0).Min();
+        var baselineMaxRank = baselineRoleRanks.DefaultIfEmpty(-1).Max();
 
-        // Remove unused numeric gaps without changing the relative layer order.
-        var layerRanks = assigned.Values.Distinct().OrderBy(value => value)
-            .Select((value, index) => (value, index)).ToDictionary(item => item.value, item => item.index);
+        for (var index = 1; index < roleCategories.Length; index++)
+            AddCategoryEdge(edges, roleCategories[index - 1].Category, roleCategories[index].Category);
+        if (categories.Contains("baseline", StringComparer.Ordinal))
+        {
+            foreach (var role in roleCategories.Where(item => item.Rank < baselineMinRank))
+                AddCategoryEdge(edges, role.Category, "baseline");
+            foreach (var role in roleCategories.Where(item => item.Rank > baselineMaxRank))
+                AddCategoryEdge(edges, "baseline", role.Category);
+        }
+
+        var depthCategories = categories.Where(category => category.StartsWith("depth:", StringComparison.Ordinal))
+            .OrderBy(category => int.Parse(category.Substring("depth:".Length)))
+            .ToArray();
+        for (var index = 1; index < depthCategories.Length; index++)
+            AddCategoryEdge(edges, depthCategories[index - 1], depthCategories[index]);
+
+        foreach (var parent in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+            foreach (var child in childrenByNode[parent.PhysicalNodeId])
+            {
+                var parentCategory = categoryByNode[parent.PhysicalNodeId];
+                var childCategory = categoryByNode[child];
+                if (!string.Equals(parentCategory, childCategory, StringComparison.Ordinal))
+                    AddCategoryEdge(edges, parentCategory, childCategory);
+            }
+
+        var mainCategories = categories.Where(category => category != "external" && !category.StartsWith("standalone:", StringComparison.Ordinal)).ToArray();
+        foreach (var standaloneCategory in categories.Where(category => category.StartsWith("standalone:", StringComparison.Ordinal)))
+            foreach (var mainCategory in mainCategories)
+                AddCategoryEdge(edges, mainCategory, standaloneCategory);
+        foreach (var standaloneCategory in categories.Where(category => category.StartsWith("standalone:", StringComparison.Ordinal)))
+            AddCategoryEdge(edges, standaloneCategory, "external");
+        foreach (var category in mainCategories)
+            AddCategoryEdge(edges, category, "external");
+
+        var categoryOrder = TopologicallyOrderCategories(categories, edges, categoryByNode);
+        var categoryLayer = categoryOrder.Select((category, index) => (category, index))
+            .ToDictionary(item => item.category, item => item.index, StringComparer.Ordinal);
         finalVisualLayerByNode.Clear();
-        foreach (var item in assigned)
-            finalVisualLayerByNode[item.Key] = layerRanks[item.Value];
+        foreach (var node in nodes.Values)
+            finalVisualLayerByNode[node.PhysicalNodeId] = categoryLayer[categoryByNode[node.PhysicalNodeId]];
 
         foreach (var node in nodes.Values)
         {
@@ -452,7 +464,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 ? $"standalone:{layer}"
                 : baselineSet.Contains(node.PhysicalNodeId)
                 ? "baseline"
-                : roleRank.ContainsKey(role)
+                : categoryByNode[node.PhysicalNodeId].StartsWith("role:", StringComparison.Ordinal)
                 ? $"role:{role}"
                 : $"depth:{layer}";
         }
@@ -465,6 +477,61 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             .Select(item => item.Value)
             .Distinct(StringComparer.Ordinal))
             rowRankByRole[role] = rowRankByRole.Count;
+    }
+
+    private static void AddCategoryEdge(Dictionary<string, HashSet<string>> edges, string before, string after)
+    {
+        if (!string.Equals(before, after, StringComparison.Ordinal) && edges.ContainsKey(before) && edges.ContainsKey(after))
+            edges[before].Add(after);
+    }
+
+    private IReadOnlyList<string> TopologicallyOrderCategories(IReadOnlyList<string> categories,
+        IReadOnlyDictionary<string, HashSet<string>> edges, IReadOnlyDictionary<string, string> nodeCategories)
+    {
+        var incoming = categories.ToDictionary(category => category, _ => 0, StringComparer.Ordinal);
+        foreach (var targets in edges.Values)
+            foreach (var target in targets) incoming[target]++;
+
+        int Priority(string category)
+        {
+            if (category == "external") return int.MaxValue;
+            if (category.StartsWith("standalone:", StringComparison.Ordinal)) return int.MaxValue - 1000 + int.Parse(category.Substring("standalone:".Length));
+            if (category == "baseline") return 500;
+            if (category.StartsWith("role:", StringComparison.Ordinal))
+            {
+                var role = category.Substring("role:".Length);
+                return 100 + ((request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+                    .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal)
+                    .Select((rule, index) => (rule.Name, index)).FirstOrDefault(item => string.Equals(item.Name, role, StringComparison.Ordinal)).index);
+            }
+            return int.Parse(category.Substring("depth:".Length));
+        }
+
+        var ready = new SortedSet<string>(Comparer<string>.Create((left, right) =>
+        {
+            var compare = Priority(left).CompareTo(Priority(right));
+            return compare != 0 ? compare : string.CompareOrdinal(left, right);
+        }));
+        foreach (var category in categories.Where(category => incoming[category] == 0)) ready.Add(category);
+        var result = new List<string>(categories.Count);
+        while (ready.Count > 0)
+        {
+            var category = ready.Min!;
+            ready.Remove(category);
+            result.Add(category);
+            foreach (var target in edges[category].OrderBy(item => item, StringComparer.Ordinal))
+                if (--incoming[target] == 0) ready.Add(target);
+        }
+
+        if (result.Count != categories.Count)
+        {
+            var remaining = categories.Where(category => !result.Contains(category, StringComparer.Ordinal)).OrderBy(Priority).ThenBy(category => category, StringComparer.Ordinal).ToArray();
+            diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementCategoryOrderCycle",
+                $"Configured and hierarchy category constraints contain a cycle: {string.Join(" -> ", remaining)}.",
+                PlanningDiagnosticSubject.Grid, string.Join(",", remaining)));
+            result.AddRange(remaining);
+        }
+        return result;
     }
 
     private void CalculateSpans()
@@ -493,7 +560,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
         var intervals = new List<ProfileInterval>();
         var childProfiles = new List<(string ChildId, SubtreeHorizontalProfile Profile, int Shift)>();
-        foreach (var child in childrenByNode[id].Where(child => !nodes[child].IsStandalone))
+        foreach (var child in childrenByNode[id].Where(child => !nodes[child].IsStandalone && !nodes[child].IsExternal))
         {
             var childProfile = BuildProfile(child);
             var compositionTimer = Stopwatch.StartNew();
@@ -592,46 +659,124 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
     }
 
-    private void AlignExternalProfiles(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> externalNodes,
+    private void ResolveRootRowConflicts(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> roots)
+    {
+        for (var pass = 0; pass < roots.Count + 1; pass++)
+        {
+            var contours = roots.SelectMany(root => SubtreeMembers(root.PhysicalNodeId)
+                    .Where(id => slotByNode.ContainsKey(id) && !nodes[id].IsExternal && !nodes[id].IsStandalone)
+                    .SelectMany(id => slotByNode[id].Columns.Select(column =>
+                        (Root: root.PhysicalNodeId, Row: slotByNode[id].RowId, Column: grid.ColumnOrder(column)))))
+                .GroupBy(item => (item.Root, item.Row))
+                .Select(group => (group.Key.Root, group.Key.Row,
+                    Start: group.Min(item => item.Column), End: group.Max(item => item.Column)))
+                .GroupBy(item => item.Row);
+
+            var moved = false;
+            foreach (var rowContours in contours)
+            {
+                var ordered = rowContours.OrderBy(item => item.Start).ToArray();
+                for (var index = 1; index < ordered.Length; index++)
+                {
+                    if (!Intersects(ordered[index - 1].Start, ordered[index - 1].End,
+                        ordered[index].Start, ordered[index].End)) continue;
+
+                    var delta = ordered[index - 1].End + LogicalGap + 1 - ordered[index].Start;
+                    if (delta <= 0) continue;
+                    if (!MoveRootSubtree(grid, ordered[index].Root, delta))
+                    {
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSubtreeCollisionUnresolved",
+                            "A complete root subtree could not be translated to resolve a same-row collision.",
+                            PlanningDiagnosticSubject.PhysicalNode, ordered[index].Root));
+                        continue;
+                    }
+                    moved = true;
+                    break;
+                }
+                if (moved) break;
+            }
+            if (!moved) return;
+        }
+    }
+
+    private bool MoveRootSubtree(LogicalProjectGrid grid, string rootId, int delta)
+    {
+        var members = SubtreeMembers(rootId)
+            .Where(id => slotByNode.ContainsKey(id) && !nodes[id].IsExternal && !nodes[id].IsStandalone)
+            .ToArray();
+        var moves = members.Select(id =>
+        {
+            var slot = slotByNode[id];
+            return (NodeId: id, Row: slot.RowId, Start: grid.ColumnOrder(slot.Columns[0]), Span: slot.Columns.Count);
+        }).ToArray();
+        var maxAdditionalShift = Math.Max(grid.Columns.Count, moves.Length * 8);
+        for (var candidateDelta = delta; candidateDelta <= delta + maxAdditionalShift; candidateDelta++)
+        {
+            if (!grid.TryMoveNodeFootprints(moves.Select(move => (move.Row, move.Start, move.Span)).ToArray(), candidateDelta))
+                continue;
+
+            foreach (var move in moves)
+            {
+                var columns = grid.Columns.Skip(move.Start + candidateDelta).Take(move.Span).ToArray();
+                slotByNode[move.NodeId] = new GridSlot(move.Row, columns);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private void PlaceExternalProfiles(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> externalNodes,
         ICollection<ProfileInterval> occupied)
     {
         foreach (var external in externalNodes.OrderBy(node => order[node.PhysicalNodeId]))
         {
             var owner = ownerByNode[external.PhysicalNodeId];
-            if (owner is null || !slotByNode.TryGetValue(owner, out var ownerSlot) || !slotByNode.TryGetValue(external.PhysicalNodeId, out var externalSlot))
-                continue;
-
-            var ownerCentre = grid.ColumnOrder(ownerSlot.AnchorColumn);
-            var span = externalSlot.Columns.Count;
-            var desiredStart = ownerCentre - span / 2;
-            var currentStart = grid.ColumnOrder(externalSlot.Columns[0]);
-            if (desiredStart == currentStart) continue;
-
-            var interval = occupied.Single(item => item.OwnerId == external.PhysicalNodeId);
-            var candidate = interval with { Start = desiredStart, End = desiredStart + span - 1 };
-            var blocked = occupied.Any(item => item.OwnerId != external.PhysicalNodeId &&
-                item.RowRole == interval.RowRole && CountsAsConflict(candidate, item, 0));
-            if (blocked)
+            var span = spanByNode[external.PhysicalNodeId];
+            var preferredStart = owner is not null && slotByNode.TryGetValue(owner, out var ownerSlot)
+                ? grid.ColumnOrder(ownerSlot.AnchorColumn) - span / 2
+                : 0;
+            var rowRole = rowRoleByNode[external.PhysicalNodeId];
+            var start = FindNearestFreeStart(preferredStart, span, rowRole, occupied);
+            if (start < 0)
             {
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalAffinityBlocked",
-                    "An external node could not align to its owner because the owner-centred footprint is occupied on the external layer.",
+                    "An external node could not occupy a valid owner-local position on the external layer.",
                     PlanningDiagnosticSubject.PhysicalNode, external.PhysicalNodeId));
                 continue;
             }
 
-            if (!grid.TryMoveNodeFootprint(externalSlot.RowId, currentStart, desiredStart, span))
+            if (owner is not null && start != preferredStart)
             {
+                externalAffinityBlocked.Add(external.PhysicalNodeId);
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalAffinityBlocked",
-                    "An external node could not align to its owner because its target logical footprint conflicts with another node.",
+                    $"Preferred owner-centred external position was occupied; selected nearest free start {start} instead of {preferredStart}.",
                     PlanningDiagnosticSubject.PhysicalNode, external.PhysicalNodeId));
-                continue;
             }
 
-            occupied.Remove(interval);
-            occupied.Add(candidate);
-            slotByNode[external.PhysicalNodeId] = new GridSlot(externalSlot.RowId,
-                grid.Columns.Skip(desiredStart).Take(span).ToArray());
+            var profile = new SubtreeHorizontalProfile($"subtree:{external.PhysicalNodeId}", external.PhysicalNodeId,
+                new[] { new ProfileInterval(rowRole, start, start + span - 1, external.PhysicalNodeId, "external", span) });
+            MaterializeProfile(grid, profile, 0, occupied);
         }
+    }
+
+    private int FindNearestFreeStart(int preferredStart, int span, string rowRole,
+        IEnumerable<ProfileInterval> occupied)
+    {
+        var occupiedIntervals = occupied.Where(item => item.RowRole == rowRole).ToArray();
+        var limit = Math.Max(preferredStart + span,
+            occupiedIntervals.Select(item => item.End).DefaultIfEmpty(0).Max() + span + 2);
+        for (var distance = 0; distance < limit + span + 2; distance++)
+        {
+            var candidates = distance == 0 ? new[] { preferredStart } : new[] { preferredStart - distance, preferredStart + distance };
+            foreach (var start in candidates.Where(start => start >= 0))
+            {
+                var candidate = new ProfileInterval(rowRole, start, start + span - 1, "candidate", "external", span);
+                if (!occupiedIntervals.Any(existing => CountsAsConflict(candidate, existing, 0)))
+                    return start;
+            }
+        }
+        return -1;
     }
 
     private int FindCompatibleShift(IReadOnlyList<ProfileInterval> candidate,
@@ -923,6 +1068,31 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 occupiedNodeCells.UnionWith(oldCells);
                 return false;
             }
+            occupiedNodeCells.UnionWith(newCells);
+            foreach (var cell in newCells) occupiedNodeColumns.Add(cell.ColumnId);
+            return true;
+        }
+
+        public bool TryMoveNodeFootprints(IReadOnlyList<(PlanningGridRowId Row, int Start, int Span)> moves, int delta)
+        {
+            if (moves.Count == 0 || delta <= 0) return false;
+            EnsureColumns(moves.Max(move => move.Start + delta + move.Span));
+            var oldCells = moves.SelectMany(move => columns.Skip(move.Start).Take(move.Span)
+                    .Select(column => new PlanningGridCellId(Id, move.Row, column)))
+                .ToArray();
+            foreach (var cell in oldCells) occupiedNodeCells.Remove(cell);
+
+            var newCells = moves.SelectMany(move =>
+                    columns.Skip(move.Start + delta).Take(move.Span)
+                        .Select(column => new PlanningGridCellId(Id, move.Row, column)))
+                .ToArray();
+            if (newCells.Length != oldCells.Length || newCells.Distinct().Count() != newCells.Length ||
+                newCells.Any(occupiedNodeCells.Contains))
+            {
+                occupiedNodeCells.UnionWith(oldCells);
+                return false;
+            }
+
             occupiedNodeCells.UnionWith(newCells);
             foreach (var cell in newCells) occupiedNodeColumns.Add(cell.ColumnId);
             return true;
