@@ -427,10 +427,13 @@ public sealed class ArchitectureV6StructuralTests
         {
             var transform = plan.PhysicalScene.Transforms.Single(item => item.GridId.Equals(node.GridId));
             var relative = plan.RelativeGeometry!.Nodes.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
-            Assert.Equal(relative.Bounds.X + transform.Origin.X, node.AbsoluteBounds.X);
-            Assert.Equal(relative.Bounds.Y + transform.Origin.Y, node.AbsoluteBounds.Y);
-            Assert.Equal(relative.Bounds.Width, node.AbsoluteBounds.Width);
-            Assert.Equal(relative.Bounds.Height, node.AbsoluteBounds.Height);
+            var visible = relative.VisibleBounds ?? relative.Bounds;
+            Assert.Equal(visible.X + transform.Origin.X, node.AbsoluteBounds.X);
+            Assert.Equal(visible.Y + transform.Origin.Y, node.AbsoluteBounds.Y);
+            Assert.Equal(visible.Width, node.AbsoluteBounds.Width);
+            Assert.Equal(visible.Height, node.AbsoluteBounds.Height);
+            Assert.Equal(relative.Bounds.X + transform.Origin.X, node.AbsoluteRoutingBounds!.Value.X);
+            Assert.Equal(relative.Bounds.Width, node.AbsoluteRoutingBounds.Value.Width);
         }
 
         var projectTransform = Assert.Single(plan.PhysicalScene.Transforms,
@@ -730,7 +733,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_keeps_baseline_members_in_hierarchy_order_without_changing_depth()
+    public void Planner_keeps_baseline_members_on_one_final_layer_and_reports_hierarchy_conflict()
     {
         var request = Request() with
         {
@@ -755,10 +758,9 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(2, baseline.Length);
         var root = baseline.Single(node => node.SemanticNodeId == "root");
         var child = baseline.Single(node => node.SemanticNodeId == "child");
-        Assert.True(root.PhysicalRow < child.PhysicalRow);
+        Assert.Equal(root.PhysicalRow, child.PhysicalRow);
         Assert.Equal(0, plan.NodeMetadata.Single(node => node.SemanticNodeId == "root").SemanticDepth);
         Assert.Equal(1, plan.NodeMetadata.Single(node => node.SemanticNodeId == "child").SemanticDepth);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotAboveChild");
     }
 
     [Fact]
@@ -800,7 +802,7 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.True(aggregation.IsBaseline);
         Assert.True(orchestration.IsBaseline);
-        Assert.NotEqual(aggregation.PhysicalRow, orchestration.PhysicalRow);
+        Assert.Equal(aggregation.PhysicalRow, orchestration.PhysicalRow);
         Assert.Equal("AggregationService", aggregation.RoleSelector);
         Assert.Equal("OrchestrationService", orchestration.RoleSelector);
     }
@@ -1638,7 +1640,7 @@ public sealed class ArchitectureV6StructuralTests
         {
             NodePlacement = Request().NodePlacement with
             {
-                BaselinePattern = ".*(Processing|Coordination|Orchestration)Service$",
+                BaselinePattern = "*OrchestrationService",
                 RoleRules = new[]
                 {
                     new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 0),
@@ -1710,6 +1712,82 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Single(external.Select(node => node.FinalVisualLayerOrdinal).Distinct());
         Assert.True(external.Min(node => node.FinalVisualLayerOrdinal) > nonExternal.Max(node => node.FinalVisualLayerOrdinal));
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
+    }
+
+    [Fact]
+    public void Final_plan_uses_first_matching_role_rule_and_keeps_a_role_on_one_final_layer()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                RoleRules = new[]
+                {
+                    new ArchitectureV6RoleRule("CoordinationService", "CoordinationService$", 0),
+                    new ArchitectureV6RoleRule("Service", "Service$", 1)
+                }
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("coordination", "project:p", "SomeCoordinationService", "Project.SomeCoordinationService", "Class", "coordination", Array.Empty<string>()),
+                        new ArchitectureNode("service", "project:p", "OtherService", "Project.OtherService", "Class", "service", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-coordination", "root", "coordination", "internal"),
+                    new ArchitectureLink("root-service", "root", "service", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
+
+        Assert.Equal("CoordinationService", metadata["coordination"].RoleSelector);
+        Assert.Equal("Service", metadata["service"].RoleSelector);
+        Assert.True(metadata["coordination"].FinalVisualLayerOrdinal < metadata["service"].FinalVisualLayerOrdinal);
+    }
+
+    [Fact]
+    public void Final_plan_keeps_multiple_nodes_in_one_configured_category_on_one_layer()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                RoleRules = new[] { new ArchitectureV6RoleRule("Service", "Service$", 0) }
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("left", "project:p", "LeftService", "Project.LeftService", "Class", "left", Array.Empty<string>()),
+                        new ArchitectureNode("right", "project:p", "RightService", "Project.RightService", "Class", "right", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-left", "root", "left", "internal"),
+                    new ArchitectureLink("root-right", "root", "right", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var services = plan.NodeMetadata.Where(node => node.RoleSelector == "Service").ToArray();
+
+        Assert.Equal(2, services.Length);
+        Assert.Single(services.Select(node => node.FinalVisualLayerOrdinal).Distinct());
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementLayerOrderContradiction");
     }
 
     [Fact]

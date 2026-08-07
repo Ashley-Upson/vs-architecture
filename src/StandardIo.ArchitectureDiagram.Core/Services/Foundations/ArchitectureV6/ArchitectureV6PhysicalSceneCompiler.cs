@@ -272,10 +272,13 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 findings.Add(new ArchitecturePlanningDiagnostic("MissingGridTransform", "Node grid has no accepted transform.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
                 continue;
             }
-            var absolute = Translate(node.Bounds, transform.Origin);
+            var visibleBounds = node.VisibleBounds ?? node.Bounds;
+            var absolute = Translate(visibleBounds, transform.Origin);
+            var routingAbsolute = Translate(node.Bounds, transform.Origin);
             var source = nodes.SingleOrDefault(item => item.PhysicalNodeId == node.PhysicalNodeId);
-            result.Add(new PlannedPhysicalNodeGeometry(node.PhysicalNodeId, node.SemanticNodeId, node.ProjectId, node.Bounds, absolute,
-                node.GridId, node.AnchorCellId, node.PositionalOwnerId, node.ProjectionMode, node.IsExternal, node.IsStandalone));
+            result.Add(new PlannedPhysicalNodeGeometry(node.PhysicalNodeId, node.SemanticNodeId, node.ProjectId, visibleBounds, absolute,
+                node.GridId, node.AnchorCellId, node.PositionalOwnerId, node.ProjectionMode, node.IsExternal, node.IsStandalone,
+                node.Bounds, routingAbsolute));
             if (source is null)
                 findings.Add(new ArchitecturePlanningDiagnostic("PhysicalNodeGeometrySourceMissing", "Geometry has no physical node source.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         }

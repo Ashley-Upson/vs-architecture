@@ -78,8 +78,10 @@ internal sealed class ArchitectureV6TrackSizingPlanner
             {
                 var node = nodes.Single(item => item.PhysicalNodeId == placement.PhysicalNodeId);
                 var bounds = FootprintBounds(placement, sized);
+                var visibleBounds = VisibleBounds(node, bounds);
                 relativeNodes.Add(new PlannedRelativeNodeGeometry(node.PhysicalNodeId, node.SemanticNodeId, node.ProjectId,
-                    bounds, placement.GridId, placement.AnchorCellId, node.PositionalOwnerId, node.ProjectionMode, node.IsExternal, node.IsStandalone));
+                    bounds, placement.GridId, placement.AnchorCellId, node.PositionalOwnerId, node.ProjectionMode, node.IsExternal, node.IsStandalone,
+                    visibleBounds));
             }
             nodeEnvelopeTimer.Stop();
             nodeEnvelopeMilliseconds += nodeEnvelopeTimer.ElapsedMilliseconds;
@@ -286,6 +288,19 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         return Math.Max(request.NodePlacement.MinimumNodeWidth, longestLine * 8 + 44);
     }
 
+    private RelativeRectangle VisibleBounds(PlannedPhysicalNode node, RelativeRectangle routingBounds)
+    {
+        // The logical footprint remains the routing authority. The emitted
+        // rectangle is only the visible label box, centred within that
+        // footprint, so terminal demand and lane capacity cannot enlarge it.
+        var width = Math.Min(routingBounds.Width, NodeWidth(node));
+        var height = Math.Min(routingBounds.Height, Math.Max(request.NodePlacement.MinimumNodeHeight, 40));
+        return new RelativeRectangle(
+            routingBounds.X + Math.Max(0, (routingBounds.Width - width) / 2),
+            routingBounds.Y + Math.Max(0, (routingBounds.Height - height) / 2),
+            Math.Max(1, width), Math.Max(1, height));
+    }
+
     private int InitialColumnMinimum(PlanningGridColumn column) => column.Role switch
     {
         PlanningGridTrackRole.NodeFootprint => request.GridSizing.NodeFootprintColumnMinimum,
@@ -430,6 +445,9 @@ internal sealed class ArchitectureV6TrackSizingPlanner
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("RelativeNodeEnvelopeMismatch",
                     $"Node rectangle must equal its complete footprint envelope: {node.PhysicalNodeId} [{node.Bounds}] != [{expected}].",
                     PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+            if (node.VisibleBounds is not null && !Contains(node.Bounds, node.VisibleBounds.Value))
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("VisibleNodeOutsideRoutingFootprint",
+                    "The visible node rectangle must remain inside its routing footprint.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
             if (node.ProjectId is not null)
             {
                 var project = relative.Projects.SingleOrDefault(item => item.ProjectId == node.ProjectId);

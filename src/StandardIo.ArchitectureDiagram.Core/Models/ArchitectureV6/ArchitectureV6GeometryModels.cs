@@ -267,7 +267,9 @@ public sealed record PlannedPhysicalNodeGeometry(
     string? PositionalOwnerId,
     PhysicalNodeProjectionMode ProjectionMode,
     bool IsExternal,
-    bool IsStandalone);
+    bool IsStandalone,
+    RelativeRectangle? RelativeRoutingBounds = null,
+    AbsoluteRectangle? AbsoluteRoutingBounds = null);
 
 public sealed record PlannedProjectGeometry(
     string ProjectId,
@@ -295,7 +297,8 @@ public sealed record PlannedRelativeNodeGeometry(
     string? PositionalOwnerId,
     PhysicalNodeProjectionMode ProjectionMode,
     bool IsExternal,
-    bool IsStandalone);
+    bool IsStandalone,
+    RelativeRectangle? VisibleBounds = null);
 
 public sealed record PlannedRelativeProjectGeometry(
     string ProjectId,

@@ -268,34 +268,79 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
 
     private void CalculateRows()
     {
-        var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
-        var baseline = nodes.Values.Where(node => baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)).ToArray();
-        var baselineSet = new HashSet<PlannedPhysicalNode>(baseline);
         var assigned = new Dictionary<string, int>(StringComparer.Ordinal);
-        var visiting = new HashSet<string>(StringComparer.Ordinal);
-        int AssignHierarchyLayer(string id)
+        var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
+        var baselineSet = new HashSet<string>(nodes.Values
+            .Where(node => baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId))
+            .Select(node => node.PhysicalNodeId), StringComparer.Ordinal);
+        var orderedRules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+            .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal).ToArray();
+        var roleByNode = nodes.Values.ToDictionary(node => node.PhysicalNodeId, node => ResolveRole(node.SemanticName), StringComparer.Ordinal);
+        var roleRank = orderedRules.Select((rule, index) => (rule.Name, index))
+            .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
+        // A configured role is a visual category, not a hint for per-node depth.
+        // Every member starts on the same band. Parent/child constraints are
+        // validated below; splitting a category would make the configured rule
+        // meaningless and would make the result depend on traversal order.
+        foreach (var node in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone))
         {
-            if (assigned.TryGetValue(id, out var known)) return known;
-            if (!visiting.Add(id))
-            {
-                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementLayerCycle", "A positional ownership cycle prevents a strict parent-above-child layer assignment; the cycle was terminated deterministically.", PlanningDiagnosticSubject.PhysicalNode, id));
-                return depthByNode[id];
-            }
-
-            var node = nodes[id];
-            var roleOffset = baselineSet.Contains(node) ? Math.Max(0, ConfiguredRoleOrder(node)) : 0;
-            var layer = depthByNode[id] + roleOffset;
-            var owner = ownerByNode[id];
-            if (owner is not null && nodes.ContainsKey(owner) && !nodes[owner].IsExternal && !nodes[owner].IsStandalone)
-                layer = Math.Max(layer, AssignHierarchyLayer(owner) + 1);
-
-            visiting.Remove(id);
-            assigned[id] = layer;
-            return layer;
+            var role = roleByNode[node.PhysicalNodeId];
+            assigned[node.PhysicalNodeId] = roleRank.TryGetValue(role, out var rank) ? rank + 1 : depthByNode[node.PhysicalNodeId];
         }
 
-        foreach (var node in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]))
-            AssignHierarchyLayer(node.PhysicalNodeId);
+        if (baselineSet.Count > 0)
+        {
+            var baselineLayer = baselineSet.Select(id => assigned[id]).Max();
+            foreach (var id in baselineSet) assigned[id] = baselineLayer;
+        }
+
+        foreach (var parent in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]))
+        {
+            foreach (var childId in childrenByNode[parent.PhysicalNodeId])
+            {
+                if (!assigned.TryGetValue(childId, out var childLayer)) continue;
+                var parentLayer = assigned[parent.PhysicalNodeId];
+                if (parentLayer < childLayer) continue;
+
+                var parentRole = roleByNode[parent.PhysicalNodeId];
+                var childRole = roleByNode[childId];
+                if (baselineSet.Contains(parent.PhysicalNodeId) && baselineSet.Contains(childId))
+                {
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "LogicalPlacementBaselineHierarchyContradiction",
+                        "Baseline members are constrained to one final layer, which conflicts with strict parent-above-child placement.",
+                        PlanningDiagnosticSubject.PhysicalNode, childId));
+                    continue;
+                }
+                if (roleRank.ContainsKey(parentRole) && roleRank.ContainsKey(childRole) &&
+                    string.Equals(parentRole, childRole, StringComparison.Ordinal))
+                {
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "LogicalPlacementLayerCategoryContradiction",
+                        "A configured role category contains a positional parent and child; preserving one final category layer conflicts with strict parent-above-child placement.",
+                        PlanningDiagnosticSubject.PhysicalNode, childId));
+                    continue;
+                }
+
+                if (!roleRank.ContainsKey(childRole))
+                    assigned[childId] = parentLayer + 1;
+                else
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "LogicalPlacementLayerOrderContradiction",
+                        "Configured role order places a positional child at or above its parent; the configured category bands were retained.",
+                        PlanningDiagnosticSubject.PhysicalNode, childId));
+            }
+        }
+
+        // Reapply unmatched hierarchy depth after role bands are known. This
+        // keeps controllers and other uncategorised nodes above their first
+        // configured service band without splitting configured categories.
+        foreach (var node in nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone && !roleRank.ContainsKey(roleByNode[node.PhysicalNodeId])))
+        {
+            var owner = ownerByNode[node.PhysicalNodeId];
+            if (owner is not null && assigned.TryGetValue(owner, out var parentLayer))
+                assigned[node.PhysicalNodeId] = Math.Max(assigned[node.PhysicalNodeId], parentLayer + 1);
+        }
 
         var mainMax = assigned.Values.DefaultIfEmpty(-1).Max();
         var standaloneNodes = nodes.Values.Where(node => node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
@@ -314,22 +359,18 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         foreach (var item in assigned)
             finalVisualLayerByNode[item.Key] = layerRanks[item.Value];
 
-        var baselineBandLayerByRole = baseline
-            .GroupBy(node => ResolveRole(node.SemanticName), StringComparer.Ordinal)
-            .ToDictionary(group => group.Key,
-                group => group.Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).Min(),
-                StringComparer.Ordinal);
-
         foreach (var node in nodes.Values)
         {
             var layer = finalVisualLayerByNode[node.PhysicalNodeId];
-            var role = ResolveRole(node.SemanticName);
+            var role = roleByNode[node.PhysicalNodeId];
             rowRoleByNode[node.PhysicalNodeId] = node.IsExternal
                 ? "external"
                 : node.IsStandalone
                 ? $"standalone:{layer}"
-                : baselineSet.Contains(node) && baselineBandLayerByRole[role] == layer
-                ? $"baseline:{role}"
+                : baselineSet.Contains(node.PhysicalNodeId)
+                ? "baseline"
+                : roleRank.ContainsKey(role)
+                ? $"role:{role}"
                 : $"depth:{layer}";
         }
 
