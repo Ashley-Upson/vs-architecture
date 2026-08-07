@@ -114,7 +114,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var incompleteTurnContractCount = boundaryValidation.Routes.SelectMany(route => route.Components)
             .Count(component => component.Kind == PlannedRouteComponentKind.Turn) - completeTurnContractCount;
         var findings = projection.Diagnostics.Concat(cardinalityFindings)
-            .Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(boundaryDiagnostics)
+            .Concat(placement.Diagnostics).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(boundaryDiagnostics)
             .Concat(sizing.Diagnostics).Concat(physicalScene.Diagnostics).ToArray();
 
         var metrics = new ArchitecturePlanningMetrics(

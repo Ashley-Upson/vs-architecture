@@ -1810,6 +1810,42 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Final_plan_visible_size_does_not_grow_with_terminal_demand()
+    {
+        var nodes = new List<ArchitectureNode>
+        {
+            new("low", "project:p", "SameService", "Project.Low", "Class", "low", Array.Empty<string>()),
+            new("high", "project:p", "SameService", "Project.High", "Class", "high", Array.Empty<string>())
+        };
+        var links = new List<ArchitectureLink>();
+        for (var index = 0; index < 8; index++)
+        {
+            var id = "child-" + index;
+            nodes.Add(new ArchitectureNode(id, "project:p", "ChildService" + index, "Project.Child" + index, "Class", id, Array.Empty<string>()));
+            links.Add(new ArchitectureLink("high-" + id, "high", id, "internal"));
+        }
+
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
+                Links = links
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var geometries = plan.PhysicalScene!.Geometry.Nodes
+            .Where(node => node.SemanticNodeId is "low" or "high")
+            .ToArray();
+
+        Assert.Equal(2, geometries.Length);
+        Assert.Equal(geometries[0].AbsoluteBounds.Width, geometries[1].AbsoluteBounds.Width);
+        Assert.Equal(geometries[0].AbsoluteBounds.Height, geometries[1].AbsoluteBounds.Height);
+        Assert.NotEqual(geometries[0].AbsoluteRoutingBounds!.Value.Width, geometries[1].AbsoluteRoutingBounds!.Value.Width);
+    }
+
+    [Fact]
     public void Final_plan_routes_use_final_scene_bounds_and_renderer_is_mechanical()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());

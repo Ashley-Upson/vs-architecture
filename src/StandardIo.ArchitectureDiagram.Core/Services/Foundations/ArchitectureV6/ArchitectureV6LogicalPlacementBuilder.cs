@@ -78,6 +78,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             }
 
             PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);
+            AlignExternalProfiles(logicalGrid, projectNodes.Where(node => node.IsExternal).ToArray(), occupied);
             logicalGrid.EnsureColumns(occupied.Count == 0 ? 0 : occupied.Max(interval => interval.End + 1));
             var placements = projectNodes.Select(BuildPlacement).OrderBy(item => order[item.PhysicalNodeId]).ToArray();
             projectPlacements[projectId] = placements.ToList();
@@ -171,6 +172,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalNotLocal", "An external node with one positional owner must be directly below and centred on that owner.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         }
 
+        ValidateFinalParentGeometry();
+        ValidateFinalRoleBands();
+
         if (reservations.Count != nodes.Count)
             diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementReservationAccounting", "Each projected physical node must have one subtree reservation.", PlanningDiagnosticSubject.Grid, null));
 
@@ -224,6 +228,85 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             children.Sort((left, right) => order[left] != order[right]
                 ? order[left].CompareTo(order[right])
                 : string.CompareOrdinal(left, right));
+    }
+
+    private void ValidateFinalParentGeometry()
+    {
+        foreach (var parent in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+        {
+            var children = childrenByNode[parent.PhysicalNodeId]
+                .Where(id => slotByNode.ContainsKey(id) && !nodes[id].IsExternal && !nodes[id].IsStandalone)
+                .ToArray();
+            if (children.Length == 0 || !slotByNode.ContainsKey(parent.PhysicalNodeId)) continue;
+
+            var grid = gridsByProject[ProjectOf(parent)];
+            var parentSlot = slotByNode[parent.PhysicalNodeId];
+            var parentCentre = (grid.ColumnOrder(parentSlot.Columns.First()) + grid.ColumnOrder(parentSlot.Columns.Last())) / 2.0;
+            var childSlots = children.Select(id => slotByNode[id]).ToArray();
+            var groupStart = childSlots.Min(slot => grid.ColumnOrder(slot.Columns.First()));
+            var groupEnd = childSlots.Max(slot => grid.ColumnOrder(slot.Columns.Last()));
+            var expectedCentre = (groupStart + groupEnd) / 2.0;
+            var error = Math.Abs(parentCentre - expectedCentre);
+
+            if (children.Length == 1 && error > 1)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSingleChildNotCentered",
+                    $"A single-child parent is {error:0.##} logical columns away from its child centre.", PlanningDiagnosticSubject.PhysicalNode, parent.PhysicalNodeId));
+            else if (children.Length > 1 && error > 1)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementParentNotCentered",
+                    $"A parent is {error:0.##} logical columns away from its immediate-child group centre.", PlanningDiagnosticSubject.PhysicalNode, parent.PhysicalNodeId));
+
+            var childIntervals = childSlots.Select(slot =>
+                (Start: grid.ColumnOrder(slot.Columns.First()), End: grid.ColumnOrder(slot.Columns.Last()))).ToArray();
+            for (var index = 0; index < childIntervals.Length; index++)
+                for (var other = index + 1; other < childIntervals.Length; other++)
+                    if (Intersects(childIntervals[index].Start, childIntervals[index].End, childIntervals[other].Start, childIntervals[other].End))
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSiblingInterleave",
+                            "Immediate sibling subtree intervals overlap after final placement.", PlanningDiagnosticSubject.PhysicalNode, parent.PhysicalNodeId));
+        }
+
+        var roots = nodes.Values.Where(node => ownerByNode[node.PhysicalNodeId] is null && !node.IsStandalone)
+            .GroupBy(ProjectOf, StringComparer.Ordinal);
+        foreach (var projectRoots in roots)
+        {
+            var grid = gridsByProject[projectRoots.Key];
+            var rootIntervals = projectRoots.Select(root =>
+            {
+                var members = SubtreeMembers(root.PhysicalNodeId).Where(slotByNode.ContainsKey).ToArray();
+                var columns = members.SelectMany(id => slotByNode[id].Columns).ToArray();
+                return (Root: root.PhysicalNodeId, Start: columns.Min(grid.ColumnOrder), End: columns.Max(grid.ColumnOrder));
+            }).OrderBy(item => item.Start).ToArray();
+            for (var index = 1; index < rootIntervals.Length; index++)
+                if (rootIntervals[index].Start <= rootIntervals[index - 1].End)
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementSubtreeInterleave",
+                        "Completed root subtree contours overlap or interleave after final packing.", PlanningDiagnosticSubject.PhysicalNode,
+                        rootIntervals[index].Root));
+        }
+    }
+
+    private void ValidateFinalRoleBands()
+    {
+        var rules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+            .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal).ToArray();
+        foreach (var rule in rules)
+        {
+            var members = nodes.Values.Where(node => string.Equals(ResolveRole(node.SemanticName), rule.Name, StringComparison.Ordinal)).ToArray();
+            var layers = members.Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).Distinct().ToArray();
+            if (layers.Length > 1)
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementRoleLayerSplit",
+                    $"Configured role '{rule.Name}' is split across final layers: {string.Join(",", layers.OrderBy(item => item))}.",
+                    PlanningDiagnosticSubject.PhysicalNode, rule.Name));
+        }
+
+        var roleLayers = rules.ToDictionary(rule => rule.Name,
+            rule => nodes.Values.Where(node => string.Equals(ResolveRole(node.SemanticName), rule.Name, StringComparison.Ordinal))
+                .Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).DefaultIfEmpty(-1).Min(), StringComparer.Ordinal);
+        for (var index = 0; index < rules.Length; index++)
+            for (var other = index + 1; other < rules.Length; other++)
+                if (roleLayers[rules[index].Name] >= 0 && roleLayers[rules[other].Name] >= 0 &&
+                    roleLayers[rules[index].Name] > roleLayers[rules[other].Name])
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementRoleOrderViolation",
+                        $"Configured role order places '{rules[index].Name}' before '{rules[other].Name}', but final layers reverse them.",
+                        PlanningDiagnosticSubject.PhysicalNode, rules[other].Name));
     }
 
     private void BuildTreeRoots()
@@ -435,8 +518,16 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
         else if (childProfiles.Count > 1)
         {
-            var childStart = intervals.Min(interval => interval.Start);
-            var childEnd = intervals.Max(interval => interval.End);
+            // Centre over the immediate child-node envelope, not over the
+            // widest descendant contour of any one child subtree.
+            var childNodes = childProfiles.Select(child =>
+                child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId) with
+                {
+                    Start = child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId).Start + child.Shift,
+                    End = child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId).End + child.Shift
+                }).ToArray();
+            var childStart = childNodes.Min(interval => interval.Start);
+            var childEnd = childNodes.Max(interval => interval.End);
             parentStart = childStart + Math.Max(0, ((childEnd - childStart + 1) - spanByNode[id]) / 2);
         }
         var parent = new ProfileInterval(rowRoleByNode[id], parentStart, parentStart + spanByNode[id] - 1,
@@ -498,6 +589,48 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 standalone[index].PhysicalNodeId, new[] { interval });
             var shift = FindCompatibleShift(profile.Intervals, occupied);
             MaterializeProfile(grid, profile, shift, occupied);
+        }
+    }
+
+    private void AlignExternalProfiles(LogicalProjectGrid grid, IReadOnlyList<PlannedPhysicalNode> externalNodes,
+        ICollection<ProfileInterval> occupied)
+    {
+        foreach (var external in externalNodes.OrderBy(node => order[node.PhysicalNodeId]))
+        {
+            var owner = ownerByNode[external.PhysicalNodeId];
+            if (owner is null || !slotByNode.TryGetValue(owner, out var ownerSlot) || !slotByNode.TryGetValue(external.PhysicalNodeId, out var externalSlot))
+                continue;
+
+            var ownerCentre = grid.ColumnOrder(ownerSlot.AnchorColumn);
+            var span = externalSlot.Columns.Count;
+            var desiredStart = ownerCentre - span / 2;
+            var currentStart = grid.ColumnOrder(externalSlot.Columns[0]);
+            if (desiredStart == currentStart) continue;
+
+            var interval = occupied.Single(item => item.OwnerId == external.PhysicalNodeId);
+            var candidate = interval with { Start = desiredStart, End = desiredStart + span - 1 };
+            var blocked = occupied.Any(item => item.OwnerId != external.PhysicalNodeId &&
+                item.RowRole == interval.RowRole && CountsAsConflict(candidate, item, 0));
+            if (blocked)
+            {
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalAffinityBlocked",
+                    "An external node could not align to its owner because the owner-centred footprint is occupied on the external layer.",
+                    PlanningDiagnosticSubject.PhysicalNode, external.PhysicalNodeId));
+                continue;
+            }
+
+            if (!grid.TryMoveNodeFootprint(externalSlot.RowId, currentStart, desiredStart, span))
+            {
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalAffinityBlocked",
+                    "An external node could not align to its owner because its target logical footprint conflicts with another node.",
+                    PlanningDiagnosticSubject.PhysicalNode, external.PhysicalNodeId));
+                continue;
+            }
+
+            occupied.Remove(interval);
+            occupied.Add(candidate);
+            slotByNode[external.PhysicalNodeId] = new GridSlot(externalSlot.RowId,
+                grid.Columns.Skip(desiredStart).Take(span).ToArray());
         }
     }
 
@@ -776,6 +909,23 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 throw new InvalidOperationException($"A logical node footprint conflicts with an existing node footprint in grid {Id}, row {row}, span {span}.");
             occupiedNodeCells.UnionWith(cells);
             foreach (var cell in cells) occupiedNodeColumns.Add(cell.ColumnId);
+        }
+
+        public bool TryMoveNodeFootprint(PlanningGridRowId row, int oldStart, int newStart, int span)
+        {
+            if (newStart < 0 || span <= 0 || span % 2 == 0) return false;
+            EnsureColumns(newStart + span);
+            var oldCells = columns.Skip(oldStart).Take(span).Select(column => new PlanningGridCellId(Id, row, column)).ToArray();
+            var newCells = columns.Skip(newStart).Take(span).Select(column => new PlanningGridCellId(Id, row, column)).ToArray();
+            foreach (var cell in oldCells) occupiedNodeCells.Remove(cell);
+            if (newCells.Any(occupiedNodeCells.Contains))
+            {
+                occupiedNodeCells.UnionWith(oldCells);
+                return false;
+            }
+            occupiedNodeCells.UnionWith(newCells);
+            foreach (var cell in newCells) occupiedNodeColumns.Add(cell.ColumnId);
+            return true;
         }
 
         public PlanningGridRowId EnsureRow(string role)
