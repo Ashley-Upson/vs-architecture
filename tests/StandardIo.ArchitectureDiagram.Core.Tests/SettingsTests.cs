@@ -98,6 +98,16 @@ public sealed class SettingsTests
     }
 
     [Fact]
+    public void Nullable_style_overlay_values_can_remain_null()
+    {
+        var settings = SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "styleRules": [{ "match": "*Service", "style": { "extraStyle": null } }] }""");
+
+        Assert.Null(settings.StyleRules.Single(rule => rule.Match == "*Service").Style.ExtraStyle);
+    }
+
+    [Fact]
     public void Unsupported_overlay_version_fails()
     {
         Assert.Throws<NotSupportedException>(() => SettingsSerializer.ApplyOverlay(

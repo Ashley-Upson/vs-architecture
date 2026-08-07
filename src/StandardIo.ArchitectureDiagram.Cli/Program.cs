@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -169,6 +170,16 @@ public static class Program
                 Path.Combine(directory, "architecture-evidence.json"),
                 JsonSerializer.Serialize(new
                 {
+                    Configuration = new
+                    {
+                        Path = string.IsNullOrWhiteSpace(options.SettingsPath)
+                            ? "repository-defaults"
+                            : Path.GetFullPath(options.SettingsPath),
+                        Version = settings.Version,
+                        Sha256 = string.IsNullOrWhiteSpace(options.SettingsPath)
+                            ? null
+                            : Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.GetFullPath(options.SettingsPath)))).ToLowerInvariant()
+                    },
                     architecture.Manifest,
                     architecture.Eligibility,
                     architecture.Findings,

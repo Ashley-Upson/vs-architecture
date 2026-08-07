@@ -179,7 +179,15 @@ public static class SettingsSerializer
         string path)
     {
         if (overlay.ValueKind == JsonValueKind.Null)
+        {
+            if (baseline.ValueKind == JsonValueKind.Null)
+            {
+                overlay.WriteTo(writer);
+                return;
+            }
+
             throw new InvalidDataException($"Settings overlay property '{path}' cannot be null.");
+        }
         if (baseline.ValueKind == JsonValueKind.Object && overlay.ValueKind == JsonValueKind.Object)
             WriteOverlayObject(writer, baseline, overlay, path);
         else
