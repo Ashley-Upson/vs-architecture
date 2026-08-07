@@ -70,8 +70,8 @@ public sealed record GridSizingPolicy(
     public int DiagramRoutingColumnMinimum { get; init; } = 1;
     public int StructuralColumnMinimum { get; init; } = 1;
     public int NodeBearingRowMinimum { get; init; } = 1;
-    public int RoutingRowMinimum { get; init; } = 1;
-    public int ProjectTransitionRowMinimum { get; init; } = 1;
+    public int RoutingRowMinimum { get; init; } = 20;
+    public int ProjectTransitionRowMinimum { get; init; } = 20;
 }
 
 public sealed record ValidationPolicy(ArchitectureValidationMode Mode);

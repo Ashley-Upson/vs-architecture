@@ -263,8 +263,10 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         foreach (var node in nodes.Values)
         {
             var branch = treeRootByNode[node.PhysicalNodeId];
-            rowRoleByNode[node.PhysicalNodeId] = baseline.Contains(node)
-                ? "baseline"
+            rowRoleByNode[node.PhysicalNodeId] = node.IsExternal
+                ? "external"
+                : baseline.Contains(node)
+                ? "baseline:" + ResolveRole(node.SemanticName)
                 : $"depth:{depthByNode[node.PhysicalNodeId]}";
         }
 
@@ -553,20 +555,20 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var semanticChildren = semanticChildrenByNode[node.PhysicalNodeId].Distinct(StringComparer.Ordinal).ToArray();
             var subtree = reservations.First(item => item.PositionalOwnerId == node.PhysicalNodeId);
             var role = node.IsExternal ? "External" : ResolveRole(node.SemanticName);
-            var baselineRows = rowRoleByNode.Where(item => IsBaseline(item.Key)).Select(item => item.Value).Distinct().ToArray();
-            var baseline = baselineRows.Length > 0 && baselineRows.Length == 1 && rowRoleByNode[node.PhysicalNodeId] == baselineRows[0];
+            var baseline = IsBaseline(node);
             return new PhysicalNodePlacementMetadata(node.PhysicalNodeId, node.SemanticNodeId, owner,
                 childrenByNode[node.PhysicalNodeId].ToArray(), semanticParents, semanticChildren, subtree.SubtreeId,
                 reservations.Where(item => item.SubtreeId == subtree.SubtreeId || item.AncestorReservationId == subtree.SubtreeId).Select(item => item.SubtreeId).ToArray(),
                 node.ProjectId, depthByNode[node.PhysicalNodeId], baseline, node.IsExternal, node.IsStandalone,
                 spanReasonByNode[node.PhysicalNodeId], depthByNode[node.PhysicalNodeId], role, 0, ProjectOf(node), owner is null ? $"root:{ProjectOf(node)}" : $"owner:{owner}",
-                "sibling", "logical-row", RowOrder(node.PhysicalNodeId), gridsByProject[ProjectOf(node)].ColumnOrder(slotByNode[node.PhysicalNodeId].AnchorColumn),
+                "sibling", rowRoleByNode[node.PhysicalNodeId], RowOrder(node.PhysicalNodeId), gridsByProject[ProjectOf(node)].ColumnOrder(slotByNode[node.PhysicalNodeId].AnchorColumn),
                 rootByNode.TryGetValue(node.PhysicalNodeId, out var rootId) ? rootId : node.PhysicalNodeId, owner, depthByNode[node.PhysicalNodeId] - (owner is null ? 0 : depthByNode[owner]),
                 0, owner is null ? order[node.PhysicalNodeId] : childrenByNode[owner].IndexOf(node.PhysicalNodeId), 0, subtree.SubtreeId);
         }).ToArray();
     }
 
     private bool IsBaseline(string id) => IsBaselineNode(nodes[id]);
+    private bool IsBaseline(PlannedPhysicalNode node) => IsBaselineNode(node);
     private bool IsBaselineNode(PlannedPhysicalNode node) => ToRegex(request.NodePlacement.BaselinePattern).IsMatch(node.SemanticName) ||
         ToRegex(request.NodePlacement.BaselinePattern).IsMatch(node.SemanticNodeId);
 

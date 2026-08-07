@@ -257,11 +257,12 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         }
         foreach (var placement in placements.Where(item => item.GridId.Equals(grid.Id)))
         {
+            var node = nodes.Single(item => item.PhysicalNodeId == placement.PhysicalNodeId);
             var placementRows = placement.Footprint.Select(item => item.RowId).Distinct().Where(rowIds.Contains).ToArray();
             var placementColumns = placement.Footprint.Select(item => item.ColumnId).Distinct().Where(columnIds.Contains).ToArray();
             result.Add(new GridTrackConstraint(TrackConstraintKind.NodeFootprint, grid.Id,
-                Array.Empty<PlanningGridRowId>(), placementColumns, request.NodePlacement.MinimumNodeWidth,
-                "node minimum footprint width", placement.PhysicalNodeId + ":columns"));
+                Array.Empty<PlanningGridRowId>(), placementColumns, NodeWidth(node),
+                "resolved display-label footprint width", placement.PhysicalNodeId + ":columns"));
             result.Add(new GridTrackConstraint(TrackConstraintKind.NodeFootprint, grid.Id,
                 placementRows, Array.Empty<PlanningGridColumnId>(), request.NodePlacement.MinimumNodeHeight,
                 "node minimum footprint height", placement.PhysicalNodeId + ":rows"));
@@ -276,6 +277,14 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         PlanningGridTrackRole.ProjectBoundaryTransition or PlanningGridTrackRole.DiagramProjectPlacement => request.GridSizing.ProjectTransitionRowMinimum,
         _ => request.GridSizing.RoutingRowMinimum
     };
+
+    private int NodeWidth(PlannedPhysicalNode node)
+    {
+        var label = node.DisplayLabel ?? node.SemanticName;
+        var longestLine = label.Split(new[] { '\n' }, StringSplitOptions.None)
+            .DefaultIfEmpty(string.Empty).Max(line => line.Length);
+        return Math.Max(request.NodePlacement.MinimumNodeWidth, longestLine * 8 + 44);
+    }
 
     private int InitialColumnMinimum(PlanningGridColumn column) => column.Role switch
     {

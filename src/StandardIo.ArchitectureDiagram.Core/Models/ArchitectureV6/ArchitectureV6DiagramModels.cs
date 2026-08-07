@@ -56,6 +56,9 @@ public sealed record PlannedPhysicalNode(
 {
     public string SemanticName { get; init; } = string.Empty;
     public string SemanticFullName { get; init; } = string.Empty;
+    public IReadOnlyList<string> Interfaces { get; init; } = Array.Empty<string>();
+    public int ImplementationCount { get; init; }
+    public string DisplayLabel { get; init; } = string.Empty;
     public ArchitectureV6StyleRule? ResolvedStyle { get; init; }
 }
 

@@ -332,6 +332,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 {
                     SemanticName = info.Name,
                     SemanticFullName = info.FullName,
+                    Interfaces = info.Interfaces,
+                    ImplementationCount = info.ImplementationCount,
+                    DisplayLabel = ResolveDisplayLabel(info.Name, info.Interfaces, info.ImplementationCount, info.IsExternal),
                     ResolvedStyle = ResolveNodeStyle(info.Name, info.FullName, info.IsExternal)
                 };
             }).ToList();
@@ -360,6 +363,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     {
                         SemanticName = nodes[link.TargetId].Name,
                         SemanticFullName = nodes[link.TargetId].FullName,
+                        Interfaces = nodes[link.TargetId].Interfaces,
+                        ImplementationCount = nodes[link.TargetId].ImplementationCount,
+                        DisplayLabel = ResolveDisplayLabel(nodes[link.TargetId].Name, nodes[link.TargetId].Interfaces,
+                            nodes[link.TargetId].ImplementationCount, nodes[link.TargetId].IsExternal),
                         ResolvedStyle = ResolveNodeStyle(nodes[link.TargetId].Name, nodes[link.TargetId].FullName, nodes[link.TargetId].IsExternal)
                     };
                     physicalNodes.Add(target);
@@ -423,14 +430,16 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 {
                     if (selectedNodes.Count > 0 && !selectedNodes.Contains(node.Id)) continue;
                     if (nodes.ContainsKey(node.Id)) continue;
-                    nodes.Add(node.Id, new SemanticInfo(node.Id, node.Name, node.FullName, project.Id, false));
+                    nodes.Add(node.Id, new SemanticInfo(node.Id, node.Name, node.FullName, project.Id, false,
+                        node.Interfaces ?? Array.Empty<string>(), node.ImplementationCount));
                     order.Add(node.Id);
                 }
             }
             foreach (var external in request.SemanticModel.ExternalNodes)
             {
                 if (nodes.ContainsKey(external.Id)) continue;
-                nodes.Add(external.Id, new SemanticInfo(external.Id, external.Name, external.FullName, null, true));
+                nodes.Add(external.Id, new SemanticInfo(external.Id, external.Name, external.FullName, null, true,
+                    Array.Empty<string>(), 0));
                 order.Add(external.Id);
             }
         }
@@ -463,6 +472,29 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             return cycles.OrderBy(id => order.IndexOf(id)).ToArray();
         }
 
-        private sealed record SemanticInfo(string Id, string Name, string FullName, string? ProjectId, bool IsExternal);
+        private static string ResolveDisplayLabel(string name, IReadOnlyList<string> interfaces, int implementationCount, bool external)
+        {
+            var simpleName = SimpleName(name);
+            if (external) return "[External]\n" + simpleName;
+            if (implementationCount > 1 && interfaces.Count == 0)
+                return $"{simpleName} ({implementationCount} implementations)";
+            if (interfaces.Count == 1)
+                return simpleName + ":" + SimpleName(interfaces[0]);
+            return simpleName;
+        }
+
+        private static string SimpleName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+            var lineBreak = value.IndexOf('\n');
+            if (lineBreak >= 0) value = value.Substring(0, lineBreak);
+            var displaySeparator = value.IndexOf(" : ", StringComparison.Ordinal);
+            if (displaySeparator >= 0) value = value.Substring(0, displaySeparator);
+            var lastDot = value.LastIndexOf('.');
+            return (lastDot >= 0 ? value.Substring(lastDot + 1) : value).Trim();
+        }
+
+        private sealed record SemanticInfo(string Id, string Name, string FullName, string? ProjectId, bool IsExternal,
+            IReadOnlyList<string> Interfaces, int ImplementationCount);
     }
 }

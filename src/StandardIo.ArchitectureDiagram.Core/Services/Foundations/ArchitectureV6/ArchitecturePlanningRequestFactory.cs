@@ -46,7 +46,11 @@ public static class ArchitecturePlanningRequestFactory
                     ProjectBoundary = Math.Max(layout.HorizontalSpacing * 2, layout.ContainerPadding * 2)
                 }),
             new RoutePlanningPolicy(layout.ParallelLaneSpacing, layout.EdgePortSpacing, analysis.ExternalDependencyTag),
-            new GridSizingPolicy(layout.NodeWidth, layout.NodeHeight, layout.ContainerPadding, layout.ProjectHeaderHeight),
+            new GridSizingPolicy(layout.NodeWidth, layout.NodeHeight, layout.ContainerPadding, layout.ProjectHeaderHeight)
+            {
+                RoutingRowMinimum = 20,
+                ProjectTransitionRowMinimum = 20
+            },
             new ValidationPolicy(mode == ArchitectureRenderingMode.Production
                 ? ArchitectureValidationMode.Normal
                 : ArchitectureValidationMode.Diagnostic),

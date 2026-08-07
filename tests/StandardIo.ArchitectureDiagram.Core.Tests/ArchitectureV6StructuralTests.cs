@@ -760,6 +760,88 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_uses_baseline_pattern_and_role_rules_as_separate_visual_bands()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                BaselinePattern = ".*(Aggregation|Orchestration)Service$",
+                RoleRules = new[]
+                {
+                    new ArchitectureV6RoleRule("AggregationService", "AggregationService$", 0),
+                    new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 1)
+                }
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("aggregation", "project:p", "AggregationService", "Project.AggregationService", "Class", "aggregation", Array.Empty<string>()),
+                        new ArchitectureNode("orchestration", "project:p", "OrchestrationService", "Project.OrchestrationService", "Class", "orchestration", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-aggregation", "root", "aggregation", "internal"),
+                    new ArchitectureLink("root-orchestration", "root", "orchestration", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var aggregation = plan.NodeMetadata.Single(node => node.SemanticNodeId == "aggregation");
+        var orchestration = plan.NodeMetadata.Single(node => node.SemanticNodeId == "orchestration");
+
+        Assert.True(aggregation.IsBaseline);
+        Assert.True(orchestration.IsBaseline);
+        Assert.NotEqual(aggregation.PhysicalRow, orchestration.PhysicalRow);
+        Assert.Equal("AggregationService", aggregation.RoleSelector);
+        Assert.Equal("OrchestrationService", orchestration.RoleSelector);
+    }
+
+    [Fact]
+    public void Planner_resolves_compact_labels_before_sizing_and_rendering()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("implementation", "project:p", "AuthorizationBroker", "Project.Brokers.AuthorizationBroker", "Class", "implementation",
+                            new[] { "Project.Contracts.IAuthorizationBroker" }),
+                        new ArchitectureNode("plain", "project:p", "PlainService", "Project.Services.PlainService", "Class", "plain", Array.Empty<string>())
+                    }, "project:p")
+                },
+                ExternalNodes = new[]
+                {
+                    new ArchitectureExternalNode("external", "IEventHub", "External", "external", "External.IEventHub", "interface")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("implementation-external", "implementation", "external", "external")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal("AuthorizationBroker:IAuthorizationBroker",
+            plan.PhysicalNodes.Single(node => node.SemanticNodeId == "implementation").DisplayLabel);
+        Assert.Equal("PlainService", plan.PhysicalNodes.Single(node => node.SemanticNodeId == "plain").DisplayLabel);
+        Assert.Equal("[External]\nIEventHub",
+            plan.PhysicalNodes.Single(node => node.SemanticNodeId == "external").DisplayLabel);
+        Assert.All(plan.Sizing.Rows.Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting),
+            row => Assert.True(row.FinalExtent >= 20));
+    }
+
+    [Fact]
     public void Planner_places_external_node_below_and_centred_on_its_owner()
     {
         var request = Request() with
@@ -1288,6 +1370,12 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains("strokeColor=#112233", (string)edge.Attribute("style")!);
         Assert.Equal("target-node-background", (string)edge.Attribute("resolvedStyleSource")!);
         Assert.Equal((string)sharedCell.Attribute("id")!, (string)edge.Attribute("target")!);
+        Assert.Contains("exitX=", (string)edge.Attribute("style")!);
+        Assert.Contains("exitY=1", (string)edge.Attribute("style")!);
+        Assert.Contains("entryX=", (string)edge.Attribute("style")!);
+        Assert.Contains("entryY=0", (string)edge.Attribute("style")!);
+        Assert.NotNull(edge.Attribute("sourceTerminalId"));
+        Assert.NotNull(edge.Attribute("targetTerminalId"));
         Assert.Contains("strokeWidth=7", (string)edge.Attribute("style")!);
         Assert.Contains("dashed=1", (string)edge.Attribute("style")!);
         Assert.Contains("startArrow=open", (string)edge.Attribute("style")!);

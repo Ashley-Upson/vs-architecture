@@ -110,7 +110,11 @@ internal sealed class ArchitectureV6LaneAllocator
         var result = new List<PlannedEndpointAllocation>();
         foreach (var group in endpointDemands.GroupBy(demand => demand.Endpoint.PhysicalNodeId + ":" + demand.Endpoint.Side, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            var ordered = group.OrderBy(demand => EndpointPriority(demand)).ThenBy(demand => demand.PhysicalLinkId, StringComparer.Ordinal).ToArray();
+            var ordered = group
+                .OrderBy(demand => EndpointColumn(demand))
+                .ThenBy(demand => EndpointPriority(demand))
+                .ThenBy(demand => demand.PhysicalLinkId, StringComparer.Ordinal)
+                .ToArray();
             for (var index = 0; index < ordered.Length; index++)
             {
                 var offset = Offset(index);
@@ -373,6 +377,18 @@ internal sealed class ArchitectureV6LaneAllocator
     private int RouteOrder(string routeId) => links.Select((link, index) => (link.PhysicalLinkId, index)).FirstOrDefault(item => item.PhysicalLinkId == routeId).index;
     private bool IsDirectDownward(string physicalLinkId) => Topology(physicalLinkId) == RouteTopologyFamily.AdjacentDownward;
     private int EndpointPriority(NodeEndpointDemand demand) => IsDirectDownward(demand.PhysicalLinkId) ? 0 : Topology(demand.PhysicalLinkId) == RouteTopologyFamily.External ? 1 : 2;
+
+    private int EndpointColumn(NodeEndpointDemand demand)
+    {
+        var link = links.SingleOrDefault(item => item.PhysicalLinkId == demand.PhysicalLinkId);
+        if (link is null) return int.MaxValue;
+        var otherNodeId = demand.Endpoint.Side == GridSide.Bottom
+            ? link.DestinationPhysicalNodeId
+            : link.SourcePhysicalNodeId;
+        return metadata.TryGetValue(otherNodeId, out var other)
+            ? other.PhysicalColumn
+            : int.MaxValue;
+    }
     private static int Offset(int index) => index == 0 ? 0 : index % 2 == 1 ? -(index + 1) / 2 : index / 2;
     private static (int Start, int End) Interval(PlannedStraightRun run)
     {

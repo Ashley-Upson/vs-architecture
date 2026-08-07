@@ -66,6 +66,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 ["projectionMode"] = node.ProjectionMode.ToString(),
                 ["isExternal"] = node.IsExternal ? "1" : "0",
                 ["isStandalone"] = node.IsStandalone ? "1" : "0",
+                ["displayLabel"] = physicalNode?.DisplayLabel ?? physicalNode?.SemanticName ?? node.SemanticNodeId,
                 ["resolvedStyleRule"] = styleRule.Match,
                 ["styleFallback"] = string.Equals(styleRule.Match, "<fallback>", StringComparison.OrdinalIgnoreCase) ? "1" : "0"
             };
@@ -76,7 +77,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 metadata["duplicationReason"] = provenance.Reason;
                 if (provenance.ParentPhysicalNodeId is not null) metadata["duplicationParentPhysicalNodeId"] = provenance.ParentPhysicalNodeId;
             }
-            root.Add(Vertex(cellId, physicalNode?.SemanticFullName ?? physicalNode?.SemanticName ?? node.SemanticNodeId,
+            root.Add(Vertex(cellId, physicalNode?.DisplayLabel ?? physicalNode?.SemanticName ?? node.SemanticNodeId,
                 Style(styleRule, DefaultNodeStyle(node.IsExternal)), parent, bounds.X, bounds.Y, bounds.Width, bounds.Height, metadata));
         }
 
@@ -92,7 +93,14 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             var route = geometry.Routes.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId);
             var connector = link.ResolvedStyle ?? diagram.Request.ConnectorStyle;
             physicalNodes.TryGetValue(link.DestinationPhysicalNodeId, out var targetNode);
+            var sourceTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId &&
+                item.PhysicalNodeId == link.SourcePhysicalNodeId && item.Side == GridSide.Bottom);
+            var targetTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId &&
+                item.PhysicalNodeId == link.DestinationPhysicalNodeId && item.Side == GridSide.Top);
+            var sourceGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.SourcePhysicalNodeId);
+            var targetGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
             root.Add(Edge(link, route, source, target, ConnectorForTarget(connector, targetNode),
+                sourceGeometry, targetGeometry, sourceTerminal, targetTerminal,
                 targetNode?.ResolvedStyle?.FillColor is { Length: > 0 } ? "target-node-background" : link.ResolvedStyleSource));
             emittedEdges++;
         }
@@ -121,14 +129,27 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     }
 
     private static XElement Edge(PlannedPhysicalLink link, PlannedPhysicalRoute? route, string source, string target,
-        ArchitectureV6ConnectorStyle? connector, string resolvedStyleSource)
+        ArchitectureV6ConnectorStyle? connector,
+        PlannedPhysicalNodeGeometry? sourceGeometry, PlannedPhysicalNodeGeometry? targetGeometry,
+        PlannedPhysicalTerminal? sourceTerminal, PlannedPhysicalTerminal? targetTerminal, string resolvedStyleSource)
     {
-        var points = (route?.ReducedPoints ?? route?.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
+        var rawPoints = (route?.ReducedPoints ?? route?.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
+            .Where(point => point.Point != sourceTerminal?.Point && point.Point != targetTerminal?.Point)
+            .Aggregate(new List<PlannedPhysicalRoutePoint>(), (items, point) =>
+            {
+                if (items.Count == 0 || items[items.Count - 1].Point != point.Point) items.Add(point);
+                return items;
+            });
+        var points = rawPoints
             .Select(point => new XElement("mxPoint", new XAttribute("x", point.Point.X.ToString(CultureInfo.InvariantCulture)),
                 new XAttribute("y", point.Point.Y.ToString(CultureInfo.InvariantCulture))))
             .ToArray();
         var style = connector ?? new ArchitectureV6ConnectorStyle("#6c8ebf", 1, false);
         var styleText = $"edgeStyle=none;orthogonal=0;curved=0;rounded={(style.Rounded ? 1 : 0)};startArrow={style.StartArrow};endArrow={style.EndArrow};startFill={(style.StartFill ? 1 : 0)};endFill={(style.EndFill ? 1 : 0)};startSize={style.ArrowSize};endSize={style.ArrowSize};strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};opacity={style.Opacity};fontColor={style.FontColor};html=1;";
+        if (sourceGeometry is not null && sourceTerminal is not null)
+            styleText += $"exitX={Ratio(sourceTerminal.Point.X, sourceGeometry.AbsoluteBounds.X, sourceGeometry.AbsoluteBounds.Width)};exitY=1;";
+        if (targetGeometry is not null && targetTerminal is not null)
+            styleText += $"entryX={Ratio(targetTerminal.Point.X, targetGeometry.AbsoluteBounds.X, targetGeometry.AbsoluteBounds.Width)};entryY=0;";
         if (style.Dashed) styleText += $"dashed=1;dashPattern={style.DashPattern ?? "3 3"};";
         if (!style.ShowLabels) styleText += "labelPosition=none;";
         if (!string.IsNullOrWhiteSpace(style.ExtraStyle)) styleText += style.ExtraStyle!.TrimEnd(';') + ";";
@@ -142,6 +163,8 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             ["resolvedStrokeColor"] = style.StrokeColor,
             ["resolvedStrokeWidth"] = style.StrokeWidth.ToString(CultureInfo.InvariantCulture)
         };
+        if (sourceTerminal is not null) attributes["sourceTerminalId"] = sourceTerminal.TerminalId;
+        if (targetTerminal is not null) attributes["targetTerminalId"] = targetTerminal.TerminalId;
         if (style.ShowLabels && !string.IsNullOrWhiteSpace(link.DisplayLabel)) attributes["value"] = link.DisplayLabel!;
         if (route?.IsInvalid == true) attributes["invalidRoute"] = "1";
         if (route is not null) attributes["topologyFamily"] = route.TopologyFamily.ToString();
@@ -149,6 +172,9 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"),
                 new XElement("Array", new XAttribute("as", "points"), points)));
     }
+
+    private static string Ratio(int x, int left, int width) =>
+        Math.Max(0, Math.Min(1, (x - left) / (double)Math.Max(1, width))).ToString("0.####", CultureInfo.InvariantCulture);
 
     private static ArchitectureV6ConnectorStyle ConnectorForTarget(
         ArchitectureV6ConnectorStyle? connector,
