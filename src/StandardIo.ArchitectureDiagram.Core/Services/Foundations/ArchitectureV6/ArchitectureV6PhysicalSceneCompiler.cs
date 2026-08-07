@@ -548,8 +548,18 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 (current.X < Math.Min(previous.X, next.X) || current.X > Math.Max(previous.X, next.X));
             var verticalReversal = previous.X == current.X && current.X == next.X &&
                 (current.Y < Math.Min(previous.Y, next.Y) || current.Y > Math.Max(previous.Y, next.Y));
-            var sourceLocal = index <= endpointWindow;
-            var destinationLocal = index >= points.Count - endpointWindow - 1;
+            // Only the terminal/anchor/departure and approach/anchor/terminal
+            // components are endpoint-local. A reversal in an ordinary turn
+            // corridor is owned by route planning and is not an endpoint
+            // double-back.
+            var sourceLocal = index <= endpointWindow &&
+                points[index - 1].Role == RouteStepRole.SourceExit &&
+                points[index].Role == RouteStepRole.SourceExit &&
+                points[index + 1].Role == RouteStepRole.SourceExit;
+            var destinationLocal = index >= points.Count - endpointWindow - 1 &&
+                points[index - 1].Role == RouteStepRole.DestinationEntry &&
+                points[index].Role == RouteStepRole.DestinationEntry &&
+                points[index + 1].Role == RouteStepRole.DestinationEntry;
             if (!(horizontalReversal || verticalReversal) || (!sourceLocal && !destinationLocal)) continue;
             if (!findingsInWindow.Add(index)) continue;
             routeInvalid = true;
