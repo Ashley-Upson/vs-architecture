@@ -804,6 +804,69 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_keeps_single_child_chain_vertically_aligned()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("parent", "project:p", "ParentController", "Project.ParentController", "Class", "parent", Array.Empty<string>()),
+                        new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[] { new ArchitectureLink("parent-child", "parent", "child", "internal") }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var parent = plan.NodeMetadata.Single(node => node.SemanticNodeId == "parent");
+        var child = plan.NodeMetadata.Single(node => node.SemanticNodeId == "child");
+
+        Assert.Equal(parent.PhysicalColumn, child.PhysicalColumn);
+        Assert.True(child.PhysicalRow > parent.PhysicalRow);
+    }
+
+    [Fact]
+    public void Planner_centres_parent_over_two_immediate_child_subtrees()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("parent", "project:p", "ParentController", "Project.ParentController", "Class", "parent", Array.Empty<string>()),
+                        new ArchitectureNode("left", "project:p", "LeftService", "Project.LeftService", "Class", "left", Array.Empty<string>()),
+                        new ArchitectureNode("right", "project:p", "RightService", "Project.RightService", "Class", "right", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("parent-left", "parent", "left", "internal"),
+                    new ArchitectureLink("parent-right", "parent", "right", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var parent = plan.NodeMetadata.Single(node => node.SemanticNodeId == "parent");
+        var left = plan.NodeMetadata.Single(node => node.SemanticNodeId == "left");
+        var right = plan.NodeMetadata.Single(node => node.SemanticNodeId == "right");
+
+        Assert.True(left.PhysicalColumn < parent.PhysicalColumn);
+        Assert.True(parent.PhysicalColumn < right.PhysicalColumn);
+        Assert.Equal((left.PhysicalColumn + right.PhysicalColumn) / 2, parent.PhysicalColumn);
+        Assert.Equal(left.PhysicalRow, right.PhysicalRow);
+        Assert.True(left.PhysicalRow > parent.PhysicalRow);
+    }
+
+    [Fact]
     public void Planner_resolves_compact_labels_before_sizing_and_rendering()
     {
         var request = Request() with

@@ -312,6 +312,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         var profileTimer = Stopwatch.StartNew();
 
         var intervals = new List<ProfileInterval>();
+        var childProfiles = new List<(string ChildId, SubtreeHorizontalProfile Profile, int Shift)>();
         foreach (var child in childrenByNode[id].Where(child => !nodes[child].IsStandalone))
         {
             var childProfile = BuildProfile(child);
@@ -322,15 +323,25 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 Start = interval.Start + shift,
                 End = interval.End + shift
             }));
+            childProfiles.Add((child, childProfile, shift));
             compositionTimer.Stop();
             profileCompositionMilliseconds += compositionTimer.ElapsedMilliseconds;
         }
 
-        var childStart = intervals.Count == 0 ? 0 : intervals.Min(interval => interval.Start);
-        var childEnd = intervals.Count == 0 ? spanByNode[id] - 1 : intervals.Max(interval => interval.End);
-        var parentStart = intervals.Count == 0
-            ? 0
-            : childStart + Math.Max(0, ((childEnd - childStart + 1) - spanByNode[id]) / 2);
+        var parentStart = 0;
+        if (childProfiles.Count == 1)
+        {
+            var child = childProfiles[0];
+            var childNode = child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId);
+            var childStart = childNode.Start + child.Shift;
+            parentStart = childStart + (childNode.Width - spanByNode[id]) / 2;
+        }
+        else if (childProfiles.Count > 1)
+        {
+            var childStart = intervals.Min(interval => interval.Start);
+            var childEnd = intervals.Max(interval => interval.End);
+            parentStart = childStart + Math.Max(0, ((childEnd - childStart + 1) - spanByNode[id]) / 2);
+        }
         var parent = new ProfileInterval(rowRoleByNode[id], parentStart, parentStart + spanByNode[id] - 1,
             id, "node", spanByNode[id]);
         while (intervals.Any(interval => interval.RowRole == parent.RowRole &&
