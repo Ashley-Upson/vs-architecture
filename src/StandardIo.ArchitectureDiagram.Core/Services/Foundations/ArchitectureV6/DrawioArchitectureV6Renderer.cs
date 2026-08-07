@@ -90,7 +90,10 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 continue;
             }
             var route = geometry.Routes.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId);
-            root.Add(Edge(link, route, source, target, link.ResolvedStyle ?? diagram.Request.ConnectorStyle));
+            var connector = link.ResolvedStyle ?? diagram.Request.ConnectorStyle;
+            physicalNodes.TryGetValue(link.DestinationPhysicalNodeId, out var targetNode);
+            root.Add(Edge(link, route, source, target, ConnectorForTarget(connector, targetNode),
+                targetNode?.ResolvedStyle?.FillColor is { Length: > 0 } ? "target-node-background" : link.ResolvedStyleSource));
             emittedEdges++;
         }
 
@@ -117,7 +120,8 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         return new DrawioPage("Architecture", "architecture", graph, diagnostics);
     }
 
-    private static XElement Edge(PlannedPhysicalLink link, PlannedPhysicalRoute? route, string source, string target, ArchitectureV6ConnectorStyle? connector)
+    private static XElement Edge(PlannedPhysicalLink link, PlannedPhysicalRoute? route, string source, string target,
+        ArchitectureV6ConnectorStyle? connector, string resolvedStyleSource)
     {
         var points = (route?.ReducedPoints ?? route?.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
             .Select(point => new XElement("mxPoint", new XAttribute("x", point.Point.X.ToString(CultureInfo.InvariantCulture)),
@@ -134,7 +138,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             ["semanticLinkId"] = link.SemanticLinkId, ["sourcePhysicalNodeId"] = link.SourcePhysicalNodeId,
             ["targetPhysicalNodeId"] = link.DestinationPhysicalNodeId, ["edge"] = "1", ["parent"] = "1",
             ["source"] = source, ["target"] = target, ["style"] = styleText,
-            ["resolvedStyleSource"] = link.ResolvedStyleSource,
+            ["resolvedStyleSource"] = resolvedStyleSource,
             ["resolvedStrokeColor"] = style.StrokeColor,
             ["resolvedStrokeWidth"] = style.StrokeWidth.ToString(CultureInfo.InvariantCulture)
         };
@@ -144,6 +148,17 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         return new XElement("mxCell", attributes.Select(item => new XAttribute(item.Key, item.Value)),
             new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"),
                 new XElement("Array", new XAttribute("as", "points"), points)));
+    }
+
+    private static ArchitectureV6ConnectorStyle ConnectorForTarget(
+        ArchitectureV6ConnectorStyle? connector,
+        PlannedPhysicalNode? targetNode)
+    {
+        var style = connector ?? new ArchitectureV6ConnectorStyle("#6c8ebf", 1, false);
+        var targetFill = targetNode?.ResolvedStyle?.FillColor;
+        return string.IsNullOrWhiteSpace(targetFill)
+            ? style
+            : style with { StrokeColor = targetFill };
     }
 
     private static ArchitectureV6StyleRule ResolveStyle(PlannedArchitectureDiagram diagram, PlannedPhysicalNode? node, PlannedPhysicalNodeGeometry geometry)
