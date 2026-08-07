@@ -464,7 +464,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_aligns_endpoint_terminals_to_the_authoritative_route_lanes()
+    public void Planner_uses_centred_endpoint_slots_and_orthogonal_handoffs()
     {
         var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
         Assert.NotNull(scene);
@@ -473,18 +473,19 @@ public sealed class ArchitectureV6StructuralTests
         {
             var sourceTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
             var destinationTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Top);
-            var sourcePoint = route.RawPoints!.First(point => point.Point != sourceTerminal.Point);
-            var destinationPoint = route.RawPoints!.Reverse().First(point => point.Point != destinationTerminal.Point);
-
-            Assert.True(sourcePoint.Point.Y > sourceTerminal.Point.Y,
-                $"source terminal={sourceTerminal.Point}, first route point={sourcePoint.Point}");
-            Assert.True(destinationTerminal.Point.Y > destinationPoint.Point.Y,
-                $"destination terminal={destinationTerminal.Point}, last route point={destinationPoint.Point}");
-
-            var complete = new[] { sourceTerminal.Point }
+            var points = new[] { sourceTerminal.Point }
                 .Concat(route.RawPoints!.Select(point => point.Point))
                 .Append(destinationTerminal.Point)
                 .ToArray();
+            var distinct = points.Where((point, index) => index == 0 || point != points[index - 1]).ToArray();
+            var sourcePoint = distinct.Skip(1).First();
+            var destinationPoint = distinct[distinct.Length - 2];
+            Assert.True(sourcePoint.Y > sourceTerminal.Point.Y,
+                $"source terminal={sourceTerminal.Point}, first route point={sourcePoint}");
+            Assert.True(destinationTerminal.Point.Y > destinationPoint.Y,
+                $"destination terminal={destinationTerminal.Point}, last route point={destinationPoint}");
+
+            var complete = distinct;
             Assert.All(complete.Zip(complete.Skip(1), (left, right) => (left, right)), pair =>
                 Assert.True(pair.left.X == pair.right.X || pair.left.Y == pair.right.Y,
                     "terminal and route centreline must remain orthogonal"));
@@ -2202,6 +2203,7 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.Equal(plan.PhysicalLinks.Count, metrics.PhysicalRouteCount);
         Assert.Equal(plan.PhysicalLinks.Count, metrics.PhysicalRouteCount - metrics.InvalidRouteCount);
+        Assert.Equal(0, metrics.InvalidRouteCount);
         Assert.Equal(0, metrics.DiagonalSegmentCount);
         Assert.Equal(0, metrics.CorridorEscapeCount);
         Assert.Equal(0, metrics.ComponentContinuityFailureCount);

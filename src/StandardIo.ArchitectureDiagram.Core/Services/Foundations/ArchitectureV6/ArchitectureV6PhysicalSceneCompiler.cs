@@ -335,17 +335,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (node is null || !transforms.TryGetValue(node.GridId, out var transform)) continue;
             var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
             var requestedX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
-            var route = allocation.Routes.SingleOrDefault(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
-            if (route is not null && route.Steps.Count > 0)
-            {
-                var step = endpoint.Side == GridSide.Bottom ? route.Steps.First() : route.Steps.Last();
-                if (transforms.TryGetValue(step.GridId, out var routeTransform))
-                {
-                    var boundary = BoundaryPoint(route, step,
-                        endpoint.Side == GridSide.Bottom ? step.ExitSide : step.EntrySide, routeTransform);
-                    requestedX = boundary.X;
-                }
-            }
             var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
                 Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
             var minX = node.AbsoluteBounds.X + inset;
@@ -548,12 +537,45 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     {
         if (rawPoints.Count < 3) return rawPoints.ToArray();
 
-        var reduced = new List<PlannedPhysicalRoutePoint> { rawPoints[0] };
-        for (var index = 1; index < rawPoints.Count - 1; index++)
+        var compact = new List<PlannedPhysicalRoutePoint>();
+        foreach (var point in rawPoints)
+        {
+            if (compact.Count > 0 && SamePoint(compact[compact.Count - 1].Point, point.Point))
+                continue;
+            if (compact.Count >= 2 && SamePoint(compact[compact.Count - 2].Point, point.Point))
+            {
+                compact.RemoveAt(compact.Count - 1);
+                continue;
+            }
+            var repeatedAxisIndex = -1;
+            for (var index = compact.Count - 2; index >= 0; index--)
+            {
+                if (!SamePoint(compact[index].Point, point.Point)) continue;
+                var horizontal = compact[index].Point.Y == point.Point.Y &&
+                    compact.Skip(index).All(item => item.Point.Y == point.Point.Y);
+                var vertical = compact[index].Point.X == point.Point.X &&
+                    compact.Skip(index).All(item => item.Point.X == point.Point.X);
+                if (horizontal || vertical)
+                {
+                    repeatedAxisIndex = index;
+                    break;
+                }
+            }
+            if (repeatedAxisIndex >= 0)
+            {
+                compact.RemoveRange(repeatedAxisIndex + 1, compact.Count - repeatedAxisIndex - 1);
+                continue;
+            }
+            compact.Add(point);
+        }
+        if (compact.Count < 3) return compact.ToArray();
+
+        var reduced = new List<PlannedPhysicalRoutePoint> { compact[0] };
+        for (var index = 1; index < compact.Count - 1; index++)
         {
             var previous = reduced[reduced.Count - 1];
-            var current = rawPoints[index];
-            var next = rawPoints[index + 1];
+            var current = compact[index];
+            var next = compact[index + 1];
             var sameHorizontal = previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y;
             var sameVertical = previous.Point.X == current.Point.X && current.Point.X == next.Point.X;
             var isProtected = current.Role is RouteStepRole.Turn or RouteStepRole.SourceExit or RouteStepRole.DestinationEntry ||
@@ -561,9 +583,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (!(sameHorizontal || sameVertical) || isProtected)
                 reduced.Add(current);
         }
-        reduced.Add(rawPoints[rawPoints.Count - 1]);
+        reduced.Add(compact[compact.Count - 1]);
         return reduced;
     }
+
+    private static bool SamePoint(AbsolutePoint left, AbsolutePoint right) =>
+        left.X == right.X && left.Y == right.Y;
 
     private IReadOnlyList<PlannedPhysicalRouteComponent> BuildComponentsFromContract(
         PlannedGridRoute route,
@@ -637,9 +662,48 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 points.FirstOrDefault()?.Point, points.LastOrDefault()?.Point, component.EntrySide, component.ExitSide,
                 component.PrecedingComponentId, component.FollowingComponentId, component.EntryBoundary?.ToString()));
         }
+        AlignDestinationApproachBoundary(route, result);
         return route.Transitions.Count == 0
             ? result
             : InsertCrossProjectTransitionComponents(route, result, transforms);
+    }
+
+    private void AlignDestinationApproachBoundary(PlannedGridRoute route, IList<PlannedPhysicalRouteComponent> components)
+    {
+        for (var index = 1; index < components.Count; index++)
+        {
+            var component = components[index];
+            if (!component.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal)) continue;
+            var previous = components[index - 1];
+            if (previous.ExitPoint is null) continue;
+
+            var points = component.Points.ToList();
+            if (points.Count == 0) continue;
+            var entry = previous.ExitPoint.Value;
+            var following = index + 1 < components.Count ? components[index + 1] : null;
+            var terminal = points[points.Count - 1];
+            var target = following?.EntryPoint ?? terminal.Point;
+            var aligned = new List<PlannedPhysicalRoutePoint>
+            {
+                points[0] with { Point = entry, Provenance = "shared boundary from preceding ordinary component" }
+            };
+            if (entry.X != target.X && entry.Y != target.Y)
+            {
+                aligned.Add(Point(route, terminal.GridId, new AbsolutePoint(target.X, entry.Y),
+                    RouteStepRole.DestinationEntry, component.ComponentId + ":aligned-terminal-bend", component.RouteStepOrder,
+                    component.StraightRunId, component.TurnIdentity, terminal.CellId,
+                    "orthogonal destination terminal alignment", component.ComponentId));
+            }
+            aligned.Add(Point(route, terminal.GridId, target, RouteStepRole.DestinationEntry,
+                component.ComponentId + ":aligned-terminal", component.RouteStepOrder, component.StraightRunId,
+                component.TurnIdentity, terminal.CellId, "destination node-anchor shared boundary", component.ComponentId));
+            components[index] = component with
+            {
+                Points = aligned,
+                EntryPoint = entry,
+                ExitPoint = aligned[aligned.Count - 1].Point
+            };
+        }
     }
 
     private IReadOnlyList<PlannedPhysicalRouteComponent> InsertCrossProjectTransitionComponents(
@@ -850,14 +914,15 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             start = boundary.Point;
             points.Add(Point(route, boundary.GridId, start, role, component.ComponentId + ":footprint-bottom", component.Order, component.RunId, component.TurnId,
                 component.EntryBoundary?.CellId, "source footprint bottom exterior boundary", component.ComponentId));
-            if (orderedSteps.Length <= 1)
+            if (orderedSteps.Length > 0)
             {
-                var verticalEnd = new AbsolutePoint(start.X, end.Y);
-                points.Add(Point(route, firstCell.GridId, verticalEnd, role, component.ComponentId + ":vertical-departure", component.Order,
-                    component.RunId, component.TurnId, firstCell, "source bottom vertical departure", component.ComponentId));
-                if (verticalEnd.X != end.X)
-                    points.Add(Point(route, firstCell.GridId, end, role, component.ComponentId + ":horizontal-alignment", component.Order,
-                        component.RunId, component.TurnId, firstCell, "source departure lane alignment", component.ComponentId));
+                var firstTransform = transforms[orderedSteps[0].GridId];
+                var handoff = EndpointHandoffPoint(route, orderedSteps[0], firstTransform);
+                points.Add(Point(route, firstCell.GridId, new AbsolutePoint(start.X, handoff.Y), role,
+                    component.ComponentId + ":vertical-departure", component.Order, component.RunId, component.TurnId,
+                    firstCell, "dedicated source endpoint-local vertical", component.ComponentId));
+                points.Add(Point(route, firstCell.GridId, handoff, role, component.ComponentId + ":handoff", component.Order,
+                    component.RunId, component.TurnId, firstCell, "source endpoint-local orthogonal handoff", component.ComponentId));
                 return points;
             }
             if (component.Lane is not null)
@@ -876,8 +941,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 points.Add(Point(route, component.EntryBoundary?.GridId ?? firstStep.GridId, start, role,
                     component.ComponentId + ":boundary", component.Order, component.RunId, component.TurnId,
                     component.EntryBoundary?.CellId, "canonical boundary before owned destination approach", component.ComponentId));
-                var selectedBoundary = BoundaryPoint(route, firstStep, firstStep.EntrySide, firstTransform);
-                var approachStart = ComponentLanePoint(component, firstStep, selectedBoundary, transforms);
+                var previousStep = route.Steps
+                    .Where(step => step.Order < firstStep.Order)
+                    .OrderByDescending(step => step.Order)
+                    .FirstOrDefault();
+                var approachStart = previousStep is null
+                    ? BoundaryPoint(route, firstStep, GridSide.Top, firstTransform)
+                    : EndpointHandoffPoint(route, previousStep, transforms[previousStep.GridId]);
+                points.Clear();
                 points.Add(Point(route, firstStep.GridId, approachStart, role, component.ComponentId + ":entry", component.Order,
                     component.RunId, component.TurnId, firstStep.CellId, "destination approach first owned cell entry", component.ComponentId));
 
@@ -896,6 +967,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         else
         {
+            if (component.PrecedingComponentId?.EndsWith(":source-departure", StringComparison.Ordinal) == true && orderedSteps.Length > 0 &&
+                transforms.TryGetValue(orderedSteps[0].GridId, out var sourceHandoffTransform))
+                start = CellPoint(orderedSteps[0], route, sourceHandoffTransform);
+            if (component.FollowingComponentId?.EndsWith(":destination-approach", StringComparison.Ordinal) == true && orderedSteps.Length > 0 &&
+                transforms.TryGetValue(orderedSteps[orderedSteps.Length - 1].GridId, out var destinationHandoffTransform))
+                end = CellPoint(orderedSteps[orderedSteps.Length - 1], route, destinationHandoffTransform);
             points.Add(Point(route, firstCell.GridId, start, role, component.ComponentId + ":entry", component.Order,
                 component.RunId, component.TurnId, firstCell,
                 component.Kind == PlannedRouteComponentKind.DestinationApproach
@@ -905,6 +982,17 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
 
         if (orderedSteps.Length == 0)
         {
+            if (component.Kind == PlannedRouteComponentKind.DestinationApproach)
+            {
+                var destinationAnchor = placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId)?.AnchorCellId;
+                var exteriorStep = route.Steps
+                    .Where(step => !destinationAnchor.HasValue || !step.CellId.Equals(destinationAnchor.Value))
+                    .OrderByDescending(step => step.Order)
+                    .FirstOrDefault();
+                if (exteriorStep is not null && transforms.TryGetValue(exteriorStep.GridId, out var exteriorTransform))
+                    start = EndpointHandoffPoint(route, exteriorStep, exteriorTransform);
+                points.Clear();
+            }
             if (component.Kind is PlannedRouteComponentKind.SourceDeparture or PlannedRouteComponentKind.DestinationApproach)
                 AppendEndpointBend(points, route, component, start, end,
                     component.Kind == PlannedRouteComponentKind.SourceDeparture, firstCell);
@@ -1260,6 +1348,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         var point = new RelativePoint(x, y);
         return new AbsolutePoint(point.X + transform.Origin.X, point.Y + transform.Origin.Y);
     }
+
+    private AbsolutePoint EndpointHandoffPoint(PlannedGridRoute route, PlannedGridRouteStep step, GridTransform transform) =>
+        step.Role == RouteStepRole.Turn ? TurnPoint(route, step, transform) : CellPoint(step, route, transform);
 
     private AbsolutePoint TurnPoint(PlannedGridRoute route, PlannedGridRouteStep step, GridTransform transform)
     {

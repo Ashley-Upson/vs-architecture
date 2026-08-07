@@ -23,6 +23,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly Dictionary<string, string> treeRootByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> branchOrderByRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> depthByNode = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> structuralDepthByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> rowRoleByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> categoryByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> finalVisualLayerByNode = new(StringComparer.Ordinal);
@@ -60,6 +61,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         BuildPositionalChildren();
         BuildTreeRoots();
         CalculateDepths();
+        CalculateStructuralDepths();
         CalculateRows();
         CalculateSpans();
 
@@ -379,6 +381,23 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             Visit(node.PhysicalNodeId, depthByNode[node.PhysicalNodeId]);
     }
 
+    private void CalculateStructuralDepths()
+    {
+        structuralDepthByNode.Clear();
+        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+        {
+            var depth = 0;
+            var current = node.PhysicalNodeId;
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            while (ownerByNode.TryGetValue(current, out var owner) && owner is not null && visited.Add(current))
+            {
+                depth++;
+                current = owner;
+            }
+            structuralDepthByNode[node.PhysicalNodeId] = depth;
+        }
+    }
+
     private void CalculateRows()
     {
         var baselinePattern = ToRegex(request.NodePlacement.BaselinePattern);
@@ -403,7 +422,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 ? $"role:{role}"
                 : baselineSet.Contains(node.PhysicalNodeId)
                 ? "baseline"
-                : $"depth:{depthByNode[node.PhysicalNodeId]}";
+                : $"depth:{structuralDepthByNode[node.PhysicalNodeId]}";
         }
 
         var categories = categoryByNode.Values.Distinct(StringComparer.Ordinal).ToArray();
