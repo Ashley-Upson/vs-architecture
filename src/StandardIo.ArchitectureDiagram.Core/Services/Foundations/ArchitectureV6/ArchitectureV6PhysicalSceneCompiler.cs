@@ -329,19 +329,23 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var node = nodeGeometry.SingleOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
             if (node is null || !transforms.TryGetValue(node.GridId, out var transform)) continue;
             var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
-            var x = node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
-            var route = routes.SingleOrDefault(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
+            var requestedX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
+            var route = allocation.Routes.SingleOrDefault(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
             if (route is not null && route.Steps.Count > 0)
             {
-                var endpointStep = endpoint.Side == GridSide.Bottom
-                    ? route.Steps.OrderBy(item => item.Order).First()
-                    : route.Steps.OrderBy(item => item.Order).Last();
-                if (transforms.TryGetValue(endpointStep.GridId, out var endpointTransform))
+                var step = endpoint.Side == GridSide.Bottom ? route.Steps.First() : route.Steps.Last();
+                if (transforms.TryGetValue(step.GridId, out var routeTransform))
                 {
-                    var endpointSide = endpoint.Side == GridSide.Bottom ? endpointStep.ExitSide : endpointStep.EntrySide;
-                    x = BoundaryPoint(route, endpointStep, endpointSide, endpointTransform).X;
+                    var boundary = BoundaryPoint(route, step,
+                        endpoint.Side == GridSide.Bottom ? step.ExitSide : step.EntrySide, routeTransform);
+                    requestedX = boundary.X;
                 }
             }
+            var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
+                Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
+            var minX = node.AbsoluteBounds.X + inset;
+            var maxX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
+            var x = Math.Max(minX, Math.Min(maxX, requestedX));
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
             var id = endpoint.PhysicalLinkId + ":" + endpoint.Side;
@@ -1308,6 +1312,25 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (node is null) continue;
             var valid = terminal.Side == GridSide.Bottom ? terminal.Point.Y == node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : terminal.Point.Y == node.AbsoluteBounds.Y;
             if (!valid) findings.Add(new ArchitecturePlanningDiagnostic("TerminalEdgeMismatch", "Terminal does not lie on its expected node edge.", PlanningDiagnosticSubject.PhysicalNode, terminal.PhysicalNodeId));
+            var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
+                Math.Max(request.RoutePlanning.MinimumPortSpacing, request.GridSizing.NodeToRouteClearance));
+            if (terminal.Point.X <= node.AbsoluteBounds.X || terminal.Point.X >= node.AbsoluteBounds.X + node.AbsoluteBounds.Width ||
+                terminal.Point.X < node.AbsoluteBounds.X + inset || terminal.Point.X > node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset)
+                findings.Add(new ArchitecturePlanningDiagnostic("TerminalCornerOrInsetViolation", "A top/bottom terminal lies outside the configured edge inset.", PlanningDiagnosticSubject.PhysicalNode, terminal.TerminalId));
+        }
+        foreach (var route in routes)
+        {
+            var source = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
+            var destination = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Top);
+            if (source is null || destination is null) continue;
+            var points = route.ReducedPoints ?? route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>();
+            var ordered = new[] { source.Point }
+                .Concat(points.Select(item => item.Point))
+                .Concat(new[] { destination.Point })
+                .ToArray();
+            for (var index = 1; index < ordered.Length; index++)
+                if (ordered[index - 1].X != ordered[index].X && ordered[index - 1].Y != ordered[index].Y)
+                    findings.Add(new ArchitecturePlanningDiagnostic("TerminalJoinDiagonal", "A final route segment, including a terminal join, is diagonal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
     }
 
@@ -1324,7 +1347,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             findings.Count(item => item.Code == "LabelGeometryUnavailable"), routes.GroupBy(route => route.TopologyFamily.ToString()).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal), timings,
             InvalidRouteCount: invalidRouteIds.Count,
             AttemptedSegmentCount: attemptedSegments.Count + routes.Sum(route => route.Segments.Count),
-            DiagonalSegmentCount: attemptedSegments.Count(item => item.FailureCode == "DiagonalComponentConnection"),
+            DiagonalSegmentCount: attemptedSegments.Count(item => item.FailureCode == "DiagonalComponentConnection") +
+                findings.Count(item => item.Code == "TerminalJoinDiagonal"),
             CorridorEscapeCount: attemptedSegments.Count(item => item.FailureCode == "ComponentCorridorEscape"),
             ComponentContinuityFailureCount: attemptedSegments.Count(item => item.FailureCode == "ComponentContinuityMismatch"),
             SourceStubDirectionFailureCount: findings.Count(item => item.Code == "SourceStubDirectionInvalid" || item.Code == "SourceDepartureDirectionInvalid"),

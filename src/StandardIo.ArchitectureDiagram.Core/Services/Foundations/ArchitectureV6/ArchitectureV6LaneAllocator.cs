@@ -117,7 +117,7 @@ internal sealed class ArchitectureV6LaneAllocator
                 .ToArray();
             for (var index = 0; index < ordered.Length; index++)
             {
-                var offset = Offset(index);
+                var offset = PortOffset(index, ordered.Length);
                 result.Add(new PlannedEndpointAllocation(ordered[index].PhysicalLinkId, ordered[index].Endpoint.PhysicalNodeId,
                     ordered[index].Endpoint.Side, ordered[index].Endpoint, index, offset, group.Key,
                     $"endpoint:{group.Key}:{index}"));
@@ -135,7 +135,7 @@ internal sealed class ArchitectureV6LaneAllocator
             var linksForNode = ordered.OrderBy(id => IsDirectDownward(id) ? 0 : 1).ThenBy(id => id, StringComparer.Ordinal).ToArray();
             for (var index = 0; index < linksForNode.Length; index++)
             {
-                var offset = Offset(index);
+                var offset = PortOffset(index, linksForNode.Length);
                 result.Add(new PlannedDestinationApproachAllocation(approach.ReservationId, approach.PhysicalNodeId, linksForNode[index],
                     approach.GridId, index, offset, $"approach:{approach.PhysicalNodeId}", $"approach:{approach.ReservationId}:{index}"));
             }
@@ -389,7 +389,14 @@ internal sealed class ArchitectureV6LaneAllocator
             ? other.PhysicalColumn
             : int.MaxValue;
     }
-    private static int Offset(int index) => index == 0 ? 0 : index % 2 == 1 ? -(index + 1) / 2 : index / 2;
+    private static int PortOffset(int index, int count)
+    {
+        if (count <= 1) return 0;
+        var half = count / 2;
+        return count % 2 == 1
+            ? index - half
+            : index < half ? index - half : index - half + 1;
+    }
     private static (int Start, int End) Interval(PlannedStraightRun run)
     {
         var values = run.Cells.Select(cell => run.Axis == RouteAxis.Horizontal ? cell.ColumnId.Value : cell.RowId.Value).Select(ParseValue).ToArray();

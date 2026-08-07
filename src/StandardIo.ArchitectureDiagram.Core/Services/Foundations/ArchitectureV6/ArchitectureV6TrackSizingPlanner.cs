@@ -274,10 +274,12 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 
     private int InitialRowMinimum(PlanningGridRow row) => row.Role switch
     {
+        _ when row.Id.Value == "routing:exterior:top" => request.GridSizing.ProjectHeaderHeight + request.GridSizing.ContainerPadding,
         PlanningGridTrackRole.NodeBearing or PlanningGridTrackRole.BaselineNode or
         PlanningGridTrackRole.ExternalRegion or PlanningGridTrackRole.StandaloneRegion => request.GridSizing.NodeBearingRowMinimum,
+        PlanningGridTrackRole.ProjectHeader => request.GridSizing.ProjectHeaderHeight + request.GridSizing.ContainerPadding,
         PlanningGridTrackRole.ProjectBoundaryTransition or PlanningGridTrackRole.DiagramProjectPlacement => request.GridSizing.ProjectTransitionRowMinimum,
-        _ => request.GridSizing.RoutingRowMinimum
+        _ => request.GridSizing.RoutingRowMinimum + request.GridSizing.NodeToRouteClearance * 2
     };
 
     private int NodeWidth(PlannedPhysicalNode node)

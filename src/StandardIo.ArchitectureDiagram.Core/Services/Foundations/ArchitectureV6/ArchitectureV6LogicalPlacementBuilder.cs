@@ -328,6 +328,11 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         for (var index = 0; index < rules.Length; index++)
             for (var other = index + 1; other < rules.Length; other++)
                 if (roleLayers[rules[index].Name] >= 0 && roleLayers[rules[other].Name] >= 0 &&
+                    roleLayers[rules[index].Name] == roleLayers[rules[other].Name])
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementRoleLayerMerge",
+                        $"Configured roles '{rules[index].Name}' and '{rules[other].Name}' share final layer {roleLayers[rules[index].Name]}.",
+                        PlanningDiagnosticSubject.PhysicalNode, rules[other].Name));
+                else if (roleLayers[rules[index].Name] >= 0 && roleLayers[rules[other].Name] >= 0 &&
                     roleLayers[rules[index].Name] > roleLayers[rules[other].Name])
                     diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementRoleOrderViolation",
                         $"Configured role order places '{rules[index].Name}' before '{rules[other].Name}', but final layers reverse them.",
@@ -388,14 +393,16 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         categoryByNode.Clear();
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
+            var role = roleByNode[node.PhysicalNodeId];
+            var hasConfiguredRole = orderedRules.Any(rule => string.Equals(rule.Name, role, StringComparison.Ordinal));
             categoryByNode[node.PhysicalNodeId] = node.IsExternal
                 ? "external"
                 : node.IsStandalone
                 ? $"standalone:{order[node.PhysicalNodeId] / standaloneColumnsPerRow}"
+                : hasConfiguredRole
+                ? $"role:{role}"
                 : baselineSet.Contains(node.PhysicalNodeId)
                 ? "baseline"
-                : orderedRules.Any(rule => string.Equals(rule.Name, roleByNode[node.PhysicalNodeId], StringComparison.Ordinal))
-                ? $"role:{roleByNode[node.PhysicalNodeId]}"
                 : $"depth:{depthByNode[node.PhysicalNodeId]}";
         }
 
@@ -462,10 +469,10 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 ? "external"
                 : node.IsStandalone
                 ? $"standalone:{layer}"
-                : baselineSet.Contains(node.PhysicalNodeId)
-                ? "baseline"
                 : categoryByNode[node.PhysicalNodeId].StartsWith("role:", StringComparison.Ordinal)
                 ? $"role:{role}"
+                : baselineSet.Contains(node.PhysicalNodeId)
+                ? "baseline"
                 : $"depth:{layer}";
         }
 
@@ -585,16 +592,16 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
         else if (childProfiles.Count > 1)
         {
-            // Centre over the immediate child-node envelope, not over the
-            // widest descendant contour of any one child subtree.
-            var childNodes = childProfiles.Select(child =>
-                child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId) with
-                {
-                    Start = child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId).Start + child.Shift,
-                    End = child.Profile.Intervals.Single(interval => interval.OwnerId == child.ChildId).End + child.Shift
-                }).ToArray();
-            var childStart = childNodes.Min(interval => interval.Start);
-            var childEnd = childNodes.Max(interval => interval.End);
+            // Reserve and centre over each complete child subtree envelope so
+            // unrelated peers cannot consume the width needed by descendants.
+            var childContours = childProfiles.Select(child =>
+            {
+                var start = child.Profile.Intervals.Min(interval => interval.Start) + child.Shift;
+                var end = child.Profile.Intervals.Max(interval => interval.End) + child.Shift;
+                return (Start: start, End: end);
+            }).ToArray();
+            var childStart = childContours.Min(interval => interval.Start);
+            var childEnd = childContours.Max(interval => interval.End);
             parentStart = childStart + Math.Max(0, ((childEnd - childStart + 1) - spanByNode[id]) / 2);
         }
         var parent = new ProfileInterval(rowRoleByNode[id], parentStart, parentStart + spanByNode[id] - 1,
@@ -871,7 +878,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var rows = new List<PlanningGridRow>
             {
                 new(topExterior, 0, 1, 1, 1, 0, 0, PlanningGridTrackRole.InterLayerRouting,
-                    "placement", "permanent top exterior routing capacity", projectId)
+                    "placement", "project header plus content origin", projectId)
             };
             rows.AddRange(placementRows.Select((id, index) => new PlanningGridRow(id, index * 2 + 1, 1, 1, 1, index * 2 + 1, index * 2 + 1,
                 id.Value.StartsWith("standalone:", StringComparison.Ordinal) ? PlanningGridTrackRole.StandaloneRegion :

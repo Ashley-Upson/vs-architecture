@@ -48,6 +48,7 @@ public static class ArchitecturePlanningRequestFactory
             new RoutePlanningPolicy(layout.ParallelLaneSpacing, layout.EdgePortSpacing, analysis.ExternalDependencyTag),
             new GridSizingPolicy(layout.NodeWidth, layout.NodeHeight, layout.ContainerPadding, layout.ProjectHeaderHeight)
             {
+                NodeToRouteClearance = layout.LinkPadding + layout.EdgePortSpacing,
                 RoutingRowMinimum = 20,
                 ProjectTransitionRowMinimum = 20
             },

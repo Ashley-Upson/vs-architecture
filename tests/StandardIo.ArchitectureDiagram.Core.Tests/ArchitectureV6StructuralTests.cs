@@ -476,10 +476,18 @@ public sealed class ArchitectureV6StructuralTests
             var sourcePoint = route.RawPoints!.First(point => point.Point != sourceTerminal.Point);
             var destinationPoint = route.RawPoints!.Reverse().First(point => point.Point != destinationTerminal.Point);
 
-            Assert.Equal(sourceTerminal.Point.X, sourcePoint.Point.X);
-            Assert.True(sourcePoint.Point.Y > sourceTerminal.Point.Y);
-            Assert.Equal(destinationTerminal.Point.X, destinationPoint.Point.X);
-            Assert.True(destinationTerminal.Point.Y > destinationPoint.Point.Y);
+            Assert.True(sourcePoint.Point.Y > sourceTerminal.Point.Y,
+                $"source terminal={sourceTerminal.Point}, first route point={sourcePoint.Point}");
+            Assert.True(destinationTerminal.Point.Y > destinationPoint.Point.Y,
+                $"destination terminal={destinationTerminal.Point}, last route point={destinationPoint.Point}");
+
+            var complete = new[] { sourceTerminal.Point }
+                .Concat(route.RawPoints!.Select(point => point.Point))
+                .Append(destinationTerminal.Point)
+                .ToArray();
+            Assert.All(complete.Zip(complete.Skip(1), (left, right) => (left, right)), pair =>
+                Assert.True(pair.left.X == pair.right.X || pair.left.Y == pair.right.Y,
+                    "terminal and route centreline must remain orthogonal"));
         }
     }
 
@@ -900,7 +908,7 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.True(aggregation.IsBaseline);
         Assert.True(orchestration.IsBaseline);
-        Assert.Equal(aggregation.PhysicalRow, orchestration.PhysicalRow);
+        Assert.NotEqual(aggregation.PhysicalRow, orchestration.PhysicalRow);
         Assert.Equal("AggregationService", aggregation.RoleSelector);
         Assert.Equal("OrchestrationService", orchestration.RoleSelector);
     }
@@ -1782,6 +1790,114 @@ public sealed class ArchitectureV6StructuralTests
             .OrderBy(group => group.Key).Select(group => group.Count()).ToArray();
         Assert.Equal(nodeRows.Length, layerRows.Length);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotAboveChild");
+    }
+
+    [Fact]
+    public void Final_pipeline_keeps_configured_role_bands_distinct_when_baseline_pattern_overlaps_them()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                BaselinePattern = ".*(Aggregation|Coordination|Orchestration)Service$",
+                RoleRules = new[]
+                {
+                    new ArchitectureV6RoleRule("CoordinationService", "CoordinationService$", 0),
+                    new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 1),
+                    new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 2),
+                    new ArchitectureV6RoleRule("Service", "Service$", 3)
+                }
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("coordination", "project:p", "FooCoordinationService", "Project.FooCoordinationService", "Class", "coordination", Array.Empty<string>()),
+                        new ArchitectureNode("orchestration", "project:p", "FooOrchestrationService", "Project.FooOrchestrationService", "Class", "orchestration", Array.Empty<string>()),
+                        new ArchitectureNode("processing", "project:p", "FooProcessingService", "Project.FooProcessingService", "Class", "processing", Array.Empty<string>()),
+                        new ArchitectureNode("service", "project:p", "FooService", "Project.FooService", "Class", "service", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-coordination", "root", "coordination", "internal"),
+                    new ArchitectureLink("root-orchestration", "root", "orchestration", "internal"),
+                    new ArchitectureLink("root-processing", "root", "processing", "internal"),
+                    new ArchitectureLink("root-service", "root", "service", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
+
+        Assert.True(metadata["coordination"].FinalVisualLayerOrdinal < metadata["orchestration"].FinalVisualLayerOrdinal,
+            $"coordination={metadata["coordination"].FinalVisualLayerOrdinal}/{metadata["coordination"].RoleSelector}/{metadata["coordination"].VerticalSpacingPolicy}/{metadata["coordination"].PhysicalRow}, orchestration={metadata["orchestration"].FinalVisualLayerOrdinal}/{metadata["orchestration"].RoleSelector}/{metadata["orchestration"].VerticalSpacingPolicy}/{metadata["orchestration"].PhysicalRow}");
+        Assert.True(metadata["orchestration"].FinalVisualLayerOrdinal < metadata["processing"].FinalVisualLayerOrdinal,
+            $"orchestration={metadata["orchestration"].FinalVisualLayerOrdinal}, processing={metadata["processing"].FinalVisualLayerOrdinal}");
+        Assert.True(metadata["processing"].FinalVisualLayerOrdinal < metadata["service"].FinalVisualLayerOrdinal,
+            $"processing={metadata["processing"].FinalVisualLayerOrdinal}, service={metadata["service"].FinalVisualLayerOrdinal}");
+        Assert.Equal(4, metadata.Values.Where(node => node.RoleSelector != "Unmatched")
+            .Select(node => node.PhysicalRow).Distinct().Count());
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementRoleOrderViolation");
+    }
+
+    [Fact]
+    public void Final_pipeline_reserves_header_and_route_clearance_before_rendering()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+        var project = Assert.Single(scene.Geometry.Projects);
+
+        Assert.All(scene.Geometry.Nodes, node =>
+            Assert.True(node.AbsoluteBounds.Y >= project.AbsoluteLabelBounds!.Value.Y + project.AbsoluteLabelBounds.Value.Height));
+        Assert.All(plan.Sizing.Rows.Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting), row =>
+            Assert.True(row.FinalExtent >= plan.Request.GridSizing.RoutingRowMinimum + plan.Request.GridSizing.NodeToRouteClearance * 2));
+    }
+
+    [Fact]
+    public void Final_pipeline_fanout_terminals_are_inset_monotonic_and_orthogonal()
+    {
+        var request = CleanRequest() with
+        {
+            SemanticModel = CleanRequest().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
+                        new ArchitectureNode("child-a", "project:p", "AService", "Project.AService", "Class", "child-a", Array.Empty<string>()),
+                        new ArchitectureNode("child-b", "project:p", "BService", "Project.BService", "Class", "child-b", Array.Empty<string>()),
+                        new ArchitectureNode("child-c", "project:p", "CService", "Project.CService", "Class", "child-c", Array.Empty<string>()),
+                        new ArchitectureNode("child-d", "project:p", "DService", "Project.DService", "Class", "child-d", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[]
+                {
+                    new ArchitectureLink("root-a", "root", "child-a", "internal"),
+                    new ArchitectureLink("root-b", "root", "child-b", "internal"),
+                    new ArchitectureLink("root-c", "root", "child-c", "internal"),
+                    new ArchitectureLink("root-d", "root", "child-d", "internal")
+                }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
+        var sourceTerminals = scene.Terminals.Where(terminal => terminal.PhysicalNodeId == root.PhysicalNodeId).OrderBy(terminal => terminal.Point.X).ToArray();
+
+        Assert.Equal(4, sourceTerminals.Length);
+        Assert.All(sourceTerminals, terminal =>
+            Assert.InRange(terminal.Point.X, root.AbsoluteBounds.X + 1, root.AbsoluteBounds.X + root.AbsoluteBounds.Width - 1));
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "TerminalJoinDiagonal");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "TerminalCornerOrInsetViolation");
     }
 
     [Fact]
