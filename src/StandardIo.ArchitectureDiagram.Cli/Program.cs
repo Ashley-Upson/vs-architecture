@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,13 +37,11 @@ public static class Program
                 performance = GenerationPerformanceSession.Start(options.SerializationRepeatCount);
             }
 
-            var settings = DiagramSettings.CreateDefault();
-            if (!string.IsNullOrWhiteSpace(options.SettingsPath))
-            {
-                settings = SettingsSerializer.ApplyOverlay(
-                    settings,
-                    File.ReadAllText(options.SettingsPath));
-            }
+            var settingsSource = DiagramSettingsSourceResolver.Resolve(
+                options.SettingsPath,
+                GetPreservedUserConfigPath());
+            var settings = settingsSource.Settings;
+            Console.WriteLine($"Configuration: {settingsSource.Path} ({settingsSource.SourceType}, sha256={settingsSource.Sha256}, schema={settingsSource.SourceVersion}, effectiveVersion={settingsSource.Version})");
 
             if (!string.IsNullOrWhiteSpace(options.RendererId))
             {
@@ -56,7 +53,7 @@ public static class Program
                 .BuildServiceProvider();
             if (string.Equals(settings.OutputRenderer, "drawio", StringComparison.OrdinalIgnoreCase))
             {
-                var exitCode = await GenerateUnifiedDrawioAsync(provider, options, settings).ConfigureAwait(false);
+                var exitCode = await GenerateUnifiedDrawioAsync(provider, options, settings, settingsSource).ConfigureAwait(false);
                 if (performance is not null)
                 {
                     await WritePerformanceReportAsync(performance, options.PerformanceOutputPath!).ConfigureAwait(false);
@@ -95,7 +92,8 @@ public static class Program
     private static async Task<int> GenerateUnifiedDrawioAsync(
         ServiceProvider provider,
         CliOptions options,
-        DiagramSettings settings)
+        DiagramSettings settings,
+        DiagramSettingsSource settingsSource)
     {
         WorkspacePathLoadResult? target = null;
         DiagramModel? manifest = null;
@@ -172,13 +170,11 @@ public static class Program
                 {
                     Configuration = new
                     {
-                        Path = string.IsNullOrWhiteSpace(options.SettingsPath)
-                            ? "repository-defaults"
-                            : Path.GetFullPath(options.SettingsPath),
-                        Version = settings.Version,
-                        Sha256 = string.IsNullOrWhiteSpace(options.SettingsPath)
-                            ? null
-                            : Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.GetFullPath(options.SettingsPath)))).ToLowerInvariant()
+                        Path = settingsSource.Path,
+                        SourceType = settingsSource.SourceType,
+                        SourceVersion = settingsSource.SourceVersion,
+                        Version = settingsSource.Version,
+                        Sha256 = settingsSource.Sha256
                     },
                     architecture.Manifest,
                     architecture.Eligibility,
@@ -210,6 +206,12 @@ public static class Program
         }
         return 0;
     }
+
+    private static string GetPreservedUserConfigPath() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "codex-artifacts",
+            "architecture-user-settings.json");
 
     private static string? TryReadGitRevision(string inputPath)
     {
