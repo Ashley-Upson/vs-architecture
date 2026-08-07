@@ -1898,6 +1898,20 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Final_pipeline_keeps_endpoint_component_provenance_after_envelope_validation()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
+
+        Assert.NotNull(plan.PhysicalScene);
+        Assert.All(plan.Diagnostics.Metrics.RouteEvidence!, evidence =>
+        {
+            Assert.Contains(evidence.ComponentTypes, type => type == nameof(RouteStepRole.SourceExit));
+            Assert.Contains(evidence.ComponentTypes, type => type == nameof(RouteStepRole.DestinationEntry));
+        });
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "ComponentCorridorEscape");
+    }
+
+    [Fact]
     public void Final_pipeline_fanout_terminals_are_inset_monotonic_and_orthogonal()
     {
         var request = CleanRequest() with
