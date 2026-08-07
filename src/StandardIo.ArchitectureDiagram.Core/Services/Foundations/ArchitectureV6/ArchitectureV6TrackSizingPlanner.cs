@@ -316,7 +316,10 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     private int RequiredExtent(GridTrackConstraint constraint)
     {
         if (constraint.Kind == TrackConstraintKind.HorizontalLaneEnvelope || constraint.Kind == TrackConstraintKind.VerticalLaneEnvelope)
-            return Math.Max(1, checked(constraint.MinimumExtent * request.RoutePlanning.MinimumParallelSpacing));
+            return ArchitectureV6LaneGeometry.RequiredEnvelope(constraint.MinimumExtent,
+                request.GridSizing.RoutingRowMinimum,
+                request.RoutePlanning.MinimumPortSpacing,
+                request.RoutePlanning.MinimumParallelSpacing);
         return Math.Max(1, constraint.MinimumExtent);
     }
 

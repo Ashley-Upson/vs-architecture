@@ -258,7 +258,9 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
               CorridorEscapeCount: physicalScene.Metrics.CorridorEscapeCount,
               ComponentContinuityFailureCount: physicalScene.Metrics.ComponentContinuityFailureCount,
               SourceStubDirectionFailureCount: physicalScene.Metrics.SourceStubDirectionFailureCount,
-              DestinationStubDirectionFailureCount: physicalScene.Metrics.DestinationStubDirectionFailureCount);
+              DestinationStubDirectionFailureCount: physicalScene.Metrics.DestinationStubDirectionFailureCount,
+              TrackCapacity: physicalScene.Metrics.TrackCapacity,
+              RouteEvidence: physicalScene.Metrics.RouteEvidence);
 
         return new PlannedArchitectureDiagram(
             request,

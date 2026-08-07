@@ -167,7 +167,9 @@ public sealed record PlannedPhysicalSceneMetrics(
     int CorridorEscapeCount = 0,
     int ComponentContinuityFailureCount = 0,
     int SourceStubDirectionFailureCount = 0,
-    int DestinationStubDirectionFailureCount = 0);
+    int DestinationStubDirectionFailureCount = 0,
+    IReadOnlyList<ArchitectureV6TrackCapacityEvidence>? TrackCapacity = null,
+    IReadOnlyList<ArchitectureV6PhysicalRouteEvidence>? RouteEvidence = null);
 
 public sealed class PlannedArchitecturePhysicalScene
 {

@@ -2153,6 +2153,33 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Lane_envelope_includes_port_inset_and_trailing_clearance_for_horizontal_and_vertical_tracks()
+    {
+        Assert.Equal(122, ArchitectureV6LaneGeometry.RequiredEnvelope(7, 90, 25, 12));
+        Assert.Equal(97, ArchitectureV6LaneGeometry.Coordinate(0, 6, 25, 12));
+        Assert.True(ArchitectureV6LaneGeometry.Coordinate(0, 6, 25, 12) <
+            ArchitectureV6LaneGeometry.RequiredEnvelope(7, 90, 25, 12));
+        Assert.Equal(122, ArchitectureV6LaneGeometry.RequiredEnvelope(7, 90, 25, 12));
+    }
+
+    [Fact]
+    public void Final_plan_exposes_route_level_physical_evidence()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
+
+        Assert.NotNull(plan.Diagnostics.Metrics.RouteEvidence);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.Diagnostics.Metrics.RouteEvidence!.Count);
+        Assert.All(plan.Diagnostics.Metrics.RouteEvidence, evidence =>
+        {
+            Assert.NotEmpty(evidence.RouteId);
+            Assert.NotEmpty(evidence.ComponentIds);
+            Assert.NotNull(evidence.SourceTerminal);
+            Assert.NotNull(evidence.DestinationTerminal);
+        });
+        Assert.NotNull(plan.Diagnostics.Metrics.TrackCapacity);
+    }
+
+    [Fact]
     public void Final_plan_clean_routing_regression_gate_is_zero_findings()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());

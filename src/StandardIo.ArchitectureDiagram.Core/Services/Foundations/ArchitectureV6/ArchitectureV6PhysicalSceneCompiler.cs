@@ -86,6 +86,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         timings["normalization"] = timer.ElapsedMilliseconds;
 
         timer.Restart();
+        ValidateLaneTrackCapacity();
         Validate(geometry, terminals, physicalRoutes, turns, crossings, transitions);
         timings["physicalValidation"] = timer.ElapsedMilliseconds;
         if (projects.Any(project => project.ProjectLabelReservation is null))
@@ -93,7 +94,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             findings.Add(new ArchitecturePlanningDiagnostic("LabelGeometryUnavailable",
                 "Measured project-label geometry was not supplied; no label obstruction was invented.", PlanningDiagnosticSubject.Grid, null));
         }
-        var metrics = BuildMetrics(geometry, terminals, physicalRoutes, turns, crossings, transitions, timings);
+        var metrics = BuildMetrics(geometry, terminals, physicalRoutes, turns, crossings, transitions, timings) with
+        {
+            TrackCapacity = BuildTrackCapacityEvidence(),
+            RouteEvidence = BuildRouteEvidence(physicalRoutes, terminals)
+        };
         return new PlannedArchitecturePhysicalScene(geometry, transforms.Values.OrderBy(item => item.GridId.Value, StringComparer.Ordinal).ToArray(),
             terminals, turns, crossings, transitions, reservationGeometry, findings, metrics, attemptedSegments, invalidRouteIds);
     }
@@ -1268,11 +1273,95 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     private int LaneCoordinate(int offset, int extent, IReadOnlyList<PlannedLaneAllocation> lanes, string laneId)
     {
         var ordinal = lanes.Where(item => item.Lane.Value == laneId).Select(item => item.Ordinal).DefaultIfEmpty(0).First();
-        var spacing = Math.Max(1, request.RoutePlanning.MinimumParallelSpacing);
-        var coordinate = offset + request.RoutePlanning.MinimumPortSpacing + ordinal * spacing;
+        var coordinate = ArchitectureV6LaneGeometry.Coordinate(offset, ordinal,
+            request.RoutePlanning.MinimumPortSpacing,
+            request.RoutePlanning.MinimumParallelSpacing);
         if (coordinate < offset || coordinate > offset + extent)
             findings.Add(new ArchitecturePlanningDiagnostic("LaneCoordinateOutsideTrack", "Allocated lane coordinate falls outside its sized track; materialisation was not clamped.", PlanningDiagnosticSubject.PhysicalSegment, laneId));
         return coordinate;
+    }
+
+    private void ValidateLaneTrackCapacity()
+    {
+        foreach (var track in BuildTrackCapacityEvidence())
+        {
+            if (track.Deficit <= 0) continue;
+            findings.Add(new ArchitecturePlanningDiagnostic("LaneTrackCapacityDeficit",
+                $"Track {track.TrackId} requires {track.RequiredExtent}px for {track.LaneCount} lanes but provides {track.ActualExtent}px.",
+                track.Axis == RouteAxis.Horizontal ? PlanningDiagnosticSubject.Row : PlanningDiagnosticSubject.Column,
+                track.TrackId));
+        }
+    }
+
+    private IReadOnlyList<ArchitectureV6TrackCapacityEvidence> BuildTrackCapacityEvidence()
+    {
+        var result = new List<ArchitectureV6TrackCapacityEvidence>();
+        foreach (var group in allocation.HorizontalLanes.GroupBy(item => item.GridId.Value + ":" + item.DomainId, StringComparer.Ordinal))
+        {
+            foreach (var rowId in group.SelectMany(item => item.Cells).Select(cell => cell.RowId).Distinct())
+            {
+                var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(group.First().GridId));
+                var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(rowId));
+                if (row is null) continue;
+                var lanes = group.Select(item => item.Ordinal).Distinct().OrderBy(item => item).ToArray();
+                var required = ArchitectureV6LaneGeometry.RequiredEnvelope(lanes.Length, request.GridSizing.RoutingRowMinimum,
+                    request.RoutePlanning.MinimumPortSpacing, request.RoutePlanning.MinimumParallelSpacing);
+                result.Add(new ArchitectureV6TrackCapacityEvidence(group.First().GridId.Value, RouteAxis.Horizontal,
+                    row.Id.Value, lanes.Length, lanes.Length == 0 ? null : group.OrderBy(item => item.Ordinal).First().Lane.Value,
+                    lanes.Length == 0 ? null : group.OrderBy(item => item.Ordinal).Last().Lane.Value, required, row.FinalExtent,
+                    required - row.FinalExtent, row.FinalExtent - required, group.Select(item => item.RouteId).Distinct().OrderBy(item => item, StringComparer.Ordinal).ToArray()));
+            }
+        }
+        foreach (var group in allocation.VerticalLanes.GroupBy(item => item.GridId.Value + ":" + item.DomainId, StringComparer.Ordinal))
+        {
+            foreach (var columnId in group.SelectMany(item => item.Cells).Select(cell => cell.ColumnId).Distinct())
+            {
+                var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(group.First().GridId));
+                var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(columnId));
+                if (column is null) continue;
+                var lanes = group.Select(item => item.Ordinal).Distinct().OrderBy(item => item).ToArray();
+                var required = ArchitectureV6LaneGeometry.RequiredEnvelope(lanes.Length, request.GridSizing.StructuralColumnMinimum,
+                    request.RoutePlanning.MinimumPortSpacing, request.RoutePlanning.MinimumParallelSpacing);
+                result.Add(new ArchitectureV6TrackCapacityEvidence(group.First().GridId.Value, RouteAxis.Vertical,
+                    column.Id.Value, lanes.Length, lanes.Length == 0 ? null : group.OrderBy(item => item.Ordinal).First().Lane.Value,
+                    lanes.Length == 0 ? null : group.OrderBy(item => item.Ordinal).Last().Lane.Value, required, column.FinalExtent,
+                    required - column.FinalExtent, column.FinalExtent - required, group.Select(item => item.RouteId).Distinct().OrderBy(item => item, StringComparer.Ordinal).ToArray()));
+            }
+        }
+        return result.OrderBy(item => item.GridId, StringComparer.Ordinal).ThenBy(item => item.Axis).ThenBy(item => item.TrackId, StringComparer.Ordinal).ToArray();
+    }
+
+    private IReadOnlyList<ArchitectureV6PhysicalRouteEvidence> BuildRouteEvidence(
+        IReadOnlyList<PlannedPhysicalRoute> physicalRoutes, IReadOnlyList<PlannedPhysicalTerminal> terminals)
+    {
+        return physicalRoutes.OrderBy(route => route.PhysicalLinkId, StringComparer.Ordinal).Select(route =>
+        {
+            var attempts = attemptedSegments.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray();
+            var routeLanes = (route.Components ?? Array.Empty<PlannedPhysicalRouteComponent>()).Where(item => item.Lane is not null)
+                .Select(item => item.Lane!.Value.Value).Distinct(StringComparer.Ordinal).ToArray();
+            var routeNodes = new[] { route.SourceProjection, route.DestinationProjection };
+            var routeFindings = findings.Where(item => item.SubjectId == route.PhysicalLinkId ||
+                    (item.Code.Contains("Terminal", StringComparison.Ordinal) && routeNodes.Any(node => item.SubjectId?.Contains(node, StringComparison.Ordinal) == true)) ||
+                    (item.Code == "LaneCoordinateOutsideTrack" && routeLanes.Contains(item.SubjectId, StringComparer.Ordinal)))
+                .Select(item => item.Code).Concat(attempts.Select(item => item.FailureCode)).Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var components = (route.Components ?? Array.Empty<PlannedPhysicalRouteComponent>()).OrderBy(item => item.RouteStepOrder)
+                .ThenBy(item => item.ComponentId, StringComparer.Ordinal).ToArray();
+            var cells = components.SelectMany(item => item.AllocatedCells).Distinct().Select(item => item.ToString()).ToArray();
+            var lanes = routeLanes.OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var tracks = components.SelectMany(item => item.AllocatedCells).Select(item => item.RowId.Value).Concat(components.SelectMany(item => item.AllocatedCells).Select(item => item.ColumnId.Value))
+                .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var source = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
+            var destination = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Top);
+            return new ArchitectureV6PhysicalRouteEvidence(route.PhysicalLinkId, !route.IsInvalid, routeFindings,
+                components.Select(item => item.ComponentId).ToArray(),
+                components.Select(item => item.Role.ToString()).ToArray(), cells, lanes, tracks,
+                (route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(item => item.Point.ToString()).ToArray(),
+                (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(item => item.Point.ToString()).ToArray(),
+                source?.Point.ToString(), destination?.Point.ToString(),
+                attempts.Select((item, index) => new ArchitectureV6PhysicalRouteFindingEvidence(route.PhysicalLinkId, item.FailureCode,
+                    item.ComponentId, index, item.AllocatedCells.Select(cell => cell.ToString()).ToArray(), item.Start.ToString(), item.End.ToString())).ToArray());
+        }).ToArray();
     }
     private AbsolutePoint CellCentre(PlanningGridCellId cell, GridTransform transform)
     {

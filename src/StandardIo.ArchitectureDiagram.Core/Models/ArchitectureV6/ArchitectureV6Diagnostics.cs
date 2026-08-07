@@ -35,6 +35,43 @@ public sealed record ArchitectureNodeGridEvidence(
     IReadOnlyList<string> PositionalChildIds,
     string SubtreeId);
 
+public sealed record ArchitectureV6TrackCapacityEvidence(
+    string GridId,
+    RouteAxis Axis,
+    string TrackId,
+    int LaneCount,
+    string? FirstLane,
+    string? LastLane,
+    int RequiredExtent,
+    int ActualExtent,
+    int Deficit,
+    int Surplus,
+    IReadOnlyList<string> RouteIds);
+
+public sealed record ArchitectureV6PhysicalRouteFindingEvidence(
+    string RouteId,
+    string FindingType,
+    string ComponentId,
+    int SegmentIndex,
+    IReadOnlyList<string> Cells,
+    string ActualStart,
+    string ActualEnd);
+
+public sealed record ArchitectureV6PhysicalRouteEvidence(
+    string RouteId,
+    bool IsValid,
+    IReadOnlyList<string> Findings,
+    IReadOnlyList<string> ComponentIds,
+    IReadOnlyList<string> ComponentTypes,
+    IReadOnlyList<string> OrderedCells,
+    IReadOnlyList<string> LaneIds,
+    IReadOnlyList<string> TrackIds,
+    IReadOnlyList<string> RawPoints,
+    IReadOnlyList<string> ReducedPoints,
+    string? SourceTerminal,
+    string? DestinationTerminal,
+    IReadOnlyList<ArchitectureV6PhysicalRouteFindingEvidence> FindingEvidence);
+
 public sealed record ArchitecturePlanningMetrics(
     int SemanticNodeCount,
     int SemanticLinkCount,
@@ -165,7 +202,9 @@ public sealed record ArchitecturePlanningMetrics(
      int CorridorEscapeCount = 0,
      int ComponentContinuityFailureCount = 0,
      int SourceStubDirectionFailureCount = 0,
-     int DestinationStubDirectionFailureCount = 0);
+     int DestinationStubDirectionFailureCount = 0,
+     IReadOnlyList<ArchitectureV6TrackCapacityEvidence>? TrackCapacity = null,
+     IReadOnlyList<ArchitectureV6PhysicalRouteEvidence>? RouteEvidence = null);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,
