@@ -483,6 +483,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var components = contract is null
                 ? Array.Empty<PlannedPhysicalRouteComponent>()
                 : BuildComponentsFromContract(route, contract, sourceTerminal, destinationTerminal, transforms, compiledBoundaries, boundaryContradictions);
+            if (contract is not null && route.Transitions.Count >= 2)
+                components = InsertCrossProjectTransitionComponents(route, components, transforms);
             if (contract is null)
             {
                 findings.Add(new ArchitecturePlanningDiagnostic("MissingPhysicalBoundaryContract", "A route has no accepted component boundary contract.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
@@ -787,9 +789,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
     }
 
-    // Non-production historical transition-repair helper. Cross-grid topology
-    // must be supplied by the abstract route planner, not invented here.
-    [Obsolete("Non-production historical cross-project transition helper.")]
+    // Cross-project transitions are component planning, not route repair. The
+    // abstract route supplies the transition records; this stage materialises
+    // their owned source-project, diagram-grid and destination-project legs
+    // before segments are compiled.
     private IReadOnlyList<PlannedPhysicalRouteComponent> InsertCrossProjectTransitionComponents(
         PlannedGridRoute route,
         IReadOnlyList<PlannedPhysicalRouteComponent> components,
@@ -828,25 +831,25 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             !transforms.TryGetValue(route.Transitions[1].SourceGridId, out var destinationDiagramTransform))
             return components;
 
-        var sourceDiagramCell = DiagramProjectCell(route.Transitions[0].SourceProjectId);
-        var destinationDiagramCell = DiagramProjectCell(route.Transitions[1].DestinationProjectId);
-        if (sourceDiagramCell is null || destinationDiagramCell is null)
-            return components;
+        var sourceDiagramCell = route.Transitions[0].DestinationBoundaryCellId;
+        var destinationDiagramCell = route.Transitions[1].SourceBoundaryCellId;
 
-        var sourceSide = sourceComponent.ExitPoint.Value.X >= destinationComponent.EntryPoint.Value.X ? GridSide.Right : GridSide.Left;
-        var destinationSide = destinationComponent.EntryPoint.Value.X >= sourceComponent.ExitPoint.Value.X ? GridSide.Left : GridSide.Right;
-        var sourceBoundary = BoundaryPoint(new GridBoundaryIdentity(sourceDiagramCell.Value.GridId, sourceDiagramCell.Value,
-            sourceSide, null, sourceDiagramCell.Value.GridId.Value, "diagram-project-boundary"), sourceDiagramTransform);
-        var destinationBoundary = BoundaryPoint(new GridBoundaryIdentity(destinationDiagramCell.Value.GridId, destinationDiagramCell.Value,
-            destinationSide, null, destinationDiagramCell.Value.GridId.Value, "diagram-project-boundary"), destinationDiagramTransform);
+        var sourceSide = route.Transitions[0].SourceBoundarySide ?? throw new InvalidOperationException(
+            $"Cross-project route {route.PhysicalLinkId} has no planner-owned source transition side.");
+        var destinationSide = route.Transitions[1].DestinationBoundarySide ?? throw new InvalidOperationException(
+            $"Cross-project route {route.PhysicalLinkId} has no planner-owned destination transition side.");
+        var sourceBoundary = BoundaryPoint(new GridBoundaryIdentity(sourceDiagramCell.GridId, sourceDiagramCell,
+            sourceSide, null, sourceDiagramCell.GridId.Value, "diagram-project-boundary"), sourceDiagramTransform);
+        var destinationBoundary = BoundaryPoint(new GridBoundaryIdentity(destinationDiagramCell.GridId, destinationDiagramCell,
+            destinationSide, null, destinationDiagramCell.GridId.Value, "diagram-project-boundary"), destinationDiagramTransform);
 
         var transitionOrdinal = allocation.ProjectTransitions
             .Where(item => item.PhysicalLinkId == route.PhysicalLinkId)
             .Select(item => item.Ordinal)
             .DefaultIfEmpty(0)
             .First();
-        var diagramRow = relative.Grids.Single(item => item.GridId == sourceDiagramCell.Value.GridId).Rows
-            .Single(item => item.Id == sourceDiagramCell.Value.RowId);
+        var diagramRow = relative.Grids.Single(item => item.GridId == sourceDiagramCell.GridId).Rows
+            .Single(item => item.Id == sourceDiagramCell.RowId);
         var transitionY = Math.Min(diagramRow.RelativeOffset + diagramRow.FinalExtent - 1,
             diagramRow.RelativeOffset + transitionOrdinal);
         sourceBoundary = new AbsolutePoint(sourceBoundary.X, sourceDiagramTransform.Origin.Y + transitionY);
@@ -854,15 +857,23 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         var sourceEdge = new AbsolutePoint(sourceBoundary.X, sourceComponent.ExitPoint.Value.Y);
         var destinationEdge = new AbsolutePoint(destinationBoundary.X, destinationComponent.EntryPoint.Value.Y);
         var firstTransition = TransitionComponent(route, "source-project-transition", sourceComponent.ExitPoint.Value,
-            sourceEdge, sourceBoundary, sourceGrid, sourceGrid, sourceGrid, route.Transitions[0].SourceBoundaryCellId, sourceDiagramCell.Value,
+            sourceEdge, sourceBoundary, sourceGrid, sourceGrid, sourceGrid, route.Transitions[0].SourceBoundaryCellId, sourceDiagramCell,
             sourceComponent, sourceComponent.RouteStepOrder);
         var diagramTransition = TransitionComponent(route, "diagram-transition", sourceBoundary, destinationBoundary,
             destinationBoundary, route.Transitions[0].DestinationGridId, route.Transitions[0].DestinationGridId, route.Transitions[0].DestinationGridId,
-            sourceDiagramCell.Value, destinationDiagramCell.Value,
+            sourceDiagramCell, destinationDiagramCell,
             null, sourceComponent.RouteStepOrder + 1);
+        var diagramCells = route.Steps
+            .Where(step => step.GridId == route.Transitions[0].DestinationGridId)
+            .OrderBy(step => step.Order)
+            .Select(step => step.CellId)
+            .Distinct()
+            .ToArray();
+        if (diagramCells.Length > 0)
+            diagramTransition = diagramTransition with { AllocatedCells = diagramCells };
         var destinationTransition = TransitionComponent(route, "destination-project-transition", destinationBoundary,
             destinationEdge, destinationComponent.EntryPoint.Value, route.Transitions[1].SourceGridId, destinationGrid, destinationGrid,
-            destinationDiagramCell.Value,
+            destinationDiagramCell,
             route.Transitions[1].DestinationBoundaryCellId, destinationComponent, destinationComponent.RouteStepOrder - 1);
 
         var result = new List<PlannedPhysicalRouteComponent>(components.Count + 3);

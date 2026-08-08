@@ -150,13 +150,27 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             var sourceBoundary = UseCell(sourceGrid, ExteriorRowBelow(grids[sourceGrid], placements[source.PhysicalNodeId]),
                 ColumnForRole(sourceGrid, PlanningGridTrackRole.ProjectBoundaryTransition, ColumnId(source)), CellOccupancy.Empty);
             var diagramId = new PlanningGridId("diagram");
-            var diagramBoundary = UseCell(diagramId, grids[diagramId].RowOrder[0], grids[diagramId].ColumnOrder[0], CellOccupancy.Empty);
+            var diagramGrid = grids[diagramId];
+            var sourceDiagramCell = DiagramProjectCell(diagramId, source.ProjectId);
+            var destinationDiagramCell = DiagramProjectCell(diagramId, destination.ProjectId);
+            var diagramBoundary = sourceDiagramCell ?? UseCell(diagramId, diagramGrid.RowOrder[0], diagramGrid.ColumnOrder[0], CellOccupancy.Empty);
             var destinationBoundary = UseCell(destinationGrid, ExteriorRowAbove(grids[destinationGrid], placements[destination.PhysicalNodeId]),
                 ColumnForRole(destinationGrid, PlanningGridTrackRole.ProjectBoundaryTransition, ColumnId(destination)), CellOccupancy.Empty);
+            var diagramPath = new List<PlanningGridCellId> { diagramBoundary };
+            var diagramRow = diagramGrid.RowOrder.IndexOf(diagramBoundary.RowId);
+            var diagramStartColumn = diagramGrid.ColumnOrder.IndexOf(diagramBoundary.ColumnId);
+            var diagramEndColumn = destinationDiagramCell is null ? -1 : diagramGrid.ColumnOrder.IndexOf(destinationDiagramCell.Value.ColumnId);
+            var diagramPathValid = destinationDiagramCell is not null && diagramRow >= 0 && diagramStartColumn >= 0 && diagramEndColumn >= 0 &&
+                AppendHorizontal(diagramPath, diagramId, diagramGrid, diagramRow, diagramStartColumn, diagramEndColumn, link);
+            if (!diagramPathValid)
+                diagramPath.Clear();
+            var destinationDiagramBoundary = destinationDiagramCell ?? diagramBoundary;
             transitions.Add(new GridTransition(sourceGrid, sourceBoundary, diagramId, diagramBoundary, "project-to-diagram", link.SemanticLinkId,
-                "exit", link.SourceProjectId, null, true, request.ProjectPlacement.ShowProjectContainers));
-            transitions.Add(new GridTransition(diagramId, diagramBoundary, destinationGrid, destinationBoundary, "diagram-to-project", link.SemanticLinkId,
-                "entry", null, link.DestinationProjectId, true, request.ProjectPlacement.ShowProjectContainers));
+                "exit", link.SourceProjectId, null, true, request.ProjectPlacement.ShowProjectContainers,
+                diagramStartColumn <= diagramEndColumn ? GridSide.Right : GridSide.Left, null));
+            transitions.Add(new GridTransition(diagramId, destinationDiagramBoundary, destinationGrid, destinationBoundary, "diagram-to-project", link.SemanticLinkId,
+                "entry", null, link.DestinationProjectId, true, request.ProjectPlacement.ShowProjectContainers,
+                null, diagramStartColumn <= diagramEndColumn ? GridSide.Left : GridSide.Right));
             var sourceMutable = grids[sourceGrid];
             var destinationMutable = grids[destinationGrid];
             var sourcePath = new List<PlanningGridCellId> { placements[source.PhysicalNodeId].AnchorCellId };
@@ -177,7 +191,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 AppendHorizontal(destinationPath, destinationGrid, destinationMutable, destinationRow, destinationColumn, destinationAnchorColumn, link) &&
                 AppendVertical(destinationPath, destinationGrid, destinationMutable, destinationRow, destinationAnchorRow - 1, destinationAnchorColumn, link);
             if (destinationPathValid) destinationPath.Add(placements[destination.PhysicalNodeId].AnchorCellId);
-            if (!sourcePathValid || !destinationPathValid)
+            if (!sourcePathValid || !destinationPathValid || diagramPath.Count == 0)
             {
                 steps.Clear();
             }
@@ -185,7 +199,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             {
                 steps.AddRange(BuildStepsFromPath(sourcePath, topology, grids[sourceGrid]));
                 steps[steps.Count - 1] = steps[steps.Count - 1] with { Role = RouteStepRole.ProjectExit };
-                steps.Add(Step(diagramId, diagramBoundary, GridSide.Top, GridSide.Bottom, RouteStepRole.DiagramGridPassage, steps.Count, topology));
+                steps.AddRange(BuildStepsFromPath(diagramPath, topology, diagramGrid)
+                    .Select((step, index) => step with { Role = RouteStepRole.DiagramGridPassage, Order = steps.Count + index }));
                 var destinationSteps = BuildStepsFromPath(destinationPath, topology, grids[destinationGrid]).ToList();
                 destinationSteps[0] = destinationSteps[0] with { Role = RouteStepRole.ProjectEntry };
                 steps.AddRange(destinationSteps.Select((step, index) => step with { Order = steps.Count + index }));
@@ -865,6 +880,15 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     {
         var grid = grids[new PlanningGridId("diagram")];
         return new DiagramRoutingGrid(grid.ToGrid(), Array.Empty<RelativeRectangle>(), transitions.ToArray());
+    }
+
+    private PlanningGridCellId? DiagramProjectCell(PlanningGridId diagramId, string? projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId) || !grids.TryGetValue(diagramId, out var grid)) return null;
+        var column = grid.Columns.Values.FirstOrDefault(item => string.Equals(item.OwnerId, projectId, StringComparison.Ordinal));
+        return column is null || grid.RowOrder.Count == 0
+            ? null
+            : new PlanningGridCellId(diagramId, grid.RowOrder[0], column.Id);
     }
 
     private PlannedGridRouteStep Step(PlanningGridId gridId, PlanningGridCellId cell, GridSide entry, GridSide exit,

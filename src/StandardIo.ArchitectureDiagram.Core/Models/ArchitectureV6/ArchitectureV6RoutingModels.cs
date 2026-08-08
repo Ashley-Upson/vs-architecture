@@ -69,7 +69,9 @@ public sealed record GridTransition(
     string? SourceProjectId = null,
     string? DestinationProjectId = null,
     bool ProjectLabelsPermit = true,
-    bool ProjectContainersVisible = true);
+    bool ProjectContainersVisible = true,
+    GridSide? SourceBoundarySide = null,
+    GridSide? DestinationBoundarySide = null);
 
 public sealed record PlannedGridRoute(
     string PhysicalLinkId,

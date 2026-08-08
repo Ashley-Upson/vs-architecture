@@ -1423,9 +1423,15 @@ public sealed class ArchitectureV6StructuralTests
         var repeated = new ArchitectureDiagramV6Planner().Plan(request);
         var repeatedRoute = Assert.Single(repeated.PhysicalScene!.Geometry.Routes);
 
-        Assert.DoesNotContain(route.Components!, component => component.Role == RouteStepRole.ProjectTransition);
+        Assert.Contains(route.Components!, component => component.Role == RouteStepRole.ProjectTransition);
+        Assert.Contains(route.Components!, component => component.ComponentId.EndsWith(":source-project-transition", StringComparison.Ordinal));
+        Assert.Contains(route.Components!, component => component.ComponentId.EndsWith(":diagram-transition", StringComparison.Ordinal));
+        Assert.Contains(route.Components!, component => component.ComponentId.EndsWith(":destination-project-transition", StringComparison.Ordinal));
         Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.True(plan.PhysicalScene.Metrics.DiagonalSegmentCount >= 0);
+        Assert.Equal(0, plan.PhysicalScene.Metrics.DiagonalSegmentCount);
+        Assert.Equal(0, plan.PhysicalScene.Metrics.ComponentContinuityFailureCount);
+        Assert.DoesNotContain(route.Components!, component => component.Role == RouteStepRole.ProjectTransition &&
+            component.AllocatedCells.Count < 2);
         Assert.Equal(route.RawPoints, repeatedRoute.RawPoints);
         Assert.Equal(
             route.Components.Select(component => (component.ComponentId, component.Role, component.OwnershipScope, component.EntryPoint, component.ExitPoint)),
