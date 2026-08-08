@@ -274,18 +274,37 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         var cellRectangles = cells.Select(cell => CellBounds(cell, transforms)).ToArray();
         if (cellRectangles.Length != cells.Count || cellRectangles.Any(rectangle => rectangle.Width <= 0 || rectangle.Height <= 0))
             return false;
-        var rectangles = cellRectangles
-            .Concat(additionalBounds ?? Array.Empty<AbsoluteRectangle>())
+        var rectangles = cellRectangles.Concat(additionalBounds ?? Array.Empty<AbsoluteRectangle>())
             .Where(rectangle => rectangle.Width > 0 && rectangle.Height > 0).ToArray();
-        var left = rectangles.Min(rectangle => rectangle.X) - boundaryTolerance;
-        var top = rectangles.Min(rectangle => rectangle.Y) - boundaryTolerance;
-        var right = rectangles.Max(rectangle => rectangle.X + rectangle.Width) + boundaryTolerance;
-        var bottom = rectangles.Max(rectangle => rectangle.Y + rectangle.Height) + boundaryTolerance;
         if (start.X == end.X)
-            return start.X >= left && start.X <= right && Math.Min(start.Y, end.Y) >= top && Math.Max(start.Y, end.Y) <= bottom;
+        {
+            var y0 = Math.Min(start.Y, end.Y);
+            var y1 = Math.Max(start.Y, end.Y);
+            return CoversInterval(rectangles.Where(rectangle => start.X >= rectangle.X - boundaryTolerance &&
+                    start.X <= rectangle.X + rectangle.Width + boundaryTolerance)
+                .Select(rectangle => (Start: rectangle.Y - boundaryTolerance, End: rectangle.Y + rectangle.Height + boundaryTolerance)), y0, y1);
+        }
         if (start.Y == end.Y)
-            return start.Y >= top && start.Y <= bottom && Math.Min(start.X, end.X) >= left && Math.Max(start.X, end.X) <= right;
+        {
+            var x0 = Math.Min(start.X, end.X);
+            var x1 = Math.Max(start.X, end.X);
+            return CoversInterval(rectangles.Where(rectangle => start.Y >= rectangle.Y - boundaryTolerance &&
+                    start.Y <= rectangle.Y + rectangle.Height + boundaryTolerance)
+                .Select(rectangle => (Start: rectangle.X - boundaryTolerance, End: rectangle.X + rectangle.Width + boundaryTolerance)), x0, x1);
+        }
         return false;
+    }
+
+    private static bool CoversInterval(IEnumerable<(int Start, int End)> intervals, int start, int end)
+    {
+        var cursor = start;
+        foreach (var interval in intervals.Where(item => item.End >= start && item.Start <= end).OrderBy(item => item.Start))
+        {
+            if (interval.Start > cursor) return false;
+            cursor = Math.Max(cursor, interval.End);
+            if (cursor >= end) return true;
+        }
+        return cursor >= end;
     }
 
     private AbsoluteRectangle CellBounds(PlanningGridCellId cell, IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
@@ -373,7 +392,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 findings.Add(new ArchitecturePlanningDiagnostic("TerminalCapacityOverflow",
                     "Allocated terminal demand does not fit the final node edge; terminal placement was not silently accepted by clamping.",
                     PlanningDiagnosticSubject.PhysicalNode, endpoint.PhysicalNodeId));
-            var x = Math.Max(minX, Math.Min(maxX, requestedX));
+            // Capacity is a planning concern. Preserve the allocated slot so
+            // an unresolved overflow remains visible to final validation rather
+            // than silently changing the terminal geometry here.
+            var x = requestedX;
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
             var id = endpoint.PhysicalLinkId + ":" + endpoint.Side;
@@ -487,6 +509,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             // boundaries remain provenance, but are not independent point-to-
             // point paths: a turn or endpoint bend is part of the same ordered
             // orthogonal sequence as the ordinary cell runs.
+            ValidateEndpointBacktracking(route, rawPoints, ref routeInvalid);
             var reducedPoints = RemoveRedundantCollinearPoints(rawPoints);
             ValidateEndpointBacktracking(route, reducedPoints, ref routeInvalid);
             var rawPointIndexes = rawPoints.Select((point, index) => new { point.PointId, index })
@@ -662,14 +685,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var step = route.Steps.SingleOrDefault(item => item.CellId.Equals(turn.Cells[0]));
             var turnPoint = step is null ? (AbsolutePoint?)null : TurnPoint(route, step, transform);
             if (turnPoint is null) continue;
-            if (turn.FollowingComponentId?.EndsWith(":destination-approach", StringComparison.Ordinal) == true &&
-                route.Destination.GridId == step!.GridId)
-            {
-                // The final turn owns the handoff into the destination approach.
-                // Its vertical lane, rather than the outer edge of the last
-                // approach cell, is the authoritative horizontal-run endpoint.
-                turnPoint = new AbsolutePoint(destinationTerminal.Point.X, turnPoint.Value.Y);
-            }
             RegisterBoundary(turn.EntryBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
             RegisterBoundary(turn.ExitBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
         }
@@ -723,12 +738,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 points.FirstOrDefault()?.Point, points.LastOrDefault()?.Point, component.EntrySide, component.ExitSide,
                 component.PrecedingComponentId, component.FollowingComponentId, component.EntryBoundary?.ToString()));
         }
-        AlignDestinationApproachBoundary(route, result);
-        return route.Transitions.Count == 0
-            ? result
-            : InsertCrossProjectTransitionComponents(route, result, transforms);
+        return result;
     }
 
+    // Non-production historical repair helper. The active compiler never calls
+    // this method because component boundaries must already agree upstream.
+    [Obsolete("Non-production historical boundary-repair helper.")]
     private void AlignDestinationApproachBoundary(PlannedGridRoute route, IList<PlannedPhysicalRouteComponent> components)
     {
         for (var index = 1; index < components.Count; index++)
@@ -767,6 +782,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
     }
 
+    // Non-production historical transition-repair helper. Cross-grid topology
+    // must be supplied by the abstract route planner, not invented here.
+    [Obsolete("Non-production historical cross-project transition helper.")]
     private IReadOnlyList<PlannedPhysicalRouteComponent> InsertCrossProjectTransitionComponents(
         PlannedGridRoute route,
         IReadOnlyList<PlannedPhysicalRouteComponent> components,
@@ -1013,14 +1031,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 points.Add(Point(route, firstStep.GridId, approachStart, role, component.ComponentId + ":entry", component.Order,
                     component.RunId, component.TurnId, firstStep.CellId, "destination approach first owned cell entry", component.ComponentId));
 
-                // The endpoint component owns the approach cell. Align to the
-                // destination terminal before descending into its top edge.
-                if (approachStart.X != end.X)
-                {
-                    points.Add(Point(route, firstStep.GridId, new AbsolutePoint(end.X, approachStart.Y), role,
-                        component.ComponentId + ":endpoint-bend", component.Order, component.RunId, component.TurnId,
-                        firstStep.CellId, "destination terminal alignment before top-edge descent", component.ComponentId));
-                }
                 points.Add(Point(route, firstStep.GridId, end, role, component.ComponentId + ":exit", component.Order,
                     component.RunId, component.TurnId, firstStep.CellId, "destination top edge after owned approach", component.ComponentId));
                 return points;
@@ -1061,8 +1071,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 points.Clear();
             }
             if (component.Kind is PlannedRouteComponentKind.SourceDeparture or PlannedRouteComponentKind.DestinationApproach)
-                AppendEndpointBend(points, route, component, start, end,
-                    component.Kind == PlannedRouteComponentKind.SourceDeparture, firstCell);
+                points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":boundary", component.Order,
+                    component.RunId, component.TurnId, lastCell,
+                    "unreconciled endpoint boundary from authoritative plan", component.ComponentId));
             else
                 points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":exit", component.Order,
                     component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
@@ -1151,23 +1162,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         var x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, lane.Value.Value) + transform.Origin.X;
         return new AbsolutePoint(x, boundary.Y);
-    }
-
-    private void AppendEndpointBend(List<PlannedPhysicalRoutePoint> points, PlannedGridRoute route,
-        PlannedRouteComponentContract component, AbsolutePoint start, AbsolutePoint end, bool source,
-        PlanningGridCellId cell)
-    {
-        if (start.X != end.X && start.Y != end.Y)
-        {
-            var bend = source ? new AbsolutePoint(start.X, end.Y) : new AbsolutePoint(end.X, start.Y);
-            points.Add(Point(route, cell.GridId, bend, source ? RouteStepRole.SourceExit : RouteStepRole.DestinationEntry,
-                component.ComponentId + ":endpoint-bend", component.Order, component.RunId, component.TurnId, cell,
-                source ? "derived source endpoint lane intersection" : "derived destination endpoint lane intersection",
-                component.ComponentId));
-        }
-        points.Add(Point(route, cell.GridId, end, source ? RouteStepRole.SourceExit : RouteStepRole.DestinationEntry,
-            component.ComponentId + ":boundary", component.Order, component.RunId, component.TurnId, cell,
-            source ? "first ordinary run boundary" : "destination top terminal", component.ComponentId));
     }
 
     private PlannedPhysicalRoutePoint? CompileCellTransition(PlannedGridRoute route,
@@ -1592,7 +1586,16 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 if (Intersects(segment, node.AbsoluteBounds))
                     findings.Add(new ArchitecturePlanningDiagnostic("RouteNodeIntersection", "A physical route segment intersects an unrelated node.", PlanningDiagnosticSubject.PhysicalSegment, segment.PhysicalLinkId));
         foreach (var group in routes.SelectMany(route => route.Segments.Select(segment => (route, segment))).GroupBy(item => NormalizedSegment(item.segment)))
-            if (group.Count() > 1) findings.Add(new ArchitecturePlanningDiagnostic("SharedCollinearSegment", "Routes share a non-zero physical segment.", PlanningDiagnosticSubject.PhysicalSegment, group.Key));
+        {
+            var routeIds = group.Select(item => item.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            if (routeIds.Length > 1)
+                findings.Add(new ArchitecturePlanningDiagnostic("SharedCollinearSegment",
+                    $"Routes {routeIds[0]} and {routeIds[1]} share non-zero physical segment {group.Key}.",
+                    PlanningDiagnosticSubject.PhysicalSegment, string.Join("|", routeIds.Take(2)) + "|" + group.Key));
+        }
+        ValidateSharedBends(turns);
+        ValidateParallelClearance(routes);
+        ValidateCrossings(routes);
         foreach (var terminal in terminals)
         {
             var node = geometry.Nodes.SingleOrDefault(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
@@ -1615,11 +1618,24 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 .Concat(points.Select(item => item.Point))
                 .Concat(new[] { destination.Point })
                 .ToArray();
+            ValidatePolyline(route.PhysicalLinkId, "Raw", new[] { source.Point }
+                .Concat((route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(item => item.Point))
+                .Concat(new[] { destination.Point }).ToArray());
+            ValidatePolyline(route.PhysicalLinkId, "Reduced", ordered);
             for (var index = 1; index < ordered.Length; index++)
                 if (ordered[index - 1].X != ordered[index].X && ordered[index - 1].Y != ordered[index].Y)
                     findings.Add(new ArchitecturePlanningDiagnostic("TerminalJoinDiagonal", "A final route segment, including a terminal join, is diagonal.", PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
         ValidateTerminalOrdering(geometry, terminals, routes);
+    }
+
+    private void ValidatePolyline(string routeId, string stage, IReadOnlyList<AbsolutePoint> points)
+    {
+        for (var index = 1; index < points.Count; index++)
+            if (points[index - 1].X != points[index].X && points[index - 1].Y != points[index].Y)
+                findings.Add(new ArchitecturePlanningDiagnostic(stage + "PolylineDiagonal",
+                    $"The {stage.ToLowerInvariant()} final route polyline contains a diagonal segment.",
+                    PlanningDiagnosticSubject.PhysicalLink, routeId));
     }
 
     private void ValidateTerminalOrdering(
@@ -1634,12 +1650,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 .Select(terminal =>
                 {
                     var route = routes.SingleOrDefault(item => item.PhysicalLinkId == terminal.PhysicalLinkId);
-                    var otherId = side == GridSide.Bottom ? route?.DestinationProjection : route?.SourceProjection;
-                    var other = geometry.Nodes.SingleOrDefault(item => item.PhysicalNodeId == otherId);
-                    var otherCentre = other is null ? int.MaxValue : other.AbsoluteBounds.X + other.AbsoluteBounds.Width / 2;
-                    return (terminal, otherCentre);
+                    var routePoints = (route?.ReducedPoints ?? route?.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
+                        .Select(point => point.Point).ToArray();
+                    var routeX = side == GridSide.Bottom ? routePoints.FirstOrDefault().X : routePoints.LastOrDefault().X;
+                    return (terminal, routeX);
                 })
-                .OrderBy(item => item.otherCentre)
+                .OrderBy(item => item.routeX)
                 .ThenBy(item => item.terminal.PhysicalLinkId, StringComparer.Ordinal)
                 .ToArray();
             for (var index = 1; index < ordered.Length; index++)
@@ -1651,6 +1667,68 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                     PlanningDiagnosticSubject.PhysicalNode, group.Key));
                 break;
             }
+        }
+    }
+
+    private void ValidateSharedBends(IReadOnlyList<PlannedPhysicalTurn> turns)
+    {
+        foreach (var group in turns.GroupBy(turn => turn.Point).Where(group => group.Select(turn => turn.PhysicalLinkId).Distinct(StringComparer.Ordinal).Count() > 1))
+        {
+            var routesAtBend = group.Select(turn => turn.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            findings.Add(new ArchitecturePlanningDiagnostic("SharedBend",
+                $"Routes {routesAtBend[0]} and {routesAtBend[1]} share bend {group.Key}.",
+                PlanningDiagnosticSubject.PhysicalSegment, string.Join("|", routesAtBend.Take(2))));
+        }
+    }
+
+    private void ValidateParallelClearance(IReadOnlyList<PlannedPhysicalRoute> routes)
+    {
+        var minimum = Math.Max(1, request.RoutePlanning.MinimumParallelSpacing);
+        var segments = routes.SelectMany(route => route.Segments.Select(segment => (route, segment))).ToArray();
+        for (var left = 0; left < segments.Length; left++)
+        for (var right = left + 1; right < segments.Length; right++)
+        {
+            var a = segments[left];
+            var b = segments[right];
+            if (a.route.PhysicalLinkId == b.route.PhysicalLinkId || a.segment.Axis != b.segment.Axis) continue;
+            if (a.segment.Axis == RouteAxis.Horizontal && a.segment.Start.Y == b.segment.Start.Y) continue;
+            if (a.segment.Axis == RouteAxis.Vertical && a.segment.Start.X == b.segment.Start.X) continue;
+            var overlap = a.segment.Axis == RouteAxis.Horizontal
+                ? Math.Min(Math.Max(a.segment.Start.X, a.segment.End.X), Math.Max(b.segment.Start.X, b.segment.End.X)) -
+                  Math.Max(Math.Min(a.segment.Start.X, a.segment.End.X), Math.Min(b.segment.Start.X, b.segment.End.X))
+                : Math.Min(Math.Max(a.segment.Start.Y, a.segment.End.Y), Math.Max(b.segment.Start.Y, b.segment.End.Y)) -
+                  Math.Max(Math.Min(a.segment.Start.Y, a.segment.End.Y), Math.Min(b.segment.Start.Y, b.segment.End.Y));
+            var distance = a.segment.Axis == RouteAxis.Horizontal
+                ? Math.Abs(a.segment.Start.Y - b.segment.Start.Y)
+                : Math.Abs(a.segment.Start.X - b.segment.Start.X);
+            if (overlap > 0 && distance < minimum)
+                findings.Add(new ArchitecturePlanningDiagnostic("ParallelClearanceViolation",
+                    $"Routes {a.route.PhysicalLinkId} and {b.route.PhysicalLinkId} have only {distance}px parallel clearance over {overlap}px.",
+                    PlanningDiagnosticSubject.PhysicalSegment, a.route.PhysicalLinkId + "|" + b.route.PhysicalLinkId));
+        }
+    }
+
+    private void ValidateCrossings(IReadOnlyList<PlannedPhysicalRoute> routes)
+    {
+        var segments = routes.SelectMany(route => route.Segments.Select(segment => (route, segment))).ToArray();
+        for (var left = 0; left < segments.Length; left++)
+        for (var right = left + 1; right < segments.Length; right++)
+        {
+            var a = segments[left];
+            var b = segments[right];
+            if (a.route.PhysicalLinkId == b.route.PhysicalLinkId || a.segment.Axis == b.segment.Axis) continue;
+            var horizontal = a.segment.Axis == RouteAxis.Horizontal ? a.segment : b.segment;
+            var vertical = a.segment.Axis == RouteAxis.Vertical ? a.segment : b.segment;
+            var x = vertical.Start.X;
+            var y = horizontal.Start.Y;
+            var insideHorizontal = x > Math.Min(horizontal.Start.X, horizontal.End.X) && x < Math.Max(horizontal.Start.X, horizontal.End.X);
+            var insideVertical = y > Math.Min(vertical.Start.Y, vertical.End.Y) && y < Math.Max(vertical.Start.Y, vertical.End.Y);
+            var touches = x >= Math.Min(horizontal.Start.X, horizontal.End.X) && x <= Math.Max(horizontal.Start.X, horizontal.End.X) &&
+                          y >= Math.Min(vertical.Start.Y, vertical.End.Y) && y <= Math.Max(vertical.Start.Y, vertical.End.Y);
+            if (touches && !(insideHorizontal && insideVertical))
+                findings.Add(new ArchitecturePlanningDiagnostic("InvalidCrossing",
+                    $"Routes {a.route.PhysicalLinkId} and {b.route.PhysicalLinkId} meet at a non-interior crossing ({x},{y}).",
+                    PlanningDiagnosticSubject.PhysicalSegment, a.route.PhysicalLinkId + "|" + b.route.PhysicalLinkId));
         }
     }
 

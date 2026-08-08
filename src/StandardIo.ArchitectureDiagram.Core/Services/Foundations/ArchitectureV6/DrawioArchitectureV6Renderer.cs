@@ -36,20 +36,43 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         var physicalNodes = diagram.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         var nodeCells = new Dictionary<string, string>(StringComparer.Ordinal);
         var projectCells = new Dictionary<string, string>(StringComparer.Ordinal);
+        var emittedCellIds = new HashSet<string>(StringComparer.Ordinal) { "0", "1" };
+        var minimumX = new[] { geometry.AbsoluteDiagramBounds.X }
+            .Concat(geometry.Projects.Select(project => project.AbsoluteBounds.X))
+            .Concat(geometry.Nodes.Select(node => node.AbsoluteBounds.X))
+            .Concat(geometry.Routes.SelectMany(route => (route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point.X)))
+            .DefaultIfEmpty(0).Min();
+        var minimumY = new[] { geometry.AbsoluteDiagramBounds.Y }
+            .Concat(geometry.Projects.Select(project => project.AbsoluteBounds.Y))
+            .Concat(geometry.Nodes.Select(node => node.AbsoluteBounds.Y))
+            .Concat(geometry.Routes.SelectMany(route => (route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point.Y)))
+            .DefaultIfEmpty(0).Min();
+        var offsetX = minimumX < 0 ? -minimumX : 0;
+        var offsetY = minimumY < 0 ? -minimumY : 0;
 
         foreach (var project in geometry.Projects.OrderBy(item => item.ProjectId, StringComparer.Ordinal))
         {
             if (!diagram.Request.ProjectPlacement.ShowProjectContainers) continue;
             var id = CellId("project", project.ProjectId);
+            if (!emittedCellIds.Add(id))
+            {
+                diagnostics.Add(new DiagramDiagnostic("V6RendererIdCollision", "A generated project cell ID collided with an existing Draw.io cell ID.", id));
+                continue;
+            }
             projectCells[project.ProjectId] = id;
-            root.Add(Vertex(id, project.ProjectId, Style(diagram.Request.ProjectContainerStyle ?? DefaultProjectStyle(), DefaultProjectStyle()), "1",
-                project.AbsoluteBounds.X, project.AbsoluteBounds.Y, project.AbsoluteBounds.Width, project.AbsoluteBounds.Height,
+            root.Add(Vertex(id, project.ProjectId, Style(diagram.Request.ProjectContainerStyle ?? DefaultProjectStyle()), "1",
+                project.AbsoluteBounds.X + offsetX, project.AbsoluteBounds.Y + offsetY, project.AbsoluteBounds.Width, project.AbsoluteBounds.Height,
                 new Dictionary<string, string> { ["projectId"] = project.ProjectId, ["architectureRole"] = "project-container" }));
         }
 
         foreach (var node in geometry.Nodes.OrderBy(item => item.PhysicalNodeId, StringComparer.Ordinal))
         {
             var cellId = CellId("node", node.PhysicalNodeId);
+            if (!emittedCellIds.Add(cellId))
+            {
+                diagnostics.Add(new DiagramDiagnostic("V6RendererIdCollision", "A generated node cell ID collided with an existing Draw.io cell ID.", cellId));
+                continue;
+            }
             nodeCells[node.PhysicalNodeId] = cellId;
             physicalNodes.TryGetValue(node.PhysicalNodeId, out var physicalNode);
             var parent = node.ProjectId is not null && projectCells.TryGetValue(node.ProjectId, out var projectCell)
@@ -57,8 +80,10 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             var bounds = node.ProjectId is not null && geometry.Projects.FirstOrDefault(item => item.ProjectId == node.ProjectId) is { } project
                 ? new AbsoluteRectangle(node.AbsoluteBounds.X - project.AbsoluteBounds.X, node.AbsoluteBounds.Y - project.AbsoluteBounds.Y,
                     node.AbsoluteBounds.Width, node.AbsoluteBounds.Height)
-                : node.AbsoluteBounds;
-            var styleRule = physicalNode?.ResolvedStyle ?? ResolveStyle(diagram, physicalNode, node);
+                : new AbsoluteRectangle(node.AbsoluteBounds.X + offsetX, node.AbsoluteBounds.Y + offsetY, node.AbsoluteBounds.Width, node.AbsoluteBounds.Height);
+            var styleRule = physicalNode?.ResolvedStyle;
+            if (styleRule is null)
+                diagnostics.Add(new DiagramDiagnostic("V6UnresolvedNodeStyle", "A physical node reached the renderer without a planner-resolved style.", node.PhysicalNodeId));
             var metadata = new Dictionary<string, string>
             {
                 ["physicalNodeId"] = node.PhysicalNodeId,
@@ -67,8 +92,8 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 ["isExternal"] = node.IsExternal ? "1" : "0",
                 ["isStandalone"] = node.IsStandalone ? "1" : "0",
                 ["displayLabel"] = physicalNode?.DisplayLabel ?? physicalNode?.SemanticName ?? node.SemanticNodeId,
-                ["resolvedStyleRule"] = styleRule.Match,
-                ["styleFallback"] = string.Equals(styleRule.Match, "<fallback>", StringComparison.OrdinalIgnoreCase) ? "1" : "0"
+                ["resolvedStyleRule"] = styleRule?.Match ?? "<unresolved>",
+                ["styleFallback"] = "0"
             };
             if (!string.IsNullOrWhiteSpace(node.PositionalOwnerId)) metadata["positionalOwnerId"] = node.PositionalOwnerId!;
             if (physicalNode?.DuplicationProvenance is { } provenance)
@@ -78,7 +103,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 if (provenance.ParentPhysicalNodeId is not null) metadata["duplicationParentPhysicalNodeId"] = provenance.ParentPhysicalNodeId;
             }
             root.Add(Vertex(cellId, physicalNode?.DisplayLabel ?? physicalNode?.SemanticName ?? node.SemanticNodeId,
-                Style(styleRule, DefaultNodeStyle(node.IsExternal)), parent, bounds.X, bounds.Y, bounds.Width, bounds.Height, metadata));
+                styleRule is null ? string.Empty : Style(styleRule), parent, bounds.X, bounds.Y, bounds.Width, bounds.Height, metadata));
         }
 
         var emittedEdges = 0;
@@ -91,7 +116,15 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 continue;
             }
             var route = geometry.Routes.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId);
-            var connector = link.ResolvedStyle ?? diagram.Request.ConnectorStyle;
+            var edgeId = CellId("edge", link.PhysicalLinkId);
+            if (!emittedCellIds.Add(edgeId))
+            {
+                diagnostics.Add(new DiagramDiagnostic("V6RendererIdCollision", "A generated edge cell ID collided with an existing Draw.io cell ID.", edgeId));
+                continue;
+            }
+            var connector = link.ResolvedStyle;
+            if (connector is null)
+                diagnostics.Add(new DiagramDiagnostic("V6UnresolvedConnectorStyle", "A physical relationship reached the renderer without a planner-resolved connector style.", link.PhysicalLinkId));
             physicalNodes.TryGetValue(link.DestinationPhysicalNodeId, out var targetNode);
             var sourceTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId &&
                 item.PhysicalNodeId == link.SourcePhysicalNodeId && item.Side == GridSide.Bottom);
@@ -101,7 +134,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             var targetGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
             root.Add(Edge(link, route, source, target, connector,
                 sourceGeometry, targetGeometry, sourceTerminal, targetTerminal,
-                link.ResolvedStyleSource));
+                link.ResolvedStyleSource, offsetX, offsetY));
             emittedEdges++;
         }
 
@@ -137,7 +170,8 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     private static XElement Edge(PlannedPhysicalLink link, PlannedPhysicalRoute? route, string source, string target,
         ArchitectureV6ConnectorStyle? connector,
         PlannedPhysicalNodeGeometry? sourceGeometry, PlannedPhysicalNodeGeometry? targetGeometry,
-        PlannedPhysicalTerminal? sourceTerminal, PlannedPhysicalTerminal? targetTerminal, string resolvedStyleSource)
+        PlannedPhysicalTerminal? sourceTerminal, PlannedPhysicalTerminal? targetTerminal, string resolvedStyleSource,
+        int offsetX, int offsetY)
     {
         var rawPoints = (route?.ReducedPoints ?? route?.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
             .Where(point => point.Point != sourceTerminal?.Point && point.Point != targetTerminal?.Point)
@@ -147,18 +181,18 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 return items;
             });
         var points = rawPoints
-            .Select(point => new XElement("mxPoint", new XAttribute("x", point.Point.X.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("y", point.Point.Y.ToString(CultureInfo.InvariantCulture))))
+            .Select(point => new XElement("mxPoint", new XAttribute("x", (point.Point.X + offsetX).ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("y", (point.Point.Y + offsetY).ToString(CultureInfo.InvariantCulture))))
             .ToArray();
-        var style = connector ?? new ArchitectureV6ConnectorStyle("#6c8ebf", 1, false);
-        var styleText = $"edgeStyle=none;orthogonal=0;curved=0;rounded={(style.Rounded ? 1 : 0)};startArrow={style.StartArrow};endArrow={style.EndArrow};startFill={(style.StartFill ? 1 : 0)};endFill={(style.EndFill ? 1 : 0)};startSize={style.ArrowSize};endSize={style.ArrowSize};strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};opacity={style.Opacity};fontColor={style.FontColor};html=1;";
-        if (sourceGeometry is not null && sourceTerminal is not null)
-            styleText += $"exitX={Ratio(sourceTerminal.Point.X, sourceGeometry.AbsoluteBounds.X, sourceGeometry.AbsoluteBounds.Width)};exitY=1;";
-        if (targetGeometry is not null && targetTerminal is not null)
-            styleText += $"entryX={Ratio(targetTerminal.Point.X, targetGeometry.AbsoluteBounds.X, targetGeometry.AbsoluteBounds.Width)};entryY=0;";
-        if (style.Dashed) styleText += $"dashed=1;dashPattern={style.DashPattern ?? "3 3"};";
-        if (!style.ShowLabels) styleText += "labelPosition=none;";
-        if (!string.IsNullOrWhiteSpace(style.ExtraStyle)) styleText += style.ExtraStyle!.TrimEnd(';') + ";";
+        var style = connector;
+        var styleText = style is null ? string.Empty : $"edgeStyle=none;orthogonal=0;curved=0;rounded={(style.Rounded ? 1 : 0)};startArrow={style.StartArrow};endArrow={style.EndArrow};startFill={(style.StartFill ? 1 : 0)};endFill={(style.EndFill ? 1 : 0)};startSize={style.ArrowSize};endSize={style.ArrowSize};strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};opacity={style.Opacity};fontColor={style.FontColor};html=1;";
+        if (style is not null && sourceGeometry is not null && sourceTerminal is not null)
+            styleText += $"exitX={Ratio(sourceTerminal.Point.X + offsetX, sourceGeometry.AbsoluteBounds.X + offsetX, sourceGeometry.AbsoluteBounds.Width)};exitY=1;";
+        if (style is not null && targetGeometry is not null && targetTerminal is not null)
+            styleText += $"entryX={Ratio(targetTerminal.Point.X + offsetX, targetGeometry.AbsoluteBounds.X + offsetX, targetGeometry.AbsoluteBounds.Width)};entryY=0;";
+        if (style is not null && style.Dashed) styleText += $"dashed=1;dashPattern={style.DashPattern ?? "3 3"};";
+        if (style is not null && !style.ShowLabels) styleText += "labelPosition=none;";
+        if (style is not null && !string.IsNullOrWhiteSpace(style.ExtraStyle)) styleText += style.ExtraStyle!.TrimEnd(';') + ";";
         var attributes = new Dictionary<string, string>
         {
             ["id"] = CellId("edge", link.PhysicalLinkId), ["physicalLinkId"] = link.PhysicalLinkId,
@@ -166,24 +200,24 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             ["targetPhysicalNodeId"] = link.DestinationPhysicalNodeId, ["edge"] = "1", ["parent"] = "1",
             ["source"] = source, ["target"] = target, ["style"] = styleText,
             ["resolvedStyleSource"] = resolvedStyleSource,
-            ["resolvedStrokeColor"] = style.StrokeColor,
-            ["resolvedStrokeWidth"] = style.StrokeWidth.ToString(CultureInfo.InvariantCulture),
-            ["resolvedOpacity"] = style.Opacity.ToString(CultureInfo.InvariantCulture),
-            ["resolvedRounded"] = style.Rounded ? "1" : "0",
-            ["resolvedDashed"] = style.Dashed ? "1" : "0",
-            ["resolvedDashPattern"] = style.DashPattern ?? string.Empty,
-            ["resolvedStartArrow"] = style.StartArrow,
-            ["resolvedEndArrow"] = style.EndArrow,
-            ["resolvedArrowSize"] = style.ArrowSize.ToString(CultureInfo.InvariantCulture),
-            ["resolvedStartFill"] = style.StartFill ? "1" : "0",
-            ["resolvedEndFill"] = style.EndFill ? "1" : "0",
-            ["resolvedFontColor"] = style.FontColor,
-            ["resolvedShowLabels"] = style.ShowLabels ? "1" : "0",
-            ["resolvedExtraStyle"] = style.ExtraStyle ?? string.Empty
+            ["resolvedStrokeColor"] = style?.StrokeColor ?? string.Empty,
+            ["resolvedStrokeWidth"] = style?.StrokeWidth.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            ["resolvedOpacity"] = style?.Opacity.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            ["resolvedRounded"] = style?.Rounded == true ? "1" : "0",
+            ["resolvedDashed"] = style?.Dashed == true ? "1" : "0",
+            ["resolvedDashPattern"] = style?.DashPattern ?? string.Empty,
+            ["resolvedStartArrow"] = style?.StartArrow ?? string.Empty,
+            ["resolvedEndArrow"] = style?.EndArrow ?? string.Empty,
+            ["resolvedArrowSize"] = style?.ArrowSize.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+            ["resolvedStartFill"] = style?.StartFill == true ? "1" : "0",
+            ["resolvedEndFill"] = style?.EndFill == true ? "1" : "0",
+            ["resolvedFontColor"] = style?.FontColor ?? string.Empty,
+            ["resolvedShowLabels"] = style?.ShowLabels == true ? "1" : "0",
+            ["resolvedExtraStyle"] = style?.ExtraStyle ?? string.Empty
         };
         if (sourceTerminal is not null) attributes["sourceTerminalId"] = sourceTerminal.TerminalId;
         if (targetTerminal is not null) attributes["targetTerminalId"] = targetTerminal.TerminalId;
-        if (style.ShowLabels && !string.IsNullOrWhiteSpace(link.DisplayLabel)) attributes["value"] = link.DisplayLabel!;
+        if (style?.ShowLabels == true && !string.IsNullOrWhiteSpace(link.DisplayLabel)) attributes["value"] = link.DisplayLabel!;
         if (route?.IsInvalid == true) attributes["invalidRoute"] = "1";
         if (route is not null) attributes["topologyFamily"] = route.TopologyFamily.ToString();
         return new XElement("mxCell", attributes.Select(item => new XAttribute(item.Key, item.Value)),
@@ -194,25 +228,10 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     private static string Ratio(int x, int left, int width) =>
         Math.Max(0, Math.Min(1, (x - left) / (double)Math.Max(1, width))).ToString("0.####", CultureInfo.InvariantCulture);
 
-    private static ArchitectureV6StyleRule ResolveStyle(PlannedArchitectureDiagram diagram, PlannedPhysicalNode? node, PlannedPhysicalNodeGeometry geometry)
-    {
-        if (geometry.IsExternal && diagram.Request.ExternalDependencyStyle is not null) return diagram.Request.ExternalDependencyStyle;
-        var fullName = node?.SemanticFullName ?? string.Empty;
-        var exact = diagram.Request.StyleOverridesWithValues?.FirstOrDefault(item => item.FullName == fullName);
-        if (exact is not null) return exact.Style;
-        return diagram.Request.StylePolicies?.FirstOrDefault(rule => GlobMatcher.IsMatch(node?.SemanticName ?? fullName, rule.Match) || GlobMatcher.IsMatch(fullName, rule.Match))
-            ?? DefaultNodeStyle(geometry.IsExternal);
-    }
-
-    private static ArchitectureV6StyleRule DefaultNodeStyle(bool external) => external
-        ? new ArchitectureV6StyleRule("<external>", "#f36c21", "#a43b08", "#111111", "rhombus", true, null)
-        : new ArchitectureV6StyleRule("<fallback>", "#dae8fc", "#6c8ebf", "#111111", "rounded", true, null);
-
     private static ArchitectureV6StyleRule DefaultProjectStyle() => new("<project>", "#323a40", "#263238", "#ffffff", "swimlane", true, "swimlaneLine=0;startSize=34;horizontal=1;opacity=88;");
 
-    private static string Style(ArchitectureV6StyleRule rule, ArchitectureV6StyleRule fallback)
+    private static string Style(ArchitectureV6StyleRule rule)
     {
-        rule ??= fallback;
         var shape = string.Equals(rule.Shape, "rounded", StringComparison.OrdinalIgnoreCase) ? "rounded=1" : "shape=" + rule.Shape;
         return $"{shape};whiteSpace=wrap;html=1;fillColor={rule.FillColor};strokeColor={rule.StrokeColor};fontColor={rule.FontColor};shadow={(rule.Shadow ? 1 : 0)};" + (rule.ExtraStyle ?? string.Empty);
     }

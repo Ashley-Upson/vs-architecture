@@ -231,7 +231,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         PlanningGridCellId source,
         PlanningGridCellId destination,
         PlannedPhysicalLink link,
-        bool destinationRequiresTopEntry = true)
+        bool destinationRequiresTopEntry = true,
+        bool sourceMustDescend = true)
     {
         if (source == destination) return new[] { source };
         var queue = new SortedSet<PathCandidate>(Comparer<PathCandidate>.Create((left, right) =>
@@ -250,7 +251,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             queue.Remove(candidate);
             var current = candidate.Cell;
             if (!distances.TryGetValue(current, out var currentDistance) || currentDistance != candidate.Distance) continue;
-            foreach (var next in Neighbours(grid, current, source, destination, destinationRequiresTopEntry))
+            foreach (var next in Neighbours(grid, current, source, destination, destinationRequiresTopEntry, sourceMustDescend))
             {
                 if (!CanTraversePathCell(grid, next, source, destination)) continue;
                 var distance = currentDistance + 1;
@@ -285,13 +286,14 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         PlanningGridCellId current,
         PlanningGridCellId source,
         PlanningGridCellId destination,
-        bool destinationRequiresTopEntry)
+        bool destinationRequiresTopEntry,
+        bool sourceMustDescend)
     {
         var row = grid.RowOrder.IndexOf(current.RowId);
         var column = grid.ColumnOrder.IndexOf(current.ColumnId);
         var candidates = new List<(int row, int column)>();
-        if (current == source)
-            candidates.Add((row + 1, column));
+            if (current == source && sourceMustDescend)
+                candidates.Add((row + 1, column));
         else
         {
             candidates.Add((row + 1, column));
@@ -388,6 +390,9 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         (grid.RowOrder.IndexOf(to.RowId) - grid.RowOrder.IndexOf(from.RowId),
          grid.ColumnOrder.IndexOf(to.ColumnId) - grid.ColumnOrder.IndexOf(from.ColumnId));
 
+    // Non-production historical feasibility helper. The active route authority
+    // is FindOrthogonalPath; this method must not select a second topology.
+    [Obsolete("Non-production historical route-completion helper.")]
     private CompletionResult CompleteTurnCorridor(
         PlanningGridId gridId,
         IReadOnlyList<PlannedGridRouteStep> original,

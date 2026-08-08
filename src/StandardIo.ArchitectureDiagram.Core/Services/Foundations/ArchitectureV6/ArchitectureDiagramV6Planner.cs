@@ -184,7 +184,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              ExpandedNodeSpans: expandedNodeSpans,
              InvalidatedRouteCount: invalidatedRouteCount,
              RebuiltReservationCount: rebuiltReservationCount,
-             ShiftedRegionCount: 0,
+              ShiftedRegionCount: placement.Diagnostics.Count(item => item.Code.Contains("Shift", StringComparison.OrdinalIgnoreCase)),
               SizingConstraintCounts: sizedPlan.Constraints.GroupBy(item => item.Kind.ToString())
                   .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
               SizingContributionExtents: (sizedPlan.Provenance ?? Array.Empty<GridTrackProvenance>())
@@ -206,8 +206,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                  .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
              StructuralColumnRoleCounts: projectGrids.SelectMany(grid => grid.Grid.Columns).GroupBy(column => column.Role.ToString())
                  .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
-             RouteOnlyRowCount: 0,
-             RouteOnlyColumnCount: 0,
+              RouteOnlyRowCount: projectGrids.Sum(grid => grid.Grid.Rows.Count(row =>
+                  grid.Grid.Cells.Values.Where(cell => cell.Id.RowId.Equals(row.Id)).All(cell => cell.Occupancy == CellOccupancy.Empty))),
+              RouteOnlyColumnCount: projectGrids.Sum(grid => grid.Grid.Columns.Count(column =>
+                  grid.Grid.Cells.Values.Where(cell => cell.Id.ColumnId.Equals(column.Id)).All(cell => cell.Occupancy == CellOccupancy.Empty))),
              StageTimingMilliseconds: stageTimings,
              StageInvocationCounts: stageInvocations,
               CellsBeforeRouting: placement.ProjectGrids.Sum(grid => grid.Grid.Cells.Count),
@@ -302,16 +304,16 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.LinkMetadata,
             placement.SubtreeReservations,
              new ArchitecturePlanningStageStatus(
-                 ProjectionCompleted: true,
-                 LogicalPlacementCompleted: true,
-                 AbstractRoutingCompleted: true,
-                 LaneAllocationDeferred: false,
-                 SizingDeferred: false,
-                 AbsoluteGeometryDeferred: false,
-                 SizingCompleted: true,
-                 AbsoluteGeometryCompleted: true,
-                 CapacityConstraintsCompleted: true,
-                 PhysicalSizingDeferred: false),
+                  ProjectionCompleted: true,
+                  LogicalPlacementCompleted: expansionConverged,
+                  AbstractRoutingCompleted: expansionConverged,
+                  LaneAllocationDeferred: !expansionConverged,
+                  SizingDeferred: !expansionConverged,
+                  AbsoluteGeometryDeferred: !expansionConverged,
+                  SizingCompleted: expansionConverged,
+                  AbsoluteGeometryCompleted: expansionConverged,
+                  CapacityConstraintsCompleted: expansionConverged,
+                  PhysicalSizingDeferred: !expansionConverged),
             routing.DestinationApproaches,
             allocation.StraightRuns,
             routing.TurnDemands,

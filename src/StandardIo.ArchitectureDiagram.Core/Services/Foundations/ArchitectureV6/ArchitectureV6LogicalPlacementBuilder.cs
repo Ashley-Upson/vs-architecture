@@ -595,18 +595,19 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     {
         foreach (var node in nodes.Values)
         {
-            var degree = projection.PhysicalLinks.Count(link => link.SourcePhysicalNodeId == node.PhysicalNodeId || link.DestinationPhysicalNodeId == node.PhysicalNodeId);
-            var requested = Math.Max(MinimumFootprintSpan, ((node.SemanticName ?? node.SemanticNodeId).Length + 19) / 20 * 2 + 1);
+            var outgoing = projection.PhysicalLinks.Count(link => link.SourcePhysicalNodeId == node.PhysicalNodeId);
+            var incoming = projection.PhysicalLinks.Count(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId);
+            var terminalDemand = Math.Max(outgoing, incoming);
+            var label = string.IsNullOrWhiteSpace(node.DisplayLabel) ? node.SemanticName ?? node.SemanticNodeId : node.DisplayLabel;
+            var requested = Math.Max(MinimumFootprintSpan, (label.Length + 19) / 20 * 2 + 1);
             var portInset = Math.Max(request.RoutePlanning.MinimumPortSpacing, request.GridSizing.NodeToRouteClearance);
-            var terminalWidth = degree == 0 ? 0 : checked(portInset * 2 + Math.Max(0, degree - 1) * request.RoutePlanning.MinimumPortSpacing);
+            var terminalWidth = terminalDemand == 0 ? 0 : checked(portInset * 2 + Math.Max(0, terminalDemand - 1) * request.RoutePlanning.MinimumPortSpacing);
             var cellWidth = Math.Max(1, request.GridSizing.CellWidth);
             var terminalSpan = terminalWidth == 0 ? 0 : (int)Math.Ceiling((double)terminalWidth / cellWidth);
             requested = Math.Max(requested, terminalSpan);
-            if (degree > 4) requested = Math.Max(requested, 5);
-            if (degree > 8) requested = Math.Max(requested, 7);
             if (requiredSpans.TryGetValue(node.PhysicalNodeId, out var required)) requested = Math.Max(requested, required);
             spanByNode[node.PhysicalNodeId] = requested % 2 == 0 ? requested + 1 : requested;
-            spanReasonByNode[node.PhysicalNodeId] = degree == 0 ? "minimum" : $"label-and-terminal-capacity:{degree}";
+            spanReasonByNode[node.PhysicalNodeId] = terminalDemand == 0 ? "minimum" : $"label-and-terminal-capacity:out={outgoing};in={incoming}";
         }
     }
 

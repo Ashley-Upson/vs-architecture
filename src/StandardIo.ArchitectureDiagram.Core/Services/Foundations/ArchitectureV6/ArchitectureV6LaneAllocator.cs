@@ -380,26 +380,23 @@ internal sealed class ArchitectureV6LaneAllocator
 
     private int EndpointColumn(NodeEndpointDemand demand)
     {
-        var link = links.SingleOrDefault(item => item.PhysicalLinkId == demand.PhysicalLinkId);
-        if (link is null) return int.MaxValue;
-        var otherNodeId = demand.Endpoint.Side == GridSide.Bottom
-            ? link.DestinationPhysicalNodeId
-            : link.SourcePhysicalNodeId;
-        return metadata.TryGetValue(otherNodeId, out var other)
-            ? other.PhysicalColumn
-            : int.MaxValue;
+        return RouteColumn(demand.PhysicalLinkId, demand.Endpoint.Side);
     }
 
     private int OtherEndpointColumn(string physicalLinkId, GridSide side)
     {
-        var link = links.SingleOrDefault(item => item.PhysicalLinkId == physicalLinkId);
-        if (link is null) return int.MaxValue;
-        var otherNodeId = side == GridSide.Bottom
-            ? link.DestinationPhysicalNodeId
-            : link.SourcePhysicalNodeId;
-        return metadata.TryGetValue(otherNodeId, out var other)
-            ? other.PhysicalColumn
-            : int.MaxValue;
+        return RouteColumn(physicalLinkId, side);
+    }
+
+    private int RouteColumn(string physicalLinkId, GridSide side)
+    {
+        var route = routes.SingleOrDefault(item => item.PhysicalLinkId == physicalLinkId);
+        if (route is null) return int.MaxValue;
+        var steps = route.Steps.Where(step => step.Role is RouteStepRole.HorizontalPassThrough or
+            RouteStepRole.VerticalPassThrough or RouteStepRole.Turn or RouteStepRole.ProjectExit or
+            RouteStepRole.ProjectEntry).OrderBy(step => step.Order).ToArray();
+        var step = side == GridSide.Bottom ? steps.FirstOrDefault() : steps.LastOrDefault();
+        return step is null ? int.MaxValue : ParseValue(step.CellId.ColumnId.Value);
     }
     private static int PortOffset(int index, int count)
     {
