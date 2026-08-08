@@ -1529,6 +1529,24 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         IReadOnlyList<string> routeFindings)
     {
         if (routeFindings.Count == 0) return null;
+        // Materialisation attempts are the first concrete stage evidence for a
+        // route. Prefer their ordered failure over a later aggregate finding;
+        // otherwise a final validator can make an upstream defect appear to
+        // have originated in the final polyline.
+        var firstAttempt = attempts.OrderBy(item => item.ComponentId, StringComparer.Ordinal).FirstOrDefault();
+        if (firstAttempt is not null)
+        {
+            return firstAttempt.FailureCode switch
+            {
+                "ComponentContinuityMismatch" or "BoundaryMismatch" => "component-boundary-reconciliation",
+                "ComponentCorridorEscape" or "LaneCoordinateOutsideTrack" => "raw-physical-geometry",
+                "DiagonalComponentConnection" => "raw-physical-geometry",
+                "InvalidRouteComponent" => "allocated-route",
+                _ => "raw-physical-geometry"
+            };
+        }
+        if (routeFindings.Any(item => item.Contains("Boundary", StringComparison.Ordinal)))
+            return "component-boundary-reconciliation";
         if (routeFindings.Any(item => item is "RedundantRouteBacktracking" or "TerminalJoinDiagonal" or "RouteNodeIntersection" or "SharedCollinearSegment"))
         {
             var points = route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>();
@@ -1549,11 +1567,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             return "final-physical-polyline";
         }
         if (routeFindings.Any(item => item is "ComponentCorridorEscape" or "LaneCoordinateOutsideTrack"))
-            return attempts.Count > 0 ? "materialisation" : "lane-coordinate-reconciliation";
+            return "raw-physical-geometry";
         if (routeFindings.Any(item => item.Contains("Terminal", StringComparison.Ordinal))) return "terminal-allocation";
-        return routeFindings.Any(item => item.Contains("Boundary", StringComparison.Ordinal))
-            ? "component-boundary-reconciliation"
-            : "final-physical-polyline";
+        return "final-physical-polyline";
     }
     private AbsolutePoint CellCentre(PlanningGridCellId cell, GridTransform transform)
     {

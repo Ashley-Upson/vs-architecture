@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -109,11 +110,19 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
                 finding.Message,
                 strict && finding.Severity == ArchitecturePlanningDiagnosticSeverity.Error))
             .ToArray();
+        var reportJson = JsonSerializer.Serialize(new
+        {
+            stageStatus = planned.StageStatus,
+            eligibility,
+            findings = planned.Diagnostics.Findings,
+            validationFindings = validation.Findings,
+            metrics = planned.Diagnostics.Metrics
+        }, new JsonSerializerOptions { WriteIndented = true });
         return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, findings, manifest,
                 eligibility,
             () => new DrawioDiagnosticExportResult(page.GraphModel.ToString(),
-                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"abstractRoutingCompleted\":true,\"laneAllocationCompleted\":true,\"capacityConstraintsCompleted\":true,\"physicalSizingCompleted\":true,\"relativeGeometryCompleted\":true,\"absoluteGeometryCompleted\":true,\"physicalSizingDeferred\":false,\"absoluteGeometryDeferred\":false}",
+                reportJson,
                 new Dictionary<string, string>(), 0, 0),
             repeat, planned.Diagnostics.Metrics));
     }
