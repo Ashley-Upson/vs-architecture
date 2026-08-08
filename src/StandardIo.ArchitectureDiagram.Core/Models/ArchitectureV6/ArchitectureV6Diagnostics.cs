@@ -19,11 +19,19 @@ public enum PlanningDiagnosticSubject
     PhysicalSegment
 }
 
+public enum ArchitecturePlanningDiagnosticSeverity
+{
+    Info,
+    Warning,
+    Error
+}
+
 public sealed record ArchitecturePlanningDiagnostic(
     string Code,
     string Message,
     PlanningDiagnosticSubject Subject,
-    string? SubjectId);
+    string? SubjectId,
+    ArchitecturePlanningDiagnosticSeverity Severity = ArchitecturePlanningDiagnosticSeverity.Error);
 
 public sealed record ArchitectureNodeGridEvidence(
     string PhysicalNodeId,

@@ -99,14 +99,17 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 item.PhysicalNodeId == link.DestinationPhysicalNodeId && item.Side == GridSide.Top);
             var sourceGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.SourcePhysicalNodeId);
             var targetGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
-            root.Add(Edge(link, route, source, target, ConnectorForTarget(connector, targetNode),
+            root.Add(Edge(link, route, source, target, connector,
                 sourceGeometry, targetGeometry, sourceTerminal, targetTerminal,
-                targetNode?.ResolvedStyle?.FillColor is { Length: > 0 } ? "target-node-background" : link.ResolvedStyleSource));
+                link.ResolvedStyleSource));
             emittedEdges++;
         }
 
         diagnostics.Add(new DiagramDiagnostic("V6PhysicalNodesEmitted", $"Emitted {geometry.Nodes.Count} physical node vertices.", null));
         diagnostics.Add(new DiagramDiagnostic("V6RelationshipsEmitted", $"Emitted {emittedEdges} physical relationship edges.", null));
+        if (nodeCells.Count != geometry.Nodes.Count || emittedEdges != diagram.PhysicalLinks.Count)
+            diagnostics.Add(new DiagramDiagnostic("V6RendererAccountingFailure",
+                $"Renderer accounting mismatch: plannedNodes={geometry.Nodes.Count}, emittedNodes={nodeCells.Count}, plannedLinks={diagram.PhysicalLinks.Count}, emittedLinks={emittedEdges}.", null));
         diagnostics.Add(new DiagramDiagnostic("V6InvalidRoutesEmitted", $"Emitted {geometry.Routes.Count(route => route.IsInvalid)} invalid routes with retained geometry.", null));
         diagnostics.Add(new DiagramDiagnostic("V6NodeStyleSummary", $"Resolved node styles: {string.Join(", ", diagram.PhysicalNodes.GroupBy(node => node.ResolvedStyle?.Match ?? "<fallback>").OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.Key + "=" + group.Count()))}.", null));
         diagnostics.Add(new DiagramDiagnostic("V6LinkStyleSummary", $"Resolved relationship style is carried on all {diagram.PhysicalLinks.Count} physical links. Sources: {string.Join(", ", diagram.PhysicalLinks.GroupBy(link => link.ResolvedStyleSource).OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.Key + "=" + group.Count()))}.", null));
@@ -117,8 +120,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
 
     private static DrawioPage Page(XElement root, AbsoluteRectangle bounds, IReadOnlyList<DiagramDiagnostic> diagnostics)
     {
-        var width = Math.Max(1200, bounds.Width + Math.Max(0, bounds.X));
-        var height = Math.Max(900, bounds.Height + Math.Max(0, bounds.Y));
+        // Draw.io accepts scene coordinates outside the page origin. The page
+        // extent is the scene extent, not the right/bottom coordinate relative
+        // to an assumed zero origin.
+        var width = Math.Max(1200, bounds.Width);
+        var height = Math.Max(900, bounds.Height);
         var graph = new XElement("mxGraphModel",
             new XAttribute("dx", Math.Min(width, 1200)), new XAttribute("dy", Math.Min(height, 900)),
             new XAttribute("grid", "0"), new XAttribute("gridSize", "10"), new XAttribute("guides", "1"),
@@ -175,17 +181,6 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
 
     private static string Ratio(int x, int left, int width) =>
         Math.Max(0, Math.Min(1, (x - left) / (double)Math.Max(1, width))).ToString("0.####", CultureInfo.InvariantCulture);
-
-    private static ArchitectureV6ConnectorStyle ConnectorForTarget(
-        ArchitectureV6ConnectorStyle? connector,
-        PlannedPhysicalNode? targetNode)
-    {
-        var style = connector ?? new ArchitectureV6ConnectorStyle("#6c8ebf", 1, false);
-        var targetFill = targetNode?.ResolvedStyle?.FillColor;
-        return string.IsNullOrWhiteSpace(targetFill)
-            ? style
-            : style with { StrokeColor = targetFill };
-    }
 
     private static ArchitectureV6StyleRule ResolveStyle(PlannedArchitectureDiagram diagram, PlannedPhysicalNode? node, PlannedPhysicalNodeGeometry geometry)
     {

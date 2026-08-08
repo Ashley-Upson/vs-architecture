@@ -22,17 +22,20 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
 {
     private readonly IArchitectureAnalyser analyser;
     private readonly IArchitectureDiagramPlanner planner;
+    private readonly IPlannedArchitectureDiagramValidator validator;
     private readonly IArchitectureDiagramRenderer<DrawioPage> renderer;
     private readonly IDrawioDocumentComposer composer;
 
     public ArchitectureGenerationService(
         IArchitectureAnalyser analyser,
         IArchitectureDiagramPlanner planner,
+        IPlannedArchitectureDiagramValidator validator,
         IArchitectureDiagramRenderer<DrawioPage> renderer,
         IDrawioDocumentComposer composer)
     {
         this.analyser = analyser ?? throw new ArgumentNullException(nameof(analyser));
         this.planner = planner ?? throw new ArgumentNullException(nameof(planner));
+        this.validator = validator ?? throw new ArgumentNullException(nameof(validator));
         this.renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
         this.composer = composer ?? throw new ArgumentNullException(nameof(composer));
     }
@@ -57,18 +60,31 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
     {
         var planningRequest = ArchitecturePlanningRequestFactory.Create(diagram, job, mode);
         var planned = planner.Plan(planningRequest);
+        var validation = validator.Validate(planned);
         var page = renderer.Render(planned, new ArchitectureRenderRequest(
             planningRequest.Validation.Mode, planningRequest.GenerationSettings.OutputRenderer, true));
         if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() };
         var repeat = Repeat(page, serializationRepeatCount);
         var semanticNodes = diagram.Projects.SelectMany(project => project.Nodes).ToArray();
+        // Planner findings and final structural validation are one result
+        // surface for generation policy; the validator itself remains usable
+        // independently for structural checks.
+        var allFindings = planned.Diagnostics.Findings.Concat(validation.Findings).Distinct().ToArray();
+        var strict = planningRequest.Validation.Mode == ArchitectureValidationMode.Strict;
+        var enforcedFindings = allFindings
+            .Where(finding => finding.Severity == ArchitecturePlanningDiagnosticSeverity.Error)
+            .ToArray();
+        var eligibility = strict
+            ? new ArchitectureEligibilityResult(enforcedFindings.Length == 0,
+                enforcedFindings.Select(finding => finding.Code + ": " + finding.Message).ToArray())
+            : new ArchitectureEligibilityResult(true, Array.Empty<string>());
         var manifest = new ArchitectureGenerationManifest(
             diagram.Projects.Count,
             semanticNodes.Length + diagram.ExternalNodes.Count,
             diagram.Links.Count,
             planned.Routes.Count,
-            planned.Diagnostics.Findings.Count,
-            0,
+            allFindings.Length,
+            validation.Findings.Count,
             page.StablePageKey)
         {
             SemanticClassCount = semanticNodes.Count(node => node.Kind == "Class"),
@@ -81,9 +97,9 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             DuplicatedInstanceCount = planned.PhysicalNodes.Count(node => node.ProjectionMode == PhysicalNodeProjectionMode.DuplicateBranch),
             CanonicalSharedNodeCount = planned.PhysicalNodes.Count(node => node.ProjectionMode == PhysicalNodeProjectionMode.Canonical),
             ExceptionAuthorisedDuplicateCount = planned.PhysicalNodes.Count(node => node.DuplicationProvenance is not null),
-            MultiParentNodeCount = 0
+            MultiParentNodeCount = planned.NodeMetadata.Count(item => item.SemanticParentIds.Count > 1)
         };
-        var findings = planned.Diagnostics.Findings
+        var findings = allFindings
             .Select(finding => new ValidationFinding(
                 finding.Code,
                 finding.SubjectId ?? "v6-planning",
@@ -91,13 +107,13 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
                 null,
                 1,
                 finding.Message,
-                false))
+                strict && finding.Severity == ArchitecturePlanningDiagnosticSeverity.Error))
             .ToArray();
         return Task.FromResult(new TypedArchitectureGenerationResult(
             diagram, page, findings, manifest,
-                new ArchitectureEligibilityResult(false, new[] { "V6 projection, grid-authoritative logical placement, abstract routing, lane allocation, track sizing and relative geometry are available; absolute geometry and Architecture node/link emission remain deferred." }),
+                eligibility,
             () => new DrawioDiagnosticExportResult(page.GraphModel.ToString(),
-                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"abstractRoutingCompleted\":true,\"laneAllocationCompleted\":true,\"capacityConstraintsCompleted\":true,\"physicalSizingCompleted\":true,\"relativeGeometryCompleted\":true,\"absoluteGeometryCompleted\":false,\"physicalSizingDeferred\":false,\"absoluteGeometryDeferred\":true}",
+                "{\"projectionCompleted\":true,\"logicalPlacementCompleted\":true,\"abstractRoutingCompleted\":true,\"laneAllocationCompleted\":true,\"capacityConstraintsCompleted\":true,\"physicalSizingCompleted\":true,\"relativeGeometryCompleted\":true,\"absoluteGeometryCompleted\":true,\"physicalSizingDeferred\":false,\"absoluteGeometryDeferred\":false}",
                 new Dictionary<string, string>(), 0, 0),
             repeat, planned.Diagnostics.Metrics));
     }

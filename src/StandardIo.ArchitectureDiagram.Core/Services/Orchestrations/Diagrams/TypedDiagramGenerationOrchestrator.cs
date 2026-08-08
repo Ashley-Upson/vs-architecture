@@ -22,7 +22,7 @@ public sealed class TypedDiagramGenerationOrchestrator : ITypedDiagramGeneration
     private readonly IDrawioDocumentComposer _composer;
 
     public TypedDiagramGenerationOrchestrator()
-        : this(new ArchitectureGenerationService(new RoslynDependencyAnalyzer(), new ArchitectureDiagramV6Planner(), new DrawioArchitectureV6Renderer(), new DrawioDocumentComposer()),
+        : this(new ArchitectureGenerationService(new RoslynDependencyAnalyzer(), new ArchitectureDiagramV6Planner(), new ArchitectureDiagramV6Validator(), new DrawioArchitectureV6Renderer(), new DrawioDocumentComposer()),
             new RoslynDataModelAnalyser(), new DrawioDataModelRenderer(), new DrawioDocumentComposer())
     {
     }

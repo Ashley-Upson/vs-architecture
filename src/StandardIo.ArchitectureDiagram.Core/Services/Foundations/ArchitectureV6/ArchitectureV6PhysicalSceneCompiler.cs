@@ -81,8 +81,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         timings["routeMaterialisation"] = timer.ElapsedMilliseconds;
 
         timer.Restart();
+        var absoluteBounds = CalculateAbsoluteBounds(nodeGeometry, projectGeometry, terminals, physicalRoutes, turns, crossings, transitions);
         var geometry = new PlannedArchitectureGeometry(nodeGeometry, projectGeometry, gridGeometry, reservationGeometry,
-            relative.DiagramBounds, new AbsoluteRectangle(0, 0, relative.DiagramBounds.Width, relative.DiagramBounds.Height), physicalRoutes);
+            relative.DiagramBounds, absoluteBounds, physicalRoutes);
         timings["normalization"] = timer.ElapsedMilliseconds;
 
         timer.Restart();
@@ -101,6 +102,35 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         };
         return new PlannedArchitecturePhysicalScene(geometry, transforms.Values.OrderBy(item => item.GridId.Value, StringComparer.Ordinal).ToArray(),
             terminals, turns, crossings, transitions, reservationGeometry, findings, metrics, attemptedSegments, invalidRouteIds);
+    }
+
+    private static AbsoluteRectangle CalculateAbsoluteBounds(
+        IReadOnlyList<PlannedPhysicalNodeGeometry> nodes,
+        IReadOnlyList<PlannedProjectGeometry> projects,
+        IReadOnlyList<PlannedPhysicalTerminal> terminals,
+        IReadOnlyList<PlannedPhysicalRoute> routes,
+        IReadOnlyList<PlannedPhysicalTurn> turns,
+        IReadOnlyList<PlannedPhysicalCrossing> crossings,
+        IReadOnlyList<PlannedPhysicalTransition> transitions)
+    {
+        var rectangles = nodes.Select(node => node.AbsoluteBounds)
+            .Concat(projects.Select(project => project.AbsoluteBounds))
+            .ToArray();
+        var points = terminals.Select(item => item.Point)
+            .Concat(routes.SelectMany(route => route.Segments.SelectMany(segment => new[] { segment.Start, segment.End })))
+            .Concat(routes.SelectMany(route => (route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point)))
+            .Concat(turns.Select(turn => turn.Point))
+            .Concat(crossings.Select(crossing => crossing.Point))
+            .Concat(transitions.SelectMany(transition => new[] { transition.SourcePoint, transition.DestinationPoint }))
+            .ToArray();
+        if (rectangles.Length == 0 && points.Length == 0)
+            return new AbsoluteRectangle(0, 0, 1, 1);
+
+        var minX = rectangles.Select(rectangle => rectangle.X).Concat(points.Select(point => point.X)).Min();
+        var minY = rectangles.Select(rectangle => rectangle.Y).Concat(points.Select(point => point.Y)).Min();
+        var maxX = rectangles.Select(rectangle => rectangle.X + rectangle.Width).Concat(points.Select(point => point.X)).Max();
+        var maxY = rectangles.Select(rectangle => rectangle.Y + rectangle.Height).Concat(points.Select(point => point.Y)).Max();
+        return new AbsoluteRectangle(minX, minY, Math.Max(1, maxX - minX), Math.Max(1, maxY - minY));
     }
 
     private Dictionary<PlanningGridId, GridTransform> BuildTransforms()
@@ -339,6 +369,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
             var minX = node.AbsoluteBounds.X + inset;
             var maxX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
+            if (requestedX < minX || requestedX > maxX)
+                findings.Add(new ArchitecturePlanningDiagnostic("TerminalCapacityOverflow",
+                    "Allocated terminal demand does not fit the final node edge; terminal placement was not silently accepted by clamping.",
+                    PlanningDiagnosticSubject.PhysicalNode, endpoint.PhysicalNodeId));
             var x = Math.Max(minX, Math.Min(maxX, requestedX));
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
@@ -374,10 +408,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         {
             var parts = crossing.CellId.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
             var grid = transforms.Keys.SingleOrDefault(item => item.Value == parts.FirstOrDefault());
-            var route = routes.SingleOrDefault(item => item.Steps.Any(step => step.CellId.ToString() == crossing.CellId));
+            var route = routes.SingleOrDefault(item => item.PhysicalLinkId == (crossing.HorizontalPhysicalLinkId ?? crossing.VerticalPhysicalLinkId) &&
+                item.Steps.Any(step => step.CellId.ToString() == crossing.CellId));
             var step = route?.Steps.FirstOrDefault(item => item.CellId.ToString() == crossing.CellId);
             var point = step is null || !transforms.TryGetValue(step.GridId, out var transform) ? new AbsolutePoint(0, 0) : CellPoint(step, route!, transform);
-            return new PlannedPhysicalCrossing(route?.PhysicalLinkId ?? string.Empty, string.Empty, step?.GridId ?? new PlanningGridId("unknown"),
+            return new PlannedPhysicalCrossing(route?.PhysicalLinkId ?? string.Empty, crossing.VerticalPhysicalLinkId ?? string.Empty, step?.GridId ?? new PlanningGridId("unknown"),
                 step?.CellId ?? new PlanningGridCellId(new PlanningGridId("unknown"), new PlanningGridRowId("unknown"), new PlanningGridColumnId("unknown")), point, crossing.Provenance);
         }).ToArray();
     }
@@ -537,7 +572,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         IReadOnlyList<PlannedPhysicalRoutePoint> points, ref bool routeInvalid)
     {
         if (points.Count < 3) return;
-        var endpointWindow = Math.Min(points.Count - 1, 6);
         var findingsInWindow = new HashSet<int>();
         for (var index = 1; index < points.Count - 1; index++)
         {
@@ -548,23 +582,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 (current.X < Math.Min(previous.X, next.X) || current.X > Math.Max(previous.X, next.X));
             var verticalReversal = previous.X == current.X && current.X == next.X &&
                 (current.Y < Math.Min(previous.Y, next.Y) || current.Y > Math.Max(previous.Y, next.Y));
-            // Only the terminal/anchor/departure and approach/anchor/terminal
-            // components are endpoint-local. A reversal in an ordinary turn
-            // corridor is owned by route planning and is not an endpoint
-            // double-back.
-            var sourceLocal = index <= endpointWindow &&
-                points[index - 1].Role == RouteStepRole.SourceExit &&
-                points[index].Role == RouteStepRole.SourceExit &&
-                points[index + 1].Role == RouteStepRole.SourceExit;
-            var destinationLocal = index >= points.Count - endpointWindow - 1 &&
-                points[index - 1].Role == RouteStepRole.DestinationEntry &&
-                points[index].Role == RouteStepRole.DestinationEntry &&
-                points[index + 1].Role == RouteStepRole.DestinationEntry;
-            if (!(horizontalReversal || verticalReversal) || (!sourceLocal && !destinationLocal)) continue;
+            if (!(horizontalReversal || verticalReversal)) continue;
             if (!findingsInWindow.Add(index)) continue;
             routeInvalid = true;
-            findings.Add(new ArchitecturePlanningDiagnostic("RedundantEndpointBacktracking",
-                $"Endpoint-local route geometry reverses after overshooting its target axis at point {index}.",
+            findings.Add(new ArchitecturePlanningDiagnostic("RedundantRouteBacktracking",
+                $"Route geometry reverses after overshooting its target axis at point {index}; the complete final polyline is invalid.",
                 PlanningDiagnosticSubject.PhysicalLink, route.PhysicalLinkId));
         }
     }
@@ -584,25 +606,6 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 compact.RemoveAt(compact.Count - 1);
                 continue;
             }
-            var repeatedAxisIndex = -1;
-            for (var index = compact.Count - 2; index >= 0; index--)
-            {
-                if (!SamePoint(compact[index].Point, point.Point)) continue;
-                var horizontal = compact[index].Point.Y == point.Point.Y &&
-                    compact.Skip(index).All(item => item.Point.Y == point.Point.Y);
-                var vertical = compact[index].Point.X == point.Point.X &&
-                    compact.Skip(index).All(item => item.Point.X == point.Point.X);
-                if (horizontal || vertical)
-                {
-                    repeatedAxisIndex = index;
-                    break;
-                }
-            }
-            if (repeatedAxisIndex >= 0)
-            {
-                compact.RemoveRange(repeatedAxisIndex + 1, compact.Count - repeatedAxisIndex - 1);
-                continue;
-            }
             compact.Add(point);
         }
         if (compact.Count < 3) return compact.ToArray();
@@ -613,8 +616,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var previous = reduced[reduced.Count - 1];
             var current = compact[index];
             var next = compact[index + 1];
-            var sameHorizontal = previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y;
-            var sameVertical = previous.Point.X == current.Point.X && current.Point.X == next.Point.X;
+            var sameHorizontal = previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y &&
+                current.Point.X >= Math.Min(previous.Point.X, next.Point.X) && current.Point.X <= Math.Max(previous.Point.X, next.Point.X);
+            var sameVertical = previous.Point.X == current.Point.X && current.Point.X == next.Point.X &&
+                current.Point.Y >= Math.Min(previous.Point.Y, next.Point.Y) && current.Point.Y <= Math.Max(previous.Point.Y, next.Point.Y);
             var isProtected = current.Role is RouteStepRole.Turn or RouteStepRole.SourceExit or RouteStepRole.DestinationEntry ||
                               current.TurnIdentity is not null || current.TransitionIdentity is not null;
             if (!(sameHorizontal || sameVertical) || isProtected)

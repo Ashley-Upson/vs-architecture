@@ -131,8 +131,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         {
             var owner = ownerByNode[node.PhysicalNodeId];
             if (owner is null || !finalVisualLayerByNode.TryGetValue(owner, out var parentLayer)) continue;
-            if (parentLayer >= finalVisualLayerByNode[node.PhysicalNodeId] &&
-                !string.Equals(categoryByNode[owner], categoryByNode[node.PhysicalNodeId], StringComparison.Ordinal))
+            if (parentLayer >= finalVisualLayerByNode[node.PhysicalNodeId])
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementParentNotAboveChild", "Every positional parent must occupy an earlier final visual layer than its child.", PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         }
 
@@ -251,8 +250,6 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             var parentSlot = slotByNode[parent.PhysicalNodeId];
             var parentCentre = (grid.ColumnOrder(parentSlot.Columns.First()) + grid.ColumnOrder(parentSlot.Columns.Last())) / 2.0;
             var childSlots = children.Select(id => slotByNode[id]).ToArray();
-            if (children.All(id => string.Equals(categoryByNode[id], categoryByNode[parent.PhysicalNodeId], StringComparison.Ordinal)))
-                continue;
             var groupStart = childSlots.Min(slot => grid.ColumnOrder(slot.Columns.First()));
             var groupEnd = childSlots.Max(slot => grid.ColumnOrder(slot.Columns.Last()));
             var expectedCentre = (groupStart + groupEnd) / 2.0;
@@ -412,6 +409,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         var reservedCount = orderedRules.Length;
         var externalLayer = Math.Max(1, reservedCount * 100 + nodes.Count + 1);
         var layerByNode = new Dictionary<string, int>(StringComparer.Ordinal);
+        var reservedLayers = new HashSet<int>(reservedRank.Values.Select(value => value * 100));
 
         // Reserved role bands are anchors. Ordinary nodes are then solved from
         // their dependency children, with insertion points chosen between those
@@ -427,28 +425,49 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 ? $"role:{role}"
                 : baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)
                 ? "baseline"
-                : $"depth:{structuralDepthByNode[node.PhysicalNodeId]}";
+                : "ordinary";
         }
 
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+            layerByNode[node.PhysicalNodeId] = node.IsExternal
+                ? externalLayer
+                : reservedRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var fixedLayer)
+                    ? fixedLayer * 100
+                    : 0;
+
+        var solving = new HashSet<string>(StringComparer.Ordinal);
+        var solved = new HashSet<string>(StringComparer.Ordinal);
+        int SolveOrdinaryLayer(string id)
         {
-            if (node.IsExternal)
+            if (solved.Contains(id)) return layerByNode[id];
+            if (!solving.Add(id))
             {
-                layerByNode[node.PhysicalNodeId] = externalLayer;
-                continue;
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementDependencyCycle",
+                    "A dependency cycle prevented bottom-up layer solving from reaching a fixed point.", PlanningDiagnosticSubject.PhysicalNode, id));
+                return layerByNode[id];
             }
-            if (reservedRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var fixedLayer))
+            if (!nodes[id].IsExternal && !reservedRank.ContainsKey(roleByNode[id]))
             {
-                layerByNode[node.PhysicalNodeId] = fixedLayer * 100;
-                continue;
+                var childLayers = semanticChildrenByNode[id].OrderBy(child => order[child], Comparer<int>.Default)
+                    .Select(child => SolveOrdinaryLayer(child)).ToArray();
+                if (childLayers.Length > 0)
+                {
+                    var candidate = childLayers.Min() - 1;
+                    while (reservedLayers.Contains(candidate)) candidate--;
+                    layerByNode[id] = candidate;
+                }
             }
-            layerByNode[node.PhysicalNodeId] = 0;
+            solving.Remove(id);
+            solved.Add(id);
+            return layerByNode[id];
         }
+        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+            SolveOrdinaryLayer(node.PhysicalNodeId);
 
         // A positional owner can be discovered after a semantic child in a
         // cycle. Relax ordinary layers deterministically until all ordinary
         // parent/child constraints are represented, then report any cycle.
-        for (var pass = 0; pass < nodes.Count; pass++)
+        for (var pass = 0; pass < Math.Max(1, nodes.Count * 2); pass++)
         {
             var changed = false;
             foreach (var parent in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
@@ -468,13 +487,17 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                     }
                     if (!reservedRank.ContainsKey(roleByNode[childId]))
                     {
-                        layerByNode[childId] = parentLayer + 1;
+                        var candidate = parentLayer + 1;
+                        while (reservedLayers.Contains(candidate)) candidate++;
+                        layerByNode[childId] = candidate;
                         changed = true;
                     }
                     else if (!reservedRank.ContainsKey(roleByNode[parent.PhysicalNodeId]) &&
                              parentLayer >= childLayer)
                     {
-                        layerByNode[parent.PhysicalNodeId] = childLayer - 1;
+                        var candidate = childLayer - 1;
+                        while (reservedLayers.Contains(candidate)) candidate--;
+                        layerByNode[parent.PhysicalNodeId] = candidate;
                         changed = true;
                     }
                 }

@@ -52,9 +52,12 @@ public static class ArchitecturePlanningRequestFactory
                 RoutingRowMinimum = 20,
                 ProjectTransitionRowMinimum = 20
             },
-            new ValidationPolicy(mode == ArchitectureRenderingMode.Production
-                ? ArchitectureValidationMode.Normal
-                : ArchitectureValidationMode.Diagnostic),
+            new ValidationPolicy(mode switch
+            {
+                ArchitectureRenderingMode.StrictValidation => ArchitectureValidationMode.Strict,
+                ArchitectureRenderingMode.Production => ArchitectureValidationMode.Normal,
+                _ => ArchitectureValidationMode.Diagnostic
+            }),
             rendering.StyleRules.Select(rule => rule.Match).ToArray(),
             rendering.Overrides.Select(item => item.FullName).ToArray(),
             rendering.StyleRules.Select(rule => new ArchitectureV6StyleRule(rule.Match, rule.Style.FillColor, rule.Style.StrokeColor, rule.Style.FontColor, rule.Style.Shape, rule.Style.Shadow, rule.Style.ExtraStyle)).ToArray(),

@@ -1608,8 +1608,8 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains("shape=ellipse", (string)rootCell.Attribute("style")!);
         Assert.Contains("align=left;", (string)rootCell.Attribute("style")!);
         Assert.Contains("fillColor=#112233", (string)rootCell.Attribute("style")!);
-        Assert.Contains("strokeColor=#112233", (string)edge.Attribute("style")!);
-        Assert.Equal("target-node-background", (string)edge.Attribute("resolvedStyleSource")!);
+        Assert.Contains("strokeColor=#123456", (string)edge.Attribute("style")!);
+        Assert.Equal("connector-default", (string)edge.Attribute("resolvedStyleSource")!);
         Assert.Equal((string)sharedCell.Attribute("id")!, (string)edge.Attribute("target")!);
         Assert.Contains("exitX=", (string)edge.Attribute("style")!);
         Assert.Contains("exitY=1", (string)edge.Attribute("style")!);

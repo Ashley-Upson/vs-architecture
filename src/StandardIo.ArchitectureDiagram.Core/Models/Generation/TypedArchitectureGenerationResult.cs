@@ -10,7 +10,8 @@ namespace StandardIo.ArchitectureDiagram.Core.Models.Generation;
 public enum ArchitectureRenderingMode
 {
     Production,
-    DevelopmentProjectRegion
+    DevelopmentProjectRegion,
+    StrictValidation
 }
 
 public sealed record ArchitectureGenerationManifest(

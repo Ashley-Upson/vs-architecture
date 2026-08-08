@@ -113,9 +113,11 @@ public static class Program
                     var architectureJob = new ArchitectureGenerationJob(
                         LegacyDiagramSettingsAdapter.ToArchitectureAnalysis(settings),
                         LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings));
-                    var mode = string.IsNullOrWhiteSpace(options.ProjectRegionDirectory)
-                        ? ArchitectureRenderingMode.Production
-                        : ArchitectureRenderingMode.DevelopmentProjectRegion;
+                    var mode = options.StrictValidation
+                        ? ArchitectureRenderingMode.StrictValidation
+                        : string.IsNullOrWhiteSpace(options.ProjectRegionDirectory)
+                            ? ArchitectureRenderingMode.Production
+                            : ArchitectureRenderingMode.DevelopmentProjectRegion;
                     architecture = manifest is null
                         ? await provider.GetRequiredService<IArchitectureGenerationService>()
                             .GenerateAsync(target!.Projects, architectureJob, mode, options.SerializationRepeatCount).ConfigureAwait(false)

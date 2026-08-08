@@ -254,17 +254,13 @@ internal sealed class ArchitectureV6LaneAllocator
             foreach (var h in horizontal)
                 foreach (var v in vertical)
                 {
-                    // The current physical scene contract resolves a crossing
-                    // from its cell alone. Keep only unambiguous cell crossings
-                    // until that contract can carry both run identities.
-                    if (updatedRoutes.Count(route => route.Steps.Any(step => step.CellId.Equals(cell.Key))) != 1)
-                        continue;
                     var hStep = updatedRoutes.Single(route => route.PhysicalLinkId == h.RouteId).Steps
                         .FirstOrDefault(step => step.CellId.Equals(cell.Key));
                     var vStep = updatedRoutes.Single(route => route.PhysicalLinkId == v.RouteId).Steps
                         .FirstOrDefault(step => step.CellId.Equals(cell.Key));
                     if (hStep is not null && vStep is not null && hStep.Role != RouteStepRole.Turn && vStep.Role != RouteStepRole.Turn)
-                        result.Add(new PlannedCleanCrossing(cell.Key.ToString(), runAllocations[h].RunId, runAllocations[v].RunId, $"crossing:{cell.Key}"));
+                        result.Add(new PlannedCleanCrossing(cell.Key.ToString(), runAllocations[h].RunId, runAllocations[v].RunId,
+                            $"crossing:{cell.Key}", h.RouteId, v.RouteId));
                 }
         }
         return result;

@@ -34,12 +34,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var expandedNodeSpans = new Dictionary<string, string>(StringComparer.Ordinal);
         var invalidatedRouteCount = 0;
         var rebuiltReservationCount = 0;
+        var expansionConvergenceDiagnostics = new List<ArchitecturePlanningDiagnostic>();
         LogicalPlacementResult placement = null!;
         AbstractRoutePlanningResult routing = null!;
         ArchitectureLaneAllocationResult allocation = null!;
         ArchitectureRouteBoundaryValidationResult boundaryValidation = new ArchitectureRouteBoundaryValidationResult(
             Array.Empty<PlannedRouteBoundaryContract>(), Array.Empty<RouteBoundaryContractFinding>());
-        for (var pass = 0; pass < 2; pass++)
+        const int maximumExpansionIterations = 16;
+        var expansionConverged = false;
+        for (var pass = 0; pass < maximumExpansionIterations; pass++)
         {
             TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build());
             TimeStage("abstractRouting", () => routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
@@ -53,7 +56,21 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 .Where(item => item.RequiredOddSpan > item.CurrentSpan)
                 .GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Max(item => item.RequiredOddSpan), StringComparer.Ordinal);
-            if (expanded.Count == 0) break;
+            if (expanded.Count == 0)
+            {
+                expansionConverged = true;
+                expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
+                    "FootprintExpansionConverged",
+                    $"Footprint expansion converged after {pass + 1} planning iteration(s).",
+                    PlanningDiagnosticSubject.Grid, null,
+                    ArchitecturePlanningDiagnosticSeverity.Info));
+                break;
+            }
+            expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
+                "FootprintExpansionIteration",
+                $"Iteration {pass + 1} changed spans: {string.Join(", ", expanded.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item.Key + " " + (placement.NodePlacements.Single(node => node.PhysicalNodeId == item.Key).ColumnSpan) + "->" + item.Value))}.",
+                PlanningDiagnosticSubject.Grid, null,
+                ArchitecturePlanningDiagnosticSeverity.Info));
             placementRebuildCount++;
             stageInvocations["footprintExpansionRebuild"] = stageInvocations.TryGetValue("footprintExpansionRebuild", out var rebuilds) ? rebuilds + 1 : 1;
             expansionRequirementCount += allocation.FootprintExpansionRequirements.Count;
@@ -70,6 +87,11 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             }
             foreach (var item in expanded) requiredSpans[item.Key] = Math.Max(requiredSpans.TryGetValue(item.Key, out var existing) ? existing : 0, item.Value);
         }
+        if (!expansionConverged)
+            expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
+                "FootprintExpansionDidNotConverge",
+                $"Footprint expansion did not converge within the safety limit of {maximumExpansionIterations} iterations; the final requirements were not silently treated as consumed.",
+                PlanningDiagnosticSubject.Grid, null));
         var projectGrids = routing.ProjectGrids;
         var diagramGrid = routing.DiagramGrid;
         var structuralRowsBeforeRouting = placement.ProjectGrids.Sum(grid => grid.Grid.Rows.Count);
@@ -113,7 +135,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             .Count(component => component.Kind == PlannedRouteComponentKind.Turn && component.EntryBoundary?.Lane is not null && component.ExitBoundary?.Lane is not null);
         var incompleteTurnContractCount = boundaryValidation.Routes.SelectMany(route => route.Components)
             .Count(component => component.Kind == PlannedRouteComponentKind.Turn) - completeTurnContractCount;
-        var findings = projection.Diagnostics.Concat(cardinalityFindings)
+        var findings = projection.Diagnostics.Concat(expansionConvergenceDiagnostics).Concat(cardinalityFindings)
             .Concat(placement.Diagnostics).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(boundaryDiagnostics)
             .Concat(sizing.Diagnostics).Concat(physicalScene.Diagnostics).ToArray();
 
@@ -165,7 +187,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
              ShiftedRegionCount: 0,
               SizingConstraintCounts: sizedPlan.Constraints.GroupBy(item => item.Kind.ToString())
                   .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
-             SizingContributionExtents: new Dictionary<string, int>(StringComparer.Ordinal),
+              SizingContributionExtents: (sizedPlan.Provenance ?? Array.Empty<GridTrackProvenance>())
+                  .SelectMany(item => item.Contributions)
+                  .GroupBy(item => item.Kind.ToString(), StringComparer.Ordinal)
+                  .ToDictionary(group => group.Key, group => group.Sum(item => item.Extent), StringComparer.Ordinal),
               SizingSolverIterations: sizing.ReconciliationIterations,
               SizingIdempotent: sizing.SizingIdempotent,
               LargestRowExtent: sizedPlan.Rows.Select(item => item.FinalExtent).DefaultIfEmpty(0).Max(),
@@ -276,7 +301,17 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             placement.NodeMetadata,
             placement.LinkMetadata,
             placement.SubtreeReservations,
-            new ArchitecturePlanningStageStatus(true, true, true, false, false, false, true, true, true, false),
+             new ArchitecturePlanningStageStatus(
+                 ProjectionCompleted: true,
+                 LogicalPlacementCompleted: true,
+                 AbstractRoutingCompleted: true,
+                 LaneAllocationDeferred: false,
+                 SizingDeferred: false,
+                 AbsoluteGeometryDeferred: false,
+                 SizingCompleted: true,
+                 AbsoluteGeometryCompleted: true,
+                 CapacityConstraintsCompleted: true,
+                 PhysicalSizingDeferred: false),
             routing.DestinationApproaches,
             allocation.StraightRuns,
             routing.TurnDemands,

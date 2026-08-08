@@ -53,7 +53,9 @@ public sealed record PlannedCleanCrossing(
     string CellId,
     string HorizontalRunId,
     string VerticalRunId,
-    string Provenance);
+    string Provenance,
+    string? HorizontalPhysicalLinkId = null,
+    string? VerticalPhysicalLinkId = null);
 
 public sealed record PlannedProjectTransitionAllocation(
     string PhysicalLinkId,
