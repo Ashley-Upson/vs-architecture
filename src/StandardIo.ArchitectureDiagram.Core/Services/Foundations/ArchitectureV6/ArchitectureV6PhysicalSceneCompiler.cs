@@ -854,7 +854,9 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             diagramRow.RelativeOffset + transitionOrdinal);
         sourceBoundary = new AbsolutePoint(sourceBoundary.X, sourceDiagramTransform.Origin.Y + transitionY);
         destinationBoundary = new AbsolutePoint(destinationBoundary.X, destinationDiagramTransform.Origin.Y + transitionY);
-        var sourceEdge = new AbsolutePoint(sourceBoundary.X, sourceComponent.ExitPoint.Value.Y);
+        var sourceEdge = sourceSide == GridSide.Left
+            ? new AbsolutePoint(sourceComponent.ExitPoint.Value.X, sourceBoundary.Y)
+            : new AbsolutePoint(sourceBoundary.X, sourceComponent.ExitPoint.Value.Y);
         var destinationEdge = new AbsolutePoint(destinationBoundary.X, destinationComponent.EntryPoint.Value.Y);
         var firstTransition = TransitionComponent(route, "source-project-transition", sourceComponent.ExitPoint.Value,
             sourceEdge, sourceBoundary, sourceGrid, sourceGrid, sourceGrid, route.Transitions[0].SourceBoundaryCellId, sourceDiagramCell,
