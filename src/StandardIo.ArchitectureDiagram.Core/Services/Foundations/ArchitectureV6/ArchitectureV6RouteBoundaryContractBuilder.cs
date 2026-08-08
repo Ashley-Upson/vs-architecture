@@ -159,6 +159,13 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
                 components[index] = before with { ExitBoundary = canonical };
                 components[index + 1] = after with { EntryBoundary = canonical };
             }
+            else if (IsAuthorisedCrossGridHandoff(route, before, after))
+            {
+                // A project transition deliberately changes coordinate and
+                // lane ownership. Its shared boundary is represented by the
+                // transition record rather than by one GridBoundaryIdentity
+                // spanning two grids.
+            }
             else
             {
                 Add(routeFindings, route, "GenuineBoundaryDiscontinuity", before.ComponentId, after.ComponentId,
@@ -391,6 +398,22 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         (first == GridSide.Top && second == GridSide.Bottom) ||
         (first == GridSide.Bottom && second == GridSide.Top);
 
+    private static bool IsAuthorisedCrossGridHandoff(PlannedGridRoute route,
+        PlannedRouteComponentContract before, PlannedRouteComponentContract after)
+    {
+        if (before.ExitBoundary is null || after.EntryBoundary is null || before.ExitBoundary.GridId == after.EntryBoundary.GridId)
+            return false;
+
+        var first = route.Transitions.FirstOrDefault(transition =>
+            transition.SourceGridId == before.ExitBoundary.GridId);
+        var last = route.Transitions.LastOrDefault(transition =>
+            transition.DestinationGridId == after.EntryBoundary.GridId);
+        return first is not null && last is not null &&
+            first.DestinationGridId == last.SourceGridId &&
+            route.Steps.Any(step => step.CellId == first.DestinationBoundaryCellId) &&
+            route.Steps.Any(step => step.CellId == last.SourceBoundaryCellId);
+    }
+
     private GridBoundaryIdentity? EndpointBoundary(PlannedGridRoute route, NodeEndpoint endpoint, GridSide side, string authority,
         LaneId? laneOverride = null)
     {
@@ -415,5 +438,7 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
     private static void Add(List<RouteBoundaryContractFinding> findings, PlannedGridRoute route, string code,
         string componentId, string? otherComponentId, string message, GridBoundaryIdentity? expected, GridBoundaryIdentity? actual) =>
         findings.Add(new RouteBoundaryContractFinding(code, route.PhysicalLinkId, componentId, otherComponentId,
-            message, expected?.ToString(), actual?.ToString()));
+            message + (code == "GenuineBoundaryDiscontinuity"
+                ? $" expected={expected}; actual={actual}; transitions={string.Join(" | ", route.Transitions.Select(item => item.SourceGridId + "/" + item.SourceBoundaryCellId + "->" + item.DestinationGridId + "/" + item.DestinationBoundaryCellId + ":" + item.SourceBoundarySide + "->" + item.DestinationBoundarySide))}."
+                : string.Empty), expected?.ToString(), actual?.ToString()));
 }

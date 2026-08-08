@@ -1432,6 +1432,7 @@ public sealed class ArchitectureV6StructuralTests
         Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
         Assert.Equal(0, plan.PhysicalScene.Metrics.DiagonalSegmentCount);
         Assert.Equal(0, plan.PhysicalScene.Metrics.ComponentContinuityFailureCount);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "GenuineBoundaryDiscontinuity");
         Assert.DoesNotContain(route.Components!, component => component.Role == RouteStepRole.ProjectTransition &&
             component.AllocatedCells.Count < 2);
         Assert.Equal(route.RawPoints, repeatedRoute.RawPoints);
