@@ -620,8 +620,19 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 current.Point.X >= Math.Min(previous.Point.X, next.Point.X) && current.Point.X <= Math.Max(previous.Point.X, next.Point.X);
             var sameVertical = previous.Point.X == current.Point.X && current.Point.X == next.Point.X &&
                 current.Point.Y >= Math.Min(previous.Point.Y, next.Point.Y) && current.Point.Y <= Math.Max(previous.Point.Y, next.Point.Y);
+            var collinearTurn = current.Role == RouteStepRole.Turn &&
+                (previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y ||
+                 previous.Point.X == current.Point.X && current.Point.X == next.Point.X);
             var isProtected = current.Role is RouteStepRole.Turn or RouteStepRole.SourceExit or RouteStepRole.DestinationEntry ||
                               current.TurnIdentity is not null || current.TransitionIdentity is not null;
+            if (collinearTurn)
+            {
+                // A turn marker that does not change axis is an artefact of
+                // boundary reconciliation, not a required renderer waypoint.
+                // Removing it preserves the continuous run and avoids a tiny
+                // reversal at the approach boundary.
+                continue;
+            }
             if (!(sameHorizontal || sameVertical) || isProtected)
                 reduced.Add(current);
         }
@@ -651,6 +662,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var step = route.Steps.SingleOrDefault(item => item.CellId.Equals(turn.Cells[0]));
             var turnPoint = step is null ? (AbsolutePoint?)null : TurnPoint(route, step, transform);
             if (turnPoint is null) continue;
+            if (turn.FollowingComponentId?.EndsWith(":destination-approach", StringComparison.Ordinal) == true &&
+                route.Destination.GridId == step!.GridId)
+            {
+                // The final turn owns the handoff into the destination approach.
+                // Its vertical lane, rather than the outer edge of the last
+                // approach cell, is the authoritative horizontal-run endpoint.
+                turnPoint = new AbsolutePoint(destinationTerminal.Point.X, turnPoint.Value.Y);
+            }
             RegisterBoundary(turn.EntryBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
             RegisterBoundary(turn.ExitBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
         }
