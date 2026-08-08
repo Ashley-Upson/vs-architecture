@@ -110,7 +110,10 @@ public sealed record ArchitectureLaneAllocationResult(
     GridTrackSizingPlan Sizing,
     IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics,
     LaneAllocationPerformance? Performance = null,
-    ArchitectureRouteBoundaryValidationResult? BoundaryValidation = null);
+    ArchitectureRouteBoundaryValidationResult? BoundaryValidation = null,
+    IReadOnlyList<FinalTerminalSlot>? FinalTerminalSlots = null,
+    IReadOnlyList<EndpointHandoff>? EndpointHandoffs = null,
+    IReadOnlyList<ArchitectureConvergenceRequirement>? ConvergenceRequirements = null);
 
 public sealed record LaneAllocationPerformance(
     long ElapsedMilliseconds,

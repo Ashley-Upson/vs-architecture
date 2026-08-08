@@ -2383,6 +2383,81 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Endpoint_planning_preserves_direction_order_and_reservation_ownership()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("project:endpoints", "Endpoints")
+            .Node("root", "EndpointControllerWithUnequalWidth", "project:endpoints")
+            .Node("left", "LeftServiceWithAConsiderablyLongDisplayName", "project:endpoints")
+            .Node("down", "DownService", "project:endpoints")
+            .Node("right", "RightServiceWithAnotherLongDisplayName", "project:endpoints")
+            .Link("root-left", "root", "left")
+            .Link("root-down", "root", "down")
+            .Link("root-right", "root", "right");
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(fixture.BuildRequest());
+        Assert.NotNull(plan.EndpointPlanning);
+        var endpointPlanning = plan.EndpointPlanning!;
+        var rootId = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root").PhysicalNodeId;
+        var groups = endpointPlanning.DirectionGroups
+            .Where(group => endpointPlanning.Orders.Any(order => order.PhysicalNodeId == rootId &&
+                order.Direction == group.Direction && group.PhysicalLinkIds.Contains(order.PhysicalLinkId)))
+            .OrderBy(group => group.LogicalOrder)
+            .ToArray();
+
+        Assert.Equal(groups.Select(group => group.Direction).OrderBy(direction => (int)direction),
+            groups.Select(group => group.Direction));
+        Assert.Contains(TerminalDirectionGroupKind.Left, groups.Select(group => group.Direction));
+        Assert.Contains(TerminalDirectionGroupKind.Right, groups.Select(group => group.Direction));
+        Assert.All(endpointPlanning.Reservations, reservation =>
+            Assert.All(reservation.PhysicalLinkIds, link =>
+                Assert.Contains(endpointPlanning.Orders, order => order.PhysicalLinkId == link)));
+        Assert.Contains(endpointPlanning.Envelopes, envelope => envelope.PhysicalNodeId == rootId &&
+            envelope.Side == GridSide.Bottom);
+        Assert.All(endpointPlanning.Orders.Where(order => order.PhysicalNodeId == rootId), order =>
+            Assert.Equal(rootId, order.PhysicalNodeId));
+    }
+
+    [Fact]
+    public void Final_terminal_slots_are_planner_owned_and_do_not_resize_nodes()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(FanoutRequest(4));
+        Assert.NotNull(plan.LaneAllocation);
+        var allocation = plan.LaneAllocation!;
+        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
+        var relativeBounds = plan.RelativeGeometry!.Nodes.ToDictionary(node => node.PhysicalNodeId,
+            node => node.VisibleBounds ?? node.Bounds, StringComparer.Ordinal);
+
+        Assert.NotNull(allocation.FinalTerminalSlots);
+        Assert.All(allocation.FinalTerminalSlots!, slot =>
+        {
+            var node = scene.Geometry.Nodes.Single(node => node.PhysicalNodeId == slot.PhysicalNodeId);
+            var relative = relativeBounds[slot.PhysicalNodeId];
+            Assert.Equal(relative.Width, node.AbsoluteBounds.Width);
+            Assert.Equal(relative.Height, node.AbsoluteBounds.Height);
+            Assert.InRange(slot.Point.X, relative.X, relative.X + relative.Width);
+        });
+        Assert.NotEmpty(allocation.EndpointHandoffs!);
+    }
+
+    [Fact]
+    public void Endpoint_planning_is_deterministic_for_the_same_analyser_model()
+    {
+        var request = FanoutRequest(4);
+        var first = new ArchitectureDiagramV6Planner().Plan(request);
+        var second = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.Equal(first.EndpointPlanning!.Orders.Select(order => order.Provenance),
+            second.EndpointPlanning!.Orders.Select(order => order.Provenance));
+        Assert.Equal(first.EndpointPlanning.Reservations.Select(reservation => reservation.Provenance),
+            second.EndpointPlanning.Reservations.Select(reservation => reservation.Provenance));
+        Assert.Equal(first.LaneAllocation!.FinalTerminalSlots!.Select(slot => slot.Provenance),
+            second.LaneAllocation!.FinalTerminalSlots!.Select(slot => slot.Provenance));
+        Assert.Equal(first.LaneAllocation.EndpointHandoffs!.Select(handoff => handoff.Provenance),
+            second.LaneAllocation.EndpointHandoffs!.Select(handoff => handoff.Provenance));
+    }
+
+    [Fact]
     public void Synthetic_analyser_width_pressure_uses_configured_visible_gap_between_siblings()
     {
         var fixture = new ArchitectureV6SemanticFixtureBuilder()

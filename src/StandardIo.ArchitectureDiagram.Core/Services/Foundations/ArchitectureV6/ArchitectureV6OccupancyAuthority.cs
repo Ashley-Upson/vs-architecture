@@ -31,6 +31,7 @@ internal sealed class ArchitectureV6OccupancyAuthority
     private readonly Dictionary<PlanningGridCellId, string[]> ownersByCell;
     private readonly Dictionary<string, PlannedNodePlacement> placementsByNode;
     private readonly IReadOnlyDictionary<PlanningGridCellId, PlanningGridCell> cellsById;
+    private readonly IReadOnlyDictionary<string, EndpointEnvelopeReservation> endpointReservationsById;
 
     public ArchitectureV6OccupancyAuthority(
         IReadOnlyList<PlannedPhysicalNode> nodes,
@@ -42,6 +43,7 @@ internal sealed class ArchitectureV6OccupancyAuthority
         if (grids is null) throw new ArgumentNullException(nameof(grids));
 
         placementsByNode = placements.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
+        endpointReservationsById = new Dictionary<string, EndpointEnvelopeReservation>(StringComparer.Ordinal);
         ownersByCell = placements
             .SelectMany(placement => placement.Footprint.Select(cell => (cell, placement.PhysicalNodeId)))
             .GroupBy(item => item.cell)
@@ -50,6 +52,17 @@ internal sealed class ArchitectureV6OccupancyAuthority
             .GroupBy(item => item.Key)
             .ToDictionary(group => group.Key, group => group.First().Value);
         Diagnostics = BuildDiagnostics(nodes, placements);
+    }
+
+    public ArchitectureV6OccupancyAuthority(
+        IReadOnlyList<PlannedPhysicalNode> nodes,
+        IReadOnlyList<PlannedNodePlacement> placements,
+        IEnumerable<PlanningGrid> grids,
+        IEnumerable<EndpointEnvelopeReservation>? endpointReservations)
+        : this(nodes, placements, grids)
+    {
+        endpointReservationsById = (endpointReservations ?? Array.Empty<EndpointEnvelopeReservation>())
+            .ToDictionary(item => item.ReservationId, StringComparer.Ordinal);
     }
 
     public IReadOnlyList<ArchitecturePlanningDiagnostic> Diagnostics { get; }
@@ -85,6 +98,13 @@ internal sealed class ArchitectureV6OccupancyAuthority
             return Resolve(cellId).PhysicalNodeIds.SequenceEqual(new[] { link.DestinationPhysicalNodeId }, StringComparer.Ordinal);
 
         return false;
+    }
+
+    public bool IsEndpointReservedForOtherRoute(PlanningGridCellId cellId, string physicalLinkId)
+    {
+        if (!cellsById.TryGetValue(cellId, out var cell)) return false;
+        return cell.ReservationIds.Any(reservationId => endpointReservationsById.TryGetValue(reservationId, out var reservation) &&
+            !reservation.PhysicalLinkIds.Contains(physicalLinkId, StringComparer.Ordinal));
     }
 
     private IReadOnlyList<ArchitecturePlanningDiagnostic> BuildDiagnostics(

@@ -126,10 +126,12 @@ public sealed record ProjectRoutingGrid(
     RelativeRectangle? ProjectLabelReservation,
     IReadOnlyList<string>? PhysicalNodeIds = null,
     IReadOnlyList<string>? ExternalNodeIds = null,
-    string BoundaryOwnership = "project")
+    string BoundaryOwnership = "project",
+    IReadOnlyList<EndpointEnvelopeReservation>? EndpointReservations = null)
 {
     public IReadOnlyList<string> OwnedPhysicalNodeIds => PhysicalNodeIds ?? Array.Empty<string>();
     public IReadOnlyList<string> OwnedExternalNodeIds => ExternalNodeIds ?? Array.Empty<string>();
+    public IReadOnlyList<EndpointEnvelopeReservation> OwnedEndpointReservations => EndpointReservations ?? Array.Empty<EndpointEnvelopeReservation>();
 }
 
 public sealed record SubtreeReservation(

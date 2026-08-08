@@ -202,7 +202,10 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
             }
 
             var allocationForLane = allocation.HorizontalLanes.Concat(allocation.VerticalLanes)
-                .SingleOrDefault(item => item.Lane == run.Lane && item.RouteId == route.PhysicalLinkId);
+                .Where(item => item.Lane == run.Lane && item.RouteId == route.PhysicalLinkId)
+                .OrderBy(item => item.Axis)
+                .ThenBy(item => item.Lane.Value, StringComparer.Ordinal)
+                .FirstOrDefault();
             var entry = first.ExitBoundary is null ? null : new GridBoundaryIdentity(
                 first.ExitBoundary.GridId, first.ExitBoundary.CellId, first.ExitBoundary.Side,
                 run.Lane, first.ExitBoundary.OwnershipScope, "one-cell-run-entry");
@@ -426,8 +429,10 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         var boundaryCell = endpointAllocation?.TerminalColumnId is { } terminalColumn
             ? new PlanningGridCellId(placement.AnchorCellId.GridId, placement.AnchorCellId.RowId, terminalColumn)
             : placement.AnchorCellId;
+        var finalPoint = allocation.FinalTerminalSlots?.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId &&
+            item.PhysicalNodeId == endpoint.PhysicalNodeId && item.Side == side)?.Point;
         return new GridBoundaryIdentity(placement.AnchorCellId.GridId, boundaryCell, side, lane,
-            Ownership(endpoint), authority);
+            Ownership(endpoint), authority, null, finalPoint);
     }
 
     private string Ownership(NodeEndpoint endpoint) =>

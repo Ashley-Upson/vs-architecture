@@ -176,7 +176,8 @@ public sealed class PlannedArchitectureDiagram
         IReadOnlyList<TurnDemand>? turnDemands = null,
         IReadOnlyList<NodeEndpointDemand>? endpointDemands = null,
         ArchitectureLaneAllocationResult? laneAllocation = null,
-        PlannedArchitectureRelativeGeometry? relativeGeometry = null)
+        PlannedArchitectureRelativeGeometry? relativeGeometry = null,
+        ArchitectureEndpointPlanningResult? endpointPlanning = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -198,6 +199,7 @@ public sealed class PlannedArchitectureDiagram
         EndpointDemands = Array.AsReadOnly((endpointDemands ?? Array.Empty<NodeEndpointDemand>()).ToArray());
         LaneAllocation = laneAllocation;
         RelativeGeometry = relativeGeometry;
+        EndpointPlanning = endpointPlanning;
     }
 
     public ArchitecturePlanningRequest Request { get; }
@@ -220,6 +222,7 @@ public sealed class PlannedArchitectureDiagram
     public IReadOnlyList<NodeEndpointDemand> EndpointDemands { get; }
     public ArchitectureLaneAllocationResult? LaneAllocation { get; }
     public PlannedArchitectureRelativeGeometry? RelativeGeometry { get; }
+    public ArchitectureEndpointPlanningResult? EndpointPlanning { get; }
     public PlannedArchitectureGeometry? Geometry { get; init; }
     public PlannedArchitecturePhysicalScene? PhysicalScene { get; init; }
 }

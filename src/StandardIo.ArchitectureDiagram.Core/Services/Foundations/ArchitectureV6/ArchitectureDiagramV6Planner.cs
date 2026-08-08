@@ -36,8 +36,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var rebuiltReservationCount = 0;
         var expansionConvergenceDiagnostics = new List<ArchitecturePlanningDiagnostic>();
         LogicalPlacementResult placement = null!;
+        ArchitectureEndpointPlanningResult endpointPlanning = null!;
         AbstractRoutePlanningResult routing = null!;
         ArchitectureLaneAllocationResult allocation = null!;
+        PhysicalSizingResult sizing = null!;
         ArchitectureRouteBoundaryValidationResult boundaryValidation = new ArchitectureRouteBoundaryValidationResult(
             Array.Empty<PlannedRouteBoundaryContract>(), Array.Empty<RouteBoundaryContractFinding>());
         const int maximumExpansionIterations = 16;
@@ -45,10 +47,20 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         for (var pass = 0; pass < maximumExpansionIterations; pass++)
         {
             TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build());
+            TimeStage("endpointEnvelopePlanning", () => endpointPlanning = new ArchitectureV6EndpointEnvelopePlanner(
+                request, projection.PhysicalNodes, projection.PhysicalLinks, placement.NodePlacements).Build(
+                    placement.ProjectGrids, placement.DiagramGrid, pass));
+            placement = placement with
+            {
+                ProjectGrids = endpointPlanning.ProjectGrids,
+                DiagramGrid = endpointPlanning.DiagramGrid
+            };
             TimeStage("abstractRouting", () => routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
-                placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid).Build());
+                placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid,
+                endpointPlanning.Reservations).Build());
             TimeStage("laneAllocation", () => allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
-                routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches).Build());
+                routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches,
+                endpointPlanning.Orders).Build());
             TimeStage("routeBoundaryContract", () => boundaryValidation = new ArchitectureV6RouteBoundaryContractBuilder(
                 allocation, projection.PhysicalNodes, placement.NodePlacements).Build());
             allocation = allocation with { BoundaryValidation = boundaryValidation };
@@ -58,6 +70,61 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 .ToDictionary(group => group.Key, group => group.Max(item => item.RequiredOddSpan), StringComparer.Ordinal);
             if (expanded.Count == 0)
             {
+                var endpointPathLinks = new HashSet<string>(routing.Diagnostics
+                    .Where(item => item.Code == "EndpointEnvelopePathUnavailable" && !string.IsNullOrWhiteSpace(item.SubjectId))
+                    .Select(item => item.SubjectId!), StringComparer.Ordinal);
+                var endpointOwners = projection.PhysicalLinks
+                    .Where(link => endpointPathLinks.Contains(link.PhysicalLinkId))
+                    .SelectMany(link => new[] { link.SourcePhysicalNodeId, link.DestinationPhysicalNodeId })
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                if (endpointOwners.Length > 0)
+                {
+                    expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "EndpointEnvelopeExpansionIteration",
+                        $"Iteration {pass + 1} requires endpoint corridor capacity for {string.Join(", ", endpointOwners.OrderBy(item => item, StringComparer.Ordinal))}.",
+                        PlanningDiagnosticSubject.Grid, null,
+                        ArchitecturePlanningDiagnosticSeverity.Info));
+                    placementRebuildCount++;
+                    expansionRequirementCount += endpointOwners.Length;
+                    invalidatedRouteCount += routing.Routes.Count;
+                    rebuiltReservationCount += placement.SubtreeReservations.Count;
+                    foreach (var owner in endpointOwners)
+                    {
+                        var currentSpan = placement.NodePlacements.SingleOrDefault(item => item.PhysicalNodeId == owner)?.ColumnSpan ?? 1;
+                        var requestedSpan = currentSpan + 2;
+                        requiredSpans[owner] = Math.Max(requiredSpans.TryGetValue(owner, out var existing) ? existing : 0, requestedSpan);
+                    }
+                    continue;
+                }
+                var preflightSizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
+                    placement.NodePlacements, placement.NodeMetadata, routing.ProjectGrids, placement.SubtreeReservations,
+                    allocation.Sizing.Constraints, routing.DiagramGrid).Build();
+                var preflightAllocation = new ArchitectureV6FinalTerminalAllocator(request, projection.PhysicalLinks,
+                    projection.PhysicalNodes).Build(allocation, preflightSizing.RelativeGeometry, endpointPlanning, pass);
+                var endpointRequirements = (preflightAllocation.ConvergenceRequirements ?? Array.Empty<ArchitectureConvergenceRequirement>())
+                    .Where(item => item.RequiredValue > item.CurrentValue)
+                    .GroupBy(item => item.OwnerId, StringComparer.Ordinal)
+                    .ToDictionary(group => group.Key, group => group.Max(item => item.RequiredValue), StringComparer.Ordinal);
+                if (endpointRequirements.Count > 0)
+                {
+                    expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "EndpointEnvelopeExpansionIteration",
+                        $"Iteration {pass + 1} requires endpoint capacity changes: {string.Join(", ", endpointRequirements.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item.Key + "->" + item.Value))}.",
+                        PlanningDiagnosticSubject.Grid, null,
+                        ArchitecturePlanningDiagnosticSeverity.Info));
+                    placementRebuildCount++;
+                    expansionRequirementCount += endpointRequirements.Count;
+                    invalidatedRouteCount += routing.Routes.Count;
+                    rebuiltReservationCount += placement.SubtreeReservations.Count;
+                    foreach (var requirement in endpointRequirements)
+                    {
+                        var requestedSpan = (int)Math.Ceiling((double)requirement.Value / Math.Max(1, request.GridSizing.CellWidth));
+                        if (requestedSpan % 2 == 0) requestedSpan++;
+                        requiredSpans[requirement.Key] = Math.Max(requiredSpans.TryGetValue(requirement.Key, out var current) ? current : 0, requestedSpan);
+                    }
+                    continue;
+                }
                 expansionConverged = true;
                 expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
                     "FootprintExpansionConverged",
@@ -98,11 +165,16 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var structuralColumnsBeforeRouting = placement.ProjectGrids.Sum(grid => grid.Grid.Columns.Count);
         var structuralRowsAfterRouting = projectGrids.Sum(grid => grid.Grid.Rows.Count);
         var structuralColumnsAfterRouting = projectGrids.Sum(grid => grid.Grid.Columns.Count);
-        PhysicalSizingResult sizing = null!;
         TimeStage("relativeSizing", () => sizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
             placement.NodePlacements, placement.NodeMetadata, projectGrids, placement.SubtreeReservations,
             allocation.Sizing.Constraints, diagramGrid).Build());
         var sizedPlan = sizing.Sizing;
+        TimeStage("finalTerminalAllocation", () => allocation = new ArchitectureV6FinalTerminalAllocator(
+            request, projection.PhysicalLinks, projection.PhysicalNodes).Build(allocation, sizing.RelativeGeometry,
+                endpointPlanning, 0));
+        TimeStage("finalEndpointBoundaryContract", () => boundaryValidation = new ArchitectureV6RouteBoundaryContractBuilder(
+            allocation, projection.PhysicalNodes, placement.NodePlacements).Build());
+        allocation = allocation with { BoundaryValidation = boundaryValidation };
         PlannedArchitecturePhysicalScene physicalScene = null!;
         TimeStage("absoluteGeometry", () => physicalScene = new ArchitectureV6PhysicalSceneCompiler(request, projection.PhysicalNodes,
             projection.PhysicalLinks, diagramGrid, projectGrids, placement.NodePlacements, allocation.Routes, sizedPlan,
@@ -135,7 +207,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             .Count(component => component.Kind == PlannedRouteComponentKind.Turn && component.EntryBoundary?.Lane is not null && component.ExitBoundary?.Lane is not null);
         var incompleteTurnContractCount = boundaryValidation.Routes.SelectMany(route => route.Components)
             .Count(component => component.Kind == PlannedRouteComponentKind.Turn) - completeTurnContractCount;
-        var findings = projection.Diagnostics.Concat(expansionConvergenceDiagnostics).Concat(cardinalityFindings)
+        var findings = projection.Diagnostics.Concat(expansionConvergenceDiagnostics).Concat(endpointPlanning.Diagnostics)
+            .Concat(cardinalityFindings)
             .Concat(placement.Diagnostics).Concat(routing.Diagnostics).Concat(allocation.Diagnostics).Concat(boundaryDiagnostics)
             .Concat(sizing.Diagnostics).Concat(physicalScene.Diagnostics).ToArray();
 
@@ -319,7 +392,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             routing.TurnDemands,
             routing.EndpointDemands,
              allocation,
-             sizing.RelativeGeometry)
+             sizing.RelativeGeometry,
+             endpointPlanning)
         {
             Geometry = physicalScene.Geometry,
             PhysicalScene = physicalScene

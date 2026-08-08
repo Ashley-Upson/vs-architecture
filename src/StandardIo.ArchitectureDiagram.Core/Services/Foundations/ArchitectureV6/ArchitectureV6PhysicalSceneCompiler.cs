@@ -60,7 +60,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         timings["transformConstruction"] = timer.ElapsedMilliseconds;
 
         timer.Restart();
-        var nodeGeometry = ExpandNodeGeometryForTerminalSlots(CompileNodes(transforms), transforms);
+        var nodeGeometry = CompileNodes(transforms);
         var projectGeometry = CompileProjects(transforms);
         var gridGeometry = CompileGrids(transforms);
         var reservationGeometry = CompileReservations(transforms);
@@ -382,15 +382,16 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         {
             var node = nodeGeometry.SingleOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
             if (node is null || !transforms.TryGetValue(node.GridId, out var transform)) continue;
-            var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
-            var requestedX = endpoint.TerminalLane is { } terminalLane && endpoint.TerminalColumnId is { } terminalColumnId
-                ? TerminalLaneCoordinate(node.GridId, terminalColumnId, terminalLane.Value, transform)
-                : node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
-            var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
-                Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
-            var minX = node.AbsoluteBounds.X + inset;
-            var maxX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
-            var x = requestedX;
+            var slot = allocation.FinalTerminalSlots?.SingleOrDefault(item => item.PhysicalLinkId == endpoint.PhysicalLinkId &&
+                item.PhysicalNodeId == endpoint.PhysicalNodeId && item.Side == endpoint.Side);
+            if (slot is null)
+            {
+                findings.Add(new ArchitecturePlanningDiagnostic("MissingFinalTerminalSlot",
+                    "A terminal reached physical materialisation without a planner-owned final slot.",
+                    PlanningDiagnosticSubject.PhysicalLink, endpoint.PhysicalLinkId));
+                continue;
+            }
+            var x = transform.Origin.X + slot.Point.X;
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
             var id = endpoint.PhysicalLinkId + ":" + endpoint.Side;
@@ -404,45 +405,16 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         return result;
     }
 
-    private IReadOnlyList<PlannedPhysicalNodeGeometry> ExpandNodeGeometryForTerminalSlots(
-        IReadOnlyList<PlannedPhysicalNodeGeometry> geometry,
-        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
-    {
-        var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
-        return geometry.Select(node =>
-        {
-            var slots = allocation.Endpoints
-                .Where(endpoint => endpoint.PhysicalNodeId == node.PhysicalNodeId &&
-                                   endpoint.TerminalColumnId is not null && endpoint.TerminalLane is not null)
-                .Select(endpoint => TerminalLaneCoordinate(node.GridId, endpoint.TerminalColumnId!.Value,
-                    endpoint.TerminalLane!.Value.Value, transforms[node.GridId]))
-                .ToArray();
-            if (slots.Length == 0) return node;
-            var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
-                Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
-            var minAllowed = node.AbsoluteBounds.X + inset;
-            var maxAllowed = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
-            var left = slots.Select(slot => minAllowed - slot).Where(delta => delta > 0).DefaultIfEmpty(0).Max();
-            var right = slots.Select(slot => slot - maxAllowed).Where(delta => delta > 0).DefaultIfEmpty(0).Max();
-            if (left <= 0 && right <= 0) return node;
-            var leftExpansion = left;
-            var rightExpansion = right;
-            var bounds = node.AbsoluteBounds with
-            {
-                X = node.AbsoluteBounds.X - leftExpansion,
-                Width = node.AbsoluteBounds.Width + leftExpansion + rightExpansion
-            };
-            return node with { AbsoluteBounds = bounds };
-        }).ToArray();
-    }
-
     private IReadOnlyList<PlannedPhysicalTurn> CompileTurns(IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
         var result = new List<PlannedPhysicalTurn>();
         foreach (var turn in allocation.Turns.OrderBy(item => item.BendIdentity, StringComparer.Ordinal))
         {
             var route = routes.SingleOrDefault(item => item.PhysicalLinkId == turn.RouteId);
-            var step = route?.Steps.SingleOrDefault(item => item.CellId.ToString() == turn.CellId);
+            var step = route?.Steps
+                .Where(item => item.CellId.ToString() == turn.CellId)
+                .OrderBy(item => item.Order)
+                .FirstOrDefault();
             if (route is null || step is null || !transforms.TryGetValue(step.GridId, out var transform)) continue;
             // A turn owns both the horizontal and vertical lane. CellPoint
             // can resolve only one axis from the step sides, so using it here
@@ -746,7 +718,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         {
             if (turn.Cells.Count == 0 || !transforms.TryGetValue(turn.EntryBoundary?.GridId ?? new PlanningGridId("missing"), out var transform))
                 continue;
-            var step = route.Steps.SingleOrDefault(item => item.CellId.Equals(turn.Cells[0]));
+            var step = route.Steps
+                .Where(item => item.CellId.Equals(turn.Cells[0]))
+                .OrderBy(item => item.Order)
+                .FirstOrDefault();
             var turnPoint = step is null ? (AbsolutePoint?)null : TurnPoint(route, step, transform);
             if (turnPoint is null) continue;
             RegisterBoundary(turn.EntryBoundary, turnPoint.Value, compiledBoundaries, boundaryContradictions);
@@ -1039,10 +1014,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         if (component.Kind == PlannedRouteComponentKind.SourceNodeAnchor)
         {
             var boundary = NodeFootprintBoundary(route.Source.PhysicalNodeId, GridSide.Bottom, sourceTerminal, transforms);
+            var edgePoint = new AbsolutePoint(sourceTerminal.Point.X, boundary.Point.Y);
             points.Add(Point(route, route.Source.GridId ?? boundary.GridId, sourceTerminal.Point, RouteStepRole.SourceExit,
                 component.ComponentId + ":terminal", component.Order, component.RunId, component.TurnId,
                 component.Cells.FirstOrDefault(), "source terminal to complete footprint bottom edge", component.ComponentId));
-            points.Add(Point(route, boundary.GridId, boundary.Point, RouteStepRole.SourceExit,
+            points.Add(Point(route, boundary.GridId, edgePoint, RouteStepRole.SourceExit,
                 component.ComponentId + ":footprint-bottom", component.Order, component.RunId, component.TurnId,
                 component.Cells.FirstOrDefault(), "source complete footprint bottom edge", component.ComponentId));
             return points;
@@ -1051,7 +1027,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         if (component.Kind == PlannedRouteComponentKind.DestinationNodeAnchor)
         {
             var boundary = NodeFootprintBoundary(route.Destination.PhysicalNodeId, GridSide.Top, destinationTerminal, transforms);
-            points.Add(Point(route, boundary.GridId, boundary.Point, RouteStepRole.DestinationEntry,
+            var edgePoint = new AbsolutePoint(destinationTerminal.Point.X, boundary.Point.Y);
+            points.Add(Point(route, boundary.GridId, edgePoint, RouteStepRole.DestinationEntry,
                 component.ComponentId + ":footprint-top", component.Order, component.RunId, component.TurnId,
                 component.Cells.FirstOrDefault(), "destination complete footprint top edge", component.ComponentId));
             points.Add(Point(route, route.Destination.GridId ?? boundary.GridId, destinationTerminal.Point, RouteStepRole.DestinationEntry,
@@ -1071,7 +1048,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             if (orderedSteps.Length > 0)
             {
                 var firstTransform = transforms[orderedSteps[0].GridId];
-                var handoff = EndpointHandoffPoint(route, orderedSteps[0], firstTransform);
+                var plannedHandoff = allocation.EndpointHandoffs?.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId)?.SourceRouteHandoffPoint;
+                var handoff = plannedHandoff is { } handoffPoint
+                    ? new AbsolutePoint(firstTransform.Origin.X + handoffPoint.X, firstTransform.Origin.Y + handoffPoint.Y)
+                    : EndpointHandoffPoint(route, orderedSteps[0], firstTransform);
                 points.Add(Point(route, firstCell.GridId, new AbsolutePoint(start.X, handoff.Y), role,
                     component.ComponentId + ":vertical-departure", component.Order, component.RunId, component.TurnId,
                     firstCell, "dedicated source endpoint-local vertical", component.ComponentId));
@@ -1291,6 +1271,8 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
 
     private AbsolutePoint BoundaryPoint(GridBoundaryIdentity boundary, GridTransform transform)
     {
+        if (boundary.FinalPoint is { } finalPoint)
+            return new AbsolutePoint(transform.Origin.X + finalPoint.X, transform.Origin.Y + finalPoint.Y);
         var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(boundary.GridId));
         var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(boundary.CellId.RowId));
         var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(boundary.CellId.ColumnId));
@@ -1499,7 +1481,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         var sizedGrid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
         var row = sizedGrid?.Rows.SingleOrDefault(item => item.Id.Equals(step.CellId.RowId));
         var column = sizedGrid?.Columns.SingleOrDefault(item => item.Id.Equals(step.CellId.ColumnId));
-        var turn = allocation.Turns.SingleOrDefault(item => item.RouteId == route.PhysicalLinkId && item.CellId == step.CellId.ToString());
+            var turn = allocation.Turns
+                .Where(item => item.RouteId == route.PhysicalLinkId && item.CellId == step.CellId.ToString())
+                .OrderBy(item => item.BendIdentity, StringComparer.Ordinal)
+                .FirstOrDefault();
         if (row is null || column is null || turn is null) return CellPoint(step, route, transform);
         var horizontal = allocation.HorizontalLanes.SingleOrDefault(item => item.RunId == turn.HorizontalRunId);
         var vertical = allocation.VerticalLanes.SingleOrDefault(item => item.RunId == turn.VerticalRunId);

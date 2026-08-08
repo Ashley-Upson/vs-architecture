@@ -14,6 +14,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     private readonly Dictionary<string, PhysicalNodePlacementMetadata> metadata;
     private readonly Dictionary<PlanningGridId, MutableGrid> grids;
     private readonly ArchitectureV6OccupancyAuthority occupancy;
+    private readonly IReadOnlyList<EndpointEnvelopeReservation> endpointReservations;
     private readonly Dictionary<string, int> rowOrderByNode = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> columnOrderByNode = new(StringComparer.Ordinal);
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
@@ -25,7 +26,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         IReadOnlyList<PlannedNodePlacement> placements,
         IReadOnlyList<PhysicalNodePlacementMetadata> metadata,
         IReadOnlyList<ProjectRoutingGrid> projectGrids,
-        DiagramRoutingGrid diagramGrid)
+        DiagramRoutingGrid diagramGrid,
+        IReadOnlyList<EndpointEnvelopeReservation>? endpointReservations = null)
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
@@ -34,7 +36,9 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         this.metadata = metadata.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         grids = projectGrids.ToDictionary(item => item.Grid.Id, MutableGrid.From, EqualityComparer<PlanningGridId>.Default);
         grids[diagramGrid.Grid.Id] = MutableGrid.From(diagramGrid.Grid);
-        occupancy = new ArchitectureV6OccupancyAuthority(nodes, placements, projectGrids.Select(item => item.Grid).Append(diagramGrid.Grid));
+        occupancy = new ArchitectureV6OccupancyAuthority(nodes, placements, projectGrids.Select(item => item.Grid).Append(diagramGrid.Grid),
+            endpointReservations ?? projectGrids.SelectMany(item => item.OwnedEndpointReservations));
+        this.endpointReservations = endpointReservations ?? projectGrids.SelectMany(item => item.OwnedEndpointReservations).ToArray();
         diagnostics.AddRange(occupancy.Diagnostics);
         foreach (var placement in placements)
         {
@@ -208,9 +212,28 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         }
         else
         {
-            var path = FindOrthogonalPath(grids[sourceGrid], placements[source.PhysicalNodeId].AnchorCellId,
-                placements[destination.PhysicalNodeId].AnchorCellId, link);
-            if (path.Count == 0)
+            var sourceEnvelope = EndpointEnvelopeCell(source.PhysicalNodeId, GridSide.Bottom, link.PhysicalLinkId) ??
+                placements[source.PhysicalNodeId].AnchorCellId;
+            var destinationEnvelope = EndpointEnvelopeCell(destination.PhysicalNodeId, GridSide.Top, link.PhysicalLinkId) ??
+                placements[destination.PhysicalNodeId].AnchorCellId;
+            var sourcePrefix = FindOrthogonalPath(grids[sourceGrid], placements[source.PhysicalNodeId].AnchorCellId,
+                sourceEnvelope, link, destinationRequiresTopEntry: false, sourceMustDescend: true);
+            var ordinary = sourceEnvelope == destinationEnvelope
+                ? new[] { sourceEnvelope }
+                : FindOrthogonalPath(grids[sourceGrid], sourceEnvelope, destinationEnvelope, link,
+                    destinationRequiresTopEntry: false, sourceMustDescend: false);
+            var destinationSuffix = FindOrthogonalPath(grids[sourceGrid], destinationEnvelope,
+                placements[destination.PhysicalNodeId].AnchorCellId, link, destinationRequiresTopEntry: true, sourceMustDescend: true);
+            var path = AppendContiguous(sourcePrefix, ordinary.Skip(1), destinationSuffix.Skip(1));
+            if (path.Length == 0 || path[0] != placements[source.PhysicalNodeId].AnchorCellId ||
+                path[path.Length - 1] != placements[destination.PhysicalNodeId].AnchorCellId)
+            {
+                diagnostics.Add(new ArchitecturePlanningDiagnostic("EndpointEnvelopePathUnavailable",
+                    "The reserved endpoint envelope did not admit a complete path; the route is unsupported until endpoint capacity converges.",
+                    PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
+                path = Array.Empty<PlanningGridCellId>();
+            }
+            if (path.Length == 0)
             {
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("UnsupportedAbstractRoute", "No contiguous orthogonal path exists in the authoritative project grid.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
                 steps.Clear();
@@ -268,7 +291,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             if (!distances.TryGetValue(current, out var currentDistance) || currentDistance != candidate.Distance) continue;
             foreach (var next in Neighbours(grid, current, source, destination, destinationRequiresTopEntry, sourceMustDescend))
             {
-                if (!CanTraversePathCell(grid, next, source, destination)) continue;
+                if (!CanTraversePathCell(grid, next, source, destination, link)) continue;
                 var distance = currentDistance + 1;
                 if (distances.TryGetValue(next, out var existingDistance) && existingDistance <= distance) continue;
                 distances[next] = distance;
@@ -334,10 +357,12 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         }
     }
 
-    private bool CanTraversePathCell(MutableGrid grid, PlanningGridCellId cell, PlanningGridCellId source, PlanningGridCellId destination)
+    private bool CanTraversePathCell(MutableGrid grid, PlanningGridCellId cell, PlanningGridCellId source, PlanningGridCellId destination,
+        PlannedPhysicalLink link)
     {
         if (cell == source || cell == destination) return true;
         if (IsOccupiedFootprint(grid, cell.RowId, cell.ColumnId)) return false;
+        if (occupancy.IsEndpointReservedForOtherRoute(cell, link.PhysicalLinkId)) return false;
         return !grid.Cells.TryGetValue(cell, out var existing) || (existing.Capabilities & CellCapability.RoutingAllowed) != 0;
     }
 
@@ -924,6 +949,25 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return cell;
     }
 
+    private PlanningGridCellId? EndpointEnvelopeCell(string physicalNodeId, GridSide side, string physicalLinkId)
+    {
+        var reservation = endpointReservations.FirstOrDefault(item => item.PhysicalNodeId == physicalNodeId &&
+            item.Side == side && item.PhysicalLinkIds.Contains(physicalLinkId, StringComparer.Ordinal));
+        if (reservation is null || reservation.Cells.Count == 0) return null;
+        var index = Array.IndexOf(reservation.PhysicalLinkIds.ToArray(), physicalLinkId);
+        if (index < 0) index = 0;
+        return reservation.Cells[Math.Min(index, reservation.Cells.Count - 1)];
+    }
+
+    private static PlanningGridCellId[] AppendContiguous(params IEnumerable<PlanningGridCellId>[] parts)
+    {
+        var result = new List<PlanningGridCellId>();
+        foreach (var part in parts)
+        foreach (var cell in part)
+            if (result.Count == 0 || result[result.Count - 1] != cell) result.Add(cell);
+        return result.ToArray();
+    }
+
     private PlanningGridId GridOf(PlannedPhysicalNode node) => new($"project:{ProjectOf(node.PhysicalNodeId)}");
     private string ProjectOf(string physicalNodeId) => nodes.Single(node => node.PhysicalNodeId == physicalNodeId).ProjectId ?? "external";
     private static bool IsVertical(PlannedGridRouteStep step) => step.EntrySide == GridSide.Top || step.EntrySide == GridSide.Bottom;
@@ -1005,6 +1049,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         public List<PlanningGridRowId> RowOrder { get; } = new();
         public List<PlanningGridColumnId> ColumnOrder { get; } = new();
         public IReadOnlyList<SubtreeReservation> Reservations { get; private set; } = Array.Empty<SubtreeReservation>();
+        public IReadOnlyList<EndpointEnvelopeReservation> EndpointReservations { get; private set; } = Array.Empty<EndpointEnvelopeReservation>();
         public string? ProjectId { get; private set; }
         public IReadOnlyList<string> OwnedPhysicalNodeIds { get; private set; } = Array.Empty<string>();
         public IReadOnlyList<string> OwnedExternalNodeIds { get; private set; } = Array.Empty<string>();
@@ -1025,6 +1070,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         {
             var result = From(project.Grid);
             result.Reservations = project.SubtreeReservations;
+            result.EndpointReservations = project.OwnedEndpointReservations;
             result.ProjectId = project.ProjectId;
             result.OwnedPhysicalNodeIds = project.OwnedPhysicalNodeIds;
             result.OwnedExternalNodeIds = project.OwnedExternalNodeIds;
@@ -1038,7 +1084,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         }
         public ProjectRoutingGrid ToProjectGrid(IEnumerable<PlannedPhysicalNode> owned) => new(ProjectId ?? owned.FirstOrDefault()?.ProjectId ?? Id.Value.Substring("project:".Length), ToGrid(), Reservations, null,
             OwnedPhysicalNodeIds.Count == 0 ? owned.Select(item => item.PhysicalNodeId).ToArray() : OwnedPhysicalNodeIds,
-            OwnedExternalNodeIds.Count == 0 ? owned.Where(item => item.IsExternal).Select(item => item.PhysicalNodeId).ToArray() : OwnedExternalNodeIds);
+            OwnedExternalNodeIds.Count == 0 ? owned.Where(item => item.IsExternal).Select(item => item.PhysicalNodeId).ToArray() : OwnedExternalNodeIds,
+            "project", EndpointReservations);
     }
 
     private sealed record RouteLegalityResult(bool IsSupported, string? Message);

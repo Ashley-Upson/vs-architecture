@@ -1215,3 +1215,16 @@ This section SHOULD remain concise. Normative sections above are authoritative.
 - Visible horizontal node separation is governed by configured spacing policy after node-width and footprint expansion, not by incidental sparse logical-column distance.
 - Standalone nodes occupy a dedicated compact region below the bottom External/hierarchy layer, remain standalone regardless of role suffix, and preserve at least one logical cell of horizontal and vertical separation.
 - Ordinary nodes without reserved selectors use the lowest valid non-reserved layer above their dependencies, skipping reserved bands rather than inheriting a fallback layer.
+- Terminal demand is planner-owned before ordinary routing and is separate from final physical terminal coordinates.
+- Terminal direction groups and deterministic terminal order are explicit planner records; final order must not be inferred from final lane X coordinates.
+- Source and destination endpoint envelopes/corridors are first-class grid reservations with relationship ownership and iteration provenance.
+- Ordinary route occupancy must respect endpoint reservations before topology selection; an unrelated route cannot consume another relationship group's endpoint space.
+- Final terminal coordinates are assigned only after authoritative final visible node bounds and physical track sizing exist. Terminal groups are centred on the final visible edge with configured inset and spacing.
+- Ordinary run lanes may provide route targets and ordering information, but do not own terminal X. Final terminal slot allocation is its own planner stage.
+- Terminal-local handoffs are planner-owned and must remain inside their reserved endpoint envelopes.
+- Endpoint-space conflicts and final capacity deficits are monotonic convergence requirements that invalidate and rebuild affected placement, grids, topology, lanes, boundary contracts and sizing rather than being repaired downstream.
+- Physical materialisation is mechanical: it may not expand node bounds, calculate terminal positions or invent endpoint bends.
+
+## Endpoint planning decision
+
+The accepted endpoint architecture is hybrid: reserve a conservative, bounded endpoint envelope before ordinary routing, then permit monotonic convergence when authoritative final sizing and terminal slots demonstrate that the envelope or track capacity is insufficient. The planner records demand, direction grouping, order, logical envelope, final slot and handoff separately. This prevents route lanes and physical materialisation from becoming implicit terminal authority.

@@ -16,6 +16,7 @@ internal sealed class ArchitectureV6LaneAllocator
     private readonly IReadOnlyList<PlannedStraightRun> runs;
     private readonly IReadOnlyList<NodeEndpointDemand> endpointDemands;
     private readonly IReadOnlyList<DestinationApproachReservation> approaches;
+    private readonly IReadOnlyList<TerminalOrder> terminalOrders;
     private readonly List<ArchitecturePlanningDiagnostic> diagnostics = new();
     private readonly List<LaneAllocationConflict> conflicts = new();
     private long intervalComparisons;
@@ -28,7 +29,8 @@ internal sealed class ArchitectureV6LaneAllocator
         IReadOnlyList<PlannedGridRoute> routes,
         IReadOnlyList<PlannedStraightRun> runs,
         IReadOnlyList<NodeEndpointDemand> endpointDemands,
-        IReadOnlyList<DestinationApproachReservation> approaches)
+        IReadOnlyList<DestinationApproachReservation> approaches,
+        IReadOnlyList<TerminalOrder>? terminalOrders = null)
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.links = links;
@@ -38,6 +40,7 @@ internal sealed class ArchitectureV6LaneAllocator
         this.runs = runs;
         this.endpointDemands = endpointDemands;
         this.approaches = approaches;
+        this.terminalOrders = terminalOrders ?? Array.Empty<TerminalOrder>();
     }
 
     public ArchitectureLaneAllocationResult Build()
@@ -112,7 +115,9 @@ internal sealed class ArchitectureV6LaneAllocator
         foreach (var group in endpointDemands.GroupBy(demand => demand.Endpoint.PhysicalNodeId + ":" + demand.Endpoint.Side, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             var ordered = group
-                .OrderBy(demand => EndpointColumn(demand))
+                .OrderBy(demand => terminalOrders.SingleOrDefault(item => item.PhysicalLinkId == demand.PhysicalLinkId &&
+                    item.PhysicalNodeId == demand.Endpoint.PhysicalNodeId && item.Side == demand.Endpoint.Side)?.GlobalOrder ?? int.MaxValue)
+                .ThenBy(demand => EndpointColumn(demand))
                 .ThenBy(demand => EndpointPriority(demand))
                 .ThenBy(demand => demand.PhysicalLinkId, StringComparer.Ordinal)
                 .ToArray();

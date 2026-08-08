@@ -13,7 +13,8 @@ public sealed class GridBoundaryIdentity : IEquatable<GridBoundaryIdentity>
         LaneId? lane,
         string ownershipScope,
         string authorityId,
-        PlanningGridCellId? adjacentCellId = null)
+        PlanningGridCellId? adjacentCellId = null,
+        RelativePoint? finalPoint = null)
     {
         GridId = gridId;
         CellId = cellId;
@@ -22,6 +23,7 @@ public sealed class GridBoundaryIdentity : IEquatable<GridBoundaryIdentity>
         OwnershipScope = ownershipScope ?? string.Empty;
         AuthorityId = authorityId ?? string.Empty;
         AdjacentCellId = adjacentCellId;
+        FinalPoint = finalPoint;
         IsShared = adjacentCellId is not null;
         Orientation = side is GridSide.Left or GridSide.Right
             ? GridBoundaryOrientation.Vertical
@@ -31,6 +33,7 @@ public sealed class GridBoundaryIdentity : IEquatable<GridBoundaryIdentity>
     public PlanningGridId GridId { get; }
     public PlanningGridCellId CellId { get; }
     public PlanningGridCellId? AdjacentCellId { get; }
+    public RelativePoint? FinalPoint { get; }
     public GridSide Side { get; }
     public GridBoundaryOrientation Orientation { get; }
     public LaneId? Lane { get; }
