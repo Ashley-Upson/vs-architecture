@@ -1124,7 +1124,7 @@ public sealed class ArchitectureV6StructuralTests
 
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
         var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
-        var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal).ToArray();
+        var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal && !node.IsStandalone).ToArray();
 
         Assert.Single(external.Select(node => node.FinalVisualLayerOrdinal).Distinct());
         Assert.True(external.Min(node => node.FinalVisualLayerOrdinal) > nonExternal.Max(node => node.FinalVisualLayerOrdinal));
@@ -2129,6 +2129,141 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Final_plan_spaces_each_node_edge_terminal_group_evenly_and_centred()
+    {
+        var request = FanoutRequest(4);
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
+        var terminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId)
+            .OrderBy(item => item.Point.X).ToArray();
+
+        Assert.Equal(4, terminals.Length);
+        Assert.Equal(terminals.Length, terminals.Select(item => item.Point.X).Distinct().Count());
+        var terminalGaps = terminals.Skip(1).Zip(terminals, (current, previous) => current.Point.X - previous.Point.X).ToArray();
+        Assert.All(terminalGaps, gap => Assert.True(gap >= request.RoutePlanning.MinimumPortSpacing));
+        var endpointAllocations = plan.LaneAllocation!.Endpoints
+            .Where(item => item.PhysicalNodeId == root.PhysicalNodeId && item.Side == GridSide.Bottom)
+            .OrderBy(item => item.TrackOffset).ToArray();
+        Assert.Equal(new[] { -2, -1, 1, 2 }, endpointAllocations.Select(item => item.TrackOffset));
+        Assert.Equal(0, endpointAllocations.Sum(item => item.TrackOffset));
+        Assert.All(terminals, terminal =>
+        {
+            Assert.Equal(root.AbsoluteBounds.Y + root.AbsoluteBounds.Height, terminal.Point.Y);
+            Assert.InRange(terminal.Point.X, root.AbsoluteBounds.X + 1,
+                root.AbsoluteBounds.X + root.AbsoluteBounds.Width - 1);
+        });
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "DuplicateTerminalCoordinate");
+    }
+
+    [Fact]
+    public void Final_plan_groups_fanout_departures_without_crossing_or_inverting_links()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(FanoutRequest(3));
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
+        var routes = scene.Geometry.Routes.ToDictionary(route => route.PhysicalLinkId, StringComparer.Ordinal);
+        var terminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId)
+            .OrderBy(item => item.Point.X).ToArray();
+
+        Assert.Equal(3, terminals.Length);
+        Assert.Equal(3, routes.Count);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding =>
+            finding.Code is "SourceTerminalOrderInversion" or "InvalidCrossing" or "SharedCollinearSegment");
+        Assert.Equal(0, scene.Metrics.InvalidCrossingCount);
+        Assert.Equal(0, scene.Metrics.SharedCollinearSegmentCount);
+        Assert.All(routes.Values, route => Assert.All(route.Segments,
+            segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
+
+        var routeTerminalXs = terminals.Select(terminal =>
+            (terminal.Point.X, route: routes[terminal.PhysicalLinkId])).ToArray();
+        Assert.Equal(routeTerminalXs.Select(item => item.X).OrderBy(value => value),
+            routeTerminalXs.OrderBy(item => item.X).Select(item => item.X));
+        Assert.All(routeTerminalXs, item => Assert.Contains(item.route.Segments,
+            segment => segment.Start.X == segment.End.X && segment.Start.Y != segment.End.Y));
+    }
+
+    [Fact]
+    public void Final_plan_applies_minimum_horizontal_node_gap_to_different_width_siblings()
+    {
+        var request = FanoutRequest(3);
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+        var nodes = scene.Geometry.Nodes.Where(node => node.SemanticNodeId is "child-a" or "child-b" or "child-c")
+            .OrderBy(node => node.AbsoluteBounds.X).ToArray();
+
+        Assert.Equal(3, nodes.Length);
+        for (var index = 1; index < nodes.Length; index++)
+        {
+            var gap = nodes[index].AbsoluteBounds.X -
+                (nodes[index - 1].AbsoluteBounds.X + nodes[index - 1].AbsoluteBounds.Width);
+            Assert.True(gap >= request.GridSizing.StructuralColumnMinimum,
+                $"gap between {nodes[index - 1].SemanticNodeId} and {nodes[index].SemanticNodeId} was {gap}");
+        }
+        Assert.Equal(0, scene.Metrics.NodeOverlapCount);
+    }
+
+    [Fact]
+    public void Final_plan_places_standalones_below_externals_in_a_deterministic_squareish_grid()
+    {
+        var request = StandaloneAndExternalRequest(5);
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        Assert.NotNull(plan.PhysicalScene);
+        var scene = plan.PhysicalScene!;
+        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
+        var geometries = scene.Geometry.Nodes.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
+        var external = metadata.Values.Where(item => item.IsExternal).ToArray();
+        var standalone = metadata.Values.Where(item => item.IsStandalone).ToArray();
+        var standaloneColumns = (int)Math.Ceiling(Math.Sqrt(standalone.Length));
+
+        Assert.NotEmpty(external);
+        Assert.Equal(1, external.Select(item => item.FinalVisualLayerOrdinal).Distinct().Count());
+        Assert.All(standalone, item => Assert.True(item.FinalVisualLayerOrdinal > external[0].FinalVisualLayerOrdinal));
+        var standaloneIds = standalone.Select(item => item.PhysicalNodeId).ToHashSet(StringComparer.Ordinal);
+        var placements = plan.NodePlacements.Where(item => standaloneIds.Contains(item.PhysicalNodeId))
+            .ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
+        var rows = placements.GroupBy(item => item.Value.AnchorCellId.RowId).OrderBy(group => group.Key.Value, StringComparer.Ordinal).ToArray();
+        Assert.Equal((int)Math.Ceiling(standalone.Length / (double)standaloneColumns), rows.Length);
+        Assert.All(rows, row => Assert.InRange(row.Count(), 1, standaloneColumns));
+        foreach (var row in rows)
+        {
+            var ordered = row.OrderBy(item => ColumnOrdinal(item.Value.AnchorCellId.ColumnId)).ToArray();
+            for (var index = 1; index < ordered.Length; index++)
+                Assert.True(ColumnOrdinal(ordered[index].Value.AnchorCellId.ColumnId) -
+                    ColumnOrdinal(ordered[index - 1].Value.AnchorCellId.ColumnId) >
+                    request.GridSizing.StructuralColumnMinimum);
+        }
+        for (var index = 1; index < rows.Length; index++)
+        {
+            var previous = rows[index - 1].Select(item =>
+                geometries[item.Key].AbsoluteBounds.Y + geometries[item.Key].AbsoluteBounds.Height).Max();
+            var current = rows[index].Select(item => geometries[item.Key].AbsoluteBounds.Y).Min();
+            Assert.True(current > previous, $"standalone rows {index - 1} and {index} touch or overlap");
+        }
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
+    }
+
+    [Fact]
+    public void Final_plan_places_unreserved_nodes_in_the_lowest_available_layer_above_dependencies()
+    {
+        var request = ReservedLayerInsertionRequest();
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
+
+        Assert.Equal("OrchestrationService", metadata["orchestration"].RoleSelector);
+        Assert.Equal("ProcessingService", metadata["processing"].RoleSelector);
+        Assert.Equal("Unmatched", metadata["helper"].RoleSelector);
+        Assert.True(metadata["orchestration"].FinalVisualLayerOrdinal < metadata["helper"].FinalVisualLayerOrdinal);
+        Assert.True(metadata["helper"].FinalVisualLayerOrdinal < metadata["processing"].FinalVisualLayerOrdinal);
+        Assert.True(metadata["orchestration"].PhysicalRow < metadata["helper"].PhysicalRow);
+        Assert.True(metadata["helper"].PhysicalRow < metadata["processing"].PhysicalRow);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementReservedOrderConflict");
+    }
+
+    [Fact]
     public void Final_plan_keeps_external_nodes_on_one_bottom_layer_and_affine_to_simple_owners()
     {
         var request = Request() with
@@ -2150,7 +2285,7 @@ public sealed class ArchitectureV6StructuralTests
 
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
         var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
-        var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal).ToArray();
+        var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal && !node.IsStandalone).ToArray();
         Assert.Single(external.Select(node => node.FinalVisualLayerOrdinal).Distinct());
         Assert.True(external.Min(node => node.FinalVisualLayerOrdinal) > nonExternal.Max(node => node.FinalVisualLayerOrdinal));
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
@@ -2462,6 +2597,94 @@ public sealed class ArchitectureV6StructuralTests
         new ValidationPolicy(ArchitectureValidationMode.Normal),
         Array.Empty<string>(),
         Array.Empty<string>());
+
+    private static ArchitecturePlanningRequest FanoutRequest(int count)
+    {
+        var nodes = new List<ArchitectureNode>
+        {
+            new("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>())
+        };
+        var links = new List<ArchitectureLink>();
+        for (var index = 0; index < count; index++)
+        {
+            var id = $"child-{(char)('a' + index)}";
+            nodes.Add(new ArchitectureNode(id, "project:p", $"Child{index}Service", $"Project.Child{index}Service", "Class", id, Array.Empty<string>()));
+            links.Add(new ArchitectureLink($"root-{id}", "root", id, "internal"));
+        }
+
+        return CleanRequest() with
+        {
+            SemanticModel = CleanRequest().SemanticModel with
+            {
+                Projects = new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
+                Links = links
+            }
+        };
+    }
+
+    private static ArchitecturePlanningRequest StandaloneAndExternalRequest(int standaloneCount)
+    {
+        var nodes = new List<ArchitectureNode>
+        {
+            new("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>())
+        };
+        var externals = new List<ArchitectureExternalNode>();
+        var links = new List<ArchitectureLink>();
+        for (var index = 0; index < standaloneCount; index++)
+        {
+            var id = $"standalone-{index}";
+            nodes.Add(new ArchitectureNode(id, "project:p", $"Standalone{index}", $"Project.Standalone{index}", "Class", id, Array.Empty<string>()));
+            var externalId = $"external-{index}";
+            externals.Add(new ArchitectureExternalNode(externalId, $"IExternal{index}", "External", externalId,
+                $"External.IExternal{index}", "interface"));
+            links.Add(new ArchitectureLink($"root-{externalId}", "root", externalId, "external"));
+        }
+
+        return Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
+                ExternalNodes = externals,
+                Links = links
+            }
+        };
+    }
+
+    private static ArchitecturePlanningRequest ReservedLayerInsertionRequest() => Request() with
+    {
+        NodePlacement = Request().NodePlacement with
+        {
+            RoleRules = new[]
+            {
+                new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 0),
+                new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 1)
+            }
+        },
+        SemanticModel = Request().SemanticModel with
+        {
+            Projects = new[]
+            {
+                new ArchitectureProject("project:p", "Project", new[]
+                {
+                    new ArchitectureNode("orchestration", "project:p", "RootOrchestrationService", "Project.RootOrchestrationService", "Class", "orchestration", Array.Empty<string>()),
+                    new ArchitectureNode("helper", "project:p", "Helper", "Project.Helper", "Class", "helper", Array.Empty<string>()),
+                    new ArchitectureNode("processing", "project:p", "LeafProcessingService", "Project.LeafProcessingService", "Class", "processing", Array.Empty<string>())
+                }, "project:p")
+            },
+            Links = new[]
+            {
+                new ArchitectureLink("orchestration-helper", "orchestration", "helper", "internal"),
+                new ArchitectureLink("helper-processing", "helper", "processing", "internal")
+            }
+        }
+    };
+
+    private static int ColumnOrdinal(PlanningGridColumnId id)
+    {
+        var separator = id.Value.LastIndexOf(':');
+        return separator >= 0 && int.TryParse(id.Value[(separator + 1)..], out var value) ? value : int.MaxValue;
+    }
 
     private static ArchitecturePlanningRequest CleanRequest() => Request() with
     {

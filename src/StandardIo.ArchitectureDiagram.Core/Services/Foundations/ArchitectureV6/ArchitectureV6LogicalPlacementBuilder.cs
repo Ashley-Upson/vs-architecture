@@ -82,8 +82,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             }
             ResolveRootRowConflicts(logicalGrid, mainRoots);
 
-            PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);
             PlaceExternalProfiles(logicalGrid, projectNodes.Where(node => node.IsExternal).ToArray(), occupied);
+            PlaceStandaloneProfiles(logicalGrid, projectNodes.Where(node => node.IsStandalone).ToArray(), occupied);
             logicalGrid.EnsureColumns(occupied.Count == 0 ? 0 : occupied.Max(interval => interval.End + 1));
             var placements = projectNodes.Select(BuildPlacement).OrderBy(item => order[item.PhysicalNodeId]).ToArray();
             projectPlacements[projectId] = placements.ToList();
@@ -136,7 +136,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         }
 
         var externalLayers = nodes.Values.Where(node => node.IsExternal).Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).Distinct().ToArray();
-        var bottomNonExternalLayer = nodes.Values.Where(node => !node.IsExternal).Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).DefaultIfEmpty(-1).Max();
+        var bottomNonExternalLayer = nodes.Values.Where(node => !node.IsExternal && !node.IsStandalone)
+            .Select(node => finalVisualLayerByNode[node.PhysicalNodeId]).DefaultIfEmpty(-1).Max();
         if (externalLayers.Length > 0 && (externalLayers.Length != 1 || externalLayers[0] <= bottomNonExternalLayer))
             diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalLayer", "External nodes must share one final layer below every non-external node.", PlanningDiagnosticSubject.PhysicalNode, null));
 
@@ -435,7 +436,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             layerByNode[node.PhysicalNodeId] = node.IsExternal
                 ? externalLayer
                 : node.IsStandalone
-                    ? externalLayer - standaloneColumnsPerRow - standaloneRowByNode[node.PhysicalNodeId]
+                    ? externalLayer + 1 + standaloneRowByNode[node.PhysicalNodeId]
                 : reservedRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var fixedLayer)
                     ? fixedLayer * 100
                     : 0;
