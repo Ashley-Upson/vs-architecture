@@ -31,7 +31,8 @@ public sealed class ArchitectureV6StructuralTests
     [Fact]
     public void Regression_analyser_dataset_runs_through_the_real_planner_and_preserves_relationship_pressure()
     {
-        var plan = new ArchitectureDiagramV6Planner().Plan(RegressionRequest());
+        var request = RegressionRequest();
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
         Assert.NotNull(plan.PhysicalScene);
 
         Assert.Equal(23, plan.PhysicalNodes.Count);
@@ -49,6 +50,21 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(0, plan.PhysicalScene.Metrics.NodeOverlapCount);
         Assert.All(plan.PhysicalScene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
             Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+        Assert.True(plan.PhysicalScene.Metrics.InvalidCrossingCount == 0,
+            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code == "InvalidCrossing").Select(finding => finding.Message)));
+        Assert.True(plan.PhysicalScene.Metrics.TerminalFindingCount == 0,
+            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code.Contains("Terminal", StringComparison.Ordinal)).Select(finding => finding.Code + ":" + finding.SubjectId + ":" + finding.Message)) +
+            " routes=" + string.Join(" || ", plan.PhysicalScene.Geometry.Routes.Take(3).Select(route => route.PhysicalLinkId + ":" + string.Join(" -> ", (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point)))));
+        Assert.All(plan.PhysicalScene.Terminals.GroupBy(item => item.PhysicalNodeId + ":" + item.Side), group =>
+        {
+            var nodeId = group.First().PhysicalNodeId;
+            var node = plan.PhysicalScene.Geometry.Nodes.Single(item => item.PhysicalNodeId == nodeId);
+            var ordered = group.OrderBy(item => item.Point.X).ToArray();
+            Assert.Equal(ordered.Length, ordered.Select(item => item.Point.X).Distinct().Count());
+            Assert.All(ordered, terminal => Assert.InRange(terminal.Point.X,
+                node.AbsoluteBounds.X + request.RoutePlanning.MinimumPortSpacing,
+                node.AbsoluteBounds.X + node.AbsoluteBounds.Width - request.RoutePlanning.MinimumPortSpacing));
+        });
     }
 
     [Fact]
@@ -1687,7 +1703,7 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Renderer_reports_diagonals_in_the_reconstructed_final_edge_polyline()
+    public void Renderer_rejects_diagonals_in_the_reconstructed_final_edge_polyline()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
         var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
@@ -1713,8 +1729,8 @@ public sealed class ArchitectureV6StructuralTests
                     diagonalCount++;
         }
 
-        Assert.True(diagonalCount > 0);
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "FinalRenderedDiagonal");
+        Assert.Equal(0, diagonalCount);
+        Assert.DoesNotContain(page.Diagnostics, diagnostic => diagnostic.Code == "FinalRenderedDiagonal");
         Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "RendererRouteGeometryMismatch");
     }
 
@@ -2210,7 +2226,8 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(3, routes.Count);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding =>
             finding.Code is "SourceTerminalOrderInversion" or "InvalidCrossing" or "SharedCollinearSegment");
-        Assert.Equal(0, scene.Metrics.InvalidCrossingCount);
+        Assert.True(scene.Metrics.InvalidCrossingCount == 0,
+            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code == "InvalidCrossing").Select(finding => finding.Message)));
         Assert.Equal(0, scene.Metrics.SharedCollinearSegmentCount);
         Assert.All(routes.Values, route => Assert.All(route.Segments,
             segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
@@ -2352,9 +2369,17 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
             Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.Equal(0, scene.Metrics.InvalidCrossingCount);
+        Assert.True(scene.Metrics.InvalidCrossingCount == 0,
+            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code == "InvalidCrossing").Select(finding => finding.SubjectId + ":" + finding.Message)) +
+            " routes=" + string.Join(" || ", scene.Geometry.Routes.Select(route => route.PhysicalLinkId + ":" + string.Join(" -> ", (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point + "[" + point.Role + "]")))));
         Assert.Equal(0, scene.Metrics.SharedCollinearSegmentCount);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "InvalidCrossing" or "SharedBend");
+        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
+        var rootTerminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId && item.Side == GridSide.Bottom)
+            .OrderBy(item => item.Point.X).ToArray();
+        Assert.Equal(3, rootTerminals.Length);
+        Assert.True(rootTerminals.Zip(rootTerminals.Skip(1), (left, right) => right.Point.X - left.Point.X)
+            .All(gap => gap >= fixture.BuildRequest().RoutePlanning.MinimumPortSpacing));
     }
 
     [Fact]

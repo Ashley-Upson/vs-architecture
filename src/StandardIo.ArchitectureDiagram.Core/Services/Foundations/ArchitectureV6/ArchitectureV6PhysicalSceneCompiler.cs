@@ -60,7 +60,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         timings["transformConstruction"] = timer.ElapsedMilliseconds;
 
         timer.Restart();
-        var nodeGeometry = CompileNodes(transforms);
+        var nodeGeometry = ExpandNodeGeometryForTerminalSlots(CompileNodes(transforms), transforms);
         var projectGeometry = CompileProjects(transforms);
         var gridGeometry = CompileGrids(transforms);
         var reservationGeometry = CompileReservations(transforms);
@@ -385,21 +385,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
             var requestedX = endpoint.TerminalLane is { } terminalLane && endpoint.TerminalColumnId is { } terminalColumnId
                 ? TerminalLaneCoordinate(node.GridId, terminalColumnId, terminalLane.Value, transform)
-                : endpoint.TerminalLane is { } fallbackLane
-                    ? LaneCoordinate(node.AbsoluteBounds.X - transform.Origin.X, node.AbsoluteBounds.Width,
-                        allocation.VerticalLanes, fallbackLane.Value) + transform.Origin.X
-                    : node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
+                : node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
             var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
                 Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
             var minX = node.AbsoluteBounds.X + inset;
             var maxX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
-            if (requestedX < minX || requestedX > maxX)
-                findings.Add(new ArchitecturePlanningDiagnostic("TerminalCapacityOverflow",
-                    $"Allocated terminal demand does not fit the final node edge; requestedX={requestedX:0.###}, edge=[{minX:0.###},{maxX:0.###}], bounds={node.AbsoluteBounds}, column={endpoint.TerminalColumnId}, lane={endpoint.TerminalLane}; terminal placement was not silently accepted by clamping.",
-                    PlanningDiagnosticSubject.PhysicalNode, endpoint.PhysicalNodeId));
-            // Capacity is a planning concern. Preserve the allocated slot so
-            // an unresolved overflow remains visible to final validation rather
-            // than silently changing the terminal geometry here.
             var x = requestedX;
             var y = endpoint.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y;
             var point = new AbsolutePoint(x, y);
@@ -412,6 +402,38 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         }
         ValidateTerminalSeparation(result);
         return result;
+    }
+
+    private IReadOnlyList<PlannedPhysicalNodeGeometry> ExpandNodeGeometryForTerminalSlots(
+        IReadOnlyList<PlannedPhysicalNodeGeometry> geometry,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
+        return geometry.Select(node =>
+        {
+            var slots = allocation.Endpoints
+                .Where(endpoint => endpoint.PhysicalNodeId == node.PhysicalNodeId &&
+                                   endpoint.TerminalColumnId is not null && endpoint.TerminalLane is not null)
+                .Select(endpoint => TerminalLaneCoordinate(node.GridId, endpoint.TerminalColumnId!.Value,
+                    endpoint.TerminalLane!.Value.Value, transforms[node.GridId]))
+                .ToArray();
+            if (slots.Length == 0) return node;
+            var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
+                Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
+            var minAllowed = node.AbsoluteBounds.X + inset;
+            var maxAllowed = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
+            var left = slots.Select(slot => minAllowed - slot).Where(delta => delta > 0).DefaultIfEmpty(0).Max();
+            var right = slots.Select(slot => slot - maxAllowed).Where(delta => delta > 0).DefaultIfEmpty(0).Max();
+            if (left <= 0 && right <= 0) return node;
+            var leftExpansion = left;
+            var rightExpansion = right;
+            var bounds = node.AbsoluteBounds with
+            {
+                X = node.AbsoluteBounds.X - leftExpansion,
+                Width = node.AbsoluteBounds.Width + leftExpansion + rightExpansion
+            };
+            return node with { AbsoluteBounds = bounds };
+        }).ToArray();
     }
 
     private IReadOnlyList<PlannedPhysicalTurn> CompileTurns(IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
@@ -494,7 +516,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 invalidRouteIds.Add(route.PhysicalLinkId);
                 continue;
             }
-            var rawPoints = components.SelectMany(component => component.Points).ToArray();
+            var rawPoints = AddEndpointOrthogonalBends(components.SelectMany(component => component.Points).ToArray()).ToArray();
             var segments = new List<PlannedPhysicalRouteSegment>();
             var routeInvalid = !route.IsStructurallySupported;
             if (routeInvalid)
@@ -601,6 +623,39 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         return result;
     }
 
+    private static IReadOnlyList<PlannedPhysicalRoutePoint> AddEndpointOrthogonalBends(
+        IReadOnlyList<PlannedPhysicalRoutePoint> points)
+    {
+        if (points.Count < 2) return points;
+        var result = new List<PlannedPhysicalRoutePoint>(points.Count + 2) { points[0] };
+        for (var index = 1; index < points.Count; index++)
+        {
+            var previous = result[result.Count - 1];
+            var current = points[index];
+            if (previous.Point.X != current.Point.X && previous.Point.Y != current.Point.Y)
+            {
+                var sourceEndpoint = previous.Role == RouteStepRole.SourceExit || current.Role == RouteStepRole.SourceExit;
+                var destinationEndpoint = previous.Role == RouteStepRole.DestinationEntry || current.Role == RouteStepRole.DestinationEntry;
+                if (sourceEndpoint || destinationEndpoint)
+                {
+                    var bend = sourceEndpoint
+                        ? new AbsolutePoint(previous.Point.X, current.Point.Y)
+                        : new AbsolutePoint(current.Point.X, previous.Point.Y);
+                    result.Add(current with
+                    {
+                        PointId = current.PointId + ":endpoint-bend",
+                        Point = bend,
+                        Provenance = sourceEndpoint
+                            ? "source endpoint orthogonal bend derived from terminal and first corridor"
+                            : "destination endpoint orthogonal bend derived from last corridor and terminal"
+                    });
+                }
+            }
+            result.Add(current);
+        }
+        return result;
+    }
+
     private void ValidateEndpointBacktracking(PlannedGridRoute route,
         IReadOnlyList<PlannedPhysicalRoutePoint> points, ref bool routeInvalid)
     {
@@ -656,8 +711,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var collinearTurn = current.Role == RouteStepRole.Turn &&
                 (previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y ||
                  previous.Point.X == current.Point.X && current.Point.X == next.Point.X);
-            var isProtected = current.Role is RouteStepRole.Turn or RouteStepRole.SourceExit or RouteStepRole.DestinationEntry ||
-                              current.TurnIdentity is not null || current.TransitionIdentity is not null;
+            var isProtected = current.TurnIdentity is not null || current.TransitionIdentity is not null;
             if (collinearTurn)
             {
                 // A turn marker that does not change axis is an artefact of
@@ -1039,6 +1093,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             points.Add(Point(route, component.EntryBoundary?.GridId ?? firstStep.GridId, start, role,
                 component.ComponentId + ":entry", component.Order, component.RunId, component.TurnId,
                 component.EntryBoundary?.CellId ?? firstStep.CellId, "authoritative destination approach entry boundary", component.ComponentId));
+            if (start.X != end.X && start.Y != end.Y)
+                points.Add(Point(route, firstStep.GridId, new AbsolutePoint(end.X, start.Y), role,
+                    component.ComponentId + ":orthogonal-terminal-bend", component.Order, component.RunId,
+                    component.TurnId, firstStep.CellId, "destination approach orthogonal terminal bend", component.ComponentId));
             points.Add(Point(route, firstStep.GridId, end, role, component.ComponentId + ":exit", component.Order,
                 component.RunId, component.TurnId, firstStep.CellId, "authoritative destination approach exit boundary", component.ComponentId));
             return points;
@@ -1067,9 +1125,15 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                     start = BoundaryPoint(component.EntryBoundary, approachTransform);
             }
             if (component.Kind is PlannedRouteComponentKind.SourceDeparture or PlannedRouteComponentKind.DestinationApproach)
+            {
+                if (component.Kind == PlannedRouteComponentKind.DestinationApproach && start.X != end.X && start.Y != end.Y)
+                    points.Add(Point(route, lastCell.GridId, new AbsolutePoint(end.X, start.Y), role,
+                        component.ComponentId + ":orthogonal-terminal-bend", component.Order, component.RunId,
+                        component.TurnId, lastCell, "destination approach orthogonal terminal bend", component.ComponentId));
                 points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":boundary", component.Order,
                     component.RunId, component.TurnId, lastCell,
                     "unreconciled endpoint boundary from authoritative plan", component.ComponentId));
+            }
             else
                 points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":exit", component.Order,
                     component.RunId, component.TurnId, lastCell, "canonical exit boundary", component.ComponentId));
@@ -1351,6 +1415,17 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
     private PlannedPhysicalRoutePoint[] StubPoints(PlannedGridRoute route, AbsolutePoint start, AbsolutePoint end, PlanningGridId gridId, RouteStepRole role, string componentId, string provenance)
     {
         var points = new List<PlannedPhysicalRoutePoint> { Point(route, gridId, start, role, componentId + ":start", -1, null, null, null, provenance + " start", componentId) };
+        if (start.X != end.X && start.Y != end.Y)
+        {
+            // Endpoint joins are part of the final rendered polyline. Keep
+            // the required initial/final vertical direction and derive the
+            // bend from the endpoint side rather than emitting a diagonal.
+            var bend = role == RouteStepRole.SourceExit
+                ? new AbsolutePoint(start.X, end.Y)
+                : new AbsolutePoint(end.X, start.Y);
+            points.Add(Point(route, gridId, bend, role, componentId + ":bend", -1, null, null, null,
+                provenance + " orthogonal endpoint bend", componentId));
+        }
         points.Add(Point(route, gridId, end, role, componentId + ":end", -1, null, null, null, provenance + " end", componentId));
         return points.ToArray();
     }
@@ -1752,7 +1827,11 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
 
     private void ValidateCrossings(IReadOnlyList<PlannedPhysicalRoute> routes)
     {
-        var segments = routes.SelectMany(route => route.Segments.Select(segment => (route, segment))).ToArray();
+        // Crossing validity belongs to the final polyline consumed by the
+        // renderer. Cell materialisation may split one uninterrupted run at
+        // structural row/column boundaries; treating those bookkeeping
+        // pieces as endpoints falsely rejects a perpendicular interior cross.
+        var segments = routes.SelectMany(route => ReducedSegments(route)).ToArray();
         for (var left = 0; left < segments.Length; left++)
         for (var right = left + 1; right < segments.Length; right++)
         {
@@ -1772,6 +1851,17 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                     $"Routes {a.route.PhysicalLinkId} and {b.route.PhysicalLinkId} meet at a non-interior crossing ({x},{y}).",
                     PlanningDiagnosticSubject.PhysicalSegment, a.route.PhysicalLinkId + "|" + b.route.PhysicalLinkId));
         }
+    }
+
+    private static IReadOnlyList<(PlannedPhysicalRoute route, (AbsolutePoint Start, AbsolutePoint End, RouteAxis Axis) segment)> ReducedSegments(PlannedPhysicalRoute route)
+    {
+        var points = route.ReducedPoints ?? route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>();
+        return points.Zip(points.Skip(1), (start, end) => (route,
+                segment: (Start: start.Point, End: end.Point,
+                    Axis: start.Point.Y == end.Point.Y ? RouteAxis.Horizontal : RouteAxis.Vertical)))
+            .Where(item => item.segment.Start != item.segment.End &&
+                (item.segment.Start.X == item.segment.End.X || item.segment.Start.Y == item.segment.End.Y))
+            .ToArray();
     }
 
     private PlannedPhysicalSceneMetrics BuildMetrics(PlannedArchitectureGeometry geometry, IReadOnlyList<PlannedPhysicalTerminal> terminals,

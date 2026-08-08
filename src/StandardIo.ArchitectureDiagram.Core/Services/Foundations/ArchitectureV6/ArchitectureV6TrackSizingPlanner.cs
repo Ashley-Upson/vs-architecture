@@ -301,19 +301,16 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 
     private RelativeRectangle VisibleBounds(PlannedPhysicalNode node, RelativeRectangle routingBounds)
     {
-        // The logical footprint and the visible node edge must share the same
-        // terminal authority. A terminal allocated on the footprint boundary
-        // cannot be represented faithfully by a smaller centred rectangle:
-        // Draw.io would attach it to that rectangle's edge and introduce a
-        // rendered diagonal. Node sizing has already applied label and
-        // terminal-capacity minima to the footprint, so preserve the complete
-        // footprint as the final visible bounds here.
+        // The complete footprint is the visible edge authority for terminal
+        // attachment. Keep the route envelope and visible node congruent until
+        // terminal slots can be projected onto a smaller edge without changing
+        // endpoint corridors.
         var width = Math.Max(routingBounds.Width, NodeWidth(node));
         var height = Math.Max(routingBounds.Height, Math.Max(request.NodePlacement.MinimumNodeHeight, 40));
+        var x = routingBounds.X;
+        var y = routingBounds.Y;
         return new RelativeRectangle(
-            routingBounds.X,
-            routingBounds.Y,
-            Math.Max(1, width), Math.Max(1, height));
+            x, y, width, height);
     }
 
     private int InitialColumnMinimum(PlanningGridColumn column) => column.Role switch
