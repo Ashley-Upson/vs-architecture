@@ -696,6 +696,18 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Physical_compiler_does_not_backtrack_from_a_final_horizontal_run_into_destination_approach()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
+
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RedundantRouteBacktracking");
+        Assert.DoesNotContain(plan.PhysicalScene!.Geometry.Routes, route =>
+            route.Segments.Zip(route.Segments.Skip(1), (first, second) => (first, second)).Any(pair =>
+                pair.first.Axis == RouteAxis.Horizontal && pair.second.Axis == RouteAxis.Horizontal &&
+                Math.Sign(pair.first.End.X - pair.first.Start.X) != Math.Sign(pair.second.End.X - pair.second.Start.X)));
+    }
+
+    [Fact]
     public void Planner_repeated_physical_compilation_is_deterministic()
     {
         var first = new ArchitectureDiagramV6Planner().Plan(Request());

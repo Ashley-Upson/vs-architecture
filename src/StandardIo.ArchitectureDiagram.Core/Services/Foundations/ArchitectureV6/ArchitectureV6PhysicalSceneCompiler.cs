@@ -1014,7 +1014,13 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 start = CellPoint(orderedSteps[0], route, sourceHandoffTransform);
             if (component.FollowingComponentId?.EndsWith(":destination-approach", StringComparison.Ordinal) == true && orderedSteps.Length > 0 &&
                 transforms.TryGetValue(orderedSteps[orderedSteps.Length - 1].GridId, out var destinationHandoffTransform))
-                end = CellPoint(orderedSteps[orderedSteps.Length - 1], route, destinationHandoffTransform);
+            {
+                var handoff = CellPoint(orderedSteps[orderedSteps.Length - 1], route, destinationHandoffTransform);
+                var destinationLane = ComponentLanePoint(component, orderedSteps[orderedSteps.Length - 1], handoff, transforms);
+                end = component.Kind == PlannedRouteComponentKind.HorizontalStraightRun
+                    ? new AbsolutePoint(destinationTerminal.Point.X, destinationLane.Y)
+                    : destinationLane;
+            }
             points.Add(Point(route, firstCell.GridId, start, role, component.ComponentId + ":entry", component.Order,
                 component.RunId, component.TurnId, firstCell,
                 component.Kind == PlannedRouteComponentKind.DestinationApproach
