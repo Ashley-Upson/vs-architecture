@@ -162,6 +162,8 @@ observable rules above MUST remain intact.
 
 ## Decision History
 
+- 2026-08-08 (`bd80b10` plus routing diagnostics): connector styles remain planner-owned and are emitted mechanically; physical evidence now records a first-invalid-stage classification, and same-grid immediate reversals are rejected before lane allocation. The active same-project topology authority remains the contiguous grid search; the legacy `CompleteTurnCorridor` implementation has no production caller and is not part of route construction.
+
 | Date / commit | Decision | Reason | Authority affected |
 |---|---|---|---|
 | 2026-08-08 / `c54cac8` | Planner findings feed final validation and strict eligibility; normal mode remains best effort. | Keep output available while making strict validation meaningful. | Validation/output policy |

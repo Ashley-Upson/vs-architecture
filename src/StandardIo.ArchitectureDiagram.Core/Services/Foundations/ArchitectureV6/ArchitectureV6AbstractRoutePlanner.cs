@@ -351,6 +351,17 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         for (var index = 1; index < steps.Count; index++)
             if (steps[index - 1].GridId == steps[index].GridId && !AreAdjacent(steps[index - 1].CellId, steps[index].CellId))
                 return new RouteLegalityResult(false, Trace(link, topology, steps, steps[index], "non-contiguous cell transition"));
+        for (var index = 2; index < steps.Count; index++)
+        {
+            if (steps[index - 2].GridId != steps[index - 1].GridId || steps[index - 1].GridId != steps[index].GridId)
+                continue;
+            if (!grids.TryGetValue(steps[index - 1].GridId, out var grid))
+                continue;
+            var first = Delta(steps[index - 2].CellId, steps[index - 1].CellId, grid);
+            var second = Delta(steps[index - 1].CellId, steps[index].CellId, grid);
+            if (first.Row == -second.Row && first.Column == -second.Column && (first.Row != 0 || first.Column != 0))
+                return new RouteLegalityResult(false, Trace(link, topology, steps, steps[index], "immediate topology reversal"));
+        }
         foreach (var step in steps)
         {
             if (!grids.TryGetValue(step.GridId, out var grid) && step.GridId.Value != "diagram")
@@ -372,6 +383,10 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             return new RouteLegalityResult(false, Trace(link, topology, steps, null, "invalid route terminals"));
         return new RouteLegalityResult(true, null);
     }
+
+    private static (int Row, int Column) Delta(PlanningGridCellId from, PlanningGridCellId to, MutableGrid grid) =>
+        (grid.RowOrder.IndexOf(to.RowId) - grid.RowOrder.IndexOf(from.RowId),
+         grid.ColumnOrder.IndexOf(to.ColumnId) - grid.ColumnOrder.IndexOf(from.ColumnId));
 
     private CompletionResult CompleteTurnCorridor(
         PlanningGridId gridId,

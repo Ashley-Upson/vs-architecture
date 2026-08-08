@@ -1516,6 +1516,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
             var source = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
             var destination = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Top);
+            var firstInvalidStage = FirstInvalidStage(route, attempts, routeFindings);
             return new ArchitectureV6PhysicalRouteEvidence(route.PhysicalLinkId, !route.IsInvalid, routeFindings,
                 components.Select(item => item.ComponentId).ToArray(),
                 components.Select(item => item.Role.ToString()).ToArray(), cells, lanes, tracks,
@@ -1523,8 +1524,42 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(item => item.Point.ToString()).ToArray(),
                 source?.Point.ToString(), destination?.Point.ToString(),
                 attempts.Select((item, index) => new ArchitectureV6PhysicalRouteFindingEvidence(route.PhysicalLinkId, item.FailureCode,
-                    item.ComponentId, index, item.AllocatedCells.Select(cell => cell.ToString()).ToArray(), item.Start.ToString(), item.End.ToString())).ToArray());
+                    item.ComponentId, index, item.AllocatedCells.Select(cell => cell.ToString()).ToArray(), item.Start.ToString(), item.End.ToString())).ToArray(),
+                firstInvalidStage);
         }).ToArray();
+    }
+
+    private static string? FirstInvalidStage(
+        PlannedPhysicalRoute route,
+        IReadOnlyList<PlannedPhysicalMaterialisationAttempt> attempts,
+        IReadOnlyList<string> routeFindings)
+    {
+        if (routeFindings.Count == 0) return null;
+        if (routeFindings.Any(item => item is "RedundantRouteBacktracking" or "TerminalJoinDiagonal" or "RouteNodeIntersection" or "SharedCollinearSegment"))
+        {
+            var points = route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>();
+            for (var index = 1; index < points.Count - 1; index++)
+            {
+                var previous = points[index - 1];
+                var current = points[index];
+                var next = points[index + 1];
+                var horizontalReversal = previous.Point.Y == current.Point.Y && current.Point.Y == next.Point.Y &&
+                    Math.Sign(current.Point.X - previous.Point.X) != Math.Sign(next.Point.X - current.Point.X);
+                var verticalReversal = previous.Point.X == current.Point.X && current.Point.X == next.Point.X &&
+                    Math.Sign(current.Point.Y - previous.Point.Y) != Math.Sign(next.Point.Y - current.Point.Y);
+                if (horizontalReversal || verticalReversal)
+                    return previous.ComponentId == current.ComponentId && current.ComponentId == next.ComponentId
+                        ? "component-materialisation"
+                        : "component-boundary-reconciliation";
+            }
+            return "final-physical-polyline";
+        }
+        if (routeFindings.Any(item => item is "ComponentCorridorEscape" or "LaneCoordinateOutsideTrack"))
+            return attempts.Count > 0 ? "materialisation" : "lane-coordinate-reconciliation";
+        if (routeFindings.Any(item => item.Contains("Terminal", StringComparison.Ordinal))) return "terminal-allocation";
+        return routeFindings.Any(item => item.Contains("Boundary", StringComparison.Ordinal))
+            ? "component-boundary-reconciliation"
+            : "final-physical-polyline";
     }
     private AbsolutePoint CellCentre(PlanningGridCellId cell, GridTransform transform)
     {
