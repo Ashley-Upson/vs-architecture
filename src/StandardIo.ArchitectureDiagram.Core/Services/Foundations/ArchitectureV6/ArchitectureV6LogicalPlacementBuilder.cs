@@ -839,8 +839,12 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             if (owner is not null && start != preferredStart)
             {
                 externalAffinityBlocked.Add(external.PhysicalNodeId);
+                var preferred = new ProfileInterval(rowRole, preferredStart, preferredStart + span - 1, external.PhysicalNodeId, "external", span);
+                var blockers = occupied.Where(existing => existing.RowRole == rowRole && CountsAsConflict(preferred, existing, 0))
+                    .Select(existing => existing.OwnerId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+                var classification = blockers.Length > 0 ? "genuinely blocked" : "boundary constrained";
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementExternalAffinityBlocked",
-                    $"Preferred owner-centred external position was occupied; selected nearest free start {start} instead of {preferredStart}.",
+                    $"Preferred owner-centred external position was {classification}; selected nearest free start {start} instead of {preferredStart}; blockers={string.Join(",", blockers)}.",
                     PlanningDiagnosticSubject.PhysicalNode, external.PhysicalNodeId));
             }
 

@@ -336,6 +336,12 @@ The visible node width MUST be large enough for the larger of top-edge and botto
 
 If configured terminal spacing cannot fit, the planner MUST NOT duplicate ports, use exact corners, place terminals outside the visible edge, or silently compress spacing unless an explicit policy permits it.
 
+Terminal demand MUST be calculated independently for the top and bottom edges;
+visible width uses the larger demand and MUST NOT use total graph degree as a
+proxy. The shared edge formula is `leading inset + (n - 1) * port spacing +
+trailing inset`, and the same resolved inset/spacing values MUST be used by
+logical span sizing, terminal allocation, and final validation.
+
 The final visible node edge and the terminal allocation authority MUST remain
 coordinate-compatible. If a terminal is allocated on the boundary of the
 authoritative node footprint, the final visible geometry MUST preserve that
@@ -567,6 +573,11 @@ Odd and even groups MUST remain centred and evenly spaced where capacity permits
 
 Terminal coordinates MUST be unique unless a future explicit shared-port semantic model is introduced.
 
+The terminal allocator owns the centred edge slot positions. The ordinary
+route lane may use a different X only when the accepted endpoint contract
+contains an explicit orthogonal handoff; a renderer MUST NOT invent that
+handoff or clamp a terminal into the node edge.
+
 ## 35. Terminal ordering
 
 Terminal slot positions are determined by node-edge geometry.
@@ -628,6 +639,11 @@ Crossing information MUST NOT be discarded merely because multiple routes use th
 
 A clean perpendicular point crossing is allowed.
 
+A shared bend is a hard diagnostic when two unrelated routes use the same bend
+coordinate. The finding MUST retain both route IDs, the exact coordinate, the
+horizontal and vertical lane identities, and the owning turn cell. A clean
+crossing is not valid when it shares a turn cell or endpoint.
+
 A shared non-zero collinear segment between unrelated routes is not.
 
 ## 40. Shared segments and overlaps
@@ -643,6 +659,10 @@ Final rendered geometry MUST be checked for:
 Point crossings are allowed where clean.
 
 Parallel routes MUST maintain configured minimum spacing over overlapping intervals.
+
+Parallel-clearance findings MUST identify both route IDs, the overlapping
+interval, measured separation, and the configured minimum. They are not to be
+silently resolved by moving a rendered waypoint.
 
 ## 41. Track sizing
 
@@ -1186,3 +1206,6 @@ This section SHOULD remain concise. Normative sections above are authoritative.
 - Real projects are integration targets only; permanent regressions use reduced synthetic scenarios.
 - Terminal-bearing visible geometry preserves the authoritative terminal edge; renderer reconstruction is the final orthogonality check.
 - Same-role parent/child chains use inserted role sublayers; role identity remains unchanged for style and diagnostics.
+- Terminal capacity is edge-local and calculated per source/destination side; ordinary route demand never uses total node degree to inflate a visible node.
+- Shared bends, invalid endpoint/perpendicular contacts, and under-spaced parallel intervals are diagnostics owned by route/lane allocation and final physical validation, not renderer repairs.
+- External affinity diagnostics distinguish genuinely blocked owner-centred placement from stale or avoidable displacement and retain the blocking ownership evidence.

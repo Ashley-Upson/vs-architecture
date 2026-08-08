@@ -1708,8 +1708,14 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         foreach (var group in turns.GroupBy(turn => turn.Point).Where(group => group.Select(turn => turn.PhysicalLinkId).Distinct(StringComparer.Ordinal).Count() > 1))
         {
             var routesAtBend = group.Select(turn => turn.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            var details = group.Select(turn =>
+            {
+                var horizontal = allocation.HorizontalLanes.SingleOrDefault(lane => lane.RunId == turn.HorizontalRunId);
+                var vertical = allocation.VerticalLanes.SingleOrDefault(lane => lane.RunId == turn.VerticalRunId);
+                return $"{turn.PhysicalLinkId}:cell={turn.CellId};horizontalLane={horizontal?.Lane.Value ?? "none"};verticalLane={vertical?.Lane.Value ?? "none"}";
+            }).ToArray();
             findings.Add(new ArchitecturePlanningDiagnostic("SharedBend",
-                $"Routes {routesAtBend[0]} and {routesAtBend[1]} share bend {group.Key}.",
+                $"Routes {routesAtBend[0]} and {routesAtBend[1]} share bend {group.Key}; {string.Join("; ", details)}.",
                 PlanningDiagnosticSubject.PhysicalSegment, string.Join("|", routesAtBend.Take(2))));
         }
     }

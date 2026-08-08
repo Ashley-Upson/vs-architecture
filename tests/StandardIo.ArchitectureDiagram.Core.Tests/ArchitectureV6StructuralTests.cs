@@ -2390,6 +2390,22 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Terminal_capacity_uses_edge_insets_and_evenly_spaced_slots()
+    {
+        var request = Request();
+
+        Assert.Equal(8, ArchitectureV6TerminalCapacity.Inset(request));
+        Assert.Equal(0, ArchitectureV6TerminalCapacity.RequiredWidth(request, 0));
+        Assert.Equal(16, ArchitectureV6TerminalCapacity.RequiredWidth(request, 1));
+        Assert.Equal(24, ArchitectureV6TerminalCapacity.RequiredWidth(request, 2));
+        Assert.Equal(32, ArchitectureV6TerminalCapacity.RequiredWidth(request, 3));
+        Assert.Equal(3, ArchitectureV6TerminalCapacity.RequiredOddSpan(request, 1));
+        Assert.Equal(3, ArchitectureV6TerminalCapacity.RequiredOddSpan(request, 3));
+        Assert.True(ArchitectureV6TerminalCapacity.IsInsideInset(request, 100, 0, 200));
+        Assert.False(ArchitectureV6TerminalCapacity.IsInsideInset(request, 5, 0, 200));
+    }
+
+    [Fact]
     public void Final_plan_exposes_route_level_physical_evidence()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());

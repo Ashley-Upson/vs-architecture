@@ -291,9 +291,11 @@ internal sealed class ArchitectureV6TrackSizingPlanner
         var longestLine = label.Split(new[] { '\n' }, StringSplitOptions.None)
             .DefaultIfEmpty(string.Empty).Max(line => line.Length);
         var labelWidth = Math.Max(request.NodePlacement.MinimumNodeWidth, longestLine * 8 + 44);
-        var degree = links.Count(link => link.SourcePhysicalNodeId == node.PhysicalNodeId || link.DestinationPhysicalNodeId == node.PhysicalNodeId);
-        var inset = Math.Max(request.RoutePlanning.MinimumPortSpacing, request.GridSizing.NodeToRouteClearance);
-        var terminalWidth = degree == 0 ? 0 : checked(inset * 2 + Math.Max(0, degree - 1) * request.RoutePlanning.MinimumPortSpacing);
+        var outgoing = links.Count(link => link.SourcePhysicalNodeId == node.PhysicalNodeId);
+        var incoming = links.Count(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId);
+        var terminalWidth = Math.Max(
+            ArchitectureV6TerminalCapacity.RequiredWidth(request, outgoing),
+            ArchitectureV6TerminalCapacity.RequiredWidth(request, incoming));
         return Math.Max(labelWidth, terminalWidth);
     }
 

@@ -301,8 +301,7 @@ internal sealed class ArchitectureV6LaneAllocator
         {
             var nodeId = group.First().PhysicalNodeId;
             var placement = placements.Single(item => item.PhysicalNodeId == nodeId);
-            var required = Math.Max(3, group.Count() * 2 + 1);
-            if (required % 2 == 0) required++;
+            var required = ArchitectureV6TerminalCapacity.RequiredOddSpan(request, group.Count());
             if (required > placement.ColumnSpan)
             {
                 var linksForNode = group.Select(item => item.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray();
