@@ -163,6 +163,13 @@ A node matching a more-specific configured category MUST NOT fall through into a
 
 Reserved layers are fixed ordering constraints. They are not the complete hierarchy.
 
+When two nodes with the same resolved reserved role form a positional
+parent/child chain, the role band remains the styling and ordering authority,
+but the child MUST be placed on a deterministic inserted sublayer below the
+parent. Unrelated nodes in that role continue to share the base role layer.
+This prevents a same-role dependency from being rendered as a zero-height
+hierarchy edge without changing first-match role resolution.
+
 ## 8. External layer
 
 External dependencies MUST occupy a dedicated bottom layer.
@@ -1178,3 +1185,4 @@ This section SHOULD remain concise. Normative sections above are authoritative.
 - Connector styling is planner-owned; renderer must not derive colour from destination fill.
 - Real projects are integration targets only; permanent regressions use reduced synthetic scenarios.
 - Terminal-bearing visible geometry preserves the authoritative terminal edge; renderer reconstruction is the final orthogonality check.
+- Same-role parent/child chains use inserted role sublayers; role identity remains unchanged for style and diagnostics.

@@ -2233,6 +2233,40 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Final_plan_inserts_a_sublayer_for_a_same_role_parent_child_chain()
+    {
+        var request = Request() with
+        {
+            NodePlacement = Request().NodePlacement with
+            {
+                RoleRules = new[] { new ArchitectureV6RoleRule("Service", "Service$", 0) }
+            },
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("parent", "project:p", "ParentService", "Project.ParentService", "Class", "parent", Array.Empty<string>()),
+                        new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[] { new ArchitectureLink("parent-child", "parent", "child", "internal") }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
+
+        Assert.True(metadata["parent"].FinalVisualLayerOrdinal < metadata["child"].FinalVisualLayerOrdinal);
+        Assert.True(metadata["parent"].PhysicalRow != metadata["child"].PhysicalRow);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotAboveChild");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSingleChildNotCentered");
+        Assert.Equal("Service", metadata["parent"].RoleSelector);
+        Assert.Equal("Service", metadata["child"].RoleSelector);
+    }
+
+    [Fact]
     public void Final_plan_uses_resolved_labels_for_bounds_and_not_hidden_fqns_or_endpoint_demand()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());

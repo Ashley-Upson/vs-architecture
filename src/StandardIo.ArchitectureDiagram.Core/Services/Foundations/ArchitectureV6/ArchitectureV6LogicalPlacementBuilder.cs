@@ -483,6 +483,22 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                         !layerByNode.TryGetValue(childId, out var childLayer) || parentLayer < childLayer) continue;
                     if (reservedRank.ContainsKey(roleByNode[parent.PhysicalNodeId]) && reservedRank.ContainsKey(roleByNode[childId]))
                     {
+                        if (string.Equals(roleByNode[parent.PhysicalNodeId], roleByNode[childId], StringComparison.Ordinal))
+                        {
+                            // A role band is shared by unrelated members, but it
+                            // cannot collapse a real parent/child chain onto one
+                            // row. Insert a deterministic sublayer for the child
+                            // while retaining the semantic role for styling and
+                            // ordering.
+                            var candidate = parentLayer + 1;
+                            while (reservedLayers.Contains(candidate)) candidate++;
+                            if (childLayer != candidate)
+                            {
+                                layerByNode[childId] = candidate;
+                                changed = true;
+                            }
+                            continue;
+                        }
                         diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementReservedOrderConflict",
                             "Configured reserved role order conflicts with a dependency edge.", PlanningDiagnosticSubject.PhysicalLink,
                             parent.PhysicalNodeId + "->" + childId));
@@ -526,7 +542,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 : node.IsStandalone
                 ? $"standalone:{standaloneRowByNode[node.PhysicalNodeId]}"
                 : reservedRank.ContainsKey(role)
-                ? $"role:{role}"
+                ? layerByNode[node.PhysicalNodeId] == reservedRank[role] * 100
+                    ? $"role:{role}"
+                    : $"role:{role}:sublayer:{layerByNode[node.PhysicalNodeId]}"
                 : baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)
                 ? "baseline"
                 : $"depth:{layer}";

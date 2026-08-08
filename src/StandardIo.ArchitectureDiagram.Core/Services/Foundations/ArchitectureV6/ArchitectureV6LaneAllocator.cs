@@ -130,7 +130,9 @@ internal sealed class ArchitectureV6LaneAllocator
                 var terminalLane = terminalRun.Value?.Lane;
                 PlanningGridColumnId? terminalColumn = terminalRun.Value is null
                     ? null
-                    : terminalRun.Value.Cells.FirstOrDefault().ColumnId;
+                    : (ordered[index].Endpoint.Side == GridSide.Bottom
+                        ? terminalRun.Value.Cells.FirstOrDefault().ColumnId
+                        : terminalRun.Value.Cells.LastOrDefault().ColumnId);
                 result.Add(new PlannedEndpointAllocation(ordered[index].PhysicalLinkId, ordered[index].Endpoint.PhysicalNodeId,
                     ordered[index].Endpoint.Side, ordered[index].Endpoint, index, offset, group.Key,
                     $"endpoint:{group.Key}:{index}", terminalLane, terminalColumn));

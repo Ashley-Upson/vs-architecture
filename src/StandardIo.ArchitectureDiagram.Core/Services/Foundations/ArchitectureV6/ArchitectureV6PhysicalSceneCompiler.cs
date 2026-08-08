@@ -395,7 +395,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var maxX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width - inset;
             if (requestedX < minX || requestedX > maxX)
                 findings.Add(new ArchitecturePlanningDiagnostic("TerminalCapacityOverflow",
-                    "Allocated terminal demand does not fit the final node edge; terminal placement was not silently accepted by clamping.",
+                    $"Allocated terminal demand does not fit the final node edge; requestedX={requestedX:0.###}, edge=[{minX:0.###},{maxX:0.###}], bounds={node.AbsoluteBounds}, column={endpoint.TerminalColumnId}, lane={endpoint.TerminalLane}; terminal placement was not silently accepted by clamping.",
                     PlanningDiagnosticSubject.PhysicalNode, endpoint.PhysicalNodeId));
             // Capacity is a planning concern. Preserve the allocated slot so
             // an unresolved overflow remains visible to final validation rather
