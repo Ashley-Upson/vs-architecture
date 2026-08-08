@@ -403,6 +403,9 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         var roleByNode = nodes.Values.ToDictionary(node => node.PhysicalNodeId, node => ResolveRole(node.SemanticName), StringComparer.Ordinal);
         var standaloneNodes = nodes.Values.Where(node => node.IsStandalone).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
         var standaloneColumnsPerRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standaloneNodes.Length)));
+        var standaloneRowByNode = standaloneNodes
+            .Select((node, index) => (node.PhysicalNodeId, Row: index / standaloneColumnsPerRow))
+            .ToDictionary(item => item.PhysicalNodeId, item => item.Row, StringComparer.Ordinal);
         categoryByNode.Clear();
         var reservedRank = orderedRules.Select((rule, index) => (rule.Name, index))
             .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
@@ -431,6 +434,8 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
             layerByNode[node.PhysicalNodeId] = node.IsExternal
                 ? externalLayer
+                : node.IsStandalone
+                    ? externalLayer - standaloneColumnsPerRow - standaloneRowByNode[node.PhysicalNodeId]
                 : reservedRank.TryGetValue(roleByNode[node.PhysicalNodeId], out var fixedLayer)
                     ? fixedLayer * 100
                     : 0;
@@ -446,7 +451,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                     "A dependency cycle prevented bottom-up layer solving from reaching a fixed point.", PlanningDiagnosticSubject.PhysicalNode, id));
                 return layerByNode[id];
             }
-            if (!nodes[id].IsExternal && !reservedRank.ContainsKey(roleByNode[id]))
+            if (!nodes[id].IsExternal && !nodes[id].IsStandalone && !reservedRank.ContainsKey(roleByNode[id]))
             {
                 var childLayers = semanticChildrenByNode[id].OrderBy(child => order[child], Comparer<int>.Default)
                     .Select(child => SolveOrdinaryLayer(child)).ToArray();
@@ -473,6 +478,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             foreach (var parent in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
                 foreach (var childId in semanticChildrenByNode[parent.PhysicalNodeId].OrderBy(id => order[id]))
                 {
+                    if (parent.IsStandalone || nodes[childId].IsStandalone) continue;
                     if (!layerByNode.TryGetValue(parent.PhysicalNodeId, out var parentLayer) ||
                         !layerByNode.TryGetValue(childId, out var childLayer) || parentLayer < childLayer) continue;
                     if (reservedRank.ContainsKey(roleByNode[parent.PhysicalNodeId]) && reservedRank.ContainsKey(roleByNode[childId]))
@@ -518,7 +524,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
             rowRoleByNode[node.PhysicalNodeId] = node.IsExternal
                 ? "external"
                 : node.IsStandalone
-                ? $"standalone:{layer}"
+                ? $"standalone:{standaloneRowByNode[node.PhysicalNodeId]}"
                 : reservedRank.ContainsKey(role)
                 ? $"role:{role}"
                 : baselinePattern.IsMatch(node.SemanticName) || baselinePattern.IsMatch(node.SemanticNodeId)

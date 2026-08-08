@@ -184,11 +184,33 @@ External placement MUST NOT reposition the owning ordinary tree.
 
 Standalone nodes are nodes with no parent and no child relationship under the established semantic definition.
 
+Placement regions are authoritative and mutually exclusive:
+
+- `External` for external dependencies;
+- `Standalone` for standalone nodes;
+- `DependencyHierarchy` for all remaining dependency-connected nodes.
+
+Standalone status overrides normal role/type hierarchy-layer placement. A
+standalone Service, ProcessingService, AggregationService, CoordinationService,
+OrchestrationService, Broker, or unclassified node MUST belong to the dedicated
+standalone grid rather than its corresponding dependency-hierarchy band.
+
+Role/type classification MAY still control style, metadata, and deterministic
+ordering within the standalone grid, but MUST NOT move a standalone node onto a
+reserved or ordinary dependency layer. Standalone nodes do not participate in
+dependency-depth, root, reserved-band, or tree-solving calculations.
+
 Standalone nodes SHOULD live in a dedicated compact region rather than being mixed into dependency trees.
 
 If multiple standalone rows/layers are required, there MUST be proper routing/layer clearance between them.
 
 Standalone layout MUST NOT influence ordinary tree placement.
+
+The complete standalone grid is an atomic placement block. Its internal node
+positions are frozen before global packing; dependency-tree placement and
+standalone-grid placement MUST NOT mutate one another internally. Any collision
+is resolved by translating complete regions/blocks, never by reassigning one
+standalone node through the hierarchy solver.
 
 ## 10. Ordinary Y-layer solving — bottom-up dependency depth
 

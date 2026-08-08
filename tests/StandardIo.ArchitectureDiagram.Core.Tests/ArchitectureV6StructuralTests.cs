@@ -1162,6 +1162,37 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Standalone_status_owns_placement_region_even_when_role_matches_connected_nodes()
+    {
+        var request = Request() with
+        {
+            SemanticModel = Request().SemanticModel with
+            {
+                Projects = new[]
+                {
+                    new ArchitectureProject("project:p", "Project", new[]
+                    {
+                        new ArchitectureNode("connected", "project:p", "ConnectedService", "Project.ConnectedService", "Class", "connected", Array.Empty<string>()),
+                        new ArchitectureNode("dependency", "project:p", "Dependency", "Project.Dependency", "Class", "dependency", Array.Empty<string>()),
+                        new ArchitectureNode("standalone", "project:p", "StandaloneService", "Project.StandaloneService", "Class", "standalone", Array.Empty<string>())
+                    }, "project:p")
+                },
+                Links = new[] { new ArchitectureLink("connected-dependency", "connected", "dependency", "internal") }
+            }
+        };
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var connected = plan.NodeMetadata.Single(node => node.SemanticNodeId == "connected");
+        var standalone = plan.NodeMetadata.Single(node => node.SemanticNodeId == "standalone");
+
+        Assert.False(connected.IsStandalone);
+        Assert.True(standalone.IsStandalone);
+        Assert.StartsWith("standalone:", standalone.VerticalSpacingPolicy, StringComparison.Ordinal);
+        Assert.DoesNotContain(plan.NodeMetadata.Where(node => node.IsStandalone), node => !node.VerticalSpacingPolicy.StartsWith("standalone:", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementRoleLayerSplit" && finding.SubjectId == "standalone");
+    }
+
+    [Fact]
     public void Planner_duplicate_projection_records_provenance_and_keeps_links()
     {
         var request = Request() with
