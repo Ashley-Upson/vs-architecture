@@ -88,12 +88,28 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
 
         var last = routeComponents.LastOrDefault();
         var lastComponent = components.LastOrDefault();
-        var lastExit = lastComponent?.ExitBoundary;
+        var destinationAnchorId = route.PhysicalLinkId + ":destination-node-anchor";
+        var destinationPlacement = placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId);
+        var destinationAnchorStep = ordered.LastOrDefault(step => step.Role == RouteStepRole.DestinationEntry &&
+            destinationPlacement is not null && step.CellId.Equals(destinationPlacement.AnchorCellId));
+        var destinationApproachSteps = ordered
+            .Where(step => step.Role == RouteStepRole.DestinationEntry &&
+                (destinationAnchorStep is null || !step.CellId.Equals(destinationAnchorStep.CellId)))
+            .ToArray();
+        var approachFirst = destinationApproachSteps.FirstOrDefault();
+        var approachLane = approachFirst?.AllocatedLane;
+        if (approachLane is not null)
+            destinationBoundary = EndpointBoundary(route, route.Destination, GridSide.Top, "destination-terminal-approach-lane", approachLane);
+        var lastExit = approachFirst is null
+            ? lastComponent?.ExitBoundary
+            : StepBoundary(approachFirst, approachFirst.EntrySide, approachFirst.AllocatedLane, "destination-approach-entry");
         var approachId = route.PhysicalLinkId + ":destination-approach";
         components.Add(new PlannedRouteComponentContract(approachId, route.PhysicalLinkId,
             PlannedRouteComponentKind.DestinationApproach, int.MaxValue - 1,
-            last is null ? Array.Empty<PlanningGridCellId>() : new[] { last.CellId }, lastExit, destinationBoundary,
-            lastComponent?.ExitSide, GridSide.Top, lastComponent?.Lane, lastComponent?.RunId, null,
+            destinationApproachSteps.Length > 0 ? destinationApproachSteps.Select(step => step.CellId).ToArray() :
+                last is null ? Array.Empty<PlanningGridCellId>() : new[] { last.CellId }, lastExit, destinationBoundary,
+            approachFirst?.EntrySide ?? lastComponent?.ExitSide, GridSide.Top, approachLane ?? lastComponent?.Lane,
+            approachFirst?.StraightRunId ?? lastComponent?.RunId, null,
             Ownership(route.Destination), components.LastOrDefault()?.ComponentId, route.PhysicalLinkId + ":destination-terminal",
             "derived from destination approach and terminal endpoint"));
         if (last is null)
@@ -102,9 +118,7 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
             Add(routeFindings, route, "DestinationApproachNotTopFacing", approachId, null,
                 "The destination approach does not expose the required top-facing node boundary.", lastExit, destinationBoundary);
 
-        var destinationAnchor = ordered.LastOrDefault(step => step.Role == RouteStepRole.DestinationEntry &&
-            step.CellId.Equals(placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId)?.AnchorCellId));
-        var destinationAnchorId = route.PhysicalLinkId + ":destination-node-anchor";
+        var destinationAnchor = destinationAnchorStep;
         components.Add(new PlannedRouteComponentContract(destinationAnchorId, route.PhysicalLinkId,
             PlannedRouteComponentKind.DestinationNodeAnchor, int.MaxValue,
             destinationAnchor is null ? Array.Empty<PlanningGridCellId>() : new[] { destinationAnchor.CellId },
@@ -377,14 +391,19 @@ internal sealed class ArchitectureV6RouteBoundaryContractBuilder
         (first == GridSide.Top && second == GridSide.Bottom) ||
         (first == GridSide.Bottom && second == GridSide.Top);
 
-    private GridBoundaryIdentity? EndpointBoundary(PlannedGridRoute route, NodeEndpoint endpoint, GridSide side, string authority)
+    private GridBoundaryIdentity? EndpointBoundary(PlannedGridRoute route, NodeEndpoint endpoint, GridSide side, string authority,
+        LaneId? laneOverride = null)
     {
         var placement = placements.SingleOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
         if (placement is null) return null;
-        var lane = allocation.Endpoints.Any(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == side)
+        var endpointAllocation = allocation.Endpoints.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == side);
+        var lane = laneOverride ?? endpointAllocation?.TerminalLane ?? (endpointAllocation is not null
             ? new LaneId($"endpoint:{route.PhysicalLinkId}:{side}")
-            : (LaneId?)null;
-        return new GridBoundaryIdentity(placement.AnchorCellId.GridId, placement.AnchorCellId, side, lane,
+            : (LaneId?)null);
+        var boundaryCell = endpointAllocation?.TerminalColumnId is { } terminalColumn
+            ? new PlanningGridCellId(placement.AnchorCellId.GridId, placement.AnchorCellId.RowId, terminalColumn)
+            : placement.AnchorCellId;
+        return new GridBoundaryIdentity(placement.AnchorCellId.GridId, boundaryCell, side, lane,
             Ownership(endpoint), authority);
     }
 

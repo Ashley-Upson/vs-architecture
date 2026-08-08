@@ -383,7 +383,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var node = nodeGeometry.SingleOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
             if (node is null || !transforms.TryGetValue(node.GridId, out var transform)) continue;
             var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
-            var requestedX = node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
+            var requestedX = endpoint.TerminalLane is { } terminalLane && endpoint.TerminalColumnId is { } terminalColumnId
+                ? TerminalLaneCoordinate(node.GridId, terminalColumnId, terminalLane.Value, transform)
+                : endpoint.TerminalLane is { } fallbackLane
+                    ? LaneCoordinate(node.AbsoluteBounds.X - transform.Origin.X, node.AbsoluteBounds.Width,
+                        allocation.VerticalLanes, fallbackLane.Value) + transform.Origin.X
+                    : node.AbsoluteBounds.X + node.AbsoluteBounds.Width / 2 + endpoint.TrackOffset * spacing;
             var inset = Math.Min(Math.Max(1, node.AbsoluteBounds.Width / 2 - 1),
                 Math.Max(spacing, request.GridSizing.NodeToRouteClearance));
             var minX = node.AbsoluteBounds.X + inset;
@@ -1015,41 +1020,18 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         else if (component.Kind == PlannedRouteComponentKind.DestinationApproach && orderedSteps.Length > 0)
         {
             var firstStep = orderedSteps[0];
-            if (transforms.TryGetValue(firstStep.GridId, out var firstTransform))
-            {
-                points.Add(Point(route, component.EntryBoundary?.GridId ?? firstStep.GridId, start, role,
-                    component.ComponentId + ":boundary", component.Order, component.RunId, component.TurnId,
-                    component.EntryBoundary?.CellId, "canonical boundary before owned destination approach", component.ComponentId));
-                var previousStep = route.Steps
-                    .Where(step => step.Order < firstStep.Order)
-                    .OrderByDescending(step => step.Order)
-                    .FirstOrDefault();
-                var approachStart = previousStep is null
-                    ? BoundaryPoint(route, firstStep, GridSide.Top, firstTransform)
-                    : EndpointHandoffPoint(route, previousStep, transforms[previousStep.GridId]);
-                points.Clear();
-                points.Add(Point(route, firstStep.GridId, approachStart, role, component.ComponentId + ":entry", component.Order,
-                    component.RunId, component.TurnId, firstStep.CellId, "destination approach first owned cell entry", component.ComponentId));
-
-                points.Add(Point(route, firstStep.GridId, end, role, component.ComponentId + ":exit", component.Order,
-                    component.RunId, component.TurnId, firstStep.CellId, "destination top edge after owned approach", component.ComponentId));
-                return points;
-            }
+            points.Add(Point(route, component.EntryBoundary?.GridId ?? firstStep.GridId, start, role,
+                component.ComponentId + ":entry", component.Order, component.RunId, component.TurnId,
+                component.EntryBoundary?.CellId ?? firstStep.CellId, "authoritative destination approach entry boundary", component.ComponentId));
+            points.Add(Point(route, firstStep.GridId, end, role, component.ComponentId + ":exit", component.Order,
+                component.RunId, component.TurnId, firstStep.CellId, "authoritative destination approach exit boundary", component.ComponentId));
+            return points;
         }
         else
         {
             if (component.PrecedingComponentId?.EndsWith(":source-departure", StringComparison.Ordinal) == true && orderedSteps.Length > 0 &&
                 transforms.TryGetValue(orderedSteps[0].GridId, out var sourceHandoffTransform))
                 start = CellPoint(orderedSteps[0], route, sourceHandoffTransform);
-            if (component.FollowingComponentId?.EndsWith(":destination-approach", StringComparison.Ordinal) == true && orderedSteps.Length > 0 &&
-                transforms.TryGetValue(orderedSteps[orderedSteps.Length - 1].GridId, out var destinationHandoffTransform))
-            {
-                var handoff = CellPoint(orderedSteps[orderedSteps.Length - 1], route, destinationHandoffTransform);
-                var destinationLane = ComponentLanePoint(component, orderedSteps[orderedSteps.Length - 1], handoff, transforms);
-                end = component.Kind == PlannedRouteComponentKind.HorizontalStraightRun
-                    ? new AbsolutePoint(destinationTerminal.Point.X, destinationLane.Y)
-                    : destinationLane;
-            }
             points.Add(Point(route, firstCell.GridId, start, role, component.ComponentId + ":entry", component.Order,
                 component.RunId, component.TurnId, firstCell,
                 component.Kind == PlannedRouteComponentKind.DestinationApproach
@@ -1061,14 +1043,12 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         {
             if (component.Kind == PlannedRouteComponentKind.DestinationApproach)
             {
-                var destinationAnchor = placements.SingleOrDefault(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId)?.AnchorCellId;
-                var exteriorStep = route.Steps
-                    .Where(step => !destinationAnchor.HasValue || !step.CellId.Equals(destinationAnchor.Value))
-                    .OrderByDescending(step => step.Order)
-                    .FirstOrDefault();
-                if (exteriorStep is not null && transforms.TryGetValue(exteriorStep.GridId, out var exteriorTransform))
-                    start = EndpointHandoffPoint(route, exteriorStep, exteriorTransform);
-                points.Clear();
+                // When the destination anchor is the final logical step there is
+                // no ordinary approach cell to enumerate. Recompile the entry
+                // boundary from its own cell authority so the approach retains
+                // the exact shared boundary with the preceding run.
+                if (component.EntryBoundary is not null && transforms.TryGetValue(component.EntryBoundary.GridId, out var approachTransform))
+                    start = BoundaryPoint(component.EntryBoundary, approachTransform);
             }
             if (component.Kind is PlannedRouteComponentKind.SourceDeparture or PlannedRouteComponentKind.DestinationApproach)
                 points.Add(Point(route, lastCell.GridId, end, role, component.ComponentId + ":boundary", component.Order,
@@ -1393,6 +1373,16 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
         return new AbsolutePoint(transform.Origin.X + x, transform.Origin.Y + y);
     }
 
+    private int TerminalLaneCoordinate(PlanningGridId nodeGridId, PlanningGridColumnId columnId,
+        string laneId, GridTransform transform)
+    {
+        var grid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(nodeGridId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(columnId));
+        return column is null
+            ? transform.Origin.X
+            : LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, laneId) + transform.Origin.X;
+    }
+
     private AbsolutePoint CellPoint(PlannedGridRouteStep step, PlannedGridRoute route, GridTransform transform)
     {
         var sizedGrid = relative.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
@@ -1506,6 +1496,20 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 .ThenBy(item => item.ComponentId, StringComparer.Ordinal).ToArray();
             var cells = components.SelectMany(item => item.AllocatedCells).Distinct().Select(item => item.ToString()).ToArray();
             var lanes = routeLanes.OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            var logicalRoute = routes.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId);
+            var routeStepDetails = (logicalRoute?.Steps ?? Array.Empty<PlannedGridRouteStep>()).OrderBy(item => item.Order)
+                .Select(item => $"{item.Order}:{item.Role}:{item.CellId}:{item.EntrySide}->{item.ExitSide}:lane={item.AllocatedLane?.Value ?? "none"}")
+                .ToArray();
+            var componentBoundaryDetails = (boundaryContracts.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId)?.Components ?? Array.Empty<PlannedRouteComponentContract>())
+                .OrderBy(item => item.Order)
+                .Select(item => $"{item.ComponentId}:entry={item.EntryBoundary}:exit={item.ExitBoundary}")
+                .ToArray();
+            var componentPointDetails = components
+                .Select(item => $"{item.ComponentId}:entry={item.EntryPoint}:exit={item.ExitPoint}")
+                .ToArray();
+            var componentPointProvenance = components
+                .SelectMany(item => item.Points.Select(point => $"{item.ComponentId}:{point.Point}:{point.Provenance}"))
+                .ToArray();
             var tracks = components.SelectMany(item => item.AllocatedCells).Select(item => item.RowId.Value).Concat(components.SelectMany(item => item.AllocatedCells).Select(item => item.ColumnId.Value))
                 .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
             var source = terminals.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
@@ -1519,7 +1523,7 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
                 source?.Point.ToString(), destination?.Point.ToString(),
                 attempts.Select((item, index) => new ArchitectureV6PhysicalRouteFindingEvidence(route.PhysicalLinkId, item.FailureCode,
                     item.ComponentId, index, item.AllocatedCells.Select(cell => cell.ToString()).ToArray(), item.Start.ToString(), item.End.ToString())).ToArray(),
-                firstInvalidStage);
+                firstInvalidStage, routeStepDetails, componentBoundaryDetails, componentPointDetails, componentPointProvenance);
         }).ToArray();
     }
 

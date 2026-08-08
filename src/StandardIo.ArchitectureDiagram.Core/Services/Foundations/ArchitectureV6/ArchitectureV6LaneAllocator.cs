@@ -81,7 +81,7 @@ internal sealed class ArchitectureV6LaneAllocator
             }
         }
 
-        var endpointAllocations = AllocateEndpoints();
+        var endpointAllocations = AllocateEndpoints(runAllocations);
         var approachAllocations = AllocateApproaches();
         var updatedRoutes = ApplyRunLanes(runAllocations);
         var turns = AllocateTurns(updatedRoutes, runAllocations);
@@ -105,7 +105,8 @@ internal sealed class ArchitectureV6LaneAllocator
                 intervalComparisons, turns.Count));
     }
 
-    private IReadOnlyList<PlannedEndpointAllocation> AllocateEndpoints()
+    private IReadOnlyList<PlannedEndpointAllocation> AllocateEndpoints(
+        IReadOnlyDictionary<PlannedStraightRun, PlannedLaneAllocation> runAllocations)
     {
         var result = new List<PlannedEndpointAllocation>();
         foreach (var group in endpointDemands.GroupBy(demand => demand.Endpoint.PhysicalNodeId + ":" + demand.Endpoint.Side, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
@@ -118,9 +119,21 @@ internal sealed class ArchitectureV6LaneAllocator
             for (var index = 0; index < ordered.Length; index++)
             {
                 var offset = PortOffset(index, ordered.Length);
+                var route = routes.Single(item => item.PhysicalLinkId == ordered[index].PhysicalLinkId);
+                var verticalRunAllocations = runAllocations
+                    .Where(item => item.Key.RouteId == route.PhysicalLinkId && item.Key.Axis == RouteAxis.Vertical)
+                    .OrderBy(item => item.Key.Cells.Min(cell => route.Steps.First(step => step.CellId.Equals(cell)).Order))
+                    .ToArray();
+                var terminalRun = ordered[index].Endpoint.Side == GridSide.Bottom
+                    ? verticalRunAllocations.FirstOrDefault()
+                    : verticalRunAllocations.LastOrDefault();
+                var terminalLane = terminalRun.Value?.Lane;
+                PlanningGridColumnId? terminalColumn = terminalRun.Value is null
+                    ? null
+                    : terminalRun.Value.Cells.FirstOrDefault().ColumnId;
                 result.Add(new PlannedEndpointAllocation(ordered[index].PhysicalLinkId, ordered[index].Endpoint.PhysicalNodeId,
                     ordered[index].Endpoint.Side, ordered[index].Endpoint, index, offset, group.Key,
-                    $"endpoint:{group.Key}:{index}"));
+                    $"endpoint:{group.Key}:{index}", terminalLane, terminalColumn));
             }
         }
         return result;

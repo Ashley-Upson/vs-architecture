@@ -79,7 +79,11 @@ public sealed record ArchitectureV6PhysicalRouteEvidence(
     string? SourceTerminal,
     string? DestinationTerminal,
     IReadOnlyList<ArchitectureV6PhysicalRouteFindingEvidence> FindingEvidence,
-    string? FirstInvalidStage = null);
+    string? FirstInvalidStage = null,
+    IReadOnlyList<string>? RouteStepDetails = null,
+    IReadOnlyList<string>? ComponentBoundaryDetails = null,
+    IReadOnlyList<string>? ComponentPointDetails = null,
+    IReadOnlyList<string>? ComponentPointProvenance = null);
 
 public sealed record ArchitecturePlanningMetrics(
     int SemanticNodeCount,

@@ -26,7 +26,9 @@ public sealed record PlannedEndpointAllocation(
     int LogicalOrder,
     int TrackOffset,
     string DomainId,
-    string Provenance);
+    string Provenance,
+    LaneId? TerminalLane = null,
+    PlanningGridColumnId? TerminalColumnId = null);
 
 public sealed record PlannedDestinationApproachAllocation(
     string ReservationId,

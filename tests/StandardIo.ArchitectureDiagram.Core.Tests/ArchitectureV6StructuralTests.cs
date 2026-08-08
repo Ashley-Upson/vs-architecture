@@ -464,6 +464,17 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Planner_materialises_the_authoritative_component_chain_without_repairs()
+    {
+        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
+        Assert.NotNull(scene);
+
+        Assert.Equal(0, scene!.Metrics.DiagonalSegmentCount);
+        Assert.Equal(0, scene.Metrics.ComponentContinuityFailureCount);
+        Assert.Equal(0, scene.Metrics.CorridorEscapeCount);
+    }
+
+    [Fact]
     public void Planner_uses_centred_endpoint_slots_and_orthogonal_handoffs()
     {
         var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
