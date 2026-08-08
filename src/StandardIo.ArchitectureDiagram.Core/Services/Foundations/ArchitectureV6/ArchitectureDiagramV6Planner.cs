@@ -416,8 +416,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     source.PhysicalNodeId, target.PhysicalNodeId, source.ProjectId, target.ProjectId)
                 {
                     Kind = link.Kind,
-                    ResolvedStyle = request.ConnectorStyle,
-                    ResolvedStyleSource = "connector-default"
+                    ResolvedStyle = ResolveConnectorStyle(target.ResolvedStyle),
+                    ResolvedStyleSource = "connector-target-background"
                 });
             }
             var physicalLinks = physicalLinksBuilder.ToArray();
@@ -456,6 +456,13 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             return request.StylePolicies?.FirstOrDefault(rule =>
                 GlobMatcher.IsMatch(name, rule.Match) || GlobMatcher.IsMatch(fullName, rule.Match))
                 ?? new ArchitectureV6StyleRule("<fallback>", "#dae8fc", "#6c8ebf", "#111111", "rounded", true, null);
+        }
+
+        private ArchitectureV6ConnectorStyle? ResolveConnectorStyle(ArchitectureV6StyleRule? destinationStyle)
+        {
+            if (request.ConnectorStyle is null) return null;
+            if (destinationStyle is null || string.IsNullOrWhiteSpace(destinationStyle.FillColor)) return request.ConnectorStyle;
+            return request.ConnectorStyle with { StrokeColor = destinationStyle.FillColor };
         }
 
         private void ReadSemanticNodes()

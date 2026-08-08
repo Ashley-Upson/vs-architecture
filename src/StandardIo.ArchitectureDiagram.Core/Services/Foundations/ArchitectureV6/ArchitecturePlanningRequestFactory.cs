@@ -33,7 +33,8 @@ public static class ArchitecturePlanningRequestFactory
             diagram,
             scope,
             new ArchitectureGenerationSettingsSnapshot(
-                rendering.OutputRenderer, analysis.ExternalDependencyTag, analysis.ExcludedNamespaces.ToArray(), analysis.ExcludedNames.ToArray()),
+                rendering.OutputRenderer, analysis.ExternalDependencyTag, analysis.ExcludedNamespaces.ToArray(), analysis.ExcludedNames.ToArray(),
+                rendering.Canvas.BackgroundColor),
             new NodeProjectionPolicy(projection, layout.DuplicateHighNoiseNodePatterns.ToArray()),
             new ProjectPlacementPolicy(rendering.ShowProjectContainers, rendering.ProjectContainerStyle.Shape),
             new NodePlacementPolicy(layout.BaselineAlignmentPattern, layout.NodeWidth, layout.NodeHeight,

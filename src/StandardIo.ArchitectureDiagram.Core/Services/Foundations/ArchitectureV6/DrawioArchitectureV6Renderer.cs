@@ -30,7 +30,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         if (scene is null || geometry is null)
         {
             diagnostics.Add(new DiagramDiagnostic("V6PhysicalSceneUnavailable", "No physical scene was available for Draw.io projection.", null));
-            return Page(root, new AbsoluteRectangle(0, 0, 1200, 900), diagnostics);
+            return Page(root, new AbsoluteRectangle(0, 0, 1200, 900), diagnostics, diagram.Request.GenerationSettings.BackgroundColor);
         }
 
         var physicalNodes = diagram.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
@@ -124,7 +124,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             }
             var connector = link.ResolvedStyle;
             if (connector is null)
-                diagnostics.Add(new DiagramDiagnostic("V6UnresolvedConnectorStyle", "A physical relationship reached the renderer without a planner-resolved connector style.", link.PhysicalLinkId));
+                diagnostics.Add(new DiagramDiagnostic("V6ConnectorStyleFidelityFailure", "A physical relationship reached the renderer without a planner-resolved connector style; no Draw.io connector fallback was applied.", link.PhysicalLinkId));
             physicalNodes.TryGetValue(link.DestinationPhysicalNodeId, out var targetNode);
             var sourceTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId &&
                 item.PhysicalNodeId == link.SourcePhysicalNodeId && item.Side == GridSide.Bottom);
@@ -132,9 +132,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 item.PhysicalNodeId == link.DestinationPhysicalNodeId && item.Side == GridSide.Top);
             var sourceGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.SourcePhysicalNodeId);
             var targetGeometry = geometry.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
-            root.Add(Edge(link, route, source, target, connector,
+            var edge = Edge(link, route, source, target, connector,
                 sourceGeometry, targetGeometry, sourceTerminal, targetTerminal,
-                link.ResolvedStyleSource, offsetX, offsetY));
+                link.ResolvedStyleSource, offsetX, offsetY);
+            ValidateConnectorStyle(link, edge, diagnostics);
+            root.Add(edge);
             emittedEdges++;
         }
 
@@ -148,10 +150,10 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         diagnostics.Add(new DiagramDiagnostic("V6LinkStyleSummary", $"Resolved relationship style is carried on all {diagram.PhysicalLinks.Count} physical links. Sources: {string.Join(", ", diagram.PhysicalLinks.GroupBy(link => link.ResolvedStyleSource).OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.Key + "=" + group.Count()))}.", null));
         diagnostics.Add(new DiagramDiagnostic("V6LogicalPlacementComplete", "The renderer consumed the planner's completed logical and physical geometry.", null));
         diagnostics.Add(new DiagramDiagnostic("V6RendererMechanicalProjection", "Draw.io geometry was projected from the physical scene without placement or routing decisions.", null));
-        return Page(root, geometry.AbsoluteDiagramBounds, diagnostics);
+        return Page(root, geometry.AbsoluteDiagramBounds, diagnostics, diagram.Request.GenerationSettings.BackgroundColor);
     }
 
-    private static DrawioPage Page(XElement root, AbsoluteRectangle bounds, IReadOnlyList<DiagramDiagnostic> diagnostics)
+    private static DrawioPage Page(XElement root, AbsoluteRectangle bounds, IReadOnlyList<DiagramDiagnostic> diagnostics, string backgroundColor)
     {
         // Draw.io accepts scene coordinates outside the page origin. The page
         // extent is the scene extent, not the right/bottom coordinate relative
@@ -163,6 +165,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             new XAttribute("grid", "0"), new XAttribute("gridSize", "10"), new XAttribute("guides", "1"),
             new XAttribute("tooltips", "1"), new XAttribute("connect", "1"), new XAttribute("arrows", "1"),
             new XAttribute("fold", "1"), new XAttribute("page", "0"), new XAttribute("pageScale", "1"),
+            // Keep configured connector and node colours literal. Draw.io's
+            // automatic/simple adaptive-colour modes can remap black/white
+            // while leaving the stored cell style and tooltip unchanged.
+            new XAttribute("adaptiveColors", "none"),
+            new XAttribute("background", string.IsNullOrWhiteSpace(backgroundColor) ? "#111111" : backgroundColor),
             new XAttribute("pageWidth", width), new XAttribute("pageHeight", height), root);
         return new DrawioPage("Architecture", "architecture", graph, diagnostics);
     }
@@ -185,14 +192,13 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 new XAttribute("y", (point.Point.Y + offsetY).ToString(CultureInfo.InvariantCulture))))
             .ToArray();
         var style = connector;
-        var styleText = style is null ? string.Empty : $"edgeStyle=none;orthogonal=0;curved=0;rounded={(style.Rounded ? 1 : 0)};startArrow={style.StartArrow};endArrow={style.EndArrow};startFill={(style.StartFill ? 1 : 0)};endFill={(style.EndFill ? 1 : 0)};startSize={style.ArrowSize};endSize={style.ArrowSize};strokeColor={style.StrokeColor};strokeWidth={style.StrokeWidth};opacity={style.Opacity};fontColor={style.FontColor};html=1;";
+        var styleText = style is null ? string.Empty : ConnectorStyleText(style);
         if (style is not null && sourceGeometry is not null && sourceTerminal is not null)
             styleText += $"exitX={Ratio(sourceTerminal.Point.X + offsetX, sourceGeometry.AbsoluteBounds.X + offsetX, sourceGeometry.AbsoluteBounds.Width)};exitY=1;";
         if (style is not null && targetGeometry is not null && targetTerminal is not null)
             styleText += $"entryX={Ratio(targetTerminal.Point.X + offsetX, targetGeometry.AbsoluteBounds.X + offsetX, targetGeometry.AbsoluteBounds.Width)};entryY=0;";
         if (style is not null && style.Dashed) styleText += $"dashed=1;dashPattern={style.DashPattern ?? "3 3"};";
         if (style is not null && !style.ShowLabels) styleText += "labelPosition=none;";
-        if (style is not null && !string.IsNullOrWhiteSpace(style.ExtraStyle)) styleText += style.ExtraStyle!.TrimEnd(';') + ";";
         var attributes = new Dictionary<string, string>
         {
             ["id"] = CellId("edge", link.PhysicalLinkId), ["physicalLinkId"] = link.PhysicalLinkId,
@@ -227,6 +233,64 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
 
     private static string Ratio(int x, int left, int width) =>
         Math.Max(0, Math.Min(1, (x - left) / (double)Math.Max(1, width))).ToString("0.####", CultureInfo.InvariantCulture);
+
+    private static void ValidateConnectorStyle(PlannedPhysicalLink link, XElement edge, ICollection<DiagramDiagnostic> diagnostics)
+    {
+        if (link.ResolvedStyle is null) return;
+        var tokens = ((string?)edge.Attribute("style") ?? string.Empty)
+            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Split(new[] { '=' }, 2))
+            .Where(parts => parts.Length == 2)
+            .GroupBy(parts => parts[0], StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Select(parts => parts[1]).ToArray(), StringComparer.OrdinalIgnoreCase);
+        var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["strokeColor"] = link.ResolvedStyle.StrokeColor,
+            ["strokeWidth"] = link.ResolvedStyle.StrokeWidth.ToString(CultureInfo.InvariantCulture),
+            ["opacity"] = link.ResolvedStyle.Opacity.ToString(CultureInfo.InvariantCulture),
+            ["endArrow"] = link.ResolvedStyle.EndArrow
+        };
+        foreach (var property in expected)
+        {
+            if (!tokens.TryGetValue(property.Key, out var values) || values.Length != 1 || !string.Equals(values[0], property.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostics.Add(new DiagramDiagnostic("V6ConnectorStyleFidelityFailure",
+                    $"Emitted connector style does not preserve planner property {property.Key}={property.Value}.", link.PhysicalLinkId));
+                return;
+            }
+        }
+    }
+
+    private static string ConnectorStyleText(ArchitectureV6ConnectorStyle style)
+    {
+        // Extra connector tokens are deliberately emitted before structured
+        // planner-owned properties. This preserves harmless custom tokens but
+        // makes the structured values the single effective source of truth.
+        var authoritative = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "rounded", "startArrow", "endArrow", "startFill", "endFill", "startSize", "endSize",
+            "strokeColor", "strokeWidth", "opacity", "fontColor", "dashed", "dashPattern", "labelPosition"
+        };
+        var extra = (style.ExtraStyle ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim())
+            .Where(token => token.Length > 0)
+            .Where(token => !authoritative.Contains(token.Split(new[] { '=' }, 2)[0].Trim()))
+            .ToArray();
+        var tokens = new List<string>(extra)
+        {
+            "edgeStyle=none", "orthogonal=0", "curved=0", $"rounded={(style.Rounded ? 1 : 0)}",
+            $"startArrow={style.StartArrow}", $"endArrow={style.EndArrow}", $"startFill={(style.StartFill ? 1 : 0)}",
+            $"endFill={(style.EndFill ? 1 : 0)}", $"startSize={style.ArrowSize}", $"endSize={style.ArrowSize}",
+            $"strokeColor={style.StrokeColor}", $"strokeWidth={style.StrokeWidth}", $"opacity={style.Opacity}",
+            $"fontColor={style.FontColor}", "html=1"
+        };
+        if (style.Dashed)
+        {
+            tokens.Add("dashed=1");
+            tokens.Add($"dashPattern={style.DashPattern ?? "3 3"}");
+        }
+        return string.Join(";", tokens) + ";";
+    }
 
     private static ArchitectureV6StyleRule DefaultProjectStyle() => new("<project>", "#323a40", "#263238", "#ffffff", "swimlane", true, "swimlaneLine=0;startSize=34;horizontal=1;opacity=88;");
 

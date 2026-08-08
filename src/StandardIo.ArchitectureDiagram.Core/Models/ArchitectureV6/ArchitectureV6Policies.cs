@@ -81,7 +81,8 @@ public sealed record ArchitectureGenerationSettingsSnapshot(
     string OutputRenderer,
     string ExternalDependencyTag,
     IReadOnlyList<string> ExcludedNamespaces,
-    IReadOnlyList<string> ExcludedNames);
+    IReadOnlyList<string> ExcludedNames,
+    string BackgroundColor = "#111111");
 
 public sealed record ArchitectureV6ConnectorStyle(
     string StrokeColor,

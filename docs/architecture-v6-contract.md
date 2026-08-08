@@ -779,11 +779,33 @@ Connector style is planner-owned.
 
 The renderer MUST emit the final resolved planned connector style unchanged.
 
-The renderer MUST NOT recolour a link based on destination-node fill.
+The emitted `mxCell/@style` string is the fidelity surface. Every planned
+connector MUST contain an explicit `strokeColor`; renderer defaults and theme
+inheritance MUST NOT supply a missing colour. If a relationship reaches the
+renderer without a complete resolved connector style, the renderer MUST emit a
+hard fidelity finding and MUST NOT create a fallback connector style.
 
-Current preserved configuration has been observed to resolve connectors to:
+Raw connector extra-style tokens MAY provide non-authoritative Draw.io
+properties. They MUST NOT override planner-owned structured properties such as
+stroke colour, stroke width, opacity, arrow settings, dash settings, font
+colour or label visibility. The final emitted style MUST contain one effective
+value for each planner-owned property, and reconstruction validation MUST parse
+the emitted style string rather than relying only on planner metadata.
 
-- stroke `#ffffff`
+The planner MUST resolve each connector stroke colour from the resolved fill
+colour of its destination node. This produces a per-relationship final
+connector style. The renderer MUST emit that planner-owned result mechanically
+and MUST NOT perform its own destination lookup or recolouring.
+
+Architecture pages MUST set Draw.io page `adaptiveColors=none` unless an
+explicit product setting opts into adaptive colour remapping. Connector and
+node colours must not be visually remapped while their stored style values
+remain unchanged.
+
+The preserved connector configuration supplies the non-colour connector
+properties. The final stroke colour is supplied by the destination node style.
+Current preserved configuration has been observed to supply:
+
 - width `1`
 - opacity `100`
 - end arrow `block`

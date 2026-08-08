@@ -1590,6 +1590,8 @@ public sealed class ArchitectureV6StructuralTests
         var cells = page.GraphModel.Descendants("mxCell").ToArray();
 
         Assert.Equal("architecture", page.StablePageKey);
+        Assert.Equal("none", (string)page.GraphModel.Attribute("adaptiveColors")!);
+        Assert.Equal("#111111", (string)page.GraphModel.Attribute("background")!);
         Assert.Equal(plan.PhysicalScene!.Geometry.Nodes.Count, cells.Count(cell => (string?)cell.Attribute("vertex") == "1") - plan.PhysicalScene.Geometry.Projects.Count);
         Assert.Equal(plan.PhysicalLinks.Count, cells.Count(cell => (string?)cell.Attribute("edge") == "1"));
         Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6PhysicalNodesEmitted");
@@ -1629,13 +1631,13 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.Equal("#112233", root.ResolvedStyle!.FillColor);
         Assert.Equal("#112233", shared.ResolvedStyle!.FillColor);
-        Assert.All(plan.PhysicalLinks, link => Assert.Same(request.ConnectorStyle, link.ResolvedStyle));
+        Assert.All(plan.PhysicalLinks, link => Assert.Equal("#112233", link.ResolvedStyle!.StrokeColor));
         Assert.Contains("shape=ellipse", (string)rootCell.Attribute("style")!);
         Assert.Contains("align=left;", (string)rootCell.Attribute("style")!);
         Assert.Contains("fillColor=#112233", (string)rootCell.Attribute("style")!);
-        Assert.Contains("strokeColor=#123456", (string)edge.Attribute("style")!);
-        Assert.Equal("connector-default", (string)edge.Attribute("resolvedStyleSource")!);
-        Assert.Equal("#123456", (string)edge.Attribute("resolvedStrokeColor")!);
+        Assert.Contains("strokeColor=#112233", (string)edge.Attribute("style")!);
+        Assert.Equal("connector-target-background", (string)edge.Attribute("resolvedStyleSource")!);
+        Assert.Equal("#112233", (string)edge.Attribute("resolvedStrokeColor")!);
         Assert.Equal("7", (string)edge.Attribute("resolvedStrokeWidth")!);
         Assert.Equal("81", (string)edge.Attribute("resolvedOpacity")!);
         Assert.Equal("open", (string)edge.Attribute("resolvedStartArrow")!);
@@ -1658,6 +1660,52 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains("startSize=2", (string)edge.Attribute("style")!);
         Assert.Contains("fontColor=#654321", (string)edge.Attribute("style")!);
         Assert.Contains("linkTextColor=#abcdef", (string)edge.Attribute("style")!);
+    }
+
+    [Fact]
+    public void Renderer_emits_one_effective_connector_style_from_the_final_xml()
+    {
+        var request = Request() with
+        {
+            StylePolicies = new[]
+            {
+                new ArchitectureV6StyleRule("*Service", "#000000", "#111111", "#ffffff", "rectangle", false, null)
+            },
+            ConnectorStyle = new ArchitectureV6ConnectorStyle(
+                "#ffffff", 1, false, false, null, "none", "block", 1, 100, "#000000", false, true, true,
+                "strokeColor=#ffffff;strokeWidth=99;opacity=12;endArrow=classic;linkTextColor=#abcdef;")
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+        var edge = page.GraphModel.Descendants("mxCell").First(cell => (string?)cell.Attribute("edge") == "1");
+        var destination = page.GraphModel.Descendants("mxCell").Single(cell => (string?)cell.Attribute("physicalNodeId") == plan.PhysicalNodes.Single(node => node.SemanticNodeId == "shared").PhysicalNodeId);
+        var style = (string)edge.Attribute("style")!;
+        var tokens = style.Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Split('=', 2))
+            .Where(parts => parts.Length == 2)
+            .GroupBy(parts => parts[0], StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Select(parts => parts[1]).ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal(new[] { "#000000" }, tokens["strokeColor"]);
+        Assert.Equal(new[] { "1" }, tokens["strokeWidth"]);
+        Assert.Equal(new[] { "100" }, tokens["opacity"]);
+        Assert.Equal(new[] { "block" }, tokens["endArrow"]);
+        Assert.Equal(new[] { "#abcdef" }, tokens["linkTextColor"]);
+        Assert.Contains("fillColor=#000000", (string)destination.Attribute("style")!);
+        Assert.Equal("#000000", tokens["strokeColor"].Single());
+        Assert.DoesNotContain("strokeColor=#ffffff", style, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("strokeWidth=99", style, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Renderer_reports_missing_connector_style_without_emitting_a_default()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
+
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6ConnectorStyleFidelityFailure");
+        var edge = page.GraphModel.Descendants("mxCell").First(cell => (string?)cell.Attribute("edge") == "1");
+        Assert.DoesNotContain("strokeColor=", (string)edge.Attribute("style")!);
     }
 
     [Fact]
