@@ -299,14 +299,18 @@ internal sealed class ArchitectureV6TrackSizingPlanner
 
     private RelativeRectangle VisibleBounds(PlannedPhysicalNode node, RelativeRectangle routingBounds)
     {
-        // The logical footprint remains the routing authority. The emitted
-        // rectangle is only the visible label box, centred within that
-        // footprint, so terminal demand and lane capacity cannot enlarge it.
-        var width = Math.Min(routingBounds.Width, NodeWidth(node));
-        var height = Math.Min(routingBounds.Height, Math.Max(request.NodePlacement.MinimumNodeHeight, 40));
+        // The logical footprint and the visible node edge must share the same
+        // terminal authority. A terminal allocated on the footprint boundary
+        // cannot be represented faithfully by a smaller centred rectangle:
+        // Draw.io would attach it to that rectangle's edge and introduce a
+        // rendered diagonal. Node sizing has already applied label and
+        // terminal-capacity minima to the footprint, so preserve the complete
+        // footprint as the final visible bounds here.
+        var width = Math.Max(routingBounds.Width, NodeWidth(node));
+        var height = Math.Max(routingBounds.Height, Math.Max(request.NodePlacement.MinimumNodeHeight, 40));
         return new RelativeRectangle(
-            routingBounds.X + Math.Max(0, (routingBounds.Width - width) / 2),
-            routingBounds.Y + Math.Max(0, (routingBounds.Height - height) / 2),
+            routingBounds.X,
+            routingBounds.Y,
             Math.Max(1, width), Math.Max(1, height));
     }
 

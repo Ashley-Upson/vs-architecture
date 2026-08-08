@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV6;
@@ -1613,6 +1615,61 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains(page.GraphModel.Descendants(), element => element.Name.LocalName == "mxGeometry" && element.Parent?.Name.LocalName == "mxCell");
         Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6LogicalPlacementComplete");
     }
+
+    [Fact]
+    public void Renderer_reports_diagonals_in_the_reconstructed_final_edge_polyline()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
+        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
+        var cells = page.GraphModel.Descendants("mxCell").ToArray();
+        var byId = cells.Where(cell => cell.Attribute("id") is not null)
+            .ToDictionary(cell => (string)cell.Attribute("id")!, StringComparer.Ordinal);
+
+        var diagonalCount = 0;
+        foreach (var edge in cells.Where(cell => (string?)cell.Attribute("edge") == "1"))
+        {
+            var source = byId[(string)edge.Attribute("source")!];
+            var target = byId[(string)edge.Attribute("target")!];
+            var sourcePoint = Attachment(source, edge, "exitX", true, byId);
+            var targetPoint = Attachment(target, edge, "entryX", false, byId);
+            var waypoints = edge.Element("mxGeometry")?.Element("Array")?.Elements("mxPoint")
+                .Select(point => (X: Number(point, "x"), Y: Number(point, "y")))
+                .ToArray() ?? Array.Empty<(double X, double Y)>();
+            var points = new[] { sourcePoint }.Concat(waypoints).Concat(new[] { targetPoint }).ToArray();
+
+            for (var index = 1; index < points.Length; index++)
+                if (Math.Abs(points[index - 1].X - points[index].X) > 0.01 &&
+                    Math.Abs(points[index - 1].Y - points[index].Y) > 0.01)
+                    diagonalCount++;
+        }
+
+        Assert.True(diagonalCount > 0);
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "FinalRenderedDiagonal");
+        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "RendererRouteGeometryMismatch");
+    }
+
+    private static (double X, double Y) Attachment(XElement node, XElement edge, string ratioName, bool bottom,
+        IReadOnlyDictionary<string, XElement> cells)
+    {
+        var geometry = node.Element("mxGeometry")!;
+        var x = Number(geometry, "x");
+        var y = Number(geometry, "y");
+        if ((string?)node.Attribute("parent") != "1" && cells.TryGetValue((string)node.Attribute("parent")!, out var parent))
+        {
+            x += Number(parent.Element("mxGeometry")!, "x");
+            y += Number(parent.Element("mxGeometry")!, "y");
+        }
+        var ratio = StyleValue((string)edge.Attribute("style")!, ratioName);
+        return (x + Number(geometry, "width") * ratio, y + (bottom ? Number(geometry, "height") : 0));
+    }
+
+    private static double StyleValue(string style, string name)
+    {
+        var token = style.Split(';').SingleOrDefault(item => item.StartsWith(name + "=", StringComparison.OrdinalIgnoreCase));
+        return token is null ? 0.5 : double.Parse(token.Substring(name.Length + 1), CultureInfo.InvariantCulture);
+    }
+
+    private static double Number(XElement element, string name) => double.Parse((string)element.Attribute(name)!, CultureInfo.InvariantCulture);
 
     [Fact]
     public void Planner_resolves_node_and_relationship_styles_before_rendering()

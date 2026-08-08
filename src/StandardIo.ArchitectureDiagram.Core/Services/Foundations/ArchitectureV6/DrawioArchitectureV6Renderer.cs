@@ -36,6 +36,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
         var physicalNodes = diagram.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         var nodeCells = new Dictionary<string, string>(StringComparer.Ordinal);
         var projectCells = new Dictionary<string, string>(StringComparer.Ordinal);
+        var emittedNodeBounds = new Dictionary<string, AbsoluteRectangle>(StringComparer.Ordinal);
         var emittedCellIds = new HashSet<string>(StringComparer.Ordinal) { "0", "1" };
         var minimumX = new[] { geometry.AbsoluteDiagramBounds.X }
             .Concat(geometry.Projects.Select(project => project.AbsoluteBounds.X))
@@ -81,6 +82,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 ? new AbsoluteRectangle(node.AbsoluteBounds.X - project.AbsoluteBounds.X, node.AbsoluteBounds.Y - project.AbsoluteBounds.Y,
                     node.AbsoluteBounds.Width, node.AbsoluteBounds.Height)
                 : new AbsoluteRectangle(node.AbsoluteBounds.X + offsetX, node.AbsoluteBounds.Y + offsetY, node.AbsoluteBounds.Width, node.AbsoluteBounds.Height);
+            var reconstructedBounds = node.ProjectId is not null && geometry.Projects.FirstOrDefault(item => item.ProjectId == node.ProjectId) is { } owningProject
+                ? new AbsoluteRectangle(bounds.X + owningProject.AbsoluteBounds.X + offsetX, bounds.Y + owningProject.AbsoluteBounds.Y + offsetY,
+                    bounds.Width, bounds.Height)
+                : bounds;
+            emittedNodeBounds[node.PhysicalNodeId] = reconstructedBounds;
             var styleRule = physicalNode?.ResolvedStyle;
             if (styleRule is null)
                 diagnostics.Add(new DiagramDiagnostic("V6UnresolvedNodeStyle", "A physical node reached the renderer without a planner-resolved style.", node.PhysicalNodeId));
@@ -136,6 +142,7 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 sourceGeometry, targetGeometry, sourceTerminal, targetTerminal,
                 link.ResolvedStyleSource, offsetX, offsetY);
             ValidateConnectorStyle(link, edge, diagnostics);
+            ValidateEmittedEdgeGeometry(link, route, edge, emittedNodeBounds, sourceTerminal, targetTerminal, offsetX, offsetY, diagnostics);
             root.Add(edge);
             emittedEdges++;
         }
@@ -232,7 +239,77 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
     }
 
     private static string Ratio(int x, int left, int width) =>
-        Math.Max(0, Math.Min(1, (x - left) / (double)Math.Max(1, width))).ToString("0.####", CultureInfo.InvariantCulture);
+        Math.Max(0, Math.Min(1, (x - left) / (double)Math.Max(1, width))).ToString("0.###############", CultureInfo.InvariantCulture);
+
+    private static void ValidateEmittedEdgeGeometry(PlannedPhysicalLink link, PlannedPhysicalRoute? route,
+        XElement edge, IReadOnlyDictionary<string, AbsoluteRectangle> emittedNodeBounds,
+        PlannedPhysicalTerminal? sourceTerminal, PlannedPhysicalTerminal? targetTerminal, int offsetX, int offsetY,
+        ICollection<DiagramDiagnostic> diagnostics)
+    {
+        if (route is null || !emittedNodeBounds.TryGetValue(link.SourcePhysicalNodeId, out var sourceBounds) ||
+            !emittedNodeBounds.TryGetValue(link.DestinationPhysicalNodeId, out var destinationBounds) ||
+            sourceTerminal is null || targetTerminal is null)
+            return;
+
+        var style = ParseStyle((string?)edge.Attribute("style"));
+        var source = new EmittedPoint(
+            sourceBounds.X + sourceBounds.Width * ReadRatio(style, "exitX"),
+            sourceBounds.Y + sourceBounds.Height);
+        var destination = new EmittedPoint(
+            destinationBounds.X + destinationBounds.Width * ReadRatio(style, "entryX"),
+            destinationBounds.Y);
+        var waypoints = edge.Element("mxGeometry")?.Element("Array")?.Elements("mxPoint")
+            .Select(point => new EmittedPoint(
+                ReadDouble(point, "x") + offsetX,
+                ReadDouble(point, "y") + offsetY))
+            .ToArray() ?? Array.Empty<EmittedPoint>();
+        var emitted = new[] { source }.Concat(waypoints).Concat(new[] { destination }).ToArray();
+        for (var index = 1; index < emitted.Length; index++)
+        {
+            if (!Orthogonal(emitted[index - 1], emitted[index]))
+                diagnostics.Add(new DiagramDiagnostic("FinalRenderedDiagonal",
+                    $"Emitted Draw.io geometry contains a diagonal segment at index {index - 1}: {emitted[index - 1]} -> {emitted[index]}.", link.PhysicalLinkId));
+        }
+
+        var expectedWaypoints = (route.ReducedPoints ?? route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
+            .Where(point => point.Point != sourceTerminal.Point && point.Point != targetTerminal.Point)
+            .Aggregate(new List<EmittedPoint>(), (points, point) =>
+            {
+                var value = new EmittedPoint(point.Point.X + offsetX, point.Point.Y + offsetY);
+                if (points.Count == 0 || points[points.Count - 1] != value) points.Add(value);
+                return points;
+            });
+        var expected = new[] { new EmittedPoint(sourceTerminal.Point.X + offsetX, sourceTerminal.Point.Y + offsetY) }
+            .Concat(expectedWaypoints)
+            .Concat(new[] { new EmittedPoint(targetTerminal.Point.X + offsetX, targetTerminal.Point.Y + offsetY) })
+            .ToArray();
+        var geometryMismatch = expected.Length != emitted.Length;
+        var comparedCount = Math.Min(expected.Length, emitted.Length);
+        for (var index = 0; index < comparedCount; index++)
+            geometryMismatch |= Math.Abs(expected[index].X - emitted[index].X) > 0.01 || Math.Abs(expected[index].Y - emitted[index].Y) > 0.01;
+        if (geometryMismatch)
+            diagnostics.Add(new DiagramDiagnostic("RendererRouteGeometryMismatch",
+                $"Reconstructed emitted geometry does not match the planned route polyline. plannedPoints={expected.Length}; emittedPoints={emitted.Length}.", link.PhysicalLinkId));
+    }
+
+    private static Dictionary<string, string> ParseStyle(string? text) => (text ?? string.Empty)
+        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+        .Select(token => token.Split(new[] { '=' }, 2))
+        .Where(parts => parts.Length == 2)
+        .GroupBy(parts => parts[0], StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.Last()[1], StringComparer.OrdinalIgnoreCase);
+
+    private static double ReadRatio(IReadOnlyDictionary<string, string> style, string key) =>
+        style.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var ratio)
+            ? Math.Max(0, Math.Min(1, ratio)) : 0.5;
+
+    private static double ReadDouble(XElement element, string name) =>
+        double.TryParse((string?)element.Attribute(name), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0;
+
+    private static bool Orthogonal(EmittedPoint left, EmittedPoint right) =>
+        Math.Abs(left.X - right.X) <= 0.01 || Math.Abs(left.Y - right.Y) <= 0.01;
+
+    private readonly record struct EmittedPoint(double X, double Y);
 
     private static void ValidateConnectorStyle(PlannedPhysicalLink link, XElement edge, ICollection<DiagramDiagnostic> diagnostics)
     {

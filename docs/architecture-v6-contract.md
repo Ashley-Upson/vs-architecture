@@ -307,6 +307,13 @@ The visible node width MUST be large enough for the larger of top-edge and botto
 
 If configured terminal spacing cannot fit, the planner MUST NOT duplicate ports, use exact corners, place terminals outside the visible edge, or silently compress spacing unless an explicit policy permits it.
 
+The final visible node edge and the terminal allocation authority MUST remain
+coordinate-compatible. If a terminal is allocated on the boundary of the
+authoritative node footprint, the final visible geometry MUST preserve that
+boundary (or an explicitly planned equivalent edge); a smaller centred label
+rectangle MUST NOT be emitted in a way that makes Draw.io reconstruct the
+terminal on a different X coordinate.
+
 ## 18. Tree-by-tree X placement
 
 After Y layers and node widths are final, X placement MUST be performed **tree by tree**.
@@ -1148,3 +1155,4 @@ This section SHOULD remain concise. Normative sections above are authoritative.
 - Strict mode rejects hard findings; normal mode is best-effort with explicit diagnostics.
 - Connector styling is planner-owned; renderer must not derive colour from destination fill.
 - Real projects are integration targets only; permanent regressions use reduced synthetic scenarios.
+- Terminal-bearing visible geometry preserves the authoritative terminal edge; renderer reconstruction is the final orthogonality check.
