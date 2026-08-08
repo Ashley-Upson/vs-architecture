@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Text.Json;
 using System.Linq;
 using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
@@ -13,6 +15,42 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
 public sealed class ArchitectureV6StructuralTests
 {
+    [Fact]
+    public void Content_management_regression_dataset_preserves_real_failure_shape()
+    {
+        var model = RegressionSemanticModel();
+
+        Assert.Equal(20, model.Projects.Single().Nodes.Count);
+        Assert.Equal(3, model.ExternalNodes.Count);
+        Assert.Contains(model.Links, link => link.SourceId == "cycle-a" && link.TargetId == "cycle-b");
+        Assert.Contains(model.Links, link => link.SourceId == "cycle-b" && link.TargetId == "cycle-a");
+        Assert.Equal(4, model.Links.Count(link => link.Kind == "external"));
+        Assert.Equal(8, model.Projects.Single().Nodes.Count(node => node.Id.StartsWith("standalone-", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Regression_analyser_dataset_runs_through_the_real_planner_and_preserves_relationship_pressure()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(RegressionRequest());
+        Assert.NotNull(plan.PhysicalScene);
+
+        Assert.Equal(23, plan.PhysicalNodes.Count);
+        Assert.Equal(18, plan.PhysicalLinks.Count);
+        Assert.Equal(plan.PhysicalNodes.Count, plan.NodePlacements.Count);
+        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene!.Geometry.Routes.Count);
+        Assert.Equal(3, plan.NodeMetadata.Count(node => node.IsExternal));
+        Assert.Equal(8, plan.NodeMetadata.Count(node => node.IsStandalone));
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "DuplicateTerminalCoordinate");
+
+        var externalLayer = plan.NodeMetadata.Where(node => node.IsExternal).Select(node => node.FinalVisualLayerOrdinal).Distinct().ToArray();
+        Assert.Single(externalLayer);
+        Assert.All(plan.NodeMetadata.Where(node => node.IsStandalone), node =>
+            Assert.True(node.FinalVisualLayerOrdinal > externalLayer[0]));
+        Assert.Equal(0, plan.PhysicalScene.Metrics.NodeOverlapCount);
+        Assert.All(plan.PhysicalScene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
+            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+    }
+
     [Fact]
     public void Planner_preserves_semantic_projection_and_physical_identity()
     {
@@ -2264,6 +2302,146 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Synthetic_analyser_fanout_reaches_final_plan_with_centred_terminal_demand()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("project:fanout", "Fanout")
+            .Node("root", "RootController", "project:fanout")
+            .Node("left", "LeftService", "project:fanout")
+            .Node("middle", "MiddleService", "project:fanout")
+            .Node("right", "RightService", "project:fanout")
+            .Node("far", "FarService", "project:fanout")
+            .Link("root-left", "root", "left")
+            .Link("root-middle", "root", "middle")
+            .Link("root-right", "root", "right")
+            .Link("root-far", "root", "far");
+
+        var request = fixture.BuildRequest();
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
+        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
+        var terminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId)
+            .OrderBy(item => item.Point.X).ToArray();
+
+        Assert.Equal(4, terminals.Length);
+        Assert.Equal(terminals.Length, terminals.Select(item => item.Point.X).Distinct().Count());
+        Assert.All(terminals, terminal => Assert.InRange(terminal.Point.X,
+            root.AbsoluteBounds.X + request.RoutePlanning.MinimumPortSpacing,
+            root.AbsoluteBounds.X + root.AbsoluteBounds.Width - request.RoutePlanning.MinimumPortSpacing));
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "DuplicateTerminalCoordinate");
+    }
+
+    [Fact]
+    public void Synthetic_analyser_pressure_graph_preserves_direction_groups_without_final_crossings()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("project:pressure", "Pressure")
+            .Node("root", "AppProcessingService", "project:pressure")
+            .Node("left", "AppService", "project:pressure")
+            .Node("down", "UserRoleBroker", "project:pressure")
+            .Node("right", "PageService", "project:pressure")
+            .Node("shared", "SharedService", "project:pressure")
+            .Link("root-left", "root", "left")
+            .Link("root-down", "root", "down")
+            .Link("root-right", "root", "right")
+            .Link("left-shared", "left", "shared")
+            .Link("right-shared", "right", "shared");
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(fixture.BuildRequest());
+        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
+
+        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
+            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+        Assert.Equal(0, scene.Metrics.InvalidCrossingCount);
+        Assert.Equal(0, scene.Metrics.SharedCollinearSegmentCount);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "InvalidCrossing" or "SharedBend");
+    }
+
+    [Fact]
+    public void Synthetic_analyser_width_pressure_uses_configured_visible_gap_between_siblings()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("project:width", "Width")
+            .Node("root", "RootController", "project:width")
+            .Node("short", "AService", "project:width")
+            .Node("long", "VeryLongVisibleServiceNameForSpacing", "project:width")
+            .Node("third", "CService", "project:width")
+            .Link("root-short", "root", "short")
+            .Link("root-long", "root", "long")
+            .Link("root-third", "root", "third");
+
+        var request = fixture.BuildRequest() with
+        {
+            NodePlacement = fixture.BuildRequest().NodePlacement with { HorizontalSpacing = 64 }
+        };
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
+        var nodes = scene.Geometry.Nodes.Where(node => node.SemanticNodeId is "short" or "long" or "third")
+            .OrderBy(node => node.AbsoluteBounds.X).ToArray();
+
+        Assert.Equal(3, nodes.Length);
+        for (var index = 1; index < nodes.Length; index++)
+        {
+            var gap = nodes[index].AbsoluteBounds.X -
+                (nodes[index - 1].AbsoluteBounds.X + nodes[index - 1].AbsoluteBounds.Width);
+            Assert.True(gap >= request.NodePlacement.HorizontalSpacing,
+                $"visible sibling gap was {gap}, expected at least {request.NodePlacement.HorizontalSpacing}");
+        }
+    }
+
+    [Fact]
+    public void Synthetic_analyser_standalones_are_a_separate_compact_region_below_external_nodes()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("project:standalone", "Standalone")
+            .Node("owner", "OwnerService", "project:standalone")
+            .Node("utility-a", "UtilityAService", "project:standalone")
+            .Node("utility-b", "UtilityBService", "project:standalone")
+            .Node("utility-c", "UtilityCService", "project:standalone")
+            .Node("utility-d", "UtilityDService", "project:standalone")
+            .External("external-a", "IAuth")
+            .Link("owner-external", "owner", "external-a", "external");
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(fixture.BuildRequest());
+        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
+        var externalLayer = metadata["external-a"].FinalVisualLayerOrdinal;
+        var standalones = new[] { "utility-a", "utility-b", "utility-c", "utility-d" };
+
+        Assert.All(standalones, id => Assert.True(metadata[id].IsStandalone));
+        Assert.All(standalones, id => Assert.True(metadata[id].FinalVisualLayerOrdinal > externalLayer));
+        var standalonePhysicalIds = metadata.Values.Where(item => standalones.Contains(item.SemanticNodeId, StringComparer.Ordinal))
+            .Select(item => item.PhysicalNodeId).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(2, plan.NodePlacements.Where(item => standalonePhysicalIds.Contains(item.PhysicalNodeId))
+            .GroupBy(item => item.AnchorCellId.RowId).Count());
+    }
+
+    [Fact]
+    public void Synthetic_analyser_ordinary_nodes_skip_reserved_layers_and_use_lowest_valid_layer()
+    {
+        var rules = new[]
+        {
+            new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 0),
+            new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 1)
+        };
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("project:layers", "Layers")
+            .Node("root", "RootOrchestrationService", "project:layers")
+            .Node("ordinary", "Helper", "project:layers")
+            .Node("leaf", "LeafProcessingService", "project:layers")
+            .Link("root-ordinary", "root", "ordinary")
+            .Link("ordinary-leaf", "ordinary", "leaf");
+
+        var request = fixture.BuildRequest(rules);
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
+
+        Assert.Equal("Unmatched", metadata["ordinary"].RoleSelector);
+        Assert.True(metadata["root"].FinalVisualLayerOrdinal < metadata["ordinary"].FinalVisualLayerOrdinal);
+        Assert.True(metadata["ordinary"].FinalVisualLayerOrdinal < metadata["leaf"].FinalVisualLayerOrdinal);
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementReservedOrderConflict");
+    }
+
+    [Fact]
     public void Final_plan_keeps_external_nodes_on_one_bottom_layer_and_affine_to_simple_owners()
     {
         var request = Request() with
@@ -2621,6 +2799,32 @@ public sealed class ArchitectureV6StructuralTests
             }
         };
     }
+
+    private static ArchitectureDiagramModel RegressionSemanticModel()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "ArchitectureV6",
+            "content-management-terminal-capacity-regressions.json");
+        return JsonSerializer.Deserialize<ArchitectureDiagramModel>(File.ReadAllText(path))
+            ?? throw new InvalidOperationException("The regression analyser dataset could not be deserialized.");
+    }
+
+    private static ArchitecturePlanningRequest RegressionRequest() => Request() with
+    {
+        SemanticModel = RegressionSemanticModel(),
+        SelectedScope = Request().SelectedScope with { SelectedProjectIds = new[] { "project:fixture" } },
+        NodePlacement = Request().NodePlacement with
+        {
+            RoleRules = new[]
+            {
+                new ArchitectureV6RoleRule("AggregationService", "AggregationService$", 0),
+                new ArchitectureV6RoleRule("CoordinationService", "CoordinationService$", 1),
+                new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 2),
+                new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 3),
+                new ArchitectureV6RoleRule("Service", "Service$", 4),
+                new ArchitectureV6RoleRule("Broker", "Broker$", 5)
+            }
+        }
+    };
 
     private static ArchitecturePlanningRequest StandaloneAndExternalRequest(int standaloneCount)
     {

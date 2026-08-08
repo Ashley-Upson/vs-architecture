@@ -1209,3 +1209,9 @@ This section SHOULD remain concise. Normative sections above are authoritative.
 - Terminal capacity is edge-local and calculated per source/destination side; ordinary route demand never uses total node degree to inflate a visible node.
 - Shared bends, invalid endpoint/perpendicular contacts, and under-spaced parallel intervals are diagnostics owned by route/lane allocation and final physical validation, not renderer repairs.
 - External affinity diagnostics distinguish genuinely blocked owner-centred placement from stale or avoidable displacement and retain the blocking ownership evidence.
+- Synthetic planner regressions begin with analyser-shaped semantic graphs and pass through the real planner; planner output, physical IDs, coordinates, route points, and historical artifacts are never fixture authority.
+- Terminal groups are centred on the connected node edge, use configured port spacing and inset as their authoritative capacity rules, and remain uniquely ordered after the final planning pipeline.
+- Route-demand ordering groups links by resolved direction in left, down, right order where applicable; relative vertical drop order preserves that grouping and prevents avoidable terminal/link crossings.
+- Visible horizontal node separation is governed by configured spacing policy after node-width and footprint expansion, not by incidental sparse logical-column distance.
+- Standalone nodes occupy a dedicated compact region below the bottom External/hierarchy layer, remain standalone regardless of role suffix, and preserve at least one logical cell of horizontal and vertical separation.
+- Ordinary nodes without reserved selectors use the lowest valid non-reserved layer above their dependencies, skipping reserved bands rather than inheriting a fallback layer.

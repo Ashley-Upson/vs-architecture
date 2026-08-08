@@ -1,0 +1,57 @@
+{
+  "Projects": [
+    {
+      "Id": "project:fixture",
+      "Name": "Architecture Fixture",
+      "UniqueId": "project:fixture",
+      "Nodes": [
+        { "Id": "root", "ProjectId": "project:fixture", "Name": "RootController", "FullName": "Fixture.RootController", "Kind": "Class", "UniqueId": "root", "Interfaces": [] },
+        { "Id": "app", "ProjectId": "project:fixture", "Name": "AppService", "FullName": "Fixture.AppService", "Kind": "Class", "UniqueId": "app", "Interfaces": [] },
+        { "Id": "page", "ProjectId": "project:fixture", "Name": "PageService", "FullName": "Fixture.PageService", "Kind": "Class", "UniqueId": "page", "Interfaces": [] },
+        { "Id": "orchestration", "ProjectId": "project:fixture", "Name": "RenderOrchestrationService", "FullName": "Fixture.RenderOrchestrationService", "Kind": "Class", "UniqueId": "orchestration", "Interfaces": [] },
+        { "Id": "coordination", "ProjectId": "project:fixture", "Name": "RenderCoordinationService", "FullName": "Fixture.RenderCoordinationService", "Kind": "Class", "UniqueId": "coordination", "Interfaces": [] },
+        { "Id": "processing", "ProjectId": "project:fixture", "Name": "RenderProcessingService", "FullName": "Fixture.RenderProcessingService", "Kind": "Class", "UniqueId": "processing", "Interfaces": [] },
+        { "Id": "aggregation", "ProjectId": "project:fixture", "Name": "RenderAggregationService", "FullName": "Fixture.RenderAggregationService", "Kind": "Class", "UniqueId": "aggregation", "Interfaces": [] },
+        { "Id": "shared", "ProjectId": "project:fixture", "Name": "SharedService", "FullName": "Fixture.SharedService", "Kind": "Class", "UniqueId": "shared", "Interfaces": [] },
+        { "Id": "broker", "ProjectId": "project:fixture", "Name": "AuditBroker", "FullName": "Fixture.AuditBroker", "Kind": "Class", "UniqueId": "broker", "Interfaces": [] },
+        { "Id": "cycle-a", "ProjectId": "project:fixture", "Name": "CycleAService", "FullName": "Fixture.CycleAService", "Kind": "Class", "UniqueId": "cycle-a", "Interfaces": [] },
+        { "Id": "cycle-b", "ProjectId": "project:fixture", "Name": "CycleBService", "FullName": "Fixture.CycleBService", "Kind": "Class", "UniqueId": "cycle-b", "Interfaces": [] },
+        { "Id": "standalone-0", "ProjectId": "project:fixture", "Name": "UtilityZero", "FullName": "Fixture.UtilityZero", "Kind": "Class", "UniqueId": "standalone-0", "Interfaces": [] },
+        { "Id": "standalone-1", "ProjectId": "project:fixture", "Name": "UtilityOne", "FullName": "Fixture.UtilityOne", "Kind": "Class", "UniqueId": "standalone-1", "Interfaces": [] },
+        { "Id": "standalone-2", "ProjectId": "project:fixture", "Name": "UtilityTwo", "FullName": "Fixture.UtilityTwo", "Kind": "Class", "UniqueId": "standalone-2", "Interfaces": [] },
+        { "Id": "standalone-3", "ProjectId": "project:fixture", "Name": "UtilityThree", "FullName": "Fixture.UtilityThree", "Kind": "Class", "UniqueId": "standalone-3", "Interfaces": [] },
+        { "Id": "standalone-4", "ProjectId": "project:fixture", "Name": "UtilityFour", "FullName": "Fixture.UtilityFour", "Kind": "Class", "UniqueId": "standalone-4", "Interfaces": [] },
+        { "Id": "standalone-5", "ProjectId": "project:fixture", "Name": "UtilityFive", "FullName": "Fixture.UtilityFive", "Kind": "Class", "UniqueId": "standalone-5", "Interfaces": [] },
+        { "Id": "standalone-6", "ProjectId": "project:fixture", "Name": "UtilitySix", "FullName": "Fixture.UtilitySix", "Kind": "Class", "UniqueId": "standalone-6", "Interfaces": [] },
+        { "Id": "standalone-7", "ProjectId": "project:fixture", "Name": "UtilitySeven", "FullName": "Fixture.UtilitySeven", "Kind": "Class", "UniqueId": "standalone-7", "Interfaces": [] },
+        { "Id": "project-exit", "ProjectId": "project:fixture", "Name": "BoundaryService", "FullName": "Fixture.BoundaryService", "Kind": "Class", "UniqueId": "project-exit", "Interfaces": [] }
+      ]
+    }
+  ],
+  "ExternalNodes": [
+    { "Id": "external-auth", "Name": "IAuth", "AssemblyName": "External", "UniqueId": "external-auth", "FullName": "External.IAuth", "Tag": "interface" },
+    { "Id": "external-events", "Name": "IEventHub", "AssemblyName": "External", "UniqueId": "external-events", "FullName": "External.IEventHub", "Tag": "interface" },
+    { "Id": "external-cache", "Name": "IMetadataCache", "AssemblyName": "External", "UniqueId": "external-cache", "FullName": "External.IMetadataCache", "Tag": "interface" }
+  ],
+  "Links": [
+    { "Id": "root-app", "SourceId": "root", "TargetId": "app", "Kind": "internal" },
+    { "Id": "root-page", "SourceId": "root", "TargetId": "page", "Kind": "internal" },
+    { "Id": "app-orchestration", "SourceId": "app", "TargetId": "orchestration", "Kind": "internal" },
+    { "Id": "page-orchestration", "SourceId": "page", "TargetId": "orchestration", "Kind": "internal" },
+    { "Id": "orchestration-coordination", "SourceId": "orchestration", "TargetId": "coordination", "Kind": "internal" },
+    { "Id": "orchestration-processing", "SourceId": "orchestration", "TargetId": "processing", "Kind": "internal" },
+    { "Id": "coordination-processing", "SourceId": "coordination", "TargetId": "processing", "Kind": "internal" },
+    { "Id": "processing-aggregation", "SourceId": "processing", "TargetId": "aggregation", "Kind": "internal" },
+    { "Id": "app-shared", "SourceId": "app", "TargetId": "shared", "Kind": "internal" },
+    { "Id": "page-shared", "SourceId": "page", "TargetId": "shared", "Kind": "internal" },
+    { "Id": "app-broker", "SourceId": "app", "TargetId": "broker", "Kind": "internal" },
+    { "Id": "page-broker", "SourceId": "page", "TargetId": "broker", "Kind": "internal" },
+    { "Id": "cycle-a-b", "SourceId": "cycle-a", "TargetId": "cycle-b", "Kind": "internal" },
+    { "Id": "cycle-b-a", "SourceId": "cycle-b", "TargetId": "cycle-a", "Kind": "internal" },
+    { "Id": "app-auth", "SourceId": "app", "TargetId": "external-auth", "Kind": "external" },
+    { "Id": "app-events", "SourceId": "app", "TargetId": "external-events", "Kind": "external" },
+    { "Id": "processing-cache", "SourceId": "processing", "TargetId": "external-cache", "Kind": "external" },
+    { "Id": "boundary-auth", "SourceId": "project-exit", "TargetId": "external-auth", "Kind": "external" }
+  ],
+  "Selection": null
+}
