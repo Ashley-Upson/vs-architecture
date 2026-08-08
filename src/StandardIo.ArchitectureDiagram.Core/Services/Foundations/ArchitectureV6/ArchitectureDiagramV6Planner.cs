@@ -28,6 +28,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         ArchitectureProjectionResult projection = null!;
         TimeStage("projection", () => projection = new ProjectionBuilder(request).Build());
         var requiredSpans = new Dictionary<string, int>(StringComparer.Ordinal);
+        var additionalInterLayerRows = 0;
         var placementRebuildCount = 0;
         var expansionRequirementCount = 0;
         var expandedNodeIds = new HashSet<string>(StringComparer.Ordinal);
@@ -46,7 +47,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var expansionConverged = false;
         for (var pass = 0; pass < maximumExpansionIterations; pass++)
         {
-            TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans).Build());
+            TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans, additionalInterLayerRows).Build());
             TimeStage("endpointEnvelopePlanning", () => endpointPlanning = new ArchitectureV6EndpointEnvelopePlanner(
                 request, projection.PhysicalNodes, projection.PhysicalLinks, placement.NodePlacements).Build(
                     placement.ProjectGrids, placement.DiagramGrid, pass));
@@ -89,12 +90,11 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     expansionRequirementCount += endpointOwners.Length;
                     invalidatedRouteCount += routing.Routes.Count;
                     rebuiltReservationCount += placement.SubtreeReservations.Count;
-                    foreach (var owner in endpointOwners)
-                    {
-                        var currentSpan = placement.NodePlacements.SingleOrDefault(item => item.PhysicalNodeId == owner)?.ColumnSpan ?? 1;
-                        var requestedSpan = currentSpan + 2;
-                        requiredSpans[owner] = Math.Max(requiredSpans.TryGetValue(owner, out var existing) ? existing : 0, requestedSpan);
-                    }
+                    additionalInterLayerRows++;
+                    expansionConvergenceDiagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "TrackCapacityExpansion",
+                        $"Iteration {pass + 1} adds one endpoint handoff row; total additional inter-layer rows={additionalInterLayerRows}.",
+                        PlanningDiagnosticSubject.Grid, null, ArchitecturePlanningDiagnosticSeverity.Info));
                     continue;
                 }
                 var preflightSizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,

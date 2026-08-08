@@ -2419,6 +2419,31 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
+    public void Endpoint_capacity_rebuilds_routing_rows_without_expanding_node_footprints()
+    {
+        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
+
+        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "TrackCapacityExpansion");
+        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "FootprintExpansionDidNotConverge");
+        Assert.All(plan.Routes, route => Assert.True(route.IsStructurallySupported, route.UnsupportedReason));
+        Assert.All(plan.Routes, route =>
+            Assert.Equal(route.Steps.Count, route.Steps.Select(step => step.CellId).Distinct().Count()));
+
+        var sharedRows = plan.EndpointPlanning!.Reservations
+            .Where(reservation => reservation.Cells.Count > 0)
+            .GroupBy(reservation => reservation.Cells.First().RowId)
+            .SelectMany(group => group.SelectMany(reservation => reservation.Cells
+                .Select(cell => (Row: group.Key, Column: cell.ColumnId, Reservation: reservation.ReservationId))))
+            .GroupBy(item => (item.Row, item.Column));
+        Assert.All(sharedRows, group => Assert.True(group.Count() == 1,
+            $"Endpoint reservations overlap at {group.Key.Row}/{group.Key.Column}: {string.Join(",", group.Select(item => item.Reservation))}"));
+
+        var rootPhysicalId = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root").PhysicalNodeId;
+        var rootPlacement = plan.NodePlacements.Single(item => item.PhysicalNodeId == rootPhysicalId);
+        Assert.Equal(3, rootPlacement.ColumnSpan);
+    }
+
+    [Fact]
     public void Final_terminal_slots_are_planner_owned_and_do_not_resize_nodes()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(FanoutRequest(4));

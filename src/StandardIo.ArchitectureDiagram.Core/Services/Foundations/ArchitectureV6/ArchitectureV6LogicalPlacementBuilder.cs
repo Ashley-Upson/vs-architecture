@@ -14,6 +14,7 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private readonly ArchitecturePlanningRequest request;
     private readonly ArchitectureProjectionResult projection;
     private readonly IReadOnlyDictionary<string, int> requiredSpans;
+    private readonly int additionalInterLayerRows;
     private readonly Dictionary<string, PlannedPhysicalNode> nodes;
     private readonly Dictionary<string, int> order;
     private readonly Dictionary<string, string?> ownerByNode = new(StringComparer.Ordinal);
@@ -44,11 +45,12 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
     private long intervalCompatibilityChecks;
 
     public ArchitectureV6LogicalPlacementBuilder(ArchitecturePlanningRequest request, ArchitectureProjectionResult projection,
-        IReadOnlyDictionary<string, int>? requiredSpans = null)
+        IReadOnlyDictionary<string, int>? requiredSpans = null, int additionalInterLayerRows = 0)
     {
         this.request = request ?? throw new ArgumentNullException(nameof(request));
         this.projection = projection ?? throw new ArgumentNullException(nameof(projection));
         this.requiredSpans = requiredSpans ?? new Dictionary<string, int>(StringComparer.Ordinal);
+        this.additionalInterLayerRows = Math.Max(0, additionalInterLayerRows);
         nodes = projection.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         order = projection.PhysicalNodes.Select((node, index) => (node.PhysicalNodeId, index))
             .ToDictionary(item => item.PhysicalNodeId, item => item.index, StringComparer.Ordinal);
@@ -968,17 +970,29 @@ internal sealed class ArchitectureV6LogicalPlacementBuilder
                 new(topExterior, 0, 1, 1, 1, 0, 0, PlanningGridTrackRole.InterLayerRouting,
                     "placement", "project header plus content origin", projectId)
             };
-            rows.AddRange(placementRows.Select((id, index) => new PlanningGridRow(id, index * 2 + 1, 1, 1, 1, index * 2 + 1, index * 2 + 1,
-                id.Value.StartsWith("standalone:", StringComparison.Ordinal) ? PlanningGridTrackRole.StandaloneRegion :
-                id.Value.Contains(":baseline", StringComparison.Ordinal) ? PlanningGridTrackRole.BaselineNode : PlanningGridTrackRole.NodeBearing,
-                "placement", "logical node placement", projectId)));
-            for (var index = 0; index < placementRows.Length - 1; index++)
+            var rowOrdinal = 1;
+            for (var index = 0; index < placementRows.Length; index++)
             {
+                var nodeRow = placementRows[index];
+                rows.Add(new PlanningGridRow(nodeRow, rowOrdinal, 1, 1, 1, rowOrdinal, rowOrdinal,
+                    nodeRow.Value.StartsWith("standalone:", StringComparison.Ordinal) ? PlanningGridTrackRole.StandaloneRegion :
+                    nodeRow.Value.Contains(":baseline", StringComparison.Ordinal) ? PlanningGridTrackRole.BaselineNode : PlanningGridTrackRole.NodeBearing,
+                    "placement", "logical node placement", projectId));
+                rowOrdinal++;
+                if (index >= placementRows.Length - 1) continue;
                 var id = new PlanningGridRowId($"routing:inter-layer:{index}");
-                rows.Add(new PlanningGridRow(id, index * 2 + 2, 1, 1, 1, index * 2 + 2, index * 2 + 2,
+                rows.Add(new PlanningGridRow(id, rowOrdinal, 1, 1, 1, rowOrdinal, rowOrdinal,
                     PlanningGridTrackRole.InterLayerRouting, "placement", "shared inter-layer routing", projectId));
+                rowOrdinal++;
+                for (var extra = 0; extra < additionalInterLayerRows; extra++)
+                {
+                    var endpointId = new PlanningGridRowId($"routing:inter-layer:{index}:endpoint:{extra}");
+                    rows.Add(new PlanningGridRow(endpointId, rowOrdinal, 1, 1, 1, rowOrdinal, rowOrdinal,
+                        PlanningGridTrackRole.InterLayerRouting, "endpoint-convergence", "additional endpoint handoff capacity", projectId));
+                    rowOrdinal++;
+                }
             }
-            rows.Add(new PlanningGridRow(bottomExterior, placementRows.Length * 2, 1, 1, 1, placementRows.Length * 2, placementRows.Length * 2,
+            rows.Add(new PlanningGridRow(bottomExterior, rowOrdinal, 1, 1, 1, rowOrdinal, rowOrdinal,
                 PlanningGridTrackRole.InterLayerRouting, "placement", "permanent bottom exterior routing capacity", projectId));
             var columns = logicalGrid.Columns.Select((id, index) => new PlanningGridColumn(id, index, 1, 1, 1, index, index,
                 logicalGrid.NodeFootprintColumns.Contains(id) ? PlanningGridTrackRole.NodeFootprint : PlanningGridTrackRole.SubtreeSiblingGap,

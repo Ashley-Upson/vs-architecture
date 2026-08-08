@@ -92,12 +92,12 @@ internal sealed class ArchitectureV6EndpointEnvelopePlanner
         var spacing = Math.Max(1, request.RoutePlanning.MinimumPortSpacing);
         var inset = Math.Max(spacing, request.GridSizing.NodeToRouteClearance);
         var width = inset * 2 + Math.Max(0, sideLinks.Count - 1) * spacing;
-        var ordered = sideLinks.Select(link => (link, direction: Direction(node, link, side)))
+        var ordered = sideLinks.Select(link => (link, direction: Direction(node, project, link, side)))
             .GroupBy(item => item.direction)
             .OrderBy(group => (int)group.Key)
             .SelectMany(group =>
             {
-                var ids = group.OrderBy(item => OtherNodeColumn(item.link, node, side), StringComparer.Ordinal)
+                var ids = group.OrderBy(item => OtherNodeColumn(project, item.link, node, side))
                     .ThenBy(item => item.link.PhysicalLinkId, StringComparer.Ordinal)
                     .Select(item => item.link.PhysicalLinkId).ToArray();
                 var groupRecord = new TerminalDirectionGroup(group.Key, ids, (int)group.Key,
@@ -132,12 +132,24 @@ internal sealed class ArchitectureV6EndpointEnvelopePlanner
         }
 
         var anchorColumn = project.Grid.Columns.Single(column => column.Id.Equals(placement.AnchorCellId.ColumnId)).LogicalOrder;
-        var placementColumns = placement.Footprint.Select(cell => cell.ColumnId).Distinct()
-            .OrderBy(item => project.Grid.Columns.Single(column => column.Id.Equals(item)).LogicalOrder).ToArray();
-        var preferredColumns = project.Grid.Columns.OrderBy(column => Math.Abs(column.LogicalOrder - anchorColumn))
+        // The envelope reserves endpoint demand, not the node footprint again.
+        // Node width is owned by placement; duplicating it here can consume the
+        // entire routing band and falsely trigger monotonic node expansion.
+        var requestedColumnCount = Math.Max(1, ordered.Length);
+        var occupiedByOtherReservation = new HashSet<PlanningGridColumnId>(reservations
+            .Where(item => item.Cells.Any(cell => cell.RowId.Equals(envelopeRow.Id)))
+            .SelectMany(item => item.Cells)
+            .Select(cell => cell.ColumnId));
+        var preferredColumns = project.Grid.Columns
+            .OrderBy(column => occupiedByOtherReservation.Contains(column.Id) ? 1 : 0)
+            .ThenBy(column => Math.Abs(column.LogicalOrder - anchorColumn))
             .ThenBy(column => column.LogicalOrder)
-            .Take(Math.Max(placementColumns.Length, ordered.Length))
+            .Take(requestedColumnCount)
             .Select(column => column.Id).ToArray();
+        if (preferredColumns.Length < requestedColumnCount)
+            diagnostics.Add(new ArchitecturePlanningDiagnostic("EndpointEnvelopeCapacityInsufficient",
+                $"The endpoint envelope for {node.PhysicalNodeId} on {side} requires {requestedColumnCount} columns but the existing row exposes only {preferredColumns.Length} available columns after reservation separation.",
+                PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
         var cells = preferredColumns.Select(column => new PlanningGridCellId(project.Grid.Id, envelopeRow.Id, column)).ToArray();
         var reservationId = $"endpoint-envelope:{node.PhysicalNodeId}:{side}";
         var reservation = new EndpointEnvelopeReservation(reservationId, node.PhysicalNodeId, side,
@@ -149,21 +161,22 @@ internal sealed class ArchitectureV6EndpointEnvelopePlanner
             cells, width, Math.Max(1, request.GridSizing.RoutingRowMinimum), groups.Where(group => demand.PhysicalLinkIds.Intersect(group.PhysicalLinkIds, StringComparer.Ordinal).Any()).ToArray(), reservation.Provenance));
     }
 
-    private TerminalDirectionGroupKind Direction(PlannedPhysicalNode node, PlannedPhysicalLink link, GridSide side)
+    private TerminalDirectionGroupKind Direction(PlannedPhysicalNode node, ProjectRoutingGrid project, PlannedPhysicalLink link, GridSide side)
     {
         var otherId = side == GridSide.Bottom ? link.DestinationPhysicalNodeId : link.SourcePhysicalNodeId;
         var other = placements.SingleOrDefault(item => item.PhysicalNodeId == otherId);
         var current = placements.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
         if (other is null) return TerminalDirectionGroupKind.Down;
-        var currentColumn = current.AnchorCellId.ColumnId.Value;
-        var otherColumn = other.AnchorCellId.ColumnId.Value;
-        var comparison = string.CompareOrdinal(otherColumn, currentColumn);
+        var currentColumn = project.Grid.Columns.Single(column => column.Id.Equals(current.AnchorCellId.ColumnId)).LogicalOrder;
+        var otherColumn = project.Grid.Columns.Single(column => column.Id.Equals(other.AnchorCellId.ColumnId)).LogicalOrder;
+        var comparison = otherColumn.CompareTo(currentColumn);
         return comparison < 0 ? TerminalDirectionGroupKind.Left : comparison > 0 ? TerminalDirectionGroupKind.Right : TerminalDirectionGroupKind.Down;
     }
 
-    private string OtherNodeColumn(PlannedPhysicalLink link, PlannedPhysicalNode node, GridSide side)
+    private int OtherNodeColumn(ProjectRoutingGrid project, PlannedPhysicalLink link, PlannedPhysicalNode node, GridSide side)
     {
         var otherId = side == GridSide.Bottom ? link.DestinationPhysicalNodeId : link.SourcePhysicalNodeId;
-        return placements.SingleOrDefault(item => item.PhysicalNodeId == otherId)?.AnchorCellId.ColumnId.Value ?? "~";
+        var other = placements.SingleOrDefault(item => item.PhysicalNodeId == otherId);
+        return other is null ? int.MaxValue : project.Grid.Columns.Single(column => column.Id.Equals(other.AnchorCellId.ColumnId)).LogicalOrder;
     }
 }

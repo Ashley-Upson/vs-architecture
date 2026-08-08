@@ -217,19 +217,24 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             var destinationEnvelope = EndpointEnvelopeCell(destination.PhysicalNodeId, GridSide.Top, link.PhysicalLinkId) ??
                 placements[destination.PhysicalNodeId].AnchorCellId;
             var sourcePrefix = FindOrthogonalPath(grids[sourceGrid], placements[source.PhysicalNodeId].AnchorCellId,
-                sourceEnvelope, link, destinationRequiresTopEntry: false, sourceMustDescend: true);
+                sourceEnvelope, link, destinationRequiresTopEntry: false, sourceMustDescend: true,
+                allowEndpointFootprints: true);
             var ordinary = sourceEnvelope == destinationEnvelope
                 ? new[] { sourceEnvelope }
                 : FindOrthogonalPath(grids[sourceGrid], sourceEnvelope, destinationEnvelope, link,
-                    destinationRequiresTopEntry: false, sourceMustDescend: false);
+                    destinationRequiresTopEntry: false, sourceMustDescend: false,
+                    allowEndpointFootprints: false);
             var destinationSuffix = FindOrthogonalPath(grids[sourceGrid], destinationEnvelope,
-                placements[destination.PhysicalNodeId].AnchorCellId, link, destinationRequiresTopEntry: true, sourceMustDescend: true);
-            var path = AppendContiguous(sourcePrefix, ordinary.Skip(1), destinationSuffix.Skip(1));
-            if (path.Length == 0 || path[0] != placements[source.PhysicalNodeId].AnchorCellId ||
+                placements[destination.PhysicalNodeId].AnchorCellId, link, destinationRequiresTopEntry: true, sourceMustDescend: true,
+                allowEndpointFootprints: true);
+            var path = sourcePrefix.Count == 0 || ordinary.Count == 0 || destinationSuffix.Count == 0
+                ? Array.Empty<PlanningGridCellId>()
+                : AppendContiguous(sourcePrefix, ordinary.Skip(1), destinationSuffix.Skip(1));
+            if (path.Length == 0 || !IsContiguousPath(path, grids[sourceGrid]) || !IsSimplePath(path) || path[0] != placements[source.PhysicalNodeId].AnchorCellId ||
                 path[path.Length - 1] != placements[destination.PhysicalNodeId].AnchorCellId)
             {
                 diagnostics.Add(new ArchitecturePlanningDiagnostic("EndpointEnvelopePathUnavailable",
-                    "The reserved endpoint envelope did not admit a complete path; the route is unsupported until endpoint capacity converges.",
+                    $"The reserved endpoint envelope did not admit a complete path; source={sourceEnvelope}, destination={destinationEnvelope}, sourcePrefix={sourcePrefix.Count}, ordinary={ordinary.Count}, destinationSuffix={destinationSuffix.Count}; the route is unsupported until endpoint capacity converges.",
                     PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
                 path = Array.Empty<PlanningGridCellId>();
             }
@@ -270,7 +275,8 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         PlanningGridCellId destination,
         PlannedPhysicalLink link,
         bool destinationRequiresTopEntry = true,
-        bool sourceMustDescend = true)
+        bool sourceMustDescend = true,
+        bool allowEndpointFootprints = false)
     {
         if (source == destination) return new[] { source };
         var queue = new SortedSet<PathCandidate>(Comparer<PathCandidate>.Create((left, right) =>
@@ -291,7 +297,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             if (!distances.TryGetValue(current, out var currentDistance) || currentDistance != candidate.Distance) continue;
             foreach (var next in Neighbours(grid, current, source, destination, destinationRequiresTopEntry, sourceMustDescend))
             {
-                if (!CanTraversePathCell(grid, next, source, destination, link)) continue;
+                if (!CanTraversePathCell(grid, next, source, destination, link, allowEndpointFootprints)) continue;
                 var distance = currentDistance + 1;
                 if (distances.TryGetValue(next, out var existingDistance) && existingDistance <= distance) continue;
                 distances[next] = distance;
@@ -350,7 +356,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 var destinationRow = grid.RowOrder.IndexOf(destination.RowId);
                 var destinationColumn = grid.ColumnOrder.IndexOf(destination.ColumnId);
                 var topEntry = column == destinationColumn && row == destinationRow - 1;
-                var horizontalEntry = candidate.row == destinationRow && candidate.column != destinationColumn;
+                var horizontalEntry = candidate.row == destinationRow && column != destinationColumn;
                 if (destinationRequiresTopEntry ? !topEntry : !topEntry && !horizontalEntry) continue;
             }
             yield return cell;
@@ -358,10 +364,13 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
     }
 
     private bool CanTraversePathCell(MutableGrid grid, PlanningGridCellId cell, PlanningGridCellId source, PlanningGridCellId destination,
-        PlannedPhysicalLink link)
+        PlannedPhysicalLink link, bool allowEndpointFootprints)
     {
         if (cell == source || cell == destination) return true;
-        if (IsOccupiedFootprint(grid, cell.RowId, cell.ColumnId)) return false;
+        var owners = occupancy.Resolve(cell).PhysicalNodeIds;
+        var belongsToEndpointNode = allowEndpointFootprints && (owners.Contains(link.SourcePhysicalNodeId, StringComparer.Ordinal) ||
+            owners.Contains(link.DestinationPhysicalNodeId, StringComparer.Ordinal));
+        if (IsOccupiedFootprint(grid, cell.RowId, cell.ColumnId) && !belongsToEndpointNode) return false;
         if (occupancy.IsEndpointReservedForOtherRoute(cell, link.PhysicalLinkId)) return false;
         return !grid.Cells.TryGetValue(cell, out var existing) || (existing.Capabilities & CellCapability.RoutingAllowed) != 0;
     }
@@ -416,7 +425,9 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
                 if (resolution.Status is ArchitectureV6OccupancyStatus.Ambiguous or ArchitectureV6OccupancyStatus.Inconsistent)
                     return new RouteLegalityResult(false, Trace(link, topology, steps, step,
                         resolution.Message ?? "invalid node footprint ownership"));
-                if (resolution.IsOccupied && !occupancy.IsExactEndpointCell(step.CellId, step, link))
+                var isOwnEndpointFootprint = resolution.PhysicalNodeIds.Contains(link.SourcePhysicalNodeId, StringComparer.Ordinal) ||
+                    resolution.PhysicalNodeIds.Contains(link.DestinationPhysicalNodeId, StringComparer.Ordinal);
+                if (resolution.IsOccupied && !isOwnEndpointFootprint && !occupancy.IsExactEndpointCell(step.CellId, step, link))
                     return new RouteLegalityResult(false, Trace(link, topology, steps, step,
                         $"occupied node footprint '{resolution.PhysicalNodeIds.SingleOrDefault() ?? "unknown"}'"));
             }
@@ -483,7 +494,7 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         if (turnColumn == originalTargetColumn)
         {
             var verticalPath = new List<PlanningGridCellId> { turn.CellId };
-            if (!CanTraverseVertical(grid, turnRow, targetRow, turnColumn))
+            if (!CanTraverseVertical(grid, turnRow, targetRow, turnColumn, link))
             {
                 var alternate = SelectAlternateColumn(grid, turnRow, targetRow, destinationRow, turnColumn, link);
                 if (alternate.ColumnIndex < 0)
@@ -644,27 +655,31 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
         return true;
     }
 
-    private bool CanTraverseVertical(MutableGrid grid, int startRow, int endRow, int column)
+    private bool CanTraverseVertical(MutableGrid grid, int startRow, int endRow, int column, PlannedPhysicalLink link)
     {
         var direction = endRow >= startRow ? 1 : -1;
         for (var row = startRow; row != endRow + direction; row += direction)
-            if (!CanUseAuthorisedCell(grid, grid.RowOrder[row], grid.ColumnOrder[column])) return false;
+            if (!CanUseAuthorisedCell(grid, grid.RowOrder[row], grid.ColumnOrder[column], link)) return false;
         return true;
     }
 
-    private bool CanTraverseHorizontal(MutableGrid grid, int row, int startColumn, int endColumn)
+    private bool CanTraverseHorizontal(MutableGrid grid, int row, int startColumn, int endColumn, PlannedPhysicalLink link)
     {
         var direction = endColumn >= startColumn ? 1 : -1;
         for (var column = startColumn; column != endColumn + direction; column += direction)
-            if (!CanUseAuthorisedCell(grid, grid.RowOrder[row], grid.ColumnOrder[column])) return false;
+            if (!CanUseAuthorisedCell(grid, grid.RowOrder[row], grid.ColumnOrder[column], link)) return false;
         return true;
     }
 
-    private bool CanUseAuthorisedCell(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId)
+    private bool CanUseAuthorisedCell(MutableGrid grid, PlanningGridRowId rowId, PlanningGridColumnId columnId, PlannedPhysicalLink? link = null)
     {
         var cellId = new PlanningGridCellId(grid.Id, rowId, columnId);
         if (!grid.RowOrder.Contains(rowId) || !grid.ColumnOrder.Contains(columnId)) return false;
-        if (occupancy.Resolve(cellId).IsOccupied) return false;
+        var owners = occupancy.Resolve(cellId).PhysicalNodeIds;
+        if (occupancy.Resolve(cellId).IsOccupied && (link is null ||
+            !owners.Contains(link.SourcePhysicalNodeId, StringComparer.Ordinal) &&
+            !owners.Contains(link.DestinationPhysicalNodeId, StringComparer.Ordinal))) return false;
+        if (link is not null && occupancy.IsEndpointReservedForOtherRoute(cellId, link.PhysicalLinkId)) return false;
         return !grid.Cells.TryGetValue(cellId, out var existing) || (existing.Capabilities & CellCapability.RoutingAllowed) != 0;
     }
 
@@ -701,9 +716,9 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             if (column.Id == grid.ColumnOrder[originalColumn]) continue;
             considered.Add(column.Id.Value);
             var index = grid.ColumnOrder.IndexOf(column.Id);
-            var reason = !CanTraverseVertical(grid, startRow, transitionRow, originalColumn) ? "source-to-transition blocked" :
-                !CanTraverseHorizontal(grid, transitionRow, originalColumn, index) ? "transition row blocked" :
-                !CanTraverseVertical(grid, transitionRow, targetRow, index) ? "destination corridor blocked" : null;
+            var reason = !CanTraverseVertical(grid, startRow, transitionRow, originalColumn, link) ? "source-to-transition blocked" :
+                !CanTraverseHorizontal(grid, transitionRow, originalColumn, index, link) ? "transition row blocked" :
+                !CanTraverseVertical(grid, transitionRow, targetRow, index, link) ? "destination corridor blocked" : null;
             if (reason is null) return new AlternateColumnSelection(index, transitionRow, considered, rejections);
             rejections.Add($"{column.Id.Value}={reason}");
         }
@@ -967,6 +982,20 @@ internal sealed class ArchitectureV6AbstractRoutePlanner
             if (result.Count == 0 || result[result.Count - 1] != cell) result.Add(cell);
         return result.ToArray();
     }
+
+    private static bool IsContiguousPath(IReadOnlyList<PlanningGridCellId> path, MutableGrid grid)
+    {
+        for (var index = 1; index < path.Count; index++)
+        {
+            var rowDelta = Math.Abs(grid.RowOrder.IndexOf(path[index].RowId) - grid.RowOrder.IndexOf(path[index - 1].RowId));
+            var columnDelta = Math.Abs(grid.ColumnOrder.IndexOf(path[index].ColumnId) - grid.ColumnOrder.IndexOf(path[index - 1].ColumnId));
+            if (rowDelta + columnDelta != 1) return false;
+        }
+        return true;
+    }
+
+    private static bool IsSimplePath(IReadOnlyList<PlanningGridCellId> path) =>
+        path.Distinct().Count() == path.Count;
 
     private PlanningGridId GridOf(PlannedPhysicalNode node) => new($"project:{ProjectOf(node.PhysicalNodeId)}");
     private string ProjectOf(string physicalNodeId) => nodes.Single(node => node.PhysicalNodeId == physicalNodeId).ProjectId ?? "external";
