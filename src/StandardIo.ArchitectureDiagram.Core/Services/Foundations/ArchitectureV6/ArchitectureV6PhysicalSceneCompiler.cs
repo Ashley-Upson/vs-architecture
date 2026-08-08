@@ -422,7 +422,10 @@ internal sealed class ArchitectureV6PhysicalSceneCompiler
             var route = routes.SingleOrDefault(item => item.PhysicalLinkId == turn.RouteId);
             var step = route?.Steps.SingleOrDefault(item => item.CellId.ToString() == turn.CellId);
             if (route is null || step is null || !transforms.TryGetValue(step.GridId, out var transform)) continue;
-            var point = CellPoint(step, route, transform);
+            // A turn owns both the horizontal and vertical lane. CellPoint
+            // can resolve only one axis from the step sides, so using it here
+            // collapses distinct lane intersections onto the same bend.
+            var point = TurnPoint(route, step, transform);
             result.Add(new PlannedPhysicalTurn(turn.BendIdentity, turn.RouteId, step.GridId, step.CellId, point,
                 turn.HorizontalRunId, turn.VerticalRunId, turn.Provenance));
         }

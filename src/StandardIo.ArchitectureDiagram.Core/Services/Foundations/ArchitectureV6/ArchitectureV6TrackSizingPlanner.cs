@@ -319,6 +319,7 @@ internal sealed class ArchitectureV6TrackSizingPlanner
     private int InitialColumnMinimum(PlanningGridColumn column) => column.Role switch
     {
         PlanningGridTrackRole.NodeFootprint => request.GridSizing.NodeFootprintColumnMinimum,
+        PlanningGridTrackRole.SubtreeSiblingGap => Math.Max(1, request.NodePlacement.HorizontalSpacing),
         PlanningGridTrackRole.DestinationApproach => request.GridSizing.DestinationApproachColumnMinimum,
         PlanningGridTrackRole.OwnershipLocalReturn => request.GridSizing.OwnershipLocalReturnColumnMinimum,
         PlanningGridTrackRole.ProjectBoundaryTransition => request.GridSizing.ProjectTransitionColumnMinimum,
