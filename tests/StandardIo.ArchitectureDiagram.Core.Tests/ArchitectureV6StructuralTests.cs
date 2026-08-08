@@ -1622,6 +1622,13 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains("fillColor=#112233", (string)rootCell.Attribute("style")!);
         Assert.Contains("strokeColor=#123456", (string)edge.Attribute("style")!);
         Assert.Equal("connector-default", (string)edge.Attribute("resolvedStyleSource")!);
+        Assert.Equal("#123456", (string)edge.Attribute("resolvedStrokeColor")!);
+        Assert.Equal("7", (string)edge.Attribute("resolvedStrokeWidth")!);
+        Assert.Equal("81", (string)edge.Attribute("resolvedOpacity")!);
+        Assert.Equal("open", (string)edge.Attribute("resolvedStartArrow")!);
+        Assert.Equal("diamond", (string)edge.Attribute("resolvedEndArrow")!);
+        Assert.Equal("9 4", (string)edge.Attribute("resolvedDashPattern")!);
+        Assert.Equal("linkTextColor=#abcdef;", (string)edge.Attribute("resolvedExtraStyle")!);
         Assert.Equal((string)sharedCell.Attribute("id")!, (string)edge.Attribute("target")!);
         Assert.Contains("exitX=", (string)edge.Attribute("style")!);
         Assert.Contains("exitY=1", (string)edge.Attribute("style")!);

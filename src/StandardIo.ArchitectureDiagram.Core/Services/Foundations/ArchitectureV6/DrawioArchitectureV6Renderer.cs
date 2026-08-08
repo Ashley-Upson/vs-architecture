@@ -167,7 +167,19 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             ["source"] = source, ["target"] = target, ["style"] = styleText,
             ["resolvedStyleSource"] = resolvedStyleSource,
             ["resolvedStrokeColor"] = style.StrokeColor,
-            ["resolvedStrokeWidth"] = style.StrokeWidth.ToString(CultureInfo.InvariantCulture)
+            ["resolvedStrokeWidth"] = style.StrokeWidth.ToString(CultureInfo.InvariantCulture),
+            ["resolvedOpacity"] = style.Opacity.ToString(CultureInfo.InvariantCulture),
+            ["resolvedRounded"] = style.Rounded ? "1" : "0",
+            ["resolvedDashed"] = style.Dashed ? "1" : "0",
+            ["resolvedDashPattern"] = style.DashPattern ?? string.Empty,
+            ["resolvedStartArrow"] = style.StartArrow,
+            ["resolvedEndArrow"] = style.EndArrow,
+            ["resolvedArrowSize"] = style.ArrowSize.ToString(CultureInfo.InvariantCulture),
+            ["resolvedStartFill"] = style.StartFill ? "1" : "0",
+            ["resolvedEndFill"] = style.EndFill ? "1" : "0",
+            ["resolvedFontColor"] = style.FontColor,
+            ["resolvedShowLabels"] = style.ShowLabels ? "1" : "0",
+            ["resolvedExtraStyle"] = style.ExtraStyle ?? string.Empty
         };
         if (sourceTerminal is not null) attributes["sourceTerminalId"] = sourceTerminal.TerminalId;
         if (targetTerminal is not null) attributes["targetTerminalId"] = targetTerminal.TerminalId;
