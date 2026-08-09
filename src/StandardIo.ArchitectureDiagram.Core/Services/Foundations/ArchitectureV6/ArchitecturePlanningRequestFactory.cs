@@ -10,6 +10,13 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV
 
 public static class ArchitecturePlanningRequestFactory
 {
+    private static string ReservedRuleName(string pattern)
+    {
+        var value = (pattern ?? string.Empty).Trim().TrimStart('^').TrimEnd('$');
+        value = value.Replace(".*", string.Empty).TrimStart('*');
+        return value.Length == 0 ? pattern ?? string.Empty : value;
+    }
+
     public static ArchitecturePlanningRequest Create(
         ArchitectureSemanticModel diagram,
         ArchitectureGenerationJob job,
@@ -29,6 +36,9 @@ public static class ArchitecturePlanningRequestFactory
         var projection = duplication.AllowDuplicateNodes
             ? NodeProjectionMode.DuplicateBranches
             : NodeProjectionMode.Canonical;
+        var reservedPatterns = (layout.ReservedLayerTypePatterns ?? new())
+            .Select((pattern, index) => new ArchitectureV6RoleRule(ReservedRuleName(pattern), pattern, index))
+            .ToArray();
         return new ArchitecturePlanningRequest(
             diagram,
             scope,
@@ -45,7 +55,8 @@ public static class ArchitecturePlanningRequestFactory
                     LogicalLayer = layout.VerticalSpacing,
                     External = Math.Max(layout.HorizontalSpacing, layout.StandaloneGroupSpacing / 2),
                     ProjectBoundary = Math.Max(layout.HorizontalSpacing * 2, layout.ContainerPadding * 2)
-                }),
+                },
+                reservedPatterns),
             new RoutePlanningPolicy(layout.ParallelLaneSpacing, layout.EdgePortSpacing, analysis.ExternalDependencyTag),
             new GridSizingPolicy(layout.NodeWidth, layout.NodeHeight, layout.ContainerPadding, layout.ProjectHeaderHeight)
             {

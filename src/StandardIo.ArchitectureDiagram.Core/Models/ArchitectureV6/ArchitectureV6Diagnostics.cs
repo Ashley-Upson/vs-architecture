@@ -217,7 +217,11 @@ public sealed record ArchitecturePlanningMetrics(
      int SourceStubDirectionFailureCount = 0,
      int DestinationStubDirectionFailureCount = 0,
      IReadOnlyList<ArchitectureV6TrackCapacityEvidence>? TrackCapacity = null,
-     IReadOnlyList<ArchitectureV6PhysicalRouteEvidence>? RouteEvidence = null);
+     IReadOnlyList<ArchitectureV6PhysicalRouteEvidence>? RouteEvidence = null,
+     IReadOnlyList<string>? EffectiveReservedLayerTypePatterns = null,
+     IReadOnlyList<string>? ZeroMatchReservedLayerTypePatterns = null,
+     IReadOnlyList<ArchitectureV6ReservedDepthRequirement>? ReservedDepthRequirements = null,
+     IReadOnlyList<ArchitectureV6FrozenReservation>? FrozenReservations = null);
 
 public sealed record ArchitecturePlanningDiagnostics(
     IReadOnlyList<ArchitecturePlanningDiagnostic> Findings,

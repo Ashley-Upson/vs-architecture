@@ -34,7 +34,8 @@ public sealed record NodePlacementPolicy(
     int HorizontalSpacing,
     int VerticalSpacing,
     IReadOnlyList<ArchitectureV6RoleRule>? RoleRules = null,
-    ArchitectureV6SpacingPolicy? Spacing = null);
+    ArchitectureV6SpacingPolicy? Spacing = null,
+    IReadOnlyList<ArchitectureV6RoleRule>? ReservedLayerTypePatterns = null);
 
 public sealed record ArchitectureV6RoleRule(string Name, string Pattern, int Order);
 

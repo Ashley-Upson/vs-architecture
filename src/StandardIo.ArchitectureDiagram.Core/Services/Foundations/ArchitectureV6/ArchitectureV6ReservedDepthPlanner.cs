@@ -51,7 +51,7 @@ internal sealed class ArchitectureV6ReservedDepthPlanner
         foreach (var node in projection.PhysicalNodes.OrderBy(node => order[node.PhysicalNodeId]))
             Depth(node.PhysicalNodeId, new HashSet<string>(StringComparer.Ordinal));
 
-        var rules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+        var rules = (request.NodePlacement.ReservedLayerTypePatterns ?? request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
             .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal).ToArray();
         var constraints = rules.ToDictionary(rule => rule.Name, _ => new List<ArchitectureV6ReservedDepthConstraint>(), StringComparer.Ordinal);
         foreach (var node in projection.PhysicalNodes.OrderBy(node => order[node.PhysicalNodeId]))
@@ -87,7 +87,7 @@ internal sealed class ArchitectureV6ReservedDepthPlanner
 
     public ArchitectureV6ReservedDepthTable BuildFrozenTable(IReadOnlyList<ArchitectureV6ReservedDepthRequirement> requirements)
     {
-        var rules = (request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
+        var rules = (request.NodePlacement.ReservedLayerTypePatterns ?? request.NodePlacement.RoleRules ?? Array.Empty<ArchitectureV6RoleRule>())
             .OrderBy(rule => rule.Order).ThenBy(rule => rule.Name, StringComparer.Ordinal)
             .Where(rule => requirements.Any(item => item.ReservationName == rule.Name))
             .ToArray();

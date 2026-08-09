@@ -42,6 +42,7 @@ public sealed class LayoutSettings
     public int DataModelComponentSpacing { get; set; } = 260;
     public int DataModelComponentRowWidth { get; set; } = 4200;
     public string BaselineAlignmentPattern { get; set; } = DefaultBaselineAlignmentPattern;
+    public List<string> ReservedLayerTypePatterns { get; set; } = CreateDefaultReservedLayerTypePatterns();
     public List<string> DuplicateHighNoiseNodePatterns { get; set; } = new()
     {
         "*DbContext",
@@ -52,6 +53,16 @@ public sealed class LayoutSettings
         "ILogger*"
     };
     public List<NodeLayerGroupRule> NodeLayerGroups { get; set; } = CreateDefaultNodeLayerGroups();
+
+    public static List<string> CreateDefaultReservedLayerTypePatterns() => new()
+    {
+        "*AggregationService",
+        "*CoordinationService",
+        "*OrchestrationService",
+        "*ProcessingService",
+        "*Service",
+        "*Broker"
+    };
 
     public static List<NodeLayerGroupRule> CreateDefaultNodeLayerGroups() => new()
     {

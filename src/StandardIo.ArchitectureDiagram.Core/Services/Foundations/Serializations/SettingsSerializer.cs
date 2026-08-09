@@ -95,6 +95,18 @@ public static class SettingsSerializer
             ? LayoutSettings.DefaultBaselineAlignmentPattern
             : settings.Layout.BaselineAlignmentPattern.Trim();
         settings.Layout.DuplicateHighNoiseNodePatterns ??= new();
+        settings.Layout.ReservedLayerTypePatterns ??= LayoutSettings.CreateDefaultReservedLayerTypePatterns();
+        for (var index = 0; index < settings.Layout.ReservedLayerTypePatterns.Count; index++)
+        {
+            var pattern = settings.Layout.ReservedLayerTypePatterns[index]?.Trim() ?? string.Empty;
+            if (pattern.Length == 0)
+            {
+                settings.Layout.ReservedLayerTypePatterns.RemoveAt(index--);
+                continue;
+            }
+
+            settings.Layout.ReservedLayerTypePatterns[index] = pattern;
+        }
         settings.Layout.NodeLayerGroups ??= LayoutSettings.CreateDefaultNodeLayerGroups();
         ValidateNodeLayerGroups(settings.Layout.NodeLayerGroups);
 

@@ -131,7 +131,14 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             StageTimingMilliseconds: stageTimings,
             StageInvocationCounts: stageInvocations,
             NodeGridEvidence: nodeEvidence,
-            UnsupportedRouteCount: completedRoutes.Count(route => !route.IsStructurallySupported));
+            UnsupportedRouteCount: completedRoutes.Count(route => !route.IsStructurallySupported),
+            EffectiveReservedLayerTypePatterns: (request.NodePlacement.ReservedLayerTypePatterns ?? Array.Empty<ArchitectureV6RoleRule>())
+                .OrderBy(rule => rule.Order).Select(rule => rule.Pattern).ToArray(),
+            ZeroMatchReservedLayerTypePatterns: (request.NodePlacement.ReservedLayerTypePatterns ?? Array.Empty<ArchitectureV6RoleRule>())
+                .Where(rule => !reservedDepthRequirements.Any(requirement => string.Equals(requirement.ReservationName, rule.Name, StringComparison.Ordinal)))
+                .OrderBy(rule => rule.Order).Select(rule => rule.Pattern).ToArray(),
+            ReservedDepthRequirements: reservedDepthRequirements,
+            FrozenReservations: reservedDepthTable.Reservations);
         var result = new PlannedArchitectureDiagram(
             request,
             projection.PhysicalNodes,
