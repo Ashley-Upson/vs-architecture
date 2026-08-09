@@ -119,10 +119,10 @@ public sealed class ArchitectureV6LogicalRoutingTests
 
         Assert.Equal(RouteFingerprint(first), RouteFingerprint(second));
         Assert.True(first.StageStatus.AbstractRoutingCompleted);
-        Assert.True(first.StageStatus.LaneAllocationDeferred);
-        Assert.True(first.StageStatus.SizingDeferred);
-        Assert.Null(first.RelativeGeometry);
-        Assert.Null(first.PhysicalScene);
+        Assert.False(first.StageStatus.LaneAllocationDeferred);
+        Assert.False(first.StageStatus.SizingDeferred);
+        Assert.NotNull(first.RelativeGeometry);
+        Assert.NotNull(first.PhysicalScene);
     }
 
     private static string RouteFingerprint(PlannedArchitectureDiagram plan) => string.Join("|",

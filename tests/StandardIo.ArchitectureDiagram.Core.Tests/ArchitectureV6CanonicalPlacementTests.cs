@@ -231,16 +231,18 @@ public sealed class ArchitectureV6CanonicalPlacementTests
             result.NodePlacements.Select(item => (item.PhysicalNodeId, item.AnchorCellId)));
         Assert.Equal(result.PhysicalLinks.Count, result.Routes.Count);
         Assert.All(result.Routes, route => Assert.NotEmpty(route.Steps));
-        Assert.Null(result.RelativeGeometry);
-        Assert.Null(result.PhysicalScene);
+        Assert.NotNull(result.RelativeGeometry);
+        Assert.NotNull(result.PhysicalScene);
         Assert.True(result.StageStatus.LogicalPlacementCompleted);
         Assert.True(result.StageStatus.AbstractRoutingCompleted);
-        Assert.True(result.StageStatus.LaneAllocationDeferred);
-        Assert.True(result.StageStatus.SizingDeferred);
-        Assert.True(result.StageStatus.AbsoluteGeometryDeferred);
-        Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.LanesAndTerminals");
-        Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.PhysicalSizing");
-        Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.Validation");
+        Assert.False(result.StageStatus.LaneAllocationDeferred);
+        Assert.False(result.StageStatus.SizingDeferred);
+        Assert.False(result.StageStatus.AbsoluteGeometryDeferred);
+        Assert.True(result.StageStatus.SizingCompleted);
+        Assert.True(result.StageStatus.AbsoluteGeometryCompleted);
+        Assert.DoesNotContain(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.LanesAndTerminals");
+        Assert.DoesNotContain(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.PhysicalSizing");
+        Assert.DoesNotContain(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.Validation");
         Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.Rendering");
     }
 
