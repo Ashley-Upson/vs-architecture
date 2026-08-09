@@ -27,6 +27,29 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         }
         ArchitectureProjectionResult projection = null!;
         TimeStage("projection", () => projection = new ProjectionBuilder(request).Build());
+        IReadOnlyList<ArchitectureV6NodeSpanRequirement> preRoutingSpans = Array.Empty<ArchitectureV6NodeSpanRequirement>();
+        IReadOnlyList<ArchitectureV6ReservedDepthRequirement> reservedDepthRequirements = Array.Empty<ArchitectureV6ReservedDepthRequirement>();
+        ArchitectureV6ReservedDepthTable reservedDepthTable = null!;
+        TimeStage("preRoutingSpanSizing", () => preRoutingSpans = new ArchitectureV6PreRoutingSpanSizer(request, projection).Build());
+        TimeStage("reservedDepthInspection", () =>
+        {
+            var planner = new ArchitectureV6ReservedDepthPlanner(request, projection);
+            reservedDepthRequirements = planner.Inspect();
+            reservedDepthTable = planner.BuildFrozenTable(reservedDepthRequirements);
+        });
+        // The current placement/routing implementation predates the tranche-2
+        // ownership metadata. Keep that metadata on the authoritative projection,
+        // but do not let the deferred legacy pipeline consume it yet.
+        var pipelineProjection = projection with
+        {
+            PhysicalNodes = projection.PhysicalNodes
+                .Select(node => node.ProjectionMode == PhysicalNodeProjectionMode.DuplicateBranch
+                    ? node
+                    : node with { PositionalOwnerId = null })
+                .ToArray()
+        };
+        // Tranche 2 records pre-routing span requirements without feeding them into the
+        // pre-existing placement/routing pipeline. Span consumption belongs to tranche 3.
         var requiredSpans = new Dictionary<string, int>(StringComparer.Ordinal);
         var additionalInterLayerRows = 0;
         var placementRebuildCount = 0;
@@ -47,23 +70,23 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var expansionConverged = false;
         for (var pass = 0; pass < maximumExpansionIterations; pass++)
         {
-            TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, projection, requiredSpans, additionalInterLayerRows).Build());
+            TimeStage("authoritativePlacementAndGrid", () => placement = new ArchitectureV6LogicalPlacementBuilder(request, pipelineProjection, requiredSpans, additionalInterLayerRows).Build());
             TimeStage("endpointEnvelopePlanning", () => endpointPlanning = new ArchitectureV6EndpointEnvelopePlanner(
-                request, projection.PhysicalNodes, projection.PhysicalLinks, placement.NodePlacements).Build(
+                request, pipelineProjection.PhysicalNodes, pipelineProjection.PhysicalLinks, placement.NodePlacements).Build(
                     placement.ProjectGrids, placement.DiagramGrid, pass));
             placement = placement with
             {
                 ProjectGrids = endpointPlanning.ProjectGrids,
                 DiagramGrid = endpointPlanning.DiagramGrid
             };
-            TimeStage("abstractRouting", () => routing = new ArchitectureV6AbstractRoutePlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
+            TimeStage("abstractRouting", () => routing = new ArchitectureV6AbstractRoutePlanner(request, pipelineProjection.PhysicalNodes, pipelineProjection.PhysicalLinks,
                 placement.NodePlacements, placement.NodeMetadata, placement.ProjectGrids, placement.DiagramGrid,
                 endpointPlanning.Reservations).Build());
-            TimeStage("laneAllocation", () => allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
+            TimeStage("laneAllocation", () => allocation = new ArchitectureV6LaneAllocator(request, pipelineProjection.PhysicalLinks, placement.NodePlacements, placement.NodeMetadata,
                 routing.Routes, routing.StraightRuns, routing.EndpointDemands, routing.DestinationApproaches,
                 endpointPlanning.Orders).Build());
             TimeStage("routeBoundaryContract", () => boundaryValidation = new ArchitectureV6RouteBoundaryContractBuilder(
-                allocation, projection.PhysicalNodes, placement.NodePlacements).Build());
+                allocation, pipelineProjection.PhysicalNodes, placement.NodePlacements).Build());
             allocation = allocation with { BoundaryValidation = boundaryValidation };
             var expanded = allocation.FootprintExpansionRequirements
                 .Where(item => item.RequiredOddSpan > item.CurrentSpan)
@@ -74,7 +97,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var endpointPathLinks = new HashSet<string>(routing.Diagnostics
                     .Where(item => item.Code == "EndpointEnvelopePathUnavailable" && !string.IsNullOrWhiteSpace(item.SubjectId))
                     .Select(item => item.SubjectId!), StringComparer.Ordinal);
-                var endpointOwners = projection.PhysicalLinks
+                var endpointOwners = pipelineProjection.PhysicalLinks
                     .Where(link => endpointPathLinks.Contains(link.PhysicalLinkId))
                     .SelectMany(link => new[] { link.SourcePhysicalNodeId, link.DestinationPhysicalNodeId })
                     .Distinct(StringComparer.Ordinal)
@@ -97,11 +120,11 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                         PlanningDiagnosticSubject.Grid, null, ArchitecturePlanningDiagnosticSeverity.Info));
                     continue;
                 }
-                var preflightSizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
+                var preflightSizing = new ArchitectureV6TrackSizingPlanner(request, pipelineProjection.PhysicalNodes, pipelineProjection.PhysicalLinks,
                     placement.NodePlacements, placement.NodeMetadata, routing.ProjectGrids, placement.SubtreeReservations,
                     allocation.Sizing.Constraints, routing.DiagramGrid).Build();
-                var preflightAllocation = new ArchitectureV6FinalTerminalAllocator(request, projection.PhysicalLinks,
-                    projection.PhysicalNodes).Build(allocation, preflightSizing.RelativeGeometry, endpointPlanning, pass);
+                var preflightAllocation = new ArchitectureV6FinalTerminalAllocator(request, pipelineProjection.PhysicalLinks,
+                    pipelineProjection.PhysicalNodes).Build(allocation, preflightSizing.RelativeGeometry, endpointPlanning, pass);
                 var endpointRequirements = (preflightAllocation.ConvergenceRequirements ?? Array.Empty<ArchitectureConvergenceRequirement>())
                     .Where(item => item.RequiredValue > item.CurrentValue)
                     .GroupBy(item => item.OwnerId, StringComparer.Ordinal)
@@ -165,19 +188,19 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         var structuralColumnsBeforeRouting = placement.ProjectGrids.Sum(grid => grid.Grid.Columns.Count);
         var structuralRowsAfterRouting = projectGrids.Sum(grid => grid.Grid.Rows.Count);
         var structuralColumnsAfterRouting = projectGrids.Sum(grid => grid.Grid.Columns.Count);
-        TimeStage("relativeSizing", () => sizing = new ArchitectureV6TrackSizingPlanner(request, projection.PhysicalNodes, projection.PhysicalLinks,
+        TimeStage("relativeSizing", () => sizing = new ArchitectureV6TrackSizingPlanner(request, pipelineProjection.PhysicalNodes, pipelineProjection.PhysicalLinks,
             placement.NodePlacements, placement.NodeMetadata, projectGrids, placement.SubtreeReservations,
             allocation.Sizing.Constraints, diagramGrid).Build());
         var sizedPlan = sizing.Sizing;
         TimeStage("finalTerminalAllocation", () => allocation = new ArchitectureV6FinalTerminalAllocator(
-            request, projection.PhysicalLinks, projection.PhysicalNodes).Build(allocation, sizing.RelativeGeometry,
+            request, pipelineProjection.PhysicalLinks, pipelineProjection.PhysicalNodes).Build(allocation, sizing.RelativeGeometry,
                 endpointPlanning, 0));
         TimeStage("finalEndpointBoundaryContract", () => boundaryValidation = new ArchitectureV6RouteBoundaryContractBuilder(
-            allocation, projection.PhysicalNodes, placement.NodePlacements).Build());
+            allocation, pipelineProjection.PhysicalNodes, placement.NodePlacements).Build());
         allocation = allocation with { BoundaryValidation = boundaryValidation };
         PlannedArchitecturePhysicalScene physicalScene = null!;
-        TimeStage("absoluteGeometry", () => physicalScene = new ArchitectureV6PhysicalSceneCompiler(request, projection.PhysicalNodes,
-            projection.PhysicalLinks, diagramGrid, projectGrids, placement.NodePlacements, allocation.Routes, sizedPlan,
+        TimeStage("absoluteGeometry", () => physicalScene = new ArchitectureV6PhysicalSceneCompiler(request, pipelineProjection.PhysicalNodes,
+            pipelineProjection.PhysicalLinks, diagramGrid, projectGrids, placement.NodePlacements, allocation.Routes, sizedPlan,
             sizing.RelativeGeometry, allocation, placement.SubtreeReservations, boundaryValidation.Routes).Compile());
         var cardinalityFindings = structuralRowsBeforeRouting != structuralRowsAfterRouting || structuralColumnsBeforeRouting != structuralColumnsAfterRouting
             ? new[] { Deferred("StructuralGridCardinalityChanged", PlanningDiagnosticSubject.Grid, "Abstract routing changed structural row or column cardinality.") }
@@ -393,7 +416,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             routing.EndpointDemands,
              allocation,
              sizing.RelativeGeometry,
-             endpointPlanning)
+              endpointPlanning,
+              reservedDepthTable,
+              preRoutingSpans,
+              reservedDepthRequirements)
         {
             Geometry = physicalScene.Geometry,
             PhysicalScene = physicalScene
@@ -419,7 +445,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
         return new DiagramRoutingGrid(grid, Array.Empty<RelativeRectangle>(), Array.Empty<GridTransition>());
     }
 
-    private sealed class ProjectionBuilder
+    internal sealed class ProjectionBuilder
     {
         private readonly ArchitecturePlanningRequest request;
         private readonly Dictionary<string, SemanticInfo> nodes = new(StringComparer.Ordinal);
@@ -439,7 +465,15 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             var physicalNodes = discoveredOrder.Select(id =>
             {
                 var info = nodes[id];
-                return new PlannedPhysicalNode($"physical:{id}", id, PhysicalNodeProjectionMode.Canonical, null,
+                var semanticPositionalOwnerId = parents.TryGetValue(id, out var incoming)
+                    ? incoming.Select(link => link.SourceId)
+                        .Where(nodes.ContainsKey)
+                        .Where(parentId => Array.IndexOf(discoveredOrder, parentId) < Array.IndexOf(discoveredOrder, id))
+                        .OrderBy(parentId => Array.IndexOf(discoveredOrder, parentId))
+                        .FirstOrDefault()
+                    : null;
+                var positionalOwnerId = semanticPositionalOwnerId is null ? null : $"physical:{semanticPositionalOwnerId}";
+                return new PlannedPhysicalNode($"physical:{id}", id, PhysicalNodeProjectionMode.Canonical, positionalOwnerId,
                     info.ProjectId ?? FindExternalOwner(id, links), null, info.IsExternal,
                     !parents.ContainsKey(id) && !children.ContainsKey(id))
                 {
@@ -448,6 +482,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                     Interfaces = info.Interfaces,
                     ImplementationCount = info.ImplementationCount,
                     DisplayLabel = ResolveDisplayLabel(info.Name, info.Interfaces, info.ImplementationCount, info.IsExternal),
+                    ResolvedRole = info.IsExternal ? "External" : ArchitectureV6RoleResolver.Resolve(info.Name, request.NodePlacement.RoleRules),
                     ResolvedStyle = ResolveNodeStyle(info.Name, info.FullName, info.IsExternal)
                 };
             }).ToList();
@@ -480,6 +515,7 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                         ImplementationCount = nodes[link.TargetId].ImplementationCount,
                         DisplayLabel = ResolveDisplayLabel(nodes[link.TargetId].Name, nodes[link.TargetId].Interfaces,
                             nodes[link.TargetId].ImplementationCount, nodes[link.TargetId].IsExternal),
+                        ResolvedRole = nodes[link.TargetId].IsExternal ? "External" : ArchitectureV6RoleResolver.Resolve(nodes[link.TargetId].Name, request.NodePlacement.RoleRules),
                         ResolvedStyle = ResolveNodeStyle(nodes[link.TargetId].Name, nodes[link.TargetId].FullName, nodes[link.TargetId].IsExternal)
                     };
                     physicalNodes.Add(target);

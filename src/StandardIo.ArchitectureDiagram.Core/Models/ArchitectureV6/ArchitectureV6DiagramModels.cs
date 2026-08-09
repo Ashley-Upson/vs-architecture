@@ -60,6 +60,7 @@ public sealed record PlannedPhysicalNode(
     public IReadOnlyList<string> Interfaces { get; init; } = Array.Empty<string>();
     public int ImplementationCount { get; init; }
     public string DisplayLabel { get; init; } = string.Empty;
+    public string ResolvedRole { get; init; } = "Unmatched";
     public ArchitectureV6StyleRule? ResolvedStyle { get; init; }
 }
 
@@ -177,7 +178,10 @@ public sealed class PlannedArchitectureDiagram
         IReadOnlyList<NodeEndpointDemand>? endpointDemands = null,
         ArchitectureLaneAllocationResult? laneAllocation = null,
         PlannedArchitectureRelativeGeometry? relativeGeometry = null,
-        ArchitectureEndpointPlanningResult? endpointPlanning = null)
+        ArchitectureEndpointPlanningResult? endpointPlanning = null,
+        ArchitectureV6ReservedDepthTable? reservedDepthTable = null,
+        IReadOnlyList<ArchitectureV6NodeSpanRequirement>? preRoutingSpanRequirements = null,
+        IReadOnlyList<ArchitectureV6ReservedDepthRequirement>? reservedDepthRequirements = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -200,6 +204,9 @@ public sealed class PlannedArchitectureDiagram
         LaneAllocation = laneAllocation;
         RelativeGeometry = relativeGeometry;
         EndpointPlanning = endpointPlanning;
+        ReservedDepthTable = reservedDepthTable;
+        PreRoutingSpanRequirements = Array.AsReadOnly((preRoutingSpanRequirements ?? Array.Empty<ArchitectureV6NodeSpanRequirement>()).ToArray());
+        ReservedDepthRequirements = Array.AsReadOnly((reservedDepthRequirements ?? Array.Empty<ArchitectureV6ReservedDepthRequirement>()).ToArray());
     }
 
     public ArchitecturePlanningRequest Request { get; }
@@ -223,6 +230,9 @@ public sealed class PlannedArchitectureDiagram
     public ArchitectureLaneAllocationResult? LaneAllocation { get; }
     public PlannedArchitectureRelativeGeometry? RelativeGeometry { get; }
     public ArchitectureEndpointPlanningResult? EndpointPlanning { get; }
+    public ArchitectureV6ReservedDepthTable? ReservedDepthTable { get; }
+    public IReadOnlyList<ArchitectureV6NodeSpanRequirement> PreRoutingSpanRequirements { get; }
+    public IReadOnlyList<ArchitectureV6ReservedDepthRequirement> ReservedDepthRequirements { get; }
     public PlannedArchitectureGeometry? Geometry { get; init; }
     public PlannedArchitecturePhysicalScene? PhysicalScene { get; init; }
 }

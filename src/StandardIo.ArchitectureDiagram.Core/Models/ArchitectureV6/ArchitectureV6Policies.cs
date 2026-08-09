@@ -63,6 +63,7 @@ public sealed record GridSizingPolicy(
     int ContainerPadding,
     int ProjectHeaderHeight)
 {
+    public int ConfiguredBaseCellWidth { get; init; }
     public int NodeToRouteClearance { get; init; }
     public int NodeFootprintColumnMinimum { get; init; } = 1;
     public int DestinationApproachColumnMinimum { get; init; } = 1;
