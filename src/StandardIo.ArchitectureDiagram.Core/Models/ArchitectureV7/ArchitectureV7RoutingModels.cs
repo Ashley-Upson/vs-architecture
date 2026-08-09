@@ -12,6 +12,10 @@ public sealed record ArchitectureV7RouteDiagnostic(
     bool IsHardFailure,
     IReadOnlyList<ArchitectureV7RouteCell> AttemptedCells);
 
+public sealed record ArchitectureV7RoutingOperationMetrics(
+    int ContinuationCandidatesEvaluated,
+    int UpwardEscapeCandidatesEvaluated);
+
 public sealed record ArchitectureV7RouteCandidateEvidence(
     int CandidateColumn,
     bool Accepted,
@@ -43,7 +47,8 @@ public sealed class ArchitectureV7LogicalRoute
         bool isComplete,
         IReadOnlyList<ArchitectureV7RouteDiagnostic> diagnostics,
         string provenance,
-        IReadOnlyList<ArchitectureV7RouteAttemptEvidence>? attemptEvidence = null)
+        IReadOnlyList<ArchitectureV7RouteAttemptEvidence>? attemptEvidence = null,
+        ArchitectureV7RoutingOperationMetrics? operationMetrics = null)
     {
         PhysicalLinkId = physicalLinkId ?? throw new ArgumentNullException(nameof(physicalLinkId));
         SemanticLinkId = semanticLinkId ?? throw new ArgumentNullException(nameof(semanticLinkId));
@@ -54,6 +59,7 @@ public sealed class ArchitectureV7LogicalRoute
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<ArchitectureV7RouteDiagnostic>()).ToArray());
         Provenance = provenance ?? throw new ArgumentNullException(nameof(provenance));
         AttemptEvidence = Array.AsReadOnly((attemptEvidence ?? Array.Empty<ArchitectureV7RouteAttemptEvidence>()).ToArray());
+        OperationMetrics = operationMetrics ?? new ArchitectureV7RoutingOperationMetrics(0, 0);
     }
 
     public string PhysicalLinkId { get; }
@@ -65,6 +71,7 @@ public sealed class ArchitectureV7LogicalRoute
     public IReadOnlyList<ArchitectureV7RouteDiagnostic> Diagnostics { get; }
     public string Provenance { get; }
     public IReadOnlyList<ArchitectureV7RouteAttemptEvidence> AttemptEvidence { get; }
+    public ArchitectureV7RoutingOperationMetrics OperationMetrics { get; }
 }
 
 public sealed class ArchitectureV7LogicalRouteFreeze

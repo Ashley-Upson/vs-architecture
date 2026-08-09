@@ -39,7 +39,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
     public void Downward_route_aligns_on_row_above_destination_and_enters_downward()
     {
         var route = Route(new[] { PlacementNode("s", 1, 1), PlacementNode("t", 7, 5) }, Link("l", "s", "t"), 9, 9, GeneralGrid(9, 9));
-        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
         Assert.Equal((1, 1), (route.Cells.First().Row, route.Cells.First().Column));
         Assert.Equal((2, 1), (route.Cells[1].Row, route.Cells[1].Column));
         Assert.Equal((6, 5), (route.Cells[^2].Row, route.Cells[^2].Column));
@@ -51,7 +51,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
     public void GeneralRouting_permits_horizontal_traversal_on_an_ordinary_routing_row()
     {
         var route = Route(new[] { PlacementNode("s", 3, 1), PlacementNode("t", 3, 7) }, Link("horizontal", "s", "t"), 7, 9, GeneralGrid(7, 9));
-        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
         Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row && pair.a.Column != pair.b.Column);
     }
 
@@ -91,9 +91,42 @@ public sealed class ArchitectureV7LogicalRoutingTests
         var nodes = new[] { PlacementNode("s", 1, 3), PlacementNode("t", 7, 3), PlacementNode("obstacle", 3, 3) };
         var route = Route(nodes, Link("l", "s", "t"), 9, 9, GeneralGrid(9, 9));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+        Assert.Equal(new[] { 3, 2, 1 }, route.Cells.Where(cell => cell.Row == 2).Select(cell => cell.Column));
         Assert.Contains(route.Cells, cell => cell.Row == 3 && cell.Column == 1);
         Assert.DoesNotContain(route.Cells, cell => cell.Row == 3 && cell.Column == 5);
         Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row && Math.Abs(pair.a.Column - pair.b.Column) > 1);
+        Assert.Equal(3, route.OperationMetrics.ContinuationCandidatesEvaluated);
+    }
+
+    [Fact]
+    public void Continuation_selection_does_not_prefer_the_destination_column_over_nearest_left_candidate()
+    {
+        var nodes = new[] { PlacementNode("s", 1, 3), PlacementNode("t", 7, 7), PlacementNode("obstacle", 3, 3) };
+        var route = Route(nodes, Link("nearest-not-destination", "s", "t"), 9, 11, GeneralGrid(9, 11));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+        Assert.Equal(new[] { 3, 2, 1 }, route.Cells.Where(cell => cell.Row == 2).Select(cell => cell.Column));
+        Assert.DoesNotContain(route.Cells, cell => cell.Row == 2 && cell.Column == 7);
+    }
+
+    [Fact]
+    public void Wide_grid_continuation_evaluates_only_candidates_until_first_legal_column()
+    {
+        const int width = 201;
+        var nodes = new[] { PlacementNode("s", 1, 100), PlacementNode("t", 7, 150), PlacementNode("obstacle", 3, 100) };
+        var route = Route(nodes, Link("wide-grid", "s", "t"), 9, width, GeneralGrid(9, width));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+        Assert.Equal(3, route.OperationMetrics.ContinuationCandidatesEvaluated);
+        Assert.True(route.OperationMetrics.ContinuationCandidatesEvaluated < width / 10);
+    }
+
+    [Fact]
+    public void Upward_escape_evaluates_nearest_outside_footprint_and_does_not_retain_probe_cells()
+    {
+        var route = Route(new[] { PlacementNode("s", 5, 3, 3), PlacementNode("t", 1, 7) }, Link("nearest-escape", "s", "t"), 7, 11, GeneralGrid(7, 11));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+        Assert.Equal(1, route.OperationMetrics.UpwardEscapeCandidatesEvaluated);
+        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(2), (a, b) => (a, b)), pair => pair.a == pair.b);
+        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(2), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row && pair.a.Column == pair.b.Column);
     }
 
     [Fact]

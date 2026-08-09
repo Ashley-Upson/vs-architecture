@@ -39,7 +39,7 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             var routeDiagnostics = route.Diagnostics;
             diagnostics.AddRange(routeDiagnostics);
             routes.Add(new ArchitectureV7LogicalRoute(link.PhysicalLinkId, link.SemanticLinkId, link.SourcePhysicalNodeId, link.DestinationPhysicalNodeId,
-                route.Cells, route.IsComplete, routeDiagnostics, "v7-common-diagram-router;same-authority;cross-project=" + (!string.Equals(link.SourceProjectId, link.DestinationProjectId, StringComparison.Ordinal)).ToString().ToLowerInvariant()));
+                route.Cells, route.IsComplete, routeDiagnostics, "v7-common-diagram-router;same-authority;cross-project=" + (!string.Equals(link.SourceProjectId, link.DestinationProjectId, StringComparison.Ordinal)).ToString().ToLowerInvariant(), operationMetrics: route.OperationMetrics));
         }
 
         var fingerprintText = placement.PlacementFingerprint + "#" + projection.FreezeFingerprint + "#" + string.Join("|", routes.OrderBy(route => route.PhysicalLinkId, StringComparer.Ordinal).Select(route =>
@@ -53,7 +53,7 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
         {
             var path = new[] { start, new ArchitectureV7RouteCell(start.Row + 1, start.Column), end };
-            return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>()) : Failed(path, "DirectChildBlocked", "The immediate child route is not legal on the frozen grid.");
+            return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), new ArchitectureV7RoutingOperationMetrics(0, 0)) : Failed(path, "DirectChildBlocked", "The immediate child route is not legal on the frozen grid.");
         }
 
         static RouteAttempt General(ArchitectureV7RouteCell start, ArchitectureV7RouteCell end,
@@ -61,73 +61,199 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
         {
             var path = new List<ArchitectureV7RouteCell> { start };
-            if (!Append(path, new ArchitectureV7RouteCell(start.Row + 1, start.Column), source, destination, cells)) return Failed(path, "NoLegalRoute", "The router could not leave the source downward.");
+            var metrics = new RouteOperationMetrics();
+            if (!Append(path, new ArchitectureV7RouteCell(start.Row + 1, start.Column), source, destination, cells)) return Failed(path, "NoLegalRoute", "The router could not leave the source downward.", metrics);
 
             var currentRow = start.Row + 1;
             var currentColumn = start.Column;
             if (end.Row <= start.Row)
             {
-                var escapes = FindEscapeColumns(start.Column, source.DiagramColumn, source.LogicalSpan, cells.Keys.Select(key => key.Column).DefaultIfEmpty(0).Max(), cells).ToArray();
-                if (escapes.Length == 0 || !AppendHorizontal(path, currentRow, currentColumn, escapes[0], source, destination, cells)) return Failed(path, "NoLegalUpwardEscape", "The upward route could not escape the source footprint.");
-                var escape = escapes[0];
-                currentColumn = escape;
+                var maxColumn = cells.Keys.Select(key => key.Column).DefaultIfEmpty(0).Max();
+                if (!TryEscape(path, ref currentColumn, currentRow, source, destination, cells, maxColumn, metrics)) return Failed(path, "NoLegalUpwardEscape", "The upward route could not escape the source footprint.", metrics);
+                currentRow -= 2;
                 while (currentRow > end.Row - 1)
                 {
-                    if (!Continue(path, ref currentRow, ref currentColumn, end.Column, -1, source, destination, cells)) return Failed(path, "NoLegalUpwardContinuation", "No legal upward continuation column exists.");
+                    if (!Continue(path, ref currentRow, ref currentColumn, -1, source, destination, cells, metrics)) return Failed(path, "NoLegalUpwardContinuation", "No legal upward continuation column exists.", metrics);
                 }
             }
             else
             {
                 while (currentRow < end.Row - 1)
                 {
-                    if (!Continue(path, ref currentRow, ref currentColumn, end.Column, 1, source, destination, cells)) return Failed(path, "NoLegalDownwardContinuation", "No legal downward continuation column exists.");
+                    if (!Continue(path, ref currentRow, ref currentColumn, 1, source, destination, cells, metrics)) return Failed(path, "NoLegalDownwardContinuation", "No legal downward continuation column exists.", metrics);
                 }
             }
 
             if (!AppendHorizontal(path, currentRow, currentColumn, end.Column, source, destination, cells) || !Append(path, end, source, destination, cells))
-                return Failed(path, "NoLegalDestinationApproach", "The destination cannot be approached and entered legally.");
-            return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>()) : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.");
+                return Failed(path, "NoLegalDestinationApproach", "The destination cannot be approached and entered legally.", metrics);
+            return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), metrics.Freeze()) : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.", metrics);
         }
 
-        static bool Continue(List<ArchitectureV7RouteCell> path, ref int currentRow, ref int currentColumn, int intendedColumn, int direction,
+        static bool Continue(List<ArchitectureV7RouteCell> path, ref int currentRow, ref int currentColumn, int direction,
             ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
-            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells, RouteOperationMetrics metrics)
         {
-            foreach (var candidate in CandidateColumns(currentColumn, intendedColumn, cells.Keys.Select(key => key.Column).DefaultIfEmpty(0).Max()))
+            var maxColumn = cells.Keys.Select(key => key.Column).DefaultIfEmpty(0).Max();
+            if (TryContinuation(path, ref currentColumn, currentRow, direction, source, destination, cells, maxColumn, metrics))
             {
-                var trial = new List<ArchitectureV7RouteCell>(path);
-                if (!AppendHorizontal(trial, currentRow, currentColumn, candidate, source, destination, cells)) continue;
-                var nextRow = currentRow + direction * 2;
-                if (!AppendVertical(trial, candidate, currentRow, nextRow, source, destination, cells)) continue;
-                path.Clear();
-                path.AddRange(trial);
-                currentColumn = candidate;
-                currentRow = nextRow;
+                currentRow += direction * 2;
                 return true;
             }
             return false;
         }
 
-        static IEnumerable<int> CandidateColumns(int current, int intended, int maxColumn)
+        static bool TryContinuation(List<ArchitectureV7RouteCell> path, ref int currentColumn, int currentRow, int direction,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells, int maxColumn, RouteOperationMetrics metrics)
         {
-            yield return current;
-            for (var distance = 2; distance <= maxColumn + 2; distance += 2)
+            if (TrySelectContinuation(path, currentColumn, currentRow, direction, source, destination, cells, maxColumn, metrics, out var candidate))
             {
-                if (current - distance >= 0) yield return current - distance;
-                if (current + distance <= maxColumn) yield return current + distance;
+                if (!AppendContinuation(path, currentColumn, currentRow, candidate, direction, source, destination, cells)) return false;
+                currentColumn = candidate;
+                return true;
             }
-            if (intended >= 0 && intended <= maxColumn && intended != current) yield return intended;
+            return false;
         }
 
-        static IEnumerable<int> FindEscapeColumns(int sourceCentre, int sourceLeft, int span, int maxColumn,
+        static bool TrySelectContinuation(IReadOnlyList<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int direction,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells, int maxColumn, RouteOperationMetrics metrics, out int candidate)
+        {
+            metrics.ContinuationCandidatesEvaluated++;
+            if (CanContinueAtColumn(path, currentColumn, currentRow, currentColumn, direction, source, destination, cells))
+            {
+                candidate = currentColumn;
+                return true;
+            }
+
+            for (var distance = 2; ; distance += 2)
+            {
+                var left = currentColumn - distance;
+                var right = currentColumn + distance;
+                var evaluated = false;
+                if (left >= 0)
+                {
+                    evaluated = true;
+                    metrics.ContinuationCandidatesEvaluated++;
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, left, direction, source, destination, cells))
+                    {
+                        candidate = left;
+                        return true;
+                    }
+                }
+                if (right <= maxColumn)
+                {
+                    evaluated = true;
+                    metrics.ContinuationCandidatesEvaluated++;
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, right, direction, source, destination, cells))
+                    {
+                        candidate = right;
+                        return true;
+                    }
+                }
+                if (!evaluated)
+                {
+                    candidate = currentColumn;
+                    return false;
+                }
+            }
+        }
+
+        static bool CanContinueAtColumn(IReadOnlyList<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int candidate,
+            int direction, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
             IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
         {
-            for (var distance = 2; distance <= maxColumn + span + 2; distance += 2)
+            var previous = path.Count > 1 ? path[path.Count - 2] : path[path.Count - 1];
+            var current = path[path.Count - 1];
+            if (!cells.TryGetValue((current.Row, current.Column), out var originCell)) return false;
+            if (!cells.TryGetValue((currentRow, candidate), out var continuationCell)) return false;
+            if (!CanEnterCell(currentRow, candidate, source, destination, cells)) return false;
+            var entry = candidate == currentColumn ? DirectionOf(previous, current) : candidate > currentColumn ? Direction.Right : Direction.Left;
+            if (!Allows(continuationCell.Capabilities, entry, DirectionFor(direction))) return false;
+            if (candidate != currentColumn && !originCell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting) &&
+                !CanReachRestrictedHorizontalCorridor(path, currentColumn, currentRow, candidate, source, destination, cells)) return false;
+            var middleRow = currentRow + direction;
+            var nextRow = currentRow + direction * 2;
+            if (!CanEnterCell(middleRow, candidate, source, destination, cells)) return false;
+            if (!CanEnterCell(nextRow, candidate, source, destination, cells)) return false;
+
+            if (!cells.TryGetValue((middleRow, candidate), out var middleCell) || !Allows(middleCell.Capabilities, DirectionFor(direction), DirectionFor(direction))) return false;
+            return true;
+        }
+
+        static bool CanReachRestrictedHorizontalCorridor(IReadOnlyList<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int candidate,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            var previous = path.Count > 1 ? path[path.Count - 2] : path[path.Count - 1];
+            var current = path[path.Count - 1];
+            var horizontalStep = candidate >= currentColumn ? 1 : -1;
+            for (var column = currentColumn + horizontalStep; column != candidate; column += horizontalStep)
+            {
+                var next = new ArchitectureV7RouteCell(currentRow, column);
+                if (!CanEnterCell(next.Row, next.Column, source, destination, cells)) return false;
+                if (!cells.TryGetValue((current.Row, current.Column), out var currentCell)) return false;
+                if (!Allows(currentCell.Capabilities, DirectionOf(previous, current), DirectionOf(current, next))) return false;
+                previous = current;
+                current = next;
+            }
+            return true;
+        }
+
+        static bool AppendContinuation(List<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int candidate,
+            int direction, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            var segment = new List<ArchitectureV7RouteCell>();
+            var horizontalStep = candidate >= currentColumn ? 1 : -1;
+            for (var column = currentColumn + horizontalStep; column != candidate + horizontalStep; column += horizontalStep)
+                segment.Add(new ArchitectureV7RouteCell(currentRow, column));
+            var nextRow = currentRow + direction * 2;
+            segment.Add(new ArchitectureV7RouteCell(currentRow + direction, candidate));
+            segment.Add(new ArchitectureV7RouteCell(nextRow, candidate));
+            if (!CanAppendSegment(path, segment, source, destination, cells)) return false;
+            path.AddRange(segment);
+            return true;
+        }
+
+        static bool CanEnterCell(int row, int column, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells) =>
+            cells.TryGetValue((row, column), out var cell) &&
+            (cell.OccupantId is null || cell.OccupantId == source.PhysicalNodeId || cell.OccupantId == destination.PhysicalNodeId);
+
+        static bool TryEscape(List<ArchitectureV7RouteCell> path, ref int currentColumn, int currentRow,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells, int maxColumn, RouteOperationMetrics metrics)
+        {
+            var sourceCentre = source.CentreCell;
+            for (var distance = 2; ; distance += 2)
             {
                 var left = sourceCentre - distance;
                 var right = sourceCentre + distance;
-                if (left >= 0 && left < sourceLeft) yield return left;
-                if (right <= maxColumn && right >= sourceLeft + span) yield return right;
+                var evaluated = false;
+                if (left >= 0 && left < source.DiagramColumn)
+                {
+                    evaluated = true;
+                    metrics.UpwardEscapeCandidatesEvaluated++;
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, left, -1, source, destination, cells))
+                    {
+                        if (!AppendContinuation(path, currentColumn, currentRow, left, -1, source, destination, cells)) return false;
+                        currentColumn = left;
+                        return true;
+                    }
+                }
+                if (right <= maxColumn && right >= source.DiagramColumn + source.LogicalSpan)
+                {
+                    evaluated = true;
+                    metrics.UpwardEscapeCandidatesEvaluated++;
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, right, -1, source, destination, cells))
+                    {
+                        if (!AppendContinuation(path, currentColumn, currentRow, right, -1, source, destination, cells)) return false;
+                        currentColumn = right;
+                        return true;
+                    }
+                }
+                if (!evaluated) return false;
             }
         }
 
@@ -141,25 +267,53 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             return true;
         }
 
-        static bool AppendVertical(List<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int targetRow,
-            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
-            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
-        {
-            var step = targetRow >= currentRow ? 1 : -1;
-            for (var row = currentRow + step; row != targetRow + step; row += step)
-                if (!Append(path, new ArchitectureV7RouteCell(row, currentColumn), source, destination, cells)) return false;
-            return true;
-        }
-
         static bool Append(List<ArchitectureV7RouteCell> path, ArchitectureV7RouteCell cell,
             ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
             IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
         {
             if (path.Count > 0 && Math.Abs(path[path.Count - 1].Row - cell.Row) + Math.Abs(path[path.Count - 1].Column - cell.Column) != 1) return false;
             path.Add(cell);
-            var legal = Validate(path, source, destination, cells, false);
-            if (!legal) path.RemoveAt(path.Count - 1);
-            return legal;
+            if (!IsIncrementallyLegal(path, cell, source, destination, cells)) { path.RemoveAt(path.Count - 1); return false; }
+            return true;
+        }
+
+        static bool CanAppendSegment(IReadOnlyList<ArchitectureV7RouteCell> path, IReadOnlyList<ArchitectureV7RouteCell> segment,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            if (segment.Count == 0 || path.Count == 0) return false;
+            var previous = path.Count > 1 ? path[path.Count - 2] : path[path.Count - 1];
+            var current = path[path.Count - 1];
+            foreach (var cell in segment)
+            {
+                if (Math.Abs(current.Row - cell.Row) + Math.Abs(current.Column - cell.Column) != 1) return false;
+                if (!cells.TryGetValue((cell.Row, cell.Column), out var destinationCell)) return false;
+                if (destinationCell.OccupantId is { } occupant && occupant != source.PhysicalNodeId && occupant != destination.PhysicalNodeId) return false;
+                if (path.Count > 1 || current != path[0])
+                {
+                    if (!cells.TryGetValue((current.Row, current.Column), out var currentCell)) return false;
+                    if (!Allows(currentCell.Capabilities, DirectionOf(previous, current), DirectionOf(current, cell))) return false;
+                }
+                previous = current;
+                current = cell;
+            }
+            return true;
+        }
+
+        static bool IsIncrementallyLegal(IReadOnlyList<ArchitectureV7RouteCell> path, ArchitectureV7RouteCell cell,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            if (!cells.TryGetValue((cell.Row, cell.Column), out var destinationCell)) return false;
+            var isDestination = cell == new ArchitectureV7RouteCell(destination.DiagramRow, destination.CentreCell);
+            if (!isDestination && destinationCell.OccupantId is { } occupant && occupant != source.PhysicalNodeId) return false;
+            if (path.Count < 3) return true;
+            var previous = path[path.Count - 3];
+            var current = path[path.Count - 2];
+            if (!cells.TryGetValue((current.Row, current.Column), out var currentCell)) return false;
+            var entry = DirectionOf(previous, current);
+            var exit = DirectionOf(current, cell);
+            return Allows(currentCell.Capabilities, entry, exit);
         }
 
         static bool Validate(IReadOnlyList<ArchitectureV7RouteCell> path,
@@ -194,13 +348,22 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
         static Direction DirectionOf(ArchitectureV7RouteCell from, ArchitectureV7RouteCell to) =>
             to.Row == from.Row ? (to.Column > from.Column ? Direction.Right : Direction.Left) : (to.Row > from.Row ? Direction.Down : Direction.Up);
 
-        static RouteAttempt Failed(IReadOnlyList<ArchitectureV7RouteCell> attempted, string code, string message) =>
-            new RouteAttempt(attempted, false, new[] { Failure(code, message, attempted) });
+        static Direction DirectionFor(int direction) => direction > 0 ? Direction.Down : Direction.Up;
+
+        static RouteAttempt Failed(IReadOnlyList<ArchitectureV7RouteCell> attempted, string code, string message, RouteOperationMetrics? metrics = null) =>
+            new RouteAttempt(attempted, false, new[] { Failure(code, message, attempted) }, metrics?.Freeze() ?? new ArchitectureV7RoutingOperationMetrics(0, 0));
 
         static ArchitectureV7RouteDiagnostic Failure(string code, string message, IReadOnlyList<ArchitectureV7RouteCell> attempted) =>
             new(code, message, true, attempted.ToArray());
     }
 
     private enum Direction { None, Up, Down, Left, Right }
-    private sealed record RouteAttempt(IReadOnlyList<ArchitectureV7RouteCell> Cells, bool IsComplete, IReadOnlyList<ArchitectureV7RouteDiagnostic> Diagnostics);
+    private sealed class RouteOperationMetrics
+    {
+        public int ContinuationCandidatesEvaluated { get; set; }
+        public int UpwardEscapeCandidatesEvaluated { get; set; }
+        public ArchitectureV7RoutingOperationMetrics Freeze() => new(ContinuationCandidatesEvaluated, UpwardEscapeCandidatesEvaluated);
+    }
+
+    private sealed record RouteAttempt(IReadOnlyList<ArchitectureV7RouteCell> Cells, bool IsComplete, IReadOnlyList<ArchitectureV7RouteDiagnostic> Diagnostics, ArchitectureV7RoutingOperationMetrics OperationMetrics);
 }

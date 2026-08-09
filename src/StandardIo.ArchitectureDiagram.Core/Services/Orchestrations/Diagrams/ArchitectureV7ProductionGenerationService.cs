@@ -138,7 +138,16 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
                 reservation = new { ReservationCount = reservation.Table.Reservations.Count, Fingerprint = reservation.Table.Fingerprint },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
-                routing = new { RouteCount = routes.Routes.Count, CompleteRouteCount = routes.Routes.Count(x => x.IsComplete), Fingerprint = routes.RouteFingerprint },
+                routing = new
+                {
+                    RouteCount = routes.Routes.Count,
+                    CompleteRouteCount = routes.Routes.Count(x => x.IsComplete),
+                    MaxContinuationCandidatesEvaluated = routes.Routes.Count == 0 ? 0 : routes.Routes.Max(x => x.OperationMetrics.ContinuationCandidatesEvaluated),
+                    MaxUpwardEscapeCandidatesEvaluated = routes.Routes.Count == 0 ? 0 : routes.Routes.Max(x => x.OperationMetrics.UpwardEscapeCandidatesEvaluated),
+                    TotalContinuationCandidatesEvaluated = routes.Routes.Sum(x => x.OperationMetrics.ContinuationCandidatesEvaluated),
+                    TotalUpwardEscapeCandidatesEvaluated = routes.Routes.Sum(x => x.OperationMetrics.UpwardEscapeCandidatesEvaluated),
+                    Fingerprint = routes.RouteFingerprint
+                },
                 allocation = new { AssignmentCount = allocation.RunAssignments.Count, Fingerprint = allocation.AllocationFingerprint },
                 scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint }
             }
