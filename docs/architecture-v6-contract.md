@@ -70,30 +70,28 @@ These are configuration values, not hard-coded V6 constants. The planner MUST co
 
 ## 4. Authoritative planner-stage order
 
-The intended authority order is:
+The target planner pipeline is:
 
 1. semantic analysis / semantic input;
 2. semantic-to-physical projection;
-3. positional ownership;
-4. reserved layer planning;
-5. ordinary bottom-up layer solving;
-6. terminal-capacity-aware node sizing;
-7. local dependency-tree construction;
-8. whole-tree global packing;
-9. final logical grid construction;
-10. authoritative abstract routing;
-11. lane / crossing / terminal-demand allocation;
-12. footprint-expansion convergence;
-13. full rebuild when footprint demand changes;
-14. route boundary/component construction;
-15. physical track sizing;
-16. relative geometry;
-17. absolute physical scene compilation;
-18. final authoritative validation;
-19. mechanical Draw.io rendering;
-20. renderer-fidelity validation/accounting.
+3. shared reserved-depth reconciliation across the complete selected diagram;
+4. project-local dependency-tree placement;
+5. fixed project-surround construction;
+6. common diagram-grid assembly;
+7. logical placement freeze;
+8. capability-driven cell-by-cell relationship routing;
+9. logical route freeze;
+10. collective lane, terminal, bend and crossing allocation;
+11. physical track sizing;
+12. relative geometry;
+13. absolute physical scene compilation;
+14. final authoritative validation;
+15. mechanical Draw.io rendering;
+16. renderer-fidelity validation/accounting.
 
-A later stage MUST NOT mutate an earlier authority's decision unless the pipeline explicitly loops back and rebuilds every downstream authority that depends on it.
+Placement owns logical node positions, spans, project regions and the final logical grid. Routing owns complete relationship cell paths. After routing, all stages are post-processing arithmetic over frozen logical decisions.
+
+A later stage MUST NOT mutate an earlier authority's decision. If a contradiction is discovered, the owning stage MUST report it as an explicit planning/allocation/validation failure. A later stage MUST NOT trigger convergence, rebuild an earlier stage, reroute, or repair the contradiction locally within the same planner execution.
 
 Examples:
 
@@ -117,7 +115,7 @@ A reused semantic node MAY be duplicated only according to configured duplicatio
 
 Every physical node SHOULD retain provenance including semantic identity, physical identity, project ownership, duplication provenance where applicable, and External/standalone classification where applicable.
 
-Every semantic relationship in scope MUST map to a physical relationship or to an explicit diagnostic explaining why it cannot.
+Every selected semantic relationship MUST remain accounted for and MUST map to a resolved physical source/target relationship or to an explicit failed-route diagnostic. Deduplication may change the physical instance targeted, but MUST NOT make the semantic relationship disappear.
 
 Relationships MUST NOT silently disappear.
 
@@ -142,11 +140,11 @@ Tree membership MUST remain stable through placement.
 
 ## 7. Reserved role/type layers
 
-Configured role/name matching rules establish reserved layers first.
+An ordered, case-insensitive suffix list establishes reserved layers first. Matching is performed against the configured semantic node/name value using first-match semantics.
 
 Matching uses **first-match semantics**.
 
-The currently established effective reserved category order is:
+The default effective reserved category order is:
 
 1. Aggregation
 2. Coordination
@@ -163,12 +161,26 @@ A node matching a more-specific configured category MUST NOT fall through into a
 
 Reserved layers are fixed ordering constraints. They are not the complete hierarchy.
 
-When two nodes with the same resolved reserved role form a positional
-parent/child chain, the role band remains the styling and ordering authority,
-but the child MUST be placed on a deterministic inserted sublayer below the
-parent. Unrelated nodes in that role continue to share the base role layer.
-This prevents a same-role dependency from being rendered as a zero-height
-hierarchy edge without changing first-match role resolution.
+### Pre-construction reservation constraint inspection
+
+Before constructing the final reservation table or any project tree, the planner MUST inspect every selected positional/semantic top-level tree for the minimum natural node depth required by each reserved-group occurrence and each External occurrence. This inspection MAY execute in parallel. It calculates depth constraints only; it MUST NOT construct final placement geometry.
+
+The planner MUST deterministically reduce all inspection results into shared minimum-depth requirements. Those requirements are then used to reconcile the initial reservation table, propagate downstream shifts in increments of `2`, resolve the External maximum required depth, and freeze the result. Actual tree construction begins only after that freeze.
+
+The initial shared reservation table MUST be constructed before any project tree construction:
+
+1. scan the complete selected diagram input and count matches for every configured reserved suffix group;
+2. remove configured groups whose match count is zero;
+3. preserve the configured first-match and ordering semantics for the remaining groups;
+4. append `External` after the remaining configured groups;
+5. assign the active reservations to node rows beginning at `1` and increasing by `2`: `1, 3, 5, 7, ...`;
+6. treat the rows between those odd-numbered reservations as routing rows.
+
+The resulting initial table MUST then be reconciled against the deterministically reduced requirements from the complete selected diagram input. Required downward shifts MUST preserve reservation order and node/routing parity: when a reservation moves down, every subsequent/lower reservation MUST move as necessary in increments of `2`. For External specifically, if any External node requires a deeper node row than the currently proposed External reservation, the External reservation MUST move to the required parity-aligned depth. External is the final reservation and therefore establishes the bottom shared hierarchy row.
+
+All selected projects MUST use the same frozen reconciled reservation table. Project-local grids MAY use their own local row/column coordinates during construction; this shared table MUST NOT be confused with final diagram-grid coordinates. Tree construction MAY insert padding against the frozen reservations, but MUST NOT mutate the reservation table or trigger another reservation/tree pass.
+
+Reserved-role ordering is a placement constraint, not a reason to alter semantic tree membership. If a dependency's reserved placement is equal to or above its parent and therefore cannot be placed below the parent, its complete dependency subtree MUST be constructed as a detached placement unit and composed to the right/outside of the completed main tree. The semantic relationship remains a normal routing relationship.
 
 ## 8. External layer
 
@@ -186,6 +198,8 @@ A sole-owner External dependency SHOULD be horizontally aligned beneath its auth
 If blocked, the planner MUST choose the nearest deterministic free position and SHOULD record blocker, preferred X, final X, and displacement.
 
 External placement MUST NOT reposition the owning ordinary tree.
+
+External nodes occupy the final shared reserved node layer across the selected diagram.
 
 ## 9. Standalone nodes
 
@@ -209,79 +223,90 @@ dependency-depth, root, reserved-band, or tree-solving calculations.
 
 Standalone nodes SHOULD live in a dedicated compact region rather than being mixed into dependency trees.
 
-If multiple standalone rows/layers are required, there MUST be proper routing/layer clearance between them.
+The standalone region MUST sit below External with one routing row between External and the first standalone row. It MUST be packed approximately square, with one logical separation column between adjacent standalone nodes and one routing row between standalone rows. Normal odd-span sizing applies to standalone nodes.
 
 Standalone layout MUST NOT influence ordinary tree placement.
 
 The complete standalone grid is an atomic placement block. Its internal node
-positions are frozen before global packing; dependency-tree placement and
+positions are frozen before project/diagram composition; dependency-tree placement and
 standalone-grid placement MUST NOT mutate one another internally. Any collision
 is resolved by translating complete regions/blocks, never by reassigning one
-standalone node through the hierarchy solver.
+standalone node through the hierarchy placement authority.
 
-## 10. Ordinary Y-layer solving — bottom-up dependency depth
+### Fixed project surround structure
 
-Ordinary/non-reserved layers MUST be solved from actual dependency constraints.
+Every project region MUST have exactly two logical tracks on each side:
 
-External is the bottom anchor.
+```text
+project interior
+-> inner added track: project boundary/header track
+-> outer added track: general routing track
+-> outside
+```
 
-Conceptually:
+This means two rows above, two rows below, two columns left and two columns right. The inner added track is the project boundary/header surface; it is not an additional general-routing track. The outer added track is general routing space and permits bends. This surround is fixed structural topology and MUST NOT be expanded by routing demand.
 
-- External = base depth 0;
-- an ordinary node depending only on External requires one ordinary layer above External;
-- its parent requires one layer above that;
-- and so on.
+Project border cells MUST permit straight passthrough only and MUST NOT contain bends. Header-text cells MUST be blocked. Non-text header cells MUST permit straight passthrough only and MUST NOT contain bends. The outer surrounding routing track MUST permit general routing, including bends.
 
-For an unconstrained ordinary node:
+## 10. Recursive tree-grid depth construction
 
-`required structural depth = 1 + max(depth of dependency children)`
+Temporary tree grids MUST construct dependency depth recursively. There is no separate global ordinary-Y solver or lowest-valid-layer solver that assigns every ordinary node before tree construction.
 
-A placement-tree root is **not** automatically a top-layer node.
+Temporary tree grids use alternating logical rows with explicit local parity:
 
-A root depending only on External MUST occupy the lowest valid ordinary layer immediately above External.
+```text
+local row 0 = node row
+local row 1 = routing row
+local row 2 = node row
+local row 3 = routing row
+...
+```
 
-Independent shallow roots MUST NOT be globally promoted to the depth of unrelated deeper trees.
+The root begins on local row 0. When a tree is composed into its project grid, the project-local parity is offset explicitly:
 
-## 11. Ordinary layers around reserved layers
+```text
+project row 0 = routing row
+project row 1 = node row
+project row 2 = routing row
+project row 3 = node row
+...
+```
 
-Reserved layers are anchors inside the solved hierarchy.
+Tree-local, project-local and final diagram-grid row identifiers are different coordinate domains. They MUST NOT be conflated. Once project grids are composed into the common diagram grid, routing uses diagram-grid coordinates only.
 
-Ordinary layers MAY and MUST be inserted wherever dependency constraints require them:
+An ordinary node's depth is the recursive depth implied by its dependency-tree construction. Independent trees retain independent depths and MUST NOT be promoted to match unrelated deeper trees.
 
-- above the highest reserved layer;
-- between reserved layers;
-- below the lowest reserved layer and above External.
+## 11. Reserved-depth padding during tree construction
 
-If a dependency chain needs one or more ordinary layers between two reserved bands, create those layers.
+The shared reserved-depth table is reconciled before project tree construction. Every selected project uses the same frozen reserved depths.
 
-Do not collapse ordinary nodes onto reserved bands.
+When a node's recursive tree depth would place it above its reserved depth, tree construction MUST insert node/routing-row padding so the node lands on its frozen reserved depth. Reservation movement and downstream `+2` propagation are completed by the pre-construction reconciliation phase in Section 7; construction MUST NOT move a reservation, propagate changes to later reservations, trigger another reservation pass or rebuild.
 
-## 12. Lowest-valid-layer rule
+External MUST remain the final shared reserved node layer. Ordinary nodes retain their recursive tree depth and MUST NOT be assigned to reserved rows by a separate global layer solver.
 
-For every ordinary node, the final Y layer MUST be the **lowest valid non-reserved layer** satisfying all applicable constraints.
+## 12. Reserved-order detached placement
 
-Applicable constraints include:
+If a dependency's reserved placement is equal to or above its parent and therefore cannot be placed below the parent, the semantic dependency tree MUST remain unchanged.
 
-- dependency children must be below;
-- positional parent must be above;
-- reserved-band ordering;
-- ordinary nodes cannot occupy reserved layers;
-- special-region constraints where explicitly applicable.
-
-Global analysed depth, stale structural depth, root status, or fallback row selection MUST NOT override the solved lowest-valid layer.
-
-At the end of layer solving, there MUST be one authoritative final layer ordinal per node.
-
-No later X-placement or routing stage may change Y.
+The dependency subtree MUST instead be recursively constructed as a detached placement unit. It MUST be excluded from direct-child centring and normal sibling composition, then composed to the right/outside of the completed main tree with one routing/separation column between placement units. Multiple detached units MUST be appended in analyser/FIFO order.
 
 ## 13. Parent/child Y ordering
 
-For every authoritative placement-parent edge:
+For every authoritative positional parent edge that remains within the recursively composed main placement tree:
 
 - parent MUST be visually above child;
-- child MUST be visually below parent.
+- child MUST be visually below parent;
+- direct-child placement MUST follow the recursive tree-grid row structure;
+- the normal visual invariant is evaluated using the final node rows in that composed tree.
 
-If reserved-band constraints make a relationship impossible, the planner MUST surface the contradiction rather than silently violating dependency order.
+For a dependency relationship whose subtree was detached because its reserved placement is equal to or above its semantic parent:
+
+- the normal parent-above-child visual invariant does not apply;
+- semantic ownership and the dependency relationship remain unchanged;
+- the detached subtree remains at its correct reserved placement;
+- routing later connects the two physical placements.
+
+Reserved ordering is handled by padding or detached placement units. It MUST NOT be resolved by changing reserved depth, changing semantic parentage, forcing detached Y placement below the source, or mutating the semantic dependency tree.
 
 ## 14. Node labels
 
@@ -306,13 +331,15 @@ Visible node width MUST be sufficient for both visible label/content and edge te
 
 Terminal capacity MUST expand the visible node when the actual visible edge would otherwise be unable to contain its terminal slots cleanly.
 
-Ordinary routing demand MUST NOT arbitrarily inflate visible nodes merely because a routing corridor needs more internal capacity.
-
-The planner MAY maintain a larger invisible routing footprint around the visible node for routing clearance, approach/departure corridors, lane capacity, and obstacle avoidance.
+Ordinary routing demand MUST NOT inflate the authoritative logical node footprint. Physical clearance MAY require larger row/column extents after routing, but any physical-only clearance envelope has no logical routing authority, MUST NOT block cells, MUST NOT reserve endpoint corridors, and MUST NOT alter pathfinding or node topology.
 
 ## 16. Odd logical-span sizing
 
-Node horizontal logical span MUST be odd.
+Node horizontal logical span MUST be odd and MUST be calculated before tree construction from a fixed configured base cell width, not from post-routing physical track extents.
+
+Nodes begin at logical span 3. The planner MUST choose the smallest odd span satisfying:
+
+`span * configuredBaseCellWidth >= max(visible label/text requirement, maximum top/bottom terminal capacity requirement, configured minimum node width/margins)`
 
 When a physical/terminal width requires an even logical span, round up to the next odd span.
 
@@ -324,7 +351,9 @@ Examples:
 
 Expansion MUST be symmetric around the node centre and preserve the authoritative centre cell/centreline.
 
-Node sizing MUST be finalized before local tree construction and global tree packing.
+`configuredBaseCellWidth` is a fixed pre-routing sizing assumption. Later routing pressure MAY enlarge physical row/column extents, but MUST NOT change logical node spans, centre cells or positions.
+
+Node sizing MUST be finalized before local tree construction and project-grid composition.
 
 ## 17. Terminal-capacity width
 
@@ -351,7 +380,7 @@ terminal on a different X coordinate.
 
 ## 18. Tree-by-tree X placement
 
-After Y layers and node widths are final, X placement MUST be performed **tree by tree**.
+After shared reserved depths and pre-routing logical node spans are frozen, recursive tree-grid construction MUST determine local tree X/Y geometry. X placement MUST be performed **tree by tree**.
 
 The planner MUST NOT globally pack all nodes on each visual row before tree construction.
 
@@ -359,10 +388,11 @@ For each placement root:
 
 1. build the entire tree in local X coordinates;
 2. recursively construct child subtrees;
-3. calculate the completed tree's per-layer contour;
+3. calculate the completed tree's recursive subtree contours;
 4. freeze internal tree geometry;
-5. globally translate the whole tree into free space;
-6. then place the next tree.
+5. return the completed temporary top-level tree grid as an atomic placement unit.
+
+Independent top-level trees MAY be constructed in parallel against the same frozen reserved-depth table. The planner MUST wait for all tree construction results, then pass them to project-grid composition in analyser/FIFO order. There is no sequential find-free-space, whole-tree translation, or place-next-tree authority in this stage; atomic project-grid composition is defined by Section 25.
 
 Unrelated trees MUST NOT influence the local geometry of the tree currently being built.
 
@@ -372,7 +402,7 @@ For each parent:
 
 1. recursively construct every immediate child subtree;
 2. determine the width/contour required by each child subtree;
-3. pack immediate child subtrees contiguously with the required gap;
+3. pack immediate child subtree placement units contiguously with exactly one routing/separation column between adjacent units;
 4. place the parent relative to its immediate children;
 5. return the completed subtree contour.
 
@@ -392,13 +422,13 @@ Unrelated same-layer nodes MUST NOT displace the child.
 
 An unrelated tree MUST move around the completed parent/child structure.
 
-A later global row-pack MUST NOT break this alignment.
+Project-grid or diagram-grid composition MUST NOT break this alignment.
 
 ## 21. Multiple-child parent centring
 
 For a parent with multiple immediate children, the parent MUST be centred over the immediate-child group.
 
-The centring reference is the immediate child group, not the entire descendant envelope.
+The centring reference is the immediate child group, not the entire descendant envelope. For one direct child, `ParentCentreX == ChildCentreX`. For multiple direct children, `ParentCentreX` is the midpoint of the leftmost and rightmost direct-child centres. Descendant/subtree bounds determine required placement space only; they MUST NOT determine the parent centreline.
 
 Child-subtree widths determine sibling-subtree separation, but do not redefine parent-centre semantics.
 
@@ -418,78 +448,53 @@ Tree readability takes priority over maximum compactness.
 
 Once a local tree has been constructed, its internal X geometry is frozen.
 
-Global packing may apply only a whole-tree translation.
-
-For each ordinary tree node:
-
-`FinalX = LocalTreeX + WholeTreeTranslationX`
+Project-grid composition MUST place the completed temporary tree grid as one
+atomic unit. It MUST NOT interleave or independently reposition nodes inside
+that unit.
 
 There MUST NOT be any unexplained per-node X delta after tree construction.
 
-## 24. Per-layer tree contours
+## 24. Recursive subtree contours
 
-Each completed tree MUST expose occupancy per final visual layer:
+Complete child subtree width and contour information MUST be used during recursive construction to reserve the horizontal space required by each child placement unit.
 
-`layer -> [minX, maxX]`
+This information is local to recursive tree construction. It MUST NOT become a global per-layer interlocking authority and MUST NOT permit unrelated top-level trees to use unused space inside one another.
 
-Contours SHOULD include final visible node widths and all placement-owned footprint/clearance needed to keep neighbouring trees distinct.
+## 25. Atomic top-level tree composition
 
-Global packing SHOULD use per-layer contours, not one giant rectangular tree width.
+Once a top-level temporary tree grid has been constructed, it is an atomic rectangular placement unit. Its internal node rows, routing rows, columns, spans and relative positions are frozen.
 
-## 25. Whole-tree global packing
+Completed top-level tree grids MUST be inserted into their project grid in analyser/FIFO order with exactly one routing/separation column between adjacent units. Unrelated top-level trees MUST NOT interleave, interlock by shared-layer contour, or extract individual nodes into another tree's unused space.
 
-When placing a new tree beside already-placed trees, determine the minimum whole-tree translation required across every shared layer.
+Independent tree construction MAY execute in parallel, but composition order MUST remain analyser/FIFO order.
 
-For each overlapping layer:
+## 26. Grid construction from the beginning
 
-`existing.maxX(layer) + requiredTreeGap <= new.minX(layer)`
+The diagram grid MUST be created before project tree construction as the overall working grid.
 
-Use the maximum required translation across shared layers, then translate the entire new tree.
+Temporary tree grids and project-local grids MUST then be created and populated directly with logical node and routing rows/columns. Completed tree grids are composed into project grids, and completed project grids are composed into the diagram grid with the fixed project surrounds.
 
-Do not mutate its internal coordinates.
+After project composition, the completed diagram grid becomes the authoritative frozen routing surface. This is not a layout-then-derived-grid process. No later stage may create structural routing rows/columns or alter logical node spans/positions.
 
-## 26. Grid construction timing
+## 27. Logical placement and route freeze
 
-The authoritative logical routing grid MUST be constructed from final node geometry.
+Once placement completes, logical node positions, spans, project regions and the diagram grid are frozen. Once routing completes, every relationship's ordered logical route-cell sequence is frozen.
 
-That means after final Y solving, final visible width/odd-span expansion, local tree construction, whole-tree packing, and project placement.
+No post-routing stage MAY add, remove, replace, reorder or otherwise alter a relationship's logical route-cell sequence. Lane allocation, terminal allocation, bend/crossing calculation, physical sizing and materialisation MAY derive physical requirements from the frozen paths, but MUST NOT request rerouting.
 
-Once the routing grid is authoritative, node placement is immutable.
-
-If later footprint convergence changes node spans, the pipeline MUST loop back and rebuild placement/grid/routing coherently.
-
-## 27. Footprint-expansion convergence
-
-Footprint expansion MUST converge.
-
-A fixed arbitrary two-pass limit is not acceptable.
-
-Required model:
-
-1. place/size;
-2. route;
-3. allocate lanes/endpoints;
-4. determine required footprint spans;
-5. if spans changed, rebuild all dependent stages;
-6. repeat until requirements stop changing.
-
-A defensive maximum iteration count MAY exist only as a failure guard.
-
-If convergence is not reached, generation MUST report a hard planner failure rather than render geometry based on unconsumed requirements.
+Lane allocation MAY increase physical row/column requirements, but MUST NOT add or remove logical rows/columns, change logical node spans/positions, or request another logical route. If a frozen path cannot be physically represented, the result is an explicit planning/validation failure.
 
 ## 28. One authoritative route topology
 
-There MUST be one authority for abstract route topology.
-
-The current intended same-project authority is `FindOrthogonalPath` or its future replacement.
+There MUST be one authority for abstract route topology: the capability-driven cell-by-cell route planner over the frozen common diagram grid.
 
 A later helper MUST NOT independently select another row/column route after topology has been chosen.
 
-Destination-approach requirements, return corridors, and project transitions MUST be represented as constraints in the authoritative route topology rather than as a second hidden router.
+Destination approaches, endpoint handoffs and project-boundary crossings MUST be represented by the authoritative cell path and its provenance rather than by a second hidden router or later repair stage.
 
 ## 29. Abstract route requirements
 
-Every abstract relationship route MUST be deterministic, orthogonal, complete, and represented as a full ordered sequence of traversed cells/steps.
+Every selected semantic relationship route MUST be deterministic, orthogonal, complete, and represented as a full ordered sequence of traversed cells/steps between its resolved physical source and target placements.
 
 Source first movement MUST be downward.
 
@@ -497,31 +502,100 @@ Destination must ultimately approach the target from above and enter downward.
 
 All traversed intermediate cells MUST remain represented in route provenance.
 
-No implicit cell jump is allowed.
+Every consecutive route cell MUST be orthogonally adjacent. No cell skipping or implicit cell jump is allowed.
 
-The route MUST avoid unrelated node footprints and use routing-capable cells only.
+### Authoritative cell-capability matrix
+
+Cell capability is the sole logical topology obstacle authority. Capability is evaluated against the requested traversal, not as a single `IsRoutable` Boolean. For each candidate step the router MUST evaluate the cell together with its intended entry direction and intended exit direction.
+
+| Cell kind | Capability | Permitted traversal |
+|---|---|---|
+| Occupied node-footprint cell | Blocked | No unrelated route traversal. A source or destination node cell may appear only as the corresponding route endpoint; it is not a pass-through cell. |
+| Normal routing-row cell | General routing | Horizontal traversal, vertical traversal and bends. |
+| Empty node-placement-row cell | Vertical passthrough only | Vertical straight traversal only; horizontal traversal and bends are prohibited. |
+| Project boundary cell | Straight passthrough only | Permitted straight traversal; bends are prohibited. |
+| Project header non-text cell | Straight passthrough only | Permitted straight traversal; bends are prohibited. |
+| Project header text cell | Blocked | No route traversal. |
+
+Examples are normative:
+
+- an empty node-row cell with vertical entry and vertical exit is legal;
+- an empty node-row cell with horizontal entry and horizontal exit is illegal;
+- an empty node-row cell with a vertical-to-horizontal turn is illegal;
+- a project boundary or non-text header cell permits its allowed straight traversal but rejects a turn;
+- a header-text cell blocks traversal;
+- a normal routing-row cell permits turns.
+
+The route MUST use cells whose capabilities permit the requested traversal. Pathfinding MUST fundamentally care about cell capability; route occupancy, project ownership and endpoint ownership MUST NOT become additional obstacle systems.
+
+For an ordinary immediate-child relationship, when the target centre cell is exactly `[source centre column, source node row + 2]`, the authoritative route MUST use the direct vertical path:
+
+```text
+source node cell
+-> intervening routing-row cell
+-> target node cell
+```
+
+The source and target node cells in this representation are endpoint cells, not pass-through traversal. The intervening routing-row cell is the only ordinary traversed cell. This three-cell path is subject to the same capability and orthogonal-adjacency rules. The general obstacle-routing process MUST NOT be invoked for this direct immediate-child case.
+
+### General downward route construction
+
+For a target below the source, after the direct immediate-child shortcut has been considered, the authoritative route MUST be constructed as:
+
+```text
+source
+-> leave downward into the routing row below the source
+-> move horizontally as required toward the intended vertical line
+-> descend cell-by-cell
+-> if the next vertical cell is unavailable, remain on the current routing row and use the deterministic +/-2 continuation search
+-> repeat until the routing row immediately above the target
+-> move horizontally to the target centre column
+-> enter the target downward
+```
+
+Every horizontal and vertical movement in this sequence MUST obey the requested-traversal capability rules and retain every traversed cell.
+
+### General upward route construction
+
+For a target above the source, the authoritative route MUST be constructed as:
+
+```text
+source
+-> leave downward into the routing row below the source
+-> move horizontally outside the source logical footprint
+-> ascend from that escaped column
+-> use the same capability checks and deterministic +/-2 continuation search while ascending
+-> remain close to the current/source vertical line rather than taking an arbitrary global detour
+-> reach the routing row immediately above the target
+-> move horizontally to the target centre column
+-> enter the target downward
+```
+
+An upward route MUST NOT immediately reverse through the source node or its footprint. The mandatory horizontal escape MUST occur on a general routing row before ascent begins. The direct immediate-child shortcut remains the special case handled before this general process.
 
 ## 30. Blocked preferred routes
 
-The generator MUST still generate diagrams when a preferred corridor is blocked.
+The generator MUST still account for a relationship when a preferred corridor is blocked.
 
-The route planner SHOULD deterministically route around blockers using the authoritative routing grid/cells.
+The route planner SHOULD deterministically route around blockers using the authoritative routing grid/cells. For descending and ascending travel, a blocked vertical continuation MUST NOT enter the blocked/node row. It remains on the current general-routing row and searches both horizontal directions in repeated two-column logical-ordinal candidate increments. The side requiring fewer increments to obtain a legal vertical continuation wins; equal distances use left-first.
+
+The `+/-2` value selects candidate continuation columns; it does not permit a route-cell jump. Every horizontal movement between the current column and a selected candidate column MUST contain each intervening orthogonally adjacent routing cell in route provenance, for example `[x] -> [x + 1] -> [x + 2]`.
 
 A route MUST NOT be dropped simply because the preferred corridor is unavailable.
 
-If no valid route can be found, retain the relationship and attempted invalid geometry for diagnosis rather than silently omitting it.
+If no legal path exists on the frozen grid, retain the failed relationship attempt, emit a hard route-planning diagnostic, and do not mutate placement, add rows/columns or invoke compiler repair. Normal/best-effort output retains the invalid relationship and sufficient attempted geometry for visible accounting; strict output rejects the hard-invalid result.
 
 ## 31. Cross-project routing
 
-Cross-project relationships MUST use explicit project/diagram transition topology.
+Cross-project relationships MUST use exactly the same common diagram-grid routing algorithm as same-project relationships.
 
-Project transforms MUST be accounted for explicitly.
+The logical route for a cross-project relationship is entirely expressed in common diagram-grid coordinates. Project-local grids are composed into that diagram grid before routing; project-relative and absolute project transforms are later mechanical geometry transforms only.
 
-Cross-project routing MUST remain orthogonal and subject to the same final validation as same-project routes.
+Cross-project boundary crossings MAY be recorded as provenance and ownership metadata, but MUST NOT invoke a separate transition router, transition-row selector or compiler-created transition geometry. Cross-project routing MUST remain orthogonal and subject to the same final validation as same-project routes.
 
 Project movement/translation MUST carry project-owned geometry consistently.
 
-## 32. Source/destination endpoint topology
+## 32. Source/destination endpoint geometry and component representation
 
 The endpoint chain is symmetric in intent.
 
@@ -541,7 +615,7 @@ Destination side:
 4. DestinationNodeAnchor
 5. DestinationTerminal
 
-Endpoint components are planned geometry, not renderer repairs.
+Endpoint components are derived only after logical route freeze from the frozen route-cell sequence, terminal assignments, lane assignments and final physical row/column dimensions. They are renderer-independent physical representations, not a second topology authority. They MUST NOT select, replace, reorder or otherwise modify the logical route-cell sequence.
 
 ## 33. Terminal slot ownership
 
@@ -554,6 +628,8 @@ The terminal slot owns the endpoint-local vertical X coordinate.
 The ordinary route lane MAY use a different X.
 
 If so, an explicit orthogonal planner-owned handoff connects the endpoint-local vertical to the ordinary route.
+
+An endpoint-local handoff MAY connect the assigned terminal X to the physical lane represented by the endpoint-adjacent authoritative route cells, but it MUST remain inside those cells' authorised physical routing envelope. It MUST NOT create another logical route around an obstacle. Endpoint handoffs solve physical alignment only; they do not solve topology.
 
 ## 34. Terminal group placement
 
@@ -582,13 +658,13 @@ handoff or clamp a terminal into the node edge.
 
 Terminal slot positions are determined by node-edge geometry.
 
-Relationship-to-slot assignment is determined by route geometry.
+Relationship-to-slot assignment is determined by route geometry with this precedence:
 
-Outgoing source terminals SHOULD be ordered left-to-right by downstream target/departure-route X.
+1. primary ordering authority: directional group, ordered left-to-right as links travelling left, then links travelling down, then links travelling right;
+2. secondary ordering within each directional group: deterministic positional/geometric order;
+3. stable deterministic identity/order tie-break.
 
-Incoming destination terminals SHOULD be ordered left-to-right by source/approach-route X.
-
-Stable deterministic tie-breaking is required.
+The resulting vertical offsets at the first direction change MUST preserve that grouping and MUST avoid link crossings. The established source/destination X-order statements are secondary ordering within a directional group, not an alternative global ordering authority: outgoing source terminals use downstream target/departure-route X and incoming destination terminals use source/approach-route X.
 
 ## 36. Terminal inset and corners
 
@@ -704,7 +780,7 @@ It MAY identify component boundaries, split the authoritative path into runs/tur
 
 It MUST NOT choose another corridor, choose another route, overshoot and return, invent an unrepresented detour, or alter topology.
 
-If adjacent components cannot reconcile on the authoritative topology, the route must be rebuilt by the route authority.
+If adjacent components cannot reconcile on the frozen topology, the result MUST be an explicit planning, allocation or validation failure. Boundary/component construction MUST NOT request a rebuilt route or invoke a later topology repair.
 
 ## 44. Shared component boundaries
 
@@ -936,7 +1012,7 @@ For routes, retain where practical:
 9. validation findings;
 10. `FirstInvalidStage`.
 
-Placement evidence SHOULD expose final layer reason, tree ID/root, positional parent, local tree X, whole-tree translation, final X, and per-layer tree contour.
+Placement evidence SHOULD expose final layer reason, tree ID/root, positional parent, local tree X, atomic project-placement offset, final X, and recursive subtree contour data. Contour diagnostics are evidence from recursive construction only; they MUST NOT be interpreted as permission for a global helper to interlock completed top-level trees by layer.
 
 ## 63. Diagnostics must be truthful
 
@@ -971,14 +1047,20 @@ Generated Draw.io files SHOULD NOT be automated visual goldens. XML/geometry/sty
 Coverage SHOULD include:
 
 ### Layers
-- ordinary root -> External;
-- root -> ordinary -> External;
-- shallow and deep independent roots;
-- ordinary node above/below/between reserved layers;
-- multiple inserted ordinary layers;
-- ordinary node never on reserved layer;
-- lowest-valid-layer selection;
-- root status does not imply top layer.
+- recursive single-child depth with alternating node/routing rows;
+- recursive multi-level tree depth;
+- shallow and deep independent trees retain independent depths;
+- zero-match configured reserved groups are removed;
+- initial active reservations are exactly odd node rows `1, 3, 5, ...` after zero-match removal and External append;
+- shared reserved depths across selected projects;
+- pre-construction depth inspection calculates constraints without constructing placement geometry;
+- reserved-depth padding in alternating node/routing increments;
+- when an earlier reservation moves down, every downstream reservation shifts by `2` as required;
+- External moves down when an External dependency requires a deeper node row;
+- ordinary nodes remain on their recursive tree depth;
+- reserved-order conflict creates a detached placement unit;
+- External occupies the final shared reserved node layer;
+- standalone region sits below External with a routing row between.
 
 ### Trees
 - one parent/one child exact X alignment;
@@ -986,15 +1068,25 @@ Coverage SHOULD include:
 - parent with multiple children;
 - uneven child-subtree widths;
 - two independent trees;
-- partial shared layers;
-- no unrelated node between siblings;
-- no cross-tree interleave;
-- whole-tree packing adds only whole-tree translation;
-- no post-pack individual-node X mutation.
+- direct-child-centre formula with uneven widths;
+- exactly one separation column between adjacent sibling units;
+- completed top-level tree grids compose atomically in analyser/FIFO order;
+- parallel tree completion order cannot change FIFO project composition;
+- no top-level interleave or contour interlocking;
+- completed tree grids are placed only as atomic project-grid units;
+- no post-freeze individual-node X mutation.
 
 ### External
 - owner alignment when unobstructed;
-- nearest deterministic displacement when blocked.
+- nearest deterministic displacement when blocked;
+- External final-layer placement;
+- standalone approximate-square placement with one row/column separation.
+
+### Routing-grid assembly
+- diagram grid exists before project/tree construction;
+- temporary tree and project grids compose into the diagram grid;
+- fixed two-track project surround on every side;
+- no route-created logical rows or columns after placement freeze.
 
 ## 68. Required sizing/terminal regression scenarios
 
@@ -1010,19 +1102,34 @@ Coverage SHOULD include:
 - route-order assignment within centred group;
 - endpoint-local vertical X equals terminal X;
 - expansion known before tree packing;
-- convergence beyond two passes;
-- explicit non-convergence failure.
+- pre-routing span requirements consumed before tree packing;
+- post-routing lane pressure cannot change logical spans or trigger placement rebuilds;
+- physical sizing may enlarge track extents without changing logical topology.
 
 ## 69. Required routing regression scenarios
 
 Coverage SHOULD include:
 
 - one authoritative complete path;
+- empty node-row cell permits vertical passthrough;
+- empty node-row cell rejects horizontal traversal;
+- empty node-row cell rejects bends;
+- project boundary permits straight passthrough and rejects bends;
+- non-text header cell permits straight passthrough and rejects bends;
+- header-text cell blocks traversal;
+- normal routing row permits turns;
+- normal downward route construction follows routing-row departure, horizontal alignment, cell-by-cell descent and final target alignment;
+- final horizontal target alignment occurs on the routing row immediately above the target;
+- upward routes leave downward, escape outside the source footprint, then ascend;
+- upward routes do not immediately reverse through the source node/footprint;
 - source first movement down;
 - destination final movement down;
+- direct immediate child uses the three-cell vertical path;
 - destination approach in topology;
 - no second routing in boundary/corridor completion;
 - deterministic obstacle bypass;
+- `+/-2` candidate search retains every intervening horizontal cell;
+- obstacle bypass works identically for upward and downward vertical travel;
 - all intermediate cells retained;
 - component construction cannot change topology;
 - turn inside authoritative cell;
@@ -1074,11 +1181,12 @@ Desired result:
 - no endpoint direction failures;
 - no duplicate/corner/mis-centred terminals;
 - no ordinary-on-reserved violations;
-- no lowest-valid-layer violations;
-- no shallow-root promotion;
+- no reserved-depth padding violations;
+- no independent-root promotion;
 - no single-child or parent-centering violations;
 - no tree interleave/atomicity violations;
-- no unresolved expansion;
+- no unresolved pre-routing span requirement;
+- no post-freeze logical row, column, span or position mutation;
 - no renderer omissions or planner/render mismatches.
 
 Historically Content Management has had 340 relationships and the five-project integration 383, but those exact counts are not permanent contract requirements.
@@ -1127,9 +1235,8 @@ The following have been identified but not fully settled:
 
 1. exact node-style precedence between all override classes, particularly External style versus exact user override;
 2. whether Draw.io edges are parented under project containers or root cell `1` — fidelity matters, not a specific XML parent choice;
-3. exact defensive maximum iteration count for convergence;
-4. whether a future explicit shared-port/shared-routing semantic model should exist — current contract assumes neither;
-5. whether the internal pathfinding algorithm remains priority-queue Manhattan search forever — the contract governs behaviour and authority, not one search implementation.
+3. whether a future explicit shared-port/shared-routing semantic model should exist — current contract assumes neither;
+4. whether the internal pathfinding algorithm remains priority-queue Manhattan search forever — the contract governs behaviour and authority, not one search implementation.
 
 These MUST NOT be silently invented.
 
@@ -1140,19 +1247,17 @@ These MUST NOT be silently invented.
 | Semantic dependency graph | Semantic analysis/model |
 | Canonical/duplicate projection | Projection |
 | Positional parent/tree ownership | Positional ownership stage |
-| Reserved role classification | Reserved-layer solver |
-| Ordinary Y placement | Bottom-up final-layer solver |
-| Visible node sizing | Label + terminal-capacity sizing |
-| Local tree geometry | Tree layout |
-| Global X placement | Whole-tree contour packing |
-| Logical routing cells/grid | Final grid builder |
-| Route topology | One abstract route planner |
-| Run/lane/crossing allocation | Lane allocator |
-| Terminal slot placement | Collective node-edge terminal allocator |
-| Footprint expansion | Convergence loop |
-| Boundary/component representation | Boundary contract builder |
-| Track sizes | Track sizing planner |
-| Absolute coordinates | Physical scene compiler |
+| Shared reserved depths | Reservation reconciliation |
+| Pre-routing node span | Label, terminal-capacity and configured-base-cell sizing |
+| Recursive tree-grid X/Y geometry | Recursive tree-grid construction |
+| Detached placement units | Tree placement/composition |
+| Project composition | Deterministic project-grid assembly |
+| Diagram logical grid | Diagram-grid assembly during placement |
+| Route topology | Single capability-driven cell router |
+| Run/lane/turn/crossing allocation | Collective post-route allocator |
+| Terminal assignment | Post-route terminal allocator |
+| Physical track extents | Track sizing planner |
+| Absolute geometry | Mechanical physical compiler |
 | Final validity | Final planner/scene validator |
 | Final connector/node style | Planner-resolved style |
 | Draw.io XML projection | Mechanical renderer |
@@ -1188,43 +1293,34 @@ Any future implementation reintroducing these behaviours is almost certainly vio
 
 This section SHOULD remain concise. Normative sections above are authoritative.
 
-- Grid is authoritative for logical routing; renderer is mechanical.
-- Reserved role bands use first-match ordered category semantics.
-- External is a dedicated bottom layer.
-- Ordinary layers are solved bottom-up around reserved bands; root does not mean top.
-- X placement is tree-by-tree; completed trees are globally packed atomically.
-- Single-child parent/child X equality is required.
-- Visible node width includes terminal capacity and uses odd logical spans.
-- Terminal groups are centred/evenly spaced; route geometry assigns relationships to slots.
-- Terminal slot owns endpoint-local vertical X.
+- The new planner algorithm supersedes prior V6 behaviour wherever the two differ.
+- Semantic relationships remain accounted for through resolved physical source and target instances.
+- Reserved groups are counted across the complete selected diagram, zero-match groups are removed, remaining groups preserve configured order, and active reservations begin at odd node rows `1, 3, 5, ...` with External appended last.
+- Reservation constraints are inspected from every selected top-level tree before geometry construction; inspection may run in parallel, but requirements are reduced deterministically before the table is reconciled and frozen.
+- Reserved depth shifts are reconciled across the complete selected diagram in increments of `2`; External moves to the required parity-aligned maximum depth and establishes the shared bottom reservation.
+- The reconciled reservation table is frozen before parallel project/tree construction and is shared by every selected project.
+- The project surround is fixed at exactly two logical tracks on every side: inner boundary/header track, then outer general-routing track.
+- Logical node spans are calculated before tree construction from a fixed configured base cell width and remain odd, symmetric and frozen.
+- Tree construction is analyser/FIFO ordered; independent trees may execute in parallel and must merge in analyser/FIFO order.
+- Independent tree completion order cannot affect atomic FIFO project-grid composition.
+- Parent centring uses direct-child centres; child subtree bounds determine required space but never the parent centreline.
+- Reserved-order conflicts use detached placement units, not inserted same-role sublayers.
+- External occupies the final shared reserved layer; standalone nodes occupy a separate approximately square region below External with explicit routing separation.
+- The common diagram grid is authoritative for both same-project and cross-project routing.
+- Route pathfinding is capability-driven. Route occupancy, project ownership and endpoint ownership are not additional pathfinding obstacles.
+- Cell capabilities are traversal-specific: node footprints and header text block; empty node rows permit vertical passthrough only; routing rows permit general traversal; boundaries and non-text headers permit straight passthrough only.
+- Tree-local row parity is node/routing from local row 0, project composition applies an explicit offset, and final routing uses only common diagram-grid coordinates.
+- An immediate child on the next node row and the same centre column uses the direct three-cell vertical path through the intervening routing row.
+- General downward routes align on the routing row above the target before entering downward; upward routes depart downward, escape outside the source footprint, then ascend without immediate reversal.
+- Every consecutive logical route cell is orthogonally adjacent; no cell skipping is permitted.
+- Obstacle bypass searches both logical `+/-2` directions on general routing rows; nearest valid continuation wins and left is the equal-distance tie-break.
+- Failed paths remain accounted for with explicit hard diagnostics; normal mode retains attempted invalid output and strict mode rejects it.
+- Logical route-cell sequences freeze after routing. Lane allocation, terminal allocation, sizing and materialisation may never request rerouting or alter logical topology.
+- Terminal groups are centred and evenly spaced using configured edge inset and port spacing; directional grouping is left, down, right, then positional order within each group, then stable tie-break.
+- Endpoint-local handoffs may solve physical terminal/lane alignment only within the authorised endpoint-cell envelope and may not create topology.
 - Lane sizing uses the same geometry formula as lane coordinates.
+- Final physical geometry is validated before safe monotonic collinear simplification.
 - Invalid relationships remain visible in best-effort output.
-- Final physical/rendered-equivalent geometry is authoritative for validation.
-- Redundant backtracking and shared non-zero intervals are invalid.
 - Strict mode rejects hard findings; normal mode is best-effort with explicit diagnostics.
-- Connector styling is planner-owned; renderer must not derive colour from destination fill.
-- Real projects are integration targets only; permanent regressions use reduced synthetic scenarios.
-- Terminal-bearing visible geometry preserves the authoritative terminal edge; renderer reconstruction is the final orthogonality check.
-- Same-role parent/child chains use inserted role sublayers; role identity remains unchanged for style and diagnostics.
-- Terminal capacity is edge-local and calculated per source/destination side; ordinary route demand never uses total node degree to inflate a visible node.
-- Shared bends, invalid endpoint/perpendicular contacts, and under-spaced parallel intervals are diagnostics owned by route/lane allocation and final physical validation, not renderer repairs.
-- External affinity diagnostics distinguish genuinely blocked owner-centred placement from stale or avoidable displacement and retain the blocking ownership evidence.
-- Synthetic planner regressions begin with analyser-shaped semantic graphs and pass through the real planner; planner output, physical IDs, coordinates, route points, and historical artifacts are never fixture authority.
-- Terminal groups are centred on the connected node edge, use configured port spacing and inset as their authoritative capacity rules, and remain uniquely ordered after the final planning pipeline.
-- Route-demand ordering groups links by resolved direction in left, down, right order where applicable; relative vertical drop order preserves that grouping and prevents avoidable terminal/link crossings.
-- Visible horizontal node separation is governed by configured spacing policy after node-width and footprint expansion, not by incidental sparse logical-column distance.
-- Standalone nodes occupy a dedicated compact region below the bottom External/hierarchy layer, remain standalone regardless of role suffix, and preserve at least one logical cell of horizontal and vertical separation.
-- Ordinary nodes without reserved selectors use the lowest valid non-reserved layer above their dependencies, skipping reserved bands rather than inheriting a fallback layer.
-- Terminal demand is planner-owned before ordinary routing and is separate from final physical terminal coordinates.
-- Terminal direction groups and deterministic terminal order are explicit planner records; final order must not be inferred from final lane X coordinates.
-- Source and destination endpoint envelopes/corridors are first-class grid reservations with relationship ownership and iteration provenance.
-- Ordinary route occupancy must respect endpoint reservations before topology selection; an unrelated route cannot consume another relationship group's endpoint space.
-- Final terminal coordinates are assigned only after authoritative final visible node bounds and physical track sizing exist. Terminal groups are centred on the final visible edge with configured inset and spacing.
-- Ordinary run lanes may provide route targets and ordering information, but do not own terminal X. Final terminal slot allocation is its own planner stage.
-- Terminal-local handoffs are planner-owned and must remain inside their reserved endpoint envelopes.
-- Endpoint-space conflicts and final capacity deficits are monotonic convergence requirements that invalidate and rebuild affected placement, grids, topology, lanes, boundary contracts and sizing rather than being repaired downstream.
-- Physical materialisation is mechanical: it may not expand node bounds, calculate terminal positions or invent endpoint bends.
-
-## Endpoint planning decision
-
-The accepted endpoint architecture is hybrid: reserve a conservative, bounded endpoint envelope before ordinary routing, then permit monotonic convergence when authoritative final sizing and terminal slots demonstrate that the envelope or track capacity is insufficient. The planner records demand, direction grouping, order, logical envelope, final slot and handoff separately. This prevents route lanes and physical materialisation from becoming implicit terminal authority.
+- Connector styling is planner-owned; the renderer emits the resolved style mechanically.
+- Real projects are integration targets only; permanent regressions use reduced analyser-shaped synthetic scenarios.
