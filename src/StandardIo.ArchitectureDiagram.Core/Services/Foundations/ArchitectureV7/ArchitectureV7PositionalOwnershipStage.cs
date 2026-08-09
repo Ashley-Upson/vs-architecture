@@ -30,9 +30,7 @@ public sealed class ArchitectureV7PositionalOwnershipStage
             {
                 var incoming = incomingByTarget.TryGetValue(node.PhysicalNodeId, out var links) ? links : Array.Empty<ArchitectureV7PhysicalLink>();
                 var incomingIds = incoming.Select(link => link.SourcePhysicalNodeId).Distinct(StringComparer.Ordinal).ToArray();
-                var eligible = incoming.Where(link => string.Equals(link.SourceProjectId, link.DestinationProjectId, StringComparison.Ordinal))
-                    .Select(link => link.SourcePhysicalNodeId).Distinct(StringComparer.Ordinal).ToArray();
-                var positional = eligible.FirstOrDefault();
+                var positional = incoming.Select(link => link.SourcePhysicalNodeId).Distinct(StringComparer.Ordinal).FirstOrDefault();
                 return new ArchitectureV7PositionalOwnershipDecision(node.PhysicalNodeId, node.SemanticNodeId,
                     positional, incomingIds, incomingIds.Where(id => !string.Equals(id, positional, StringComparison.Ordinal)).ToArray());
             }).ToArray();
