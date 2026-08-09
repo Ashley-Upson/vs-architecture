@@ -149,8 +149,11 @@ internal sealed class ArchitectureV6LogicalCellRouter
             var current = queue.Dequeue();
             foreach (var next in Neighbours(current, rows, columns, rowIndex, columnIndex, topology, sourceRow, targetRow, sourceMin, sourceMax))
             {
+                if (next.Equals(target) &&
+                    (rowIndex[current.RowId] != targetRow - 1 || current.ColumnId != target.ColumnId))
+                    continue;
                 if (!grid.Cells.TryGetValue(next, out var cell) || blocked.Contains(next) || !CanTraverse(cell, current, next, grid, target)) continue;
-                if (topology == RouteTopologyFamily.Upward && current.Equals(start) && rowIndex[next.RowId] <= sourceRow) continue;
+                if (current.Equals(start) && rowIndex[next.RowId] <= sourceRow) continue;
                 if (!visited.Add(next)) continue;
                 previous[next] = current;
                 if (next.Equals(target)) return Reconstruct(previous, start, target);

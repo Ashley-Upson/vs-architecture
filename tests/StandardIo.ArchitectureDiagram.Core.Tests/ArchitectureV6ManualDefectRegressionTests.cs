@@ -178,6 +178,30 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
     }
 
     [Fact]
+    public void Same_layer_route_preserves_bottom_departure_and_top_destination_entry()
+    {
+        var plan = Plan(new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("source", "SourceService", "p")
+            .Node("target", "TargetService", "p")
+            .Node("peer", "PeerService", "p")
+            .Link("source-target", "source", "target")
+            .Link("source-peer", "source", "peer"));
+
+        var route = plan.PhysicalScene!.Geometry.Routes.Single(item => item.PhysicalLinkId.Contains("source-target", StringComparison.Ordinal));
+        var points = route.ReducedPoints ?? route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>();
+        var sourceTerminal = points[0];
+        var first = points.Skip(1).First(item => item.Point != sourceTerminal.Point);
+        var destinationTerminal = points[^1];
+        var last = points.Reverse().Skip(1).First(item => item.Point != destinationTerminal.Point);
+
+        Assert.True(first.Point.X == sourceTerminal.Point.X && first.Point.Y > sourceTerminal.Point.Y,
+            $"source terminal={sourceTerminal.Point}, first={first.Point}");
+        Assert.True(last.Point.X == destinationTerminal.Point.X && last.Point.Y < destinationTerminal.Point.Y,
+            $"last={last.Point}, destination terminal={destinationTerminal.Point}");
+    }
+
+    [Fact]
     public void Shared_horizontal_and_vertical_runs_receive_distinct_lane_ordinals_before_materialisation()
     {
         var plan = Plan(RegressionRequest());
