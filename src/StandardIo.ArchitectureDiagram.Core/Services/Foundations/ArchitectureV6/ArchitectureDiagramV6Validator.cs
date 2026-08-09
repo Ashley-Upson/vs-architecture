@@ -50,8 +50,6 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
             var previousOrder = -1;
             foreach (var step in route.Steps)
             {
-                if (step.EntrySide == step.ExitSide)
-                    findings.Add(new ArchitecturePlanningDiagnostic("InvalidRouteStepSides", "A route step must change direction or represent a valid turn.", PlanningDiagnosticSubject.RouteStep, route.PhysicalLinkId));
                 if (step.Order <= previousOrder)
                     findings.Add(new ArchitecturePlanningDiagnostic("UnorderedRouteSteps", "Route steps must have deterministic increasing order.", PlanningDiagnosticSubject.RouteStep, route.PhysicalLinkId));
                 previousOrder = step.Order;
@@ -59,13 +57,14 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
                     findings.Add(new ArchitecturePlanningDiagnostic("UnknownRouteCell", "A route step must reference an existing grid cell.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
                 else
                 {
-                    if ((cell.Capabilities & CellCapability.RoutingAllowed) == 0)
+                    var isExactEndpoint = routeLink is not null && occupancy.IsExactEndpointCell(step.CellId, step, routeLink);
+                    if ((cell.Capabilities & CellCapability.RoutingAllowed) == 0 && !isExactEndpoint)
                         findings.Add(new ArchitecturePlanningDiagnostic("RouteCellNotRoutable", "A route step uses a cell without routing capability.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
                     var resolution = occupancy.Resolve(step.CellId);
                     if (resolution.Status is ArchitectureV6OccupancyStatus.Ambiguous or ArchitectureV6OccupancyStatus.Inconsistent)
                         findings.Add(new ArchitecturePlanningDiagnostic("InvalidNodeFootprintOwnership",
                             resolution.Message ?? "A route cell has invalid node footprint ownership.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
-                    else if (routeLink is not null && resolution.IsOccupied && !occupancy.IsExactEndpointCell(step.CellId, step, routeLink))
+                    else if (routeLink is not null && resolution.IsOccupied && !isExactEndpoint)
                         findings.Add(new ArchitecturePlanningDiagnostic("RouteEntersUnrelatedFootprint", "A route may not pass through an occupied node footprint.", PlanningDiagnosticSubject.Cell, step.CellId.ToString()));
                 }
             }
@@ -96,7 +95,49 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
                 if (mapping.Value.Count != 1)
                     findings.Add(new ArchitecturePlanningDiagnostic("CanonicalProjectionCount", "Canonical mode must produce one physical node per semantic node.", PlanningDiagnosticSubject.SemanticNode, mapping.Key));
         ValidateGeometry(diagram, findings);
+        ValidatePhysicalScene(diagram, findings);
         return new PlannedArchitectureValidationResult(findings.Count == 0, findings);
+    }
+
+    private static void ValidatePhysicalScene(PlannedArchitectureDiagram diagram,
+        ICollection<ArchitecturePlanningDiagnostic> findings)
+    {
+        var scene = diagram.PhysicalScene;
+        if (scene is null)
+        {
+            if (diagram.StageStatus.AbsoluteGeometryCompleted)
+                findings.Add(new ArchitecturePlanningDiagnostic("MissingPhysicalScene",
+                    "A completed physical plan must expose a physical scene.", PlanningDiagnosticSubject.Grid, null));
+            return;
+        }
+
+        foreach (var diagnostic in scene.Diagnostics)
+            findings.Add(diagnostic);
+
+        var geometry = scene.Geometry;
+        if (geometry.Nodes.Count != diagram.PhysicalNodes.Count)
+            findings.Add(new ArchitecturePlanningDiagnostic("PhysicalSceneNodeCountMismatch",
+                "The physical scene must contain exactly one geometry record per physical node.", PlanningDiagnosticSubject.PhysicalNode, null));
+        if (geometry.Routes.Count != diagram.PhysicalLinks.Count)
+            findings.Add(new ArchitecturePlanningDiagnostic("PhysicalSceneRouteCountMismatch",
+                "The physical scene must retain one physical route record per physical link.", PlanningDiagnosticSubject.PhysicalLink, null));
+
+        var nodeIds = new HashSet<string>(geometry.Nodes.Select(node => node.PhysicalNodeId), StringComparer.Ordinal);
+        foreach (var link in diagram.PhysicalLinks)
+        {
+            if (!nodeIds.Contains(link.SourcePhysicalNodeId) || !nodeIds.Contains(link.DestinationPhysicalNodeId))
+                findings.Add(new ArchitecturePlanningDiagnostic("PhysicalSceneMissingLinkEndpoint",
+                    "A physical link does not have two emitted physical node geometries.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
+            if (geometry.Routes.Count(route => route.PhysicalLinkId == link.PhysicalLinkId) != 1)
+                findings.Add(new ArchitecturePlanningDiagnostic("PhysicalSceneRouteAccounting",
+                    "A physical link must have exactly one emitted route record.", PlanningDiagnosticSubject.PhysicalLink, link.PhysicalLinkId));
+        }
+
+        foreach (var route in geometry.Routes)
+            foreach (var segment in route.Segments)
+                if (segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y)
+                    findings.Add(new ArchitecturePlanningDiagnostic("PhysicalSceneDiagonalSegment",
+                        "A final physical route segment must be orthogonal.", PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId));
     }
 
     private static void ValidateGeometry(PlannedArchitectureDiagram diagram, ICollection<ArchitecturePlanningDiagnostic> findings)

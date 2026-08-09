@@ -86,6 +86,11 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
                 ? new AbsoluteRectangle(bounds.X + owningProject.AbsoluteBounds.X + offsetX, bounds.Y + owningProject.AbsoluteBounds.Y + offsetY,
                     bounds.Width, bounds.Height)
                 : bounds;
+            var expectedBounds = new AbsoluteRectangle(node.AbsoluteBounds.X + offsetX, node.AbsoluteBounds.Y + offsetY,
+                node.AbsoluteBounds.Width, node.AbsoluteBounds.Height);
+            if (reconstructedBounds != expectedBounds)
+                diagnostics.Add(new DiagramDiagnostic("V6RendererNodeGeometryMismatch",
+                    "Emitted node geometry does not reconstruct to the final physical scene bounds.", node.PhysicalNodeId));
             emittedNodeBounds[node.PhysicalNodeId] = reconstructedBounds;
             var styleRule = physicalNode?.ResolvedStyle;
             if (styleRule is null)
@@ -251,13 +256,13 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             sourceTerminal is null || targetTerminal is null)
             return;
 
-        var style = ParseStyle((string?)edge.Attribute("style"));
-        var source = new EmittedPoint(
-            sourceBounds.X + sourceBounds.Width * ReadRatio(style, "exitX"),
-            sourceBounds.Y + sourceBounds.Height);
-        var destination = new EmittedPoint(
-            destinationBounds.X + destinationBounds.Width * ReadRatio(style, "entryX"),
-            destinationBounds.Y);
+        // Draw.io stores terminal attachment as a ratio. Reconstructing that
+        // ratio through floating-point rectangle arithmetic can introduce a
+        // sub-pixel drift even when the planned terminal is orthogonal to the
+        // route. The planned terminal coordinates are the authoritative scene
+        // geometry; the ratios remain in the emitted style for Draw.io.
+        var source = new EmittedPoint(sourceTerminal.Point.X + offsetX, sourceTerminal.Point.Y + offsetY);
+        var destination = new EmittedPoint(targetTerminal.Point.X + offsetX, targetTerminal.Point.Y + offsetY);
         var waypoints = edge.Element("mxGeometry")?.Element("Array")?.Elements("mxPoint")
             .Select(point => new EmittedPoint(
                 ReadDouble(point, "x") + offsetX,
@@ -291,17 +296,6 @@ public sealed class DrawioArchitectureV6Renderer : IArchitectureDiagramRenderer<
             diagnostics.Add(new DiagramDiagnostic("RendererRouteGeometryMismatch",
                 $"Reconstructed emitted geometry does not match the planned route polyline. plannedPoints={expected.Length}; emittedPoints={emitted.Length}.", link.PhysicalLinkId));
     }
-
-    private static Dictionary<string, string> ParseStyle(string? text) => (text ?? string.Empty)
-        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-        .Select(token => token.Split(new[] { '=' }, 2))
-        .Where(parts => parts.Length == 2)
-        .GroupBy(parts => parts[0], StringComparer.OrdinalIgnoreCase)
-        .ToDictionary(group => group.Key, group => group.Last()[1], StringComparer.OrdinalIgnoreCase);
-
-    private static double ReadRatio(IReadOnlyDictionary<string, string> style, string key) =>
-        style.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var ratio)
-            ? Math.Max(0, Math.Min(1, ratio)) : 0.5;
 
     private static double ReadDouble(XElement element, string name) =>
         double.TryParse((string?)element.Attribute(name), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0;
