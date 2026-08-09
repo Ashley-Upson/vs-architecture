@@ -29,11 +29,12 @@ public sealed class ArchitectureV7PositionalOwnershipStage
             .Select(node =>
             {
                 var incoming = incomingByTarget.TryGetValue(node.PhysicalNodeId, out var links) ? links : Array.Empty<ArchitectureV7PhysicalLink>();
+                var incomingIds = incoming.Select(link => link.SourcePhysicalNodeId).Distinct(StringComparer.Ordinal).ToArray();
                 var eligible = incoming.Where(link => string.Equals(link.SourceProjectId, link.DestinationProjectId, StringComparison.Ordinal))
                     .Select(link => link.SourcePhysicalNodeId).Distinct(StringComparer.Ordinal).ToArray();
                 var positional = eligible.FirstOrDefault();
                 return new ArchitectureV7PositionalOwnershipDecision(node.PhysicalNodeId, node.SemanticNodeId,
-                    positional, eligible, eligible.Skip(1).ToArray());
+                    positional, incomingIds, incomingIds.Where(id => !string.Equals(id, positional, StringComparison.Ordinal)).ToArray());
             }).ToArray();
 
         return new ArchitectureV7PositionalOwnershipResult(projection, decisions, projection.FreezeFingerprint,
