@@ -229,15 +229,15 @@ public sealed class ArchitectureV6CanonicalPlacementTests
         Assert.Equal(expected.Freeze.Fingerprint, result.PlacementFreeze.Fingerprint);
         Assert.Equal(expected.Placement.NodePlacements.Select(item => (item.PhysicalNodeId, item.AnchorCellId)),
             result.NodePlacements.Select(item => (item.PhysicalNodeId, item.AnchorCellId)));
-        Assert.Empty(result.Routes);
+        Assert.Equal(result.PhysicalLinks.Count, result.Routes.Count);
+        Assert.All(result.Routes, route => Assert.NotEmpty(route.Steps));
         Assert.Null(result.RelativeGeometry);
         Assert.Null(result.PhysicalScene);
         Assert.True(result.StageStatus.LogicalPlacementCompleted);
-        Assert.False(result.StageStatus.AbstractRoutingCompleted);
+        Assert.True(result.StageStatus.AbstractRoutingCompleted);
         Assert.True(result.StageStatus.LaneAllocationDeferred);
         Assert.True(result.StageStatus.SizingDeferred);
         Assert.True(result.StageStatus.AbsoluteGeometryDeferred);
-        Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.Routing");
         Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.LanesAndTerminals");
         Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.PhysicalSizing");
         Assert.Contains(result.Diagnostics.Findings, item => item.Code == "V6StageDeferred.Validation");
