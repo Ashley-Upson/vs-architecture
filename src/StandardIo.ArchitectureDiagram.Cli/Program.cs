@@ -158,9 +158,6 @@ public static class Program
                 ? $"{targetName}.data-model.drawio"
                 : options.DiagramTypes.Count == 1 ? $"{targetName}.architecture.drawio" : $"{targetName}.diagrams.drawio")
             : Path.GetFullPath(options.OutputPath);
-        await provider.GetRequiredService<IDiagramFileBroker>()
-            .WriteTextAsync(outputPath, document.Content).ConfigureAwait(false);
-
         if (architecture is not null && !string.IsNullOrWhiteSpace(options.ArchitectureAnalysisOutputDirectory))
         {
             var directory = Path.GetFullPath(options.ArchitectureAnalysisOutputDirectory);
@@ -196,16 +193,19 @@ public static class Program
                 .WriteTextAsync(diagnosticsPath, architecture.Diagnostics.ReportJson).ConfigureAwait(false);
             Console.WriteLine($"Diagnostics: {diagnosticsPath}");
         }
-        Console.WriteLine($"Output: {outputPath}");
-        Console.WriteLine($"Pages: {string.Join(", ", document.PageNames)}");
         if (options.StrictValidation && architecture is { StrictValidationPassed: false })
         {
             var enforced = architecture.Findings.Where(finding => finding.IsStrictlyEnforced).ToArray();
-            Console.Error.WriteLine($"Strict validation failed with {enforced.Length} finding(s); the diagram was still written.");
+            Console.Error.WriteLine($"Strict validation failed with {enforced.Length} finding(s); the diagram was not written.");
             foreach (var category in enforced.GroupBy(finding => finding.Category).OrderBy(group => group.Key, StringComparer.Ordinal))
                 Console.Error.WriteLine($"  {category.Key}: {category.Count()}");
             return 1;
         }
+
+        await provider.GetRequiredService<IDiagramFileBroker>()
+            .WriteTextAsync(outputPath, document.Content).ConfigureAwait(false);
+        Console.WriteLine($"Output: {outputPath}");
+        Console.WriteLine($"Pages: {string.Join(", ", document.PageNames)}");
         return 0;
     }
 

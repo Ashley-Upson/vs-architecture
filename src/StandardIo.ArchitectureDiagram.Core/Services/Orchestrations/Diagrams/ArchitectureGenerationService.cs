@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
@@ -62,10 +63,6 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
         var planningRequest = ArchitecturePlanningRequestFactory.Create(diagram, job, mode);
         var planned = planner.Plan(planningRequest);
         var validation = validator.Validate(planned);
-        var page = renderer.Render(planned, new ArchitectureRenderRequest(
-            planningRequest.Validation.Mode, planningRequest.GenerationSettings.OutputRenderer, true));
-        if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() };
-        var repeat = Repeat(page, serializationRepeatCount);
         var semanticNodes = diagram.Projects.SelectMany(project => project.Nodes).ToArray();
         // Planner findings and final structural validation are one result
         // surface for generation policy; the validator itself remains usable
@@ -79,6 +76,15 @@ public sealed class ArchitectureGenerationService : IArchitectureGenerationServi
             ? new ArchitectureEligibilityResult(enforcedFindings.Length == 0,
                 enforcedFindings.Select(finding => finding.Code + ": " + finding.Message).ToArray())
             : new ArchitectureEligibilityResult(true, Array.Empty<string>());
+        // Strict rejection is decided before the mechanical renderer is invoked.
+        // A rejected result still carries an empty diagnostic page so callers can
+        // inspect findings and export evidence without mistaking it for output.
+        var page = strict && !eligibility.Eligible
+            ? new DrawioPage("Architecture (rejected)", "architecture-rejected", new XElement("mxGraphModel"), Array.Empty<DiagramDiagnostic>())
+            : renderer.Render(planned, new ArchitectureRenderRequest(
+                planningRequest.Validation.Mode, planningRequest.GenerationSettings.OutputRenderer, true));
+        if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() };
+        var repeat = strict && !eligibility.Eligible ? null : Repeat(page, serializationRepeatCount);
         var manifest = new ArchitectureGenerationManifest(
             diagram.Projects.Count,
             semanticNodes.Length + diagram.ExternalNodes.Count,
