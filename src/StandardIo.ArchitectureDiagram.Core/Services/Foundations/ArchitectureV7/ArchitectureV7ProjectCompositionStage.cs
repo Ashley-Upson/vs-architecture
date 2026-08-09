@@ -91,7 +91,9 @@ public sealed class ArchitectureV7ProjectCompositionStage
                 var capability = ArchitectureV7CellCapability.None;
                 if (outer) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
                 if (inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly | (row == 1 ? ArchitectureV7CellCapability.HeaderBlocked : ArchitectureV7CellCapability.None);
-                if (!outer && !inner) capability |= (row - 2) % 2 == 1 ? ArchitectureV7CellCapability.NodeAllowed : ArchitectureV7CellCapability.RoutingAllowed;
+                if (!outer && !inner) capability |= (row - 2) % 2 == 1
+                    ? ArchitectureV7CellCapability.NodeAllowed
+                    : ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
                 cells.Add(new ArchitectureV7LogicalCell(transform.RegionOriginRow + row, transform.RegionOriginColumn + column, capability));
             }
         return cells;
@@ -163,7 +165,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
         var cells = new Dictionary<(int Row, int Column), ArchitectureV7CellCapability>();
         for (var row = 0; row < rows; row++)
             for (var column = 0; column < columns; column++)
-                cells[(row, column)] = ArchitectureV7CellCapability.RoutingAllowed;
+                cells[(row, column)] = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
         foreach (var project in projects)
             foreach (var cell in project.Cells) cells[(cell.Row, cell.Column)] = cell.Capabilities;
         foreach (var placement in placements)

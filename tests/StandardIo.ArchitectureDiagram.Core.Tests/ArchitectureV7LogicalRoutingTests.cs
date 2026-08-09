@@ -48,6 +48,32 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
+    public void GeneralRouting_permits_horizontal_traversal_on_an_ordinary_routing_row()
+    {
+        var route = Route(new[] { PlacementNode("s", 3, 1), PlacementNode("t", 3, 7) }, Link("horizontal", "s", "t"), 7, 9, GeneralGrid(7, 9));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row && pair.a.Column != pair.b.Column);
+    }
+
+    [Fact]
+    public void GeneralRouting_permits_horizontal_to_vertical_bend_on_an_ordinary_routing_row()
+    {
+        var route = Route(new[] { PlacementNode("s", 1, 1), PlacementNode("t", 7, 5) }, Link("down-bend", "s", "t"), 9, 9, GeneralGrid(9, 9));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row);
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Column == pair.b.Column);
+    }
+
+    [Fact]
+    public void GeneralRouting_permits_vertical_to_horizontal_bend_on_an_ordinary_routing_row()
+    {
+        var route = Route(new[] { PlacementNode("s", 7, 5), PlacementNode("t", 1, 1) }, Link("up-bend", "s", "t"), 9, 9, GeneralGrid(9, 9));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row);
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Column == pair.b.Column);
+    }
+
+    [Fact]
     public void Upward_route_starts_downward_then_escapes_source_before_ascending()
     {
         var route = Route(new[] { PlacementNode("s", 5, 3, 3), PlacementNode("t", 1, 7) }, Link("l", "s", "t"), 7, 11, GeneralGrid(7, 11));

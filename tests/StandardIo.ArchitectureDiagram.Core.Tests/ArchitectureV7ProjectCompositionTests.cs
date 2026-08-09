@@ -121,6 +121,29 @@ public sealed class ArchitectureV7ProjectCompositionTests
     }
 
     [Fact]
+    public void Ordinary_project_routing_rows_keep_general_routing_capability_after_composition()
+    {
+        var freeze = Compose(Diagram(new[] { Node("a", "A"), Node("b", "B"), Node("c", "C") },
+            new[] { Link("1", "a", "b"), Link("2", "b", "c") }));
+        var project = Assert.Single(freeze.Projects);
+        var localRoutingRow = project.Transform.RegionOriginRow + 2;
+        var cells = project.Cells.Where(cell => cell.Row == localRoutingRow && cell.Column > project.Transform.RegionOriginColumn + 1 && cell.Column < project.Transform.RegionOriginColumn + project.Width - 2).ToArray();
+        Assert.NotEmpty(cells);
+        Assert.All(cells, cell => Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed) && cell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting)));
+        Assert.All(cells, cell => Assert.Equal(cell.Capabilities, freeze.DiagramGrid.Cells.Single(gridCell => gridCell.Row == cell.Row && gridCell.Column == cell.Column).Capabilities));
+    }
+
+    [Fact]
+    public void Common_grid_space_between_composed_projects_is_general_routing()
+    {
+        var freeze = Compose(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()));
+        var projectCells = freeze.Projects.SelectMany(project => project.Cells).Select(cell => (cell.Row, cell.Column)).ToHashSet();
+        var common = freeze.DiagramGrid.Cells.First(cell => !projectCells.Contains((cell.Row, cell.Column)) && cell.OccupantId is null);
+        Assert.True(common.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed));
+        Assert.True(common.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting));
+    }
+
+    [Fact]
     public void Final_freeze_has_no_overlapping_footprints_and_parent_child_rows_are_downward()
     {
         var diagram = Diagram(new[] { Node("root", "Root"), Node("child", "Child"), Node("external", "ExternalApi") }, new[] { Link("1", "root", "child"), Link("2", "child", "external") });
