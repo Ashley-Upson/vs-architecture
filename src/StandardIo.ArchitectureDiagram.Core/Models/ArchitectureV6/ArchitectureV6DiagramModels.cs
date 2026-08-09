@@ -181,7 +181,8 @@ public sealed class PlannedArchitectureDiagram
         ArchitectureEndpointPlanningResult? endpointPlanning = null,
         ArchitectureV6ReservedDepthTable? reservedDepthTable = null,
         IReadOnlyList<ArchitectureV6NodeSpanRequirement>? preRoutingSpanRequirements = null,
-        IReadOnlyList<ArchitectureV6ReservedDepthRequirement>? reservedDepthRequirements = null)
+        IReadOnlyList<ArchitectureV6ReservedDepthRequirement>? reservedDepthRequirements = null,
+        ArchitectureV6PlacementFreeze? placementFreeze = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
         PhysicalNodes = Array.AsReadOnly((physicalNodes ?? throw new ArgumentNullException(nameof(physicalNodes))).ToArray());
@@ -207,6 +208,7 @@ public sealed class PlannedArchitectureDiagram
         ReservedDepthTable = reservedDepthTable;
         PreRoutingSpanRequirements = Array.AsReadOnly((preRoutingSpanRequirements ?? Array.Empty<ArchitectureV6NodeSpanRequirement>()).ToArray());
         ReservedDepthRequirements = Array.AsReadOnly((reservedDepthRequirements ?? Array.Empty<ArchitectureV6ReservedDepthRequirement>()).ToArray());
+        PlacementFreeze = placementFreeze;
     }
 
     public ArchitecturePlanningRequest Request { get; }
@@ -233,6 +235,7 @@ public sealed class PlannedArchitectureDiagram
     public ArchitectureV6ReservedDepthTable? ReservedDepthTable { get; }
     public IReadOnlyList<ArchitectureV6NodeSpanRequirement> PreRoutingSpanRequirements { get; }
     public IReadOnlyList<ArchitectureV6ReservedDepthRequirement> ReservedDepthRequirements { get; }
+    public ArchitectureV6PlacementFreeze? PlacementFreeze { get; }
     public PlannedArchitectureGeometry? Geometry { get; init; }
     public PlannedArchitecturePhysicalScene? PhysicalScene { get; init; }
 }

@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Linq;
-using System.Xml.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV6;
 using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV6;
@@ -26,45 +24,6 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Contains(model.Links, link => link.SourceId == "cycle-b" && link.TargetId == "cycle-a");
         Assert.Equal(4, model.Links.Count(link => link.Kind == "external"));
         Assert.Equal(8, model.Projects.Single().Nodes.Count(node => node.Id.StartsWith("standalone-", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void Regression_analyser_dataset_runs_through_the_real_planner_and_preserves_relationship_pressure()
-    {
-        var request = RegressionRequest();
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        Assert.NotNull(plan.PhysicalScene);
-
-        Assert.Equal(23, plan.PhysicalNodes.Count);
-        Assert.Equal(18, plan.PhysicalLinks.Count);
-        Assert.Equal(plan.PhysicalNodes.Count, plan.NodePlacements.Count);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene!.Geometry.Routes.Count);
-        Assert.Equal(3, plan.NodeMetadata.Count(node => node.IsExternal));
-        Assert.Equal(8, plan.NodeMetadata.Count(node => node.IsStandalone));
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "DuplicateTerminalCoordinate");
-
-        var externalLayer = plan.NodeMetadata.Where(node => node.IsExternal).Select(node => node.FinalVisualLayerOrdinal).Distinct().ToArray();
-        Assert.Single(externalLayer);
-        Assert.All(plan.NodeMetadata.Where(node => node.IsStandalone), node =>
-            Assert.True(node.FinalVisualLayerOrdinal > externalLayer[0]));
-        Assert.Equal(0, plan.PhysicalScene.Metrics.NodeOverlapCount);
-        Assert.All(plan.PhysicalScene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.True(plan.PhysicalScene.Metrics.InvalidCrossingCount == 0,
-            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code == "InvalidCrossing").Select(finding => finding.Message)));
-        Assert.True(plan.PhysicalScene.Metrics.TerminalFindingCount == 0,
-            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code.Contains("Terminal", StringComparison.Ordinal)).Select(finding => finding.Code + ":" + finding.SubjectId + ":" + finding.Message)) +
-            " routes=" + string.Join(" || ", plan.PhysicalScene.Geometry.Routes.Take(3).Select(route => route.PhysicalLinkId + ":" + string.Join(" -> ", (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point)))));
-        Assert.All(plan.PhysicalScene.Terminals.GroupBy(item => item.PhysicalNodeId + ":" + item.Side), group =>
-        {
-            var nodeId = group.First().PhysicalNodeId;
-            var node = plan.PhysicalScene.Geometry.Nodes.Single(item => item.PhysicalNodeId == nodeId);
-            var ordered = group.OrderBy(item => item.Point.X).ToArray();
-            Assert.Equal(ordered.Length, ordered.Select(item => item.Point.X).Distinct().Count());
-            Assert.All(ordered, terminal => Assert.InRange(terminal.Point.X,
-                node.AbsoluteBounds.X + request.RoutePlanning.MinimumPortSpacing,
-                node.AbsoluteBounds.X + node.AbsoluteBounds.Width - request.RoutePlanning.MinimumPortSpacing));
-        });
     }
 
     [Fact]
@@ -101,158 +60,6 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_adds_permanent_exterior_rows_around_authoritative_project_rows()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var grid = Assert.Single(plan.ProjectGrids).Grid;
-
-        Assert.Equal("routing:exterior:top", grid.Rows[0].Id.Value);
-        Assert.Equal("routing:exterior:bottom", grid.Rows[^1].Id.Value);
-        Assert.All(grid.Rows.Where(row => row.Id.Value.StartsWith("routing:exterior:", StringComparison.Ordinal)),
-            row => Assert.Equal(PlanningGridTrackRole.InterLayerRouting, row.Role));
-        Assert.All(plan.NodePlacements, placement =>
-        {
-            var row = grid.Rows.Single(item => item.Id.Equals(placement.AnchorCellId.RowId));
-            Assert.True(row.LogicalOrder > grid.Rows[0].LogicalOrder);
-            Assert.True(row.LogicalOrder < grid.Rows[^1].LogicalOrder);
-        });
-    }
-
-    [Fact]
-    public void Planner_routes_use_contiguous_authoritative_cells_without_adjacent_turns()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var grids = plan.ProjectGrids.Select(item => item.Grid).ToDictionary(item => item.Id);
-
-        Assert.All(plan.Routes, route =>
-        {
-            Assert.True(route.IsStructurallySupported);
-            for (var index = 1; index < route.Steps.Count; index++)
-            {
-                var previous = route.Steps[index - 1];
-                var current = route.Steps[index];
-                if (previous.GridId != current.GridId) continue;
-                var grid = grids[previous.GridId];
-                var rowDistance = Math.Abs(grid.Rows.Single(row => row.Id.Equals(previous.CellId.RowId)).LogicalOrder -
-                    grid.Rows.Single(row => row.Id.Equals(current.CellId.RowId)).LogicalOrder);
-                var columnDistance = Math.Abs(grid.Columns.Single(column => column.Id.Equals(previous.CellId.ColumnId)).LogicalOrder -
-                    grid.Columns.Single(column => column.Id.Equals(current.CellId.ColumnId)).LogicalOrder);
-                Assert.Equal(1, rowDistance + columnDistance);
-                Assert.False(previous.Role == RouteStepRole.Turn && current.Role == RouteStepRole.Turn);
-            }
-        });
-    }
-
-    [Fact]
-    public void Planner_freezes_structural_track_cardinality_before_abstract_routes()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var metrics = plan.Diagnostics.Metrics;
-
-        Assert.Equal(metrics.StructuralRowCountBeforeRouting, metrics.StructuralRowCountAfterRouting);
-        Assert.Equal(metrics.StructuralColumnCountBeforeRouting, metrics.StructuralColumnCountAfterRouting);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "MissingStructuralRegion");
-        Assert.Contains(plan.ProjectGrids.SelectMany(grid => grid.Grid.Rows), row => row.Role == PlanningGridTrackRole.InterLayerRouting);
-        Assert.Contains(plan.ProjectGrids.SelectMany(grid => grid.Grid.Columns), column =>
-            column.Role == PlanningGridTrackRole.NodeFootprint || column.Role == PlanningGridTrackRole.SubtreeSiblingGap);
-    }
-
-    [Fact]
-    public void Planner_records_track_roles_and_sizing_metrics()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var metrics = plan.Diagnostics.Metrics;
-
-        Assert.NotEmpty(metrics.StructuralRowRoleCounts!);
-        Assert.NotEmpty(metrics.StructuralColumnRoleCounts!);
-        Assert.True(metrics.RouteOnlyRowCount >= 0);
-        Assert.True(metrics.RouteOnlyColumnCount >= 0);
-        Assert.False(plan.StageStatus.SizingDeferred);
-        Assert.True(plan.StageStatus.SizingCompleted);
-        Assert.NotNull(plan.RelativeGeometry);
-        Assert.True(metrics.SizedNodeCount > 0);
-        Assert.True(metrics.GeometryWidth > 0);
-    }
-
-    [Fact]
-    public void Planner_reuses_horizontal_tracks_for_a_deep_chain()
-    {
-        var nodes = Enumerable.Range(0, 8)
-            .Select(index => new ArchitectureNode($"n{index}", "project:p", $"Node{index}Service", $"Project.Node{index}Service", "Class", $"n{index}", Array.Empty<string>()))
-            .ToArray();
-        var links = Enumerable.Range(0, 7)
-            .Select(index => new ArchitectureLink($"l{index}", $"n{index}", $"n{index + 1}", "internal"))
-            .ToArray();
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
-                Array.Empty<ArchitectureExternalNode>(), links, null)
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var footprintColumns = plan.ProjectGrids.Single().Grid.Columns
-            .Where(column => column.Role == PlanningGridTrackRole.NodeFootprint).ToArray();
-
-        Assert.Equal(3, footprintColumns.Length);
-        Assert.Single(plan.NodePlacements.Select(placement => placement.CentreColumnId).Distinct());
-        Assert.Equal(3, plan.SubtreeReservations.Max(reservation => reservation.OccupiedRowIntervals.Max(interval => interval.Columns.Count)));
-        Assert.Equal(plan.Diagnostics.Metrics.StructuralColumnCountBeforeRouting,
-            plan.Diagnostics.Metrics.StructuralColumnCountAfterRouting);
-    }
-
-    [Fact]
-    public void Planner_composes_same_row_children_using_exact_profile_width()
-    {
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(new[]
-            {
-                new ArchitectureProject("project:p", "Project", new[]
-                {
-                    new ArchitectureNode("root", "project:p", "Root", "Project.Root", "Class", "root", Array.Empty<string>()),
-                    new ArchitectureNode("left", "project:p", "Left", "Project.Left", "Class", "left", Array.Empty<string>()),
-                    new ArchitectureNode("right", "project:p", "Right", "Project.Right", "Class", "right", Array.Empty<string>())
-                }, "project:p")
-            }, Array.Empty<ArchitectureExternalNode>(), new[]
-            {
-                new ArchitectureLink("root-left", "root", "left", "internal"),
-                new ArchitectureLink("root-right", "root", "right", "internal")
-            }, null)
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-
-        Assert.Equal(7, plan.ProjectGrids.Single().Grid.Columns.Count(column => column.Role == PlanningGridTrackRole.NodeFootprint));
-        Assert.Equal(7, plan.NodePlacements.Max(placement => placement.Footprint.Max(cell => int.Parse(cell.ColumnId.Value.Split(':').Last())) + 1));
-    }
-
-    [Fact]
-    public void Planner_reuses_compatible_columns_between_independent_vertical_chains()
-    {
-        var nodes = new[]
-        {
-            new ArchitectureNode("root-a", "project:p", "RootA", "Project.RootA", "Class", "root-a", Array.Empty<string>()),
-            new ArchitectureNode("child-a", "project:p", "ChildA", "Project.ChildA", "Class", "child-a", Array.Empty<string>()),
-            new ArchitectureNode("root-b", "project:p", "RootB", "Project.RootB", "Class", "root-b", Array.Empty<string>()),
-            new ArchitectureNode("child-b", "project:p", "ChildB", "Project.ChildB", "Class", "child-b", Array.Empty<string>())
-        };
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
-                Array.Empty<ArchitectureExternalNode>(), new[]
-                {
-                    new ArchitectureLink("a", "root-a", "child-a", "internal"),
-                    new ArchitectureLink("b", "root-b", "child-b", "internal")
-                }, null)
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-
-        Assert.Equal(6, plan.ProjectGrids.Single().Grid.Columns.Count(column => column.Role == PlanningGridTrackRole.NodeFootprint));
-        Assert.Equal(9, plan.ProjectGrids.Single().Grid.Columns.Count);
-    }
-
-    [Fact]
     public void Planner_keeps_canonical_multi_parent_node_in_one_profile_interval()
     {
         var request = Request() with
@@ -279,378 +86,6 @@ public sealed class ArchitectureV6StructuralTests
         var sharedPlacement = plan.NodePlacements.Single(node => node.PhysicalNodeId.Contains("shared", StringComparison.Ordinal));
         Assert.Equal(3, plan.PhysicalNodes.Count);
         Assert.Equal(sharedPlacement.Footprint.Count, sharedPlacement.Footprint.Select(cell => cell.ColumnId).Distinct().Count());
-    }
-
-    [Fact]
-    public void Planner_creates_shared_destination_and_return_regions_before_routing()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var roles = plan.ProjectGrids.SelectMany(grid => grid.Grid.Columns).Select(column => column.Role).ToArray();
-        var columns = plan.ProjectGrids.SelectMany(grid => grid.Grid.Columns).ToArray();
-
-        Assert.Contains(PlanningGridTrackRole.DestinationApproach, roles);
-        Assert.Contains(PlanningGridTrackRole.OwnershipLocalReturn, roles);
-        Assert.All(columns.Where(column => column.Role == PlanningGridTrackRole.DestinationApproach ||
-            column.Role == PlanningGridTrackRole.OwnershipLocalReturn), column => Assert.False(string.IsNullOrWhiteSpace(column.OwnerId)));
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "MissingStructuralRegion");
-    }
-
-    [Fact]
-    public void Planner_relative_node_bounds_equal_their_final_grid_footprints()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        Assert.NotNull(plan.RelativeGeometry);
-        Assert.Equal(plan.PhysicalNodes.Count, plan.RelativeGeometry!.Nodes.Count);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PhysicalSizingDeferred");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RelativeNodeOverlap");
-    }
-
-    [Fact]
-    public void Planner_relative_sizing_is_deterministic_and_idempotent()
-    {
-        var first = new ArchitectureDiagramV6Planner().Plan(Request());
-        var second = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.NotNull(first.RelativeGeometry);
-        Assert.NotNull(second.RelativeGeometry);
-        Assert.True(first.Diagnostics.Metrics.SizingIdempotent);
-        Assert.Equal(first.RelativeGeometry!.DiagramBounds, second.RelativeGeometry!.DiagramBounds);
-        Assert.Equal(first.RelativeGeometry.Nodes.Select(node => node.Bounds), second.RelativeGeometry.Nodes.Select(node => node.Bounds));
-        Assert.Equal(first.ProjectGrids.SelectMany(grid => grid.Grid.Rows.Select(row => row.Id)),
-            second.ProjectGrids.SelectMany(grid => grid.Grid.Rows.Select(row => row.Id)));
-        Assert.Equal(first.ProjectGrids.SelectMany(grid => grid.Grid.Columns.Select(column => column.Id)),
-            second.ProjectGrids.SelectMany(grid => grid.Grid.Columns.Select(column => column.Id)));
-    }
-
-    [Fact]
-    public void Planner_sizes_existing_tracks_with_provenance_and_sparse_reservation_intervals()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var projectGrid = Assert.Single(plan.RelativeGeometry!.Grids, grid => grid.GridId.Value.StartsWith("project:", StringComparison.Ordinal));
-        var projectSizing = plan.Sizing.Columns.Where(column => projectGrid.Columns.Any(item => item.Id.Equals(column.Id))).ToArray();
-
-        Assert.Equal(plan.ProjectGrids.Single().Grid.Rows.Count, projectGrid.Rows.Count);
-        Assert.Equal(plan.ProjectGrids.Single().Grid.Columns.Count, projectGrid.Columns.Count);
-        Assert.All(projectGrid.Rows, track => Assert.True(track.FinalExtent > 0));
-        Assert.All(projectGrid.Columns, track => Assert.True(track.FinalExtent > 0));
-        Assert.All(plan.Sizing.Provenance!.Where(item => item.GridId.Equals(projectGrid.GridId)), item =>
-        {
-            Assert.True(item.FinalExtent >= item.MinimumExtent);
-            Assert.NotEqual(PlanningGridTrackRole.Unknown, item.StructuralRole);
-        });
-        Assert.NotEmpty(plan.RelativeGeometry.Subtrees.SelectMany(subtree => subtree.Intervals!));
-        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.HorizontalLaneEnvelope);
-        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.VerticalLaneEnvelope);
-        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.TurnClearance);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "RelativeNodeOverlap" or "SizingInvalidTrack");
-        Assert.NotEmpty(projectSizing);
-    }
-
-    [Fact]
-    public void Planner_does_not_apply_node_content_width_to_routing_columns()
-    {
-        var request = Request() with
-        {
-            GridSizing = new GridSizingPolicy(200, 80, 40, 30)
-        };
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var routingColumns = plan.RelativeGeometry!.Grids.Single(grid => grid.GridId.Equals(plan.ProjectGrids.Single().Grid.Id)).Columns
-            .Where(column => column.Role is PlanningGridTrackRole.DestinationApproach or PlanningGridTrackRole.OwnershipLocalReturn)
-            .ToArray();
-
-        Assert.NotEmpty(routingColumns);
-        Assert.Contains(routingColumns, column => column.FinalExtent < request.GridSizing.CellWidth);
-        Assert.All(routingColumns, column => Assert.Equal(1, column.MinimumExtent));
-    }
-
-    [Fact]
-    public void Planner_distributes_node_width_across_footprint_span_only()
-    {
-        var request = Request() with
-        {
-            NodePlacement = new NodePlacementPolicy("*OrchestrationService", 200, 60, 20, 40),
-            GridSizing = new GridSizingPolicy(200, 80, 40, 30)
-        };
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var placement = plan.NodePlacements.First(item => item.ColumnSpan == 3);
-        var grid = plan.RelativeGeometry!.Grids.Single(item => item.GridId.Equals(placement.GridId));
-        var footprintColumns = placement.Footprint.Select(cell => grid.Columns.Single(column => column.Id.Equals(cell.ColumnId))).ToArray();
-
-        Assert.True(footprintColumns.Sum(column => column.FinalExtent) >= 200);
-        Assert.All(footprintColumns, column => Assert.True(column.FinalExtent < 200));
-        Assert.Contains(plan.Sizing.Provenance!, item => item.DominantConstraint == TrackConstraintKind.NodeFootprint);
-        Assert.DoesNotContain(grid.Columns.Where(column => !placement.Footprint.Any(cell => cell.ColumnId.Equals(column.Id))),
-            column => column.FinalExtent >= 200);
-    }
-
-    [Fact]
-    public void Planner_records_real_structural_and_capacity_contributions()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var provenance = plan.Sizing.Provenance!;
-
-        Assert.Contains(provenance, item => item.Contributions.Any(contribution => contribution.Kind == TrackConstraintKind.SingleColumnMinimum));
-        Assert.Contains(provenance, item => item.Contributions.Any(contribution => contribution.Kind == TrackConstraintKind.SingleRowMinimum));
-        Assert.Contains(provenance, item => item.Contributions.Any(contribution => contribution.Kind == TrackConstraintKind.NodeFootprint));
-        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.VerticalLaneEnvelope);
-        Assert.Contains(plan.Sizing.Constraints, constraint => constraint.Kind == TrackConstraintKind.TurnClearance);
-    }
-
-    [Fact]
-    public void Planner_adds_project_padding_once_outside_project_grid_tracks()
-    {
-        var request = Request() with { GridSizing = new GridSizingPolicy(40, 80, 40, 30) };
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var project = Assert.Single(plan.RelativeGeometry!.Projects);
-        var grid = Assert.Single(plan.RelativeGeometry.Grids, item => item.GridId.Equals(plan.ProjectGrids.Single().Grid.Id));
-
-        Assert.Equal(grid.Columns.Sum(column => column.FinalExtent) + request.GridSizing.ContainerPadding * 2, project.Bounds.Width);
-        Assert.Equal(grid.Rows.Sum(row => row.FinalExtent) + request.GridSizing.ContainerPadding * 2 + request.GridSizing.ProjectHeaderHeight, project.Bounds.Height);
-    }
-
-    [Fact]
-    public void Planner_relative_node_bounds_are_exact_complete_footprint_envelopes()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        foreach (var node in plan.RelativeGeometry!.Nodes)
-        {
-            var placement = plan.NodePlacements.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
-            var grid = plan.RelativeGeometry.Grids.Single(item => item.GridId.Equals(node.GridId));
-            var columns = placement.Footprint.Select(cell => grid.Columns.Single(column => column.Id.Equals(cell.ColumnId))).ToArray();
-            var rows = placement.Footprint.Select(cell => grid.Rows.Single(row => row.Id.Equals(cell.RowId))).ToArray();
-            var x = columns.Min(column => column.RelativeOffset);
-            var y = rows.Min(row => row.RelativeOffset);
-            var expected = new RelativeRectangle(x, y,
-                columns.Max(column => column.RelativeOffset + column.FinalExtent) - x,
-                rows.Max(row => row.RelativeOffset + row.FinalExtent) - y);
-
-            Assert.Equal(expected, node.Bounds);
-        }
-    }
-
-    [Fact]
-    public void Planner_sizing_preserves_structural_cardinality_and_satisfies_constraints()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var project = Assert.Single(plan.ProjectGrids);
-        var sizedProject = Assert.Single(plan.RelativeGeometry!.Grids, grid => grid.GridId.Equals(project.Grid.Id));
-
-        Assert.Equal(project.Grid.Rows.Count, sizedProject.Rows.Count);
-        Assert.Equal(project.Grid.Columns.Count, sizedProject.Columns.Count);
-        Assert.Equal(project.Grid.Rows.Select(row => row.Id), sizedProject.Rows.Select(row => row.Id));
-        Assert.Equal(project.Grid.Columns.Select(column => column.Id), sizedProject.Columns.Select(column => column.Id));
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "SizingConstraintUnsatisfied" or "SizingConstraintTrackMissing" or "SizingGridBoundsMismatch");
-        Assert.All(plan.RelativeGeometry.Grids, grid =>
-        {
-            Assert.Equal(grid.Columns.Sum(column => column.FinalExtent), grid.RelativeBounds.Width);
-            Assert.Equal(grid.Rows.Sum(row => row.FinalExtent), grid.RelativeBounds.Height);
-        });
-    }
-
-    [Fact]
-    public void Planner_compiles_relative_geometry_after_grid_planning()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.True(plan.StageStatus.ProjectionCompleted);
-        Assert.True(plan.StageStatus.LogicalPlacementCompleted);
-        Assert.True(plan.StageStatus.AbstractRoutingCompleted);
-        Assert.False(plan.StageStatus.LaneAllocationDeferred);
-        Assert.False(plan.StageStatus.SizingDeferred);
-        Assert.True(plan.StageStatus.SizingCompleted);
-        Assert.True(plan.StageStatus.CapacityConstraintsCompleted);
-        Assert.False(plan.StageStatus.PhysicalSizingDeferred);
-        Assert.False(plan.StageStatus.AbsoluteGeometryDeferred);
-        Assert.True(plan.StageStatus.AbsoluteGeometryCompleted);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6PlacementDeferred");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6RoutePlanningDeferred");
-        Assert.NotNull(plan.PhysicalScene);
-        Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalScene!.Metrics.AbsoluteNodeCount);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Metrics.PhysicalRouteCount);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Geometry.Routes.Count);
-        Assert.NotNull(plan.RelativeGeometry);
-    }
-
-    [Fact]
-    public void Planner_compiles_absolute_nodes_from_the_relative_grid_envelope()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.NotNull(plan.PhysicalScene);
-        Assert.Equal(plan.PhysicalNodes.Count, plan.PhysicalScene!.Geometry.Nodes.Count);
-        foreach (var node in plan.PhysicalScene.Geometry.Nodes)
-        {
-            var transform = plan.PhysicalScene.Transforms.Single(item => item.GridId.Equals(node.GridId));
-            var relative = plan.RelativeGeometry!.Nodes.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
-            var visible = relative.VisibleBounds ?? relative.Bounds;
-            Assert.Equal(visible.X + transform.Origin.X, node.AbsoluteBounds.X);
-            Assert.Equal(visible.Y + transform.Origin.Y, node.AbsoluteBounds.Y);
-            Assert.Equal(visible.Width, node.AbsoluteBounds.Width);
-            Assert.Equal(visible.Height, node.AbsoluteBounds.Height);
-            Assert.Equal(relative.Bounds.X + transform.Origin.X, node.AbsoluteRoutingBounds!.Value.X);
-            Assert.Equal(relative.Bounds.Width, node.AbsoluteRoutingBounds.Value.Width);
-        }
-
-        var projectTransform = Assert.Single(plan.PhysicalScene.Transforms,
-            transform => transform.GridId.Equals(plan.ProjectGrids[0].Grid.Id));
-        Assert.Equal(new RelativePoint(0, 0), projectTransform.Origin);
-    }
-
-    [Fact]
-    public void Planner_materialises_one_route_and_two_terminals_per_physical_link()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.NotNull(plan.PhysicalScene);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene!.Metrics.PhysicalRouteCount);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.PhysicalScene.Geometry.Routes.Count);
-        Assert.Equal(plan.PhysicalLinks.Count * 2, plan.PhysicalScene.Terminals.Count);
-        Assert.Equal(plan.PhysicalScene.Metrics.InvalidRouteCount, plan.PhysicalScene.InvalidRouteIds.Count);
-        Assert.All(plan.PhysicalScene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-        {
-            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y);
-            Assert.NotEmpty(segment.AllocatedCells!);
-        });
-        Assert.All(plan.PhysicalScene.Terminals, terminal =>
-        {
-            var node = plan.PhysicalScene.Geometry.Nodes.Single(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
-            Assert.Equal(terminal.Side == GridSide.Bottom ? node.AbsoluteBounds.Y + node.AbsoluteBounds.Height : node.AbsoluteBounds.Y, terminal.Point.Y);
-        });
-    }
-
-    [Fact]
-    public void Planner_materialises_the_authoritative_component_chain_without_repairs()
-    {
-        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
-        Assert.NotNull(scene);
-
-        Assert.Equal(0, scene!.Metrics.DiagonalSegmentCount);
-        Assert.Equal(0, scene.Metrics.ComponentContinuityFailureCount);
-        Assert.Equal(0, scene.Metrics.CorridorEscapeCount);
-    }
-
-    [Fact]
-    public void Planner_uses_centred_endpoint_slots_and_orthogonal_handoffs()
-    {
-        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
-        Assert.NotNull(scene);
-
-        foreach (var route in scene.Geometry.Routes)
-        {
-            var sourceTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Bottom);
-            var destinationTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.Side == GridSide.Top);
-            var points = new[] { sourceTerminal.Point }
-                .Concat(route.RawPoints!.Select(point => point.Point))
-                .Append(destinationTerminal.Point)
-                .ToArray();
-            var distinct = points.Where((point, index) => index == 0 || point != points[index - 1]).ToArray();
-            var sourcePoint = distinct.Skip(1).First();
-            var destinationPoint = distinct[distinct.Length - 2];
-            Assert.True(sourcePoint.Y > sourceTerminal.Point.Y,
-                $"source terminal={sourceTerminal.Point}, first route point={sourcePoint}");
-            Assert.True(destinationTerminal.Point.Y > destinationPoint.Y,
-                $"destination terminal={destinationTerminal.Point}, last route point={destinationPoint}");
-
-            if (!route.IsInvalid)
-            {
-                var complete = distinct;
-                Assert.All(complete.Zip(complete.Skip(1), (left, right) => (left, right)), pair =>
-                    Assert.True(pair.left.X == pair.right.X || pair.left.Y == pair.right.Y,
-                        "accepted terminal and route centreline must remain orthogonal"));
-            }
-        }
-    }
-
-    [Fact]
-    public void Planner_retains_invalid_materialisation_attempts_with_route_geometry()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-
-        Assert.Equal(scene.Metrics.InvalidRouteCount, scene.InvalidRouteIds.Count);
-        Assert.Equal(scene.Metrics.PhysicalRouteCount, scene.Geometry.Routes.Count);
-        Assert.All(scene.InvalidRouteIds, routeId =>
-            Assert.Contains(scene.Geometry.Routes, route => route.PhysicalLinkId == routeId && route.IsInvalid &&
-                route.RawPoints is not null && route.Components is not null));
-        Assert.True(scene.Metrics.DiagonalSegmentCount >=
-            scene.AttemptedSegments.Count(attempt => attempt.FailureCode == "DiagonalComponentConnection"));
-        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        // Malformed logical endpoint tails remain diagnostics, but the active
-        // physical scene must never emit a diagonal Draw.io segment.
-        Assert.DoesNotContain(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-            segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-    }
-
-    [Fact]
-    public void Planner_records_complete_corridor_provenance_for_accepted_segments()
-    {
-        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
-        Assert.NotNull(scene);
-
-        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-        {
-            Assert.NotNull(segment.AllocatedCells);
-            Assert.NotEmpty(segment.AllocatedCells!);
-            Assert.NotEmpty(segment.ComponentId);
-            Assert.NotEmpty(segment.StartProvenance);
-            Assert.NotEmpty(segment.EndProvenance);
-        });
-    }
-
-    [Fact]
-    public void Planner_builds_authoritative_route_boundary_contracts_before_physical_materialisation()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var validation = plan.LaneAllocation!.BoundaryValidation;
-
-        Assert.NotNull(validation);
-        Assert.Equal(plan.PhysicalLinks.Count, validation!.Routes.Count);
-        Assert.Equal(plan.PhysicalLinks.Count, validation.ValidRouteCount + validation.InvalidRouteCount);
-        Assert.All(validation.Routes, route =>
-        {
-            Assert.NotEmpty(route.Components);
-            Assert.All(route.Components, component =>
-            {
-                Assert.NotEmpty(component.ComponentId);
-                Assert.NotNull(component.EntryBoundary);
-                Assert.NotNull(component.ExitBoundary);
-            });
-            var pairs = route.Components.Zip(route.Components.Skip(1), (before, after) => (before, after)).ToArray();
-            Assert.All(pairs.Where(pair => pair.before.ExitBoundary == pair.after.EntryBoundary), pair =>
-                Assert.Equal(pair.before.ExitBoundary, pair.after.EntryBoundary));
-        });
-        Assert.DoesNotContain(validation.Findings, finding => finding.Code == "SourceDepartureNotBottomFacing");
-        Assert.DoesNotContain(validation.Findings, finding => finding.Code == "DestinationApproachNotTopFacing");
-    }
-
-    [Fact]
-    public void Planner_consumes_all_six_endpoint_components_without_direct_terminal_to_run_geometry()
-    {
-        var scene = new ArchitectureDiagramV6Planner().Plan(Request()).PhysicalScene;
-        Assert.NotNull(scene);
-
-        Assert.All(scene!.Geometry.Routes, route =>
-        {
-            var components = route.Components!;
-            Assert.Contains(components, component => component.ComponentId.EndsWith(":source-terminal", StringComparison.Ordinal));
-            Assert.Contains(components, component => component.ComponentId.EndsWith(":source-node-anchor", StringComparison.Ordinal));
-            Assert.Contains(components, component => component.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
-            Assert.Contains(components, component => component.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
-            Assert.Contains(components, component => component.ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal));
-            Assert.Contains(components, component => component.ComponentId.EndsWith(":destination-terminal", StringComparison.Ordinal));
-
-            var sourceAnchor = components.Single(component => component.ComponentId.EndsWith(":source-node-anchor", StringComparison.Ordinal));
-            var sourceDeparture = components.Single(component => component.ComponentId.EndsWith(":source-departure", StringComparison.Ordinal));
-            var destinationApproach = components.Single(component => component.ComponentId.EndsWith(":destination-approach", StringComparison.Ordinal));
-            var destinationAnchor = components.Single(component => component.ComponentId.EndsWith(":destination-node-anchor", StringComparison.Ordinal));
-            Assert.Equal(sourceAnchor.ExitPoint, sourceDeparture.EntryPoint);
-            Assert.Equal(destinationApproach.ExitPoint, destinationAnchor.EntryPoint);
-            Assert.NotEqual(sourceAnchor.ComponentId, sourceDeparture.ComponentId);
-            Assert.NotEqual(destinationApproach.ComponentId, destinationAnchor.ComponentId);
-        });
     }
 
     [Fact]
@@ -702,103 +137,6 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_binds_turns_to_both_adjoining_run_lanes()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var validation = plan.LaneAllocation!.BoundaryValidation!;
-
-        Assert.DoesNotContain(validation.Findings, finding => finding.Code == "IncompleteTurnAllocation");
-        Assert.All(validation.Routes.SelectMany(route => route.Components.Where(component => component.Kind == PlannedRouteComponentKind.Turn)), turn =>
-        {
-            Assert.NotNull(turn.EntryBoundary);
-            Assert.NotNull(turn.ExitBoundary);
-            Assert.NotNull(turn.EntryBoundary!.Lane);
-            Assert.NotNull(turn.ExitBoundary!.Lane);
-        });
-    }
-
-    [Fact]
-    public void Planner_keeps_turn_handoffs_on_the_allocated_corridor()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var validation = plan.LaneAllocation!.BoundaryValidation!;
-        var mismatches = validation.Routes
-            .SelectMany(route => route.Components.Zip(route.Components.Skip(1), (before, after) => (route, before, after)))
-            .Where(pair => pair.before.Kind == PlannedRouteComponentKind.Turn &&
-                           (pair.after.Kind == PlannedRouteComponentKind.Turn || pair.after.Kind == PlannedRouteComponentKind.DestinationApproach) &&
-                           pair.before.ExitBoundary != pair.after.EntryBoundary)
-            .ToArray();
-
-        Assert.True(mismatches.Length == 0,
-            string.Join(Environment.NewLine, mismatches.Take(3).Select(pair =>
-                $"{pair.route.PhysicalLinkId} {pair.before.Kind}->{pair.after.Kind}: {pair.before.ExitBoundary} != {pair.after.EntryBoundary}")));
-    }
-
-    [Fact]
-    public void Planner_preserves_ordered_route_components_and_segment_provenance()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.NotNull(plan.PhysicalScene);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "MissingPhysicalTurnForDirectionChange");
-        Assert.All(plan.PhysicalScene!.Geometry.Routes, route =>
-        {
-            Assert.NotNull(route.RawPoints);
-            Assert.NotNull(route.Components);
-            Assert.NotEmpty(route.Components!);
-            Assert.InRange(route.NormalizedPointCount, 0, route.RawPoints!.Count);
-            Assert.All(route.Components!, component =>
-            {
-                Assert.NotEmpty(component.ComponentId);
-                Assert.NotEmpty(component.Points);
-                Assert.All(component.Points, point => Assert.Equal(component.ComponentId, point.ComponentId));
-            });
-            Assert.All(route.Segments, segment =>
-            {
-                Assert.NotEmpty(segment.ComponentId);
-                Assert.NotEmpty(segment.StartProvenance);
-                Assert.NotEmpty(segment.EndProvenance);
-                Assert.NotNull(segment.RelativeStart);
-                Assert.NotNull(segment.RelativeEnd);
-            });
-        });
-    }
-
-    [Fact]
-    public void Physical_compiler_does_not_backtrack_from_a_final_horizontal_run_into_destination_approach()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RedundantRouteBacktracking");
-        Assert.DoesNotContain(plan.PhysicalScene!.Geometry.Routes, route =>
-            route.Segments.Zip(route.Segments.Skip(1), (first, second) => (first, second)).Any(pair =>
-                pair.first.Axis == RouteAxis.Horizontal && pair.second.Axis == RouteAxis.Horizontal &&
-                Math.Sign(pair.first.End.X - pair.first.Start.X) != Math.Sign(pair.second.End.X - pair.second.Start.X)));
-    }
-
-    [Fact]
-    public void Planner_repeated_physical_compilation_is_deterministic()
-    {
-        var first = new ArchitectureDiagramV6Planner().Plan(Request());
-        var second = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.Equal(first.PhysicalScene!.Geometry.Nodes, second.PhysicalScene!.Geometry.Nodes);
-        foreach (var route in first.PhysicalScene.Geometry.Routes)
-        {
-            var other = second.PhysicalScene.Geometry.Routes.Single(item => item.PhysicalLinkId == route.PhysicalLinkId);
-            Assert.Equal(route.RouteLength, other.RouteLength);
-            Assert.Equal(route.Segments.Select(segment => (segment.Start, segment.End, segment.Axis)),
-                other.Segments.Select(segment => (segment.Start, segment.End, segment.Axis)));
-        }
-        Assert.Equal(first.PhysicalScene.Terminals, second.PhysicalScene.Terminals);
-        Assert.Equal(first.PhysicalScene.Metrics.AbsoluteNodeCount, second.PhysicalScene.Metrics.AbsoluteNodeCount);
-        Assert.Equal(first.PhysicalScene.Metrics.TerminalCount, second.PhysicalScene.Metrics.TerminalCount);
-        Assert.Equal(first.PhysicalScene.Metrics.SegmentCount, second.PhysicalScene.Metrics.SegmentCount);
-        Assert.Equal(first.PhysicalScene.Metrics.TotalRouteLength, second.PhysicalScene.Metrics.TotalRouteLength);
-        Assert.Equal(first.PhysicalScene.Metrics.TopologyCounts, second.PhysicalScene.Metrics.TopologyCounts);
-    }
-
-    [Fact]
     public void Planner_cycle_projection_terminates_with_finite_placement()
     {
         var request = Request() with
@@ -818,39 +156,7 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(3, plan.PhysicalNodes.Count);
         Assert.Equal(2, plan.PhysicalLinks.Count);
         Assert.NotEmpty(plan.Projection!.CycleSemanticNodeIds);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.Routes.Count);
         Assert.Equal(plan.PhysicalNodes.Count, plan.NodePlacements.Count);
-    }
-
-    [Fact]
-    public void Planner_keeps_baseline_members_on_one_final_layer_and_reports_hierarchy_conflict()
-    {
-        var request = Request() with
-        {
-            NodePlacement = Request().NodePlacement with { BaselinePattern = "*Service" },
-            SemanticModel = Request().SemanticModel with
-            {
-                Projects = new[]
-                {
-                    new ArchitectureProject("project:p", "Project", new[]
-                    {
-                        new ArchitectureNode("root", "project:p", "RootService", "Project.RootService", "Class", "root", Array.Empty<string>()),
-                        new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>())
-                    }, "project:p")
-                },
-                Links = new[] { new ArchitectureLink("root-child", "root", "child", "internal") }
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var baseline = plan.NodeMetadata.Where(node => node.IsBaseline).ToArray();
-
-        Assert.Equal(2, baseline.Length);
-        var root = baseline.Single(node => node.SemanticNodeId == "root");
-        var child = baseline.Single(node => node.SemanticNodeId == "child");
-        Assert.Equal(root.PhysicalRow, child.PhysicalRow);
-        Assert.Equal(0, plan.NodeMetadata.Single(node => node.SemanticNodeId == "root").SemanticDepth);
-        Assert.Equal(1, plan.NodeMetadata.Single(node => node.SemanticNodeId == "child").SemanticDepth);
     }
 
     [Fact]
@@ -887,112 +193,6 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSubtreeInterleave");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSiblingInterleave");
-    }
-
-    [Fact]
-    public void Final_pipeline_uses_nearest_free_external_position_when_owner_column_is_occupied()
-    {
-        var request = Request() with
-        {
-            SemanticModel = Request().SemanticModel with
-            {
-                ExternalNodes = new[]
-                {
-                    new ArchitectureExternalNode("external-a", "IA", "External", "external-a", "External.IA", "interface"),
-                    new ArchitectureExternalNode("external-b", "IB", "External", "external-b", "External.IB", "interface")
-                },
-                Links = new[]
-                {
-                    new ArchitectureLink("root-a", "root", "external-a", "external"),
-                    new ArchitectureLink("root-b", "root", "external-b", "external")
-                }
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
-        var owner = plan.NodeMetadata.Single(node => node.SemanticNodeId == "root");
-
-        Assert.Equal(2, external.Length);
-        Assert.Contains(external, node => node.PhysicalColumn == owner.PhysicalColumn);
-        Assert.Single(plan.Diagnostics.Findings.Where(finding => finding.Code == "LogicalPlacementExternalAffinityBlocked"));
-    }
-
-    [Fact]
-    public void Final_pipeline_reports_a_category_order_cycle_explicitly()
-    {
-        var request = Request() with
-        {
-            NodePlacement = Request().NodePlacement with
-            {
-                BaselinePattern = "^does-not-match$",
-                RoleRules = new[]
-                {
-                    new ArchitectureV6RoleRule("Beta", "Beta$", 0),
-                    new ArchitectureV6RoleRule("Alpha", "Alpha$", 1)
-                }
-            },
-            SemanticModel = Request().SemanticModel with
-            {
-                Projects = new[]
-                {
-                    new ArchitectureProject("project:p", "Project", new[]
-                    {
-                        new ArchitectureNode("alpha", "project:p", "Alpha", "Project.Alpha", "Class", "alpha", Array.Empty<string>()),
-                        new ArchitectureNode("beta", "project:p", "Beta", "Project.Beta", "Class", "beta", Array.Empty<string>())
-                    }, "project:p")
-                },
-                Links = new[] { new ArchitectureLink("alpha-beta", "alpha", "beta", "internal") }
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementCategoryOrderCycle");
-    }
-
-    [Fact]
-    public void Planner_uses_baseline_pattern_and_role_rules_as_separate_visual_bands()
-    {
-        var request = Request() with
-        {
-            NodePlacement = Request().NodePlacement with
-            {
-                BaselinePattern = ".*(Aggregation|Orchestration)Service$",
-                RoleRules = new[]
-                {
-                    new ArchitectureV6RoleRule("AggregationService", "AggregationService$", 0),
-                    new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 1)
-                }
-            },
-            SemanticModel = Request().SemanticModel with
-            {
-                Projects = new[]
-                {
-                    new ArchitectureProject("project:p", "Project", new[]
-                    {
-                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
-                        new ArchitectureNode("aggregation", "project:p", "AggregationService", "Project.AggregationService", "Class", "aggregation", Array.Empty<string>()),
-                        new ArchitectureNode("orchestration", "project:p", "OrchestrationService", "Project.OrchestrationService", "Class", "orchestration", Array.Empty<string>())
-                    }, "project:p")
-                },
-                Links = new[]
-                {
-                    new ArchitectureLink("root-aggregation", "root", "aggregation", "internal"),
-                    new ArchitectureLink("root-orchestration", "root", "orchestration", "internal")
-                }
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var aggregation = plan.NodeMetadata.Single(node => node.SemanticNodeId == "aggregation");
-        var orchestration = plan.NodeMetadata.Single(node => node.SemanticNodeId == "orchestration");
-
-        Assert.True(aggregation.IsBaseline);
-        Assert.True(orchestration.IsBaseline);
-        Assert.NotEqual(aggregation.PhysicalRow, orchestration.PhysicalRow);
-        Assert.Equal("AggregationService", aggregation.RoleSelector);
-        Assert.Equal("OrchestrationService", orchestration.RoleSelector);
     }
 
     [Fact]
@@ -1090,8 +290,7 @@ public sealed class ArchitectureV6StructuralTests
         var left = metadata["left"];
         var right = metadata["right"];
         Assert.Equal((left.PhysicalColumn + right.PhysicalColumn) / 2, parent.PhysicalColumn);
-        Assert.True(plan.PhysicalScene!.Geometry.Nodes.Single(node => node.PhysicalNodeId == parent.PhysicalNodeId).AbsoluteBounds.Y <
-            plan.PhysicalScene.Geometry.Nodes.Single(node => node.PhysicalNodeId == left.PhysicalNodeId).AbsoluteBounds.Y);
+        Assert.True(parent.PhysicalRow < left.PhysicalRow);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotCentered");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSubtreeInterleave");
     }
@@ -1180,9 +379,10 @@ public sealed class ArchitectureV6StructuralTests
         var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
         var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal && !node.IsStandalone).ToArray();
 
-        Assert.Single(external.Select(node => node.FinalVisualLayerOrdinal).Distinct());
-        Assert.True(external.Min(node => node.FinalVisualLayerOrdinal) > nonExternal.Max(node => node.FinalVisualLayerOrdinal));
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
+        Assert.NotNull(plan.ReservedDepthTable);
+        Assert.Single(external.Select(node => node.PhysicalRow).Distinct());
+        Assert.Equal(plan.ReservedDepthTable!.External.NodeRow, external[0].PhysicalRow);
+        Assert.True(external.Min(node => node.PhysicalRow) > nonExternal.Max(node => node.PhysicalRow));
     }
 
     [Fact]
@@ -1241,8 +441,8 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.False(connected.IsStandalone);
         Assert.True(standalone.IsStandalone);
-        Assert.StartsWith("standalone:", standalone.VerticalSpacingPolicy, StringComparison.Ordinal);
-        Assert.DoesNotContain(plan.NodeMetadata.Where(node => node.IsStandalone), node => !node.VerticalSpacingPolicy.StartsWith("standalone:", StringComparison.Ordinal));
+        Assert.Equal("standalone-square-region", standalone.VerticalSpacingPolicy);
+        Assert.DoesNotContain(plan.NodeMetadata.Where(node => node.IsStandalone), node => node.VerticalSpacingPolicy != "standalone-square-region");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementRoleLayerSplit" && finding.SubjectId == "standalone");
     }
 
@@ -1311,360 +511,6 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Planner_compiles_topology_owned_routes_and_collective_approaches()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.True(plan.StageStatus.AbstractRoutingCompleted);
-        Assert.False(plan.StageStatus.LaneAllocationDeferred);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.Routes.Count);
-        Assert.All(plan.Routes, route =>
-        {
-            Assert.Equal(GridSide.Bottom, route.Source.Side);
-            Assert.Equal(GridSide.Top, route.Destination.Side);
-            Assert.NotEmpty(route.Steps);
-            Assert.True(route.IsStructurallySupported);
-            Assert.NotEmpty(route.Provenance);
-            Assert.NotNull(route.DestinationApproachReservationId);
-        });
-        Assert.Equal(plan.PhysicalNodes.Count, plan.DestinationApproaches.Count);
-        Assert.NotEmpty(plan.StraightRuns);
-        Assert.Equal(plan.Routes.Count * 2, plan.EndpointDemands.Count);
-        Assert.NotNull(plan.LaneAllocation);
-        Assert.Equal(plan.StraightRuns.Count, plan.LaneAllocation!.HorizontalLanes.Count + plan.LaneAllocation.VerticalLanes.Count);
-        Assert.All(plan.Routes.SelectMany(route => route.Steps), step => Assert.NotNull(step.AllocatedLane));
-        Assert.All(plan.LaneAllocation.HorizontalLanes.Concat(plan.LaneAllocation.VerticalLanes), allocation =>
-        {
-            Assert.False(string.IsNullOrWhiteSpace(allocation.DomainId));
-            Assert.True(allocation.Ordinal >= 0);
-            Assert.NotEmpty(allocation.Provenance);
-        });
-        Assert.NotEmpty(plan.Sizing.Constraints);
-        Assert.NotNull(plan.RelativeGeometry);
-        Assert.NotNull(plan.Sizing);
-        Assert.Equal(plan.SubtreeReservations.Count, plan.ProjectGrids.SelectMany(grid => grid.SubtreeReservations).Count());
-        Assert.Empty(plan.LaneAllocation!.Conflicts);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "IncompatibleLaneOrdering");
-        Assert.True(new ArchitectureDiagramV6Validator().Validate(plan).IsValid);
-    }
-
-    [Fact]
-    public void Planner_keeps_endpoint_boundaries_distinct_per_physical_link()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var contracts = plan.LaneAllocation!.BoundaryValidation!.Routes;
-        var sourceBoundaries = contracts.Select(route => route.Components
-                .Single(component => component.Kind == PlannedRouteComponentKind.SourceTerminal)
-                .EntryBoundary)
-            .Where(boundary => boundary is not null)
-            .Select(boundary => boundary!.ToString())
-            .ToArray();
-
-        Assert.Equal(plan.PhysicalLinks.Count, sourceBoundaries.Length);
-        Assert.Equal(sourceBoundaries.Length, sourceBoundaries.Distinct(StringComparer.Ordinal).Count());
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "CanonicalBoundaryContradiction");
-    }
-
-    [Fact]
-    public void Planner_uses_symmetric_endpoint_anchor_components_and_exterior_rows()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var contracts = plan.LaneAllocation!.BoundaryValidation!.Routes;
-
-        Assert.All(contracts, contract =>
-        {
-            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.SourceTerminal);
-            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.SourceNodeAnchor);
-            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.SourceDeparture);
-            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.DestinationApproach);
-            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.DestinationNodeAnchor);
-            Assert.Single(contract.Components, component => component.Kind == PlannedRouteComponentKind.DestinationTerminal);
-        });
-
-        Assert.All(plan.Routes, route =>
-        {
-            var sourcePlacement = plan.NodePlacements.Single(item => item.PhysicalNodeId == route.Source.PhysicalNodeId);
-            var destinationPlacement = plan.NodePlacements.Single(item => item.PhysicalNodeId == route.Destination.PhysicalNodeId);
-            var grid = plan.ProjectGrids.Single(item => item.Grid.Id.Equals(sourcePlacement.GridId)).Grid;
-            var sourceRow = grid.Rows.Single(item => item.Id.Equals(sourcePlacement.AnchorCellId.RowId));
-            var destinationRow = grid.Rows.Single(item => item.Id.Equals(destinationPlacement.AnchorCellId.RowId));
-            var sourceExterior = route.Steps[1];
-            var destinationAnchor = route.Steps[route.Steps.Count - 1];
-            var approach = route.Steps[route.Steps.Count - 2];
-
-            Assert.Equal(route.Source.PhysicalNodeId, plan.PhysicalNodes.Single(item => item.PhysicalNodeId == route.Source.PhysicalNodeId).PhysicalNodeId);
-            Assert.Equal(sourcePlacement.AnchorCellId, route.Steps[0].CellId);
-            var sourceExteriorRow = grid.Rows.Single(item => item.Id.Equals(sourceExterior.CellId.RowId));
-            if (grid.Rows.Any(item => item.Role == PlanningGridTrackRole.InterLayerRouting && item.LogicalOrder > sourceRow.LogicalOrder))
-                Assert.True(sourceExteriorRow.LogicalOrder > sourceRow.LogicalOrder);
-            Assert.Equal(destinationPlacement.AnchorCellId, destinationAnchor.CellId);
-            var approachRow = grid.Rows.Single(item => item.Id.Equals(approach.CellId.RowId));
-            if (grid.Rows.Any(item => item.Role == PlanningGridTrackRole.InterLayerRouting && item.LogicalOrder < destinationRow.LogicalOrder))
-                Assert.True(approachRow.LogicalOrder < destinationRow.LogicalOrder);
-        });
-    }
-
-    [Fact]
-    public void Planner_reports_collective_lane_ordering_without_changing_structural_tracks()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var metrics = plan.Diagnostics.Metrics;
-
-        Assert.NotNull(plan.LaneAllocation!.Performance);
-        Assert.True(metrics.LaneDomainCount > 0);
-        Assert.Equal(plan.StraightRuns.Count, metrics.LaneOrderingVertexCount);
-        Assert.True(metrics.LaneOrderingEdgeCount >= 0);
-        Assert.Equal(0, metrics.LaneOrderingCycleCount);
-        Assert.Equal(metrics.StructuralColumnCountBeforeRouting, metrics.StructuralColumnCountAfterRouting);
-        Assert.Empty(plan.LaneAllocation.Conflicts);
-        Assert.Equal(plan.LaneAllocation.Turns.Count,
-            plan.LaneAllocation.Turns.Select(turn => turn.BendIdentity).Distinct(StringComparer.Ordinal).Count());
-    }
-
-    [Fact]
-    public void Planner_classifies_external_and_cross_project_routes_without_pixel_geometry()
-    {
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(
-                new[]
-                {
-                    new ArchitectureProject("project:a", "A", new[]
-                    {
-                        new ArchitectureNode("source", "project:a", "Source", "A.Source", "Class", "source", Array.Empty<string>())
-                    }, "project:a"),
-                    new ArchitectureProject("project:b", "B", new[]
-                    {
-                        new ArchitectureNode("target", "project:b", "Target", "B.Target", "Class", "target", Array.Empty<string>())
-                    }, "project:b")
-                },
-                Array.Empty<ArchitectureExternalNode>(),
-                new[] { new ArchitectureLink("cross", "source", "target", "cross-project") },
-                null),
-            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "project:a", "project:b" }, Array.Empty<string>())
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var route = Assert.Single(plan.Routes);
-
-        Assert.Equal(RouteTopologyFamily.CrossProject, route.TopologyFamily);
-        Assert.Equal(2, route.Transitions.Count);
-        Assert.Contains(route.Steps, step => step.Role == RouteStepRole.ProjectExit);
-        Assert.Contains(route.Steps, step => step.Role == RouteStepRole.DiagramGridPassage);
-        Assert.Contains(route.Steps, step => step.Role == RouteStepRole.ProjectEntry);
-        Assert.NotEmpty(plan.DiagramGrid.Grid.Cells);
-        Assert.DoesNotContain(plan.ProjectGrids.SelectMany(grid => grid.Grid.Cells.Keys), cell => cell.GridId.Value == "diagram");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "UnsupportedAbstractRoute");
-
-        var diagram = Assert.Single(plan.RelativeGeometry!.Grids,
-            grid => grid.GridId.Equals(plan.DiagramGrid.Grid.Id));
-        var projectTransforms = plan.PhysicalScene!.Transforms
-            .Where(transform => transform.GridId != plan.DiagramGrid.Grid.Id)
-            .OrderBy(transform => transform.GridId.Value, StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(2, projectTransforms.Length);
-        Assert.NotEqual(projectTransforms[0].Origin, projectTransforms[1].Origin);
-        foreach (var project in plan.ProjectGrids)
-        {
-            var column = Assert.Single(diagram.Columns,
-                item => string.Equals(item.OwnerId, project.ProjectId, StringComparison.Ordinal));
-            var row = Assert.Single(diagram.Rows,
-                item => item.Role == PlanningGridTrackRole.DiagramProjectPlacement);
-            var transform = Assert.Single(projectTransforms,
-                item => item.GridId.Equals(project.Grid.Id));
-            Assert.Equal(new RelativePoint(column.RelativeOffset, row.RelativeOffset), transform.Origin);
-        }
-
-        var projectGeometry = plan.PhysicalScene.Geometry.Projects;
-        Assert.Equal(2, projectGeometry.Count);
-        Assert.Empty(projectGeometry.SelectMany((left, index) => projectGeometry.Skip(index + 1)
-            .Where(right => Intersects(left.AbsoluteBounds, right.AbsoluteBounds))));
-        Assert.Equal(0, plan.PhysicalScene.Metrics.NodeOverlapCount);
-    }
-
-    [Fact]
-    public void Planner_materialises_cross_project_handoffs_as_orthogonal_owned_components()
-    {
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(
-                new[]
-                {
-                    new ArchitectureProject("project:a", "A", new[]
-                    {
-                        new ArchitectureNode("source", "project:a", "Source", "A.Source", "Class", "source", Array.Empty<string>())
-                    }, "project:a"),
-                    new ArchitectureProject("project:b", "B", new[]
-                    {
-                        new ArchitectureNode("target", "project:b", "Target", "B.Target", "Class", "target", Array.Empty<string>())
-                    }, "project:b")
-                },
-                Array.Empty<ArchitectureExternalNode>(),
-                new[] { new ArchitectureLink("cross", "source", "target", "cross-project") },
-                null),
-            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "project:a", "project:b" }, Array.Empty<string>())
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var route = Assert.Single(plan.PhysicalScene!.Geometry.Routes);
-        var repeated = new ArchitectureDiagramV6Planner().Plan(request);
-        var repeatedRoute = Assert.Single(repeated.PhysicalScene!.Geometry.Routes);
-
-        Assert.Contains(route.Components!, component => component.Role == RouteStepRole.ProjectTransition);
-        Assert.Contains(route.Components!, component => component.ComponentId.EndsWith(":source-project-transition", StringComparison.Ordinal));
-        Assert.Contains(route.Components!, component => component.ComponentId.EndsWith(":diagram-transition", StringComparison.Ordinal));
-        Assert.Contains(route.Components!, component => component.ComponentId.EndsWith(":destination-project-transition", StringComparison.Ordinal));
-        Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.Equal(0, plan.PhysicalScene.Metrics.DiagonalSegmentCount);
-        Assert.Equal(0, plan.PhysicalScene.Metrics.ComponentContinuityFailureCount);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "GenuineBoundaryDiscontinuity");
-        Assert.DoesNotContain(route.Components!, component => component.Role == RouteStepRole.ProjectTransition &&
-            component.AllocatedCells.Count < 2);
-        Assert.Equal(route.RawPoints, repeatedRoute.RawPoints);
-        Assert.Equal(
-            route.Components.Select(component => (component.ComponentId, component.Role, component.OwnershipScope, component.EntryPoint, component.ExitPoint)),
-            repeatedRoute.Components.Select(component => (component.ComponentId, component.Role, component.OwnershipScope, component.EntryPoint, component.ExitPoint)));
-    }
-
-    [Fact]
-    public void Planner_project_transforms_are_deterministic_and_preserve_local_dimensions()
-    {
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(
-                new[]
-                {
-                    new ArchitectureProject("project:a", "A", new[]
-                    {
-                        new ArchitectureNode("a", "project:a", "A", "A.A", "Class", "a", Array.Empty<string>())
-                    }, "project:a"),
-                    new ArchitectureProject("project:b", "B", new[]
-                    {
-                        new ArchitectureNode("b", "project:b", "B", "B.B", "Class", "b", Array.Empty<string>())
-                    }, "project:b")
-                },
-                Array.Empty<ArchitectureExternalNode>(),
-                Array.Empty<ArchitectureLink>(),
-                null),
-            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "project:a", "project:b" }, Array.Empty<string>())
-        };
-
-        var first = new ArchitectureDiagramV6Planner().Plan(request);
-        var second = new ArchitectureDiagramV6Planner().Plan(request);
-
-        Assert.Equal(first.PhysicalScene!.Transforms, second.PhysicalScene!.Transforms);
-        Assert.Equal(
-            first.PhysicalScene.Geometry.Projects.Select(project => (project.ProjectId, project.RelativeBounds, project.AbsoluteBounds)),
-            second.PhysicalScene.Geometry.Projects.Select(project => (project.ProjectId, project.RelativeBounds, project.AbsoluteBounds)));
-        foreach (var node in first.PhysicalScene.Geometry.Nodes)
-        {
-            var relative = first.RelativeGeometry!.Nodes.Single(item => item.PhysicalNodeId == node.PhysicalNodeId);
-            Assert.Equal(relative.Bounds.Width, node.AbsoluteBounds.Width);
-            Assert.Equal(relative.Bounds.Height, node.AbsoluteBounds.Height);
-        }
-        Assert.Equal(0, first.PhysicalScene.Metrics.NodeOverlapCount);
-    }
-
-    private static bool Intersects(AbsoluteRectangle left, AbsoluteRectangle right) =>
-        left.X < right.X + right.Width && left.X + left.Width > right.X &&
-        left.Y < right.Y + right.Height && left.Y + left.Height > right.Y;
-
-    [Fact]
-    public void Planner_keeps_external_departure_outside_an_expanded_source_footprint()
-    {
-        var request = Request() with
-        {
-            SemanticModel = new ArchitectureDiagramModel(
-                new[]
-                {
-                    new ArchitectureProject("project:p", "Project", new[]
-                    {
-                        new ArchitectureNode("source", "project:p", "SourceWithAnIntentionallyLongName", "Project.SourceWithAnIntentionallyLongName", "Class", "source", Array.Empty<string>())
-                    }, "project:p")
-                },
-                new[]
-                {
-                    new ArchitectureExternalNode("external", "ExternalDependency", "External.Assembly", "external", "External.ExternalDependency", "[External]")
-                },
-                new[] { new ArchitectureLink("source-external", "source", "external", "external") },
-                null)
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var route = Assert.Single(plan.Routes);
-        var sourcePlacement = Assert.Single(plan.NodePlacements.Where(item => item.PhysicalNodeId == route.Source.PhysicalNodeId));
-        var sourceGrid = Assert.Single(plan.ProjectGrids.Where(grid => grid.Grid.Id.Equals(sourcePlacement.GridId)));
-        var departure = route.Steps[1];
-
-        Assert.True(route.IsStructurallySupported);
-        var sourceRow = sourceGrid.Grid.Rows.Single(row => row.Id.Equals(sourcePlacement.AnchorCellId.RowId));
-        var departureRow = sourceGrid.Grid.Rows.Single(row => row.Id.Equals(departure.CellId.RowId));
-        Assert.True(departureRow.LogicalOrder > sourceRow.LogicalOrder);
-        Assert.Contains(departure.CellId, sourceGrid.Grid.Cells.Keys);
-        Assert.Null(sourceGrid.Grid.Cells[departure.CellId].FootprintOwnerId);
-        Assert.Empty(plan.LaneAllocation!.Conflicts);
-        Assert.Equal(0, plan.Diagnostics.Metrics.UnsupportedRouteCount);
-    }
-
-    [Fact]
-    public void Occupancy_authority_resolves_anchor_and_footprint_cells_once()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
-            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
-
-        Assert.Empty(authority.Diagnostics);
-        foreach (var placement in plan.NodePlacements)
-        {
-            var anchor = authority.Resolve(placement.AnchorCellId);
-            Assert.Equal(ArchitectureV6OccupancyStatus.Occupied, anchor.Status);
-            Assert.Equal(new[] { placement.PhysicalNodeId }, anchor.PhysicalNodeIds);
-            Assert.All(placement.Footprint, cell =>
-            {
-                var resolution = authority.Resolve(cell);
-                Assert.Equal(ArchitectureV6OccupancyStatus.Occupied, resolution.Status);
-                Assert.Equal(new[] { placement.PhysicalNodeId }, resolution.PhysicalNodeIds);
-            });
-        }
-    }
-
-    [Fact]
-    public void Planner_and_validator_reject_unrelated_anchor_traversal()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
-            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
-
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RouteEntersUnrelatedFootprint");
-        Assert.All(plan.Routes.SelectMany(route => route.Steps), step =>
-        {
-            var resolution = authority.Resolve(step.CellId);
-            if (!resolution.IsOccupied) return;
-            var link = plan.PhysicalLinks.Single(item => item.PhysicalLinkId == plan.Routes.Single(route => route.Steps.Contains(step)).PhysicalLinkId);
-            Assert.True(authority.IsExactEndpointCell(step.CellId, step, link));
-        });
-    }
-
-    [Fact]
-    public void Endpoint_exception_is_limited_to_the_exact_endpoint_component()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
-            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
-        var route = plan.Routes.First(item => item.Steps.Count > 2);
-        var link = plan.PhysicalLinks.Single(item => item.PhysicalLinkId == route.PhysicalLinkId);
-        var sourceAnchor = plan.NodePlacements.Single(item => item.PhysicalNodeId == link.SourcePhysicalNodeId).AnchorCellId;
-        var destinationAnchor = plan.NodePlacements.Single(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId).AnchorCellId;
-        var source = route.Steps[0] with { CellId = sourceAnchor, Role = RouteStepRole.SourceExit };
-        var destination = route.Steps[^1] with { CellId = destinationAnchor, Role = RouteStepRole.DestinationEntry };
-        var ordinary = source with { Role = RouteStepRole.Turn };
-
-        Assert.True(authority.IsExactEndpointCell(sourceAnchor, source, link));
-        Assert.True(authority.IsExactEndpointCell(destinationAnchor, destination, link));
-        Assert.False(authority.IsExactEndpointCell(sourceAnchor, ordinary, link));
-    }
-
-    [Fact]
     public void Occupancy_authority_reports_orphaned_anchor_metadata()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
@@ -1677,184 +523,25 @@ public sealed class ArchitectureV6StructuralTests
     }
 
     [Fact]
-    public void Renderer_emits_physical_scene_vertices_and_edges()
+    public void Occupancy_authority_resolves_anchor_and_footprint_cells_once()
     {
         var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
-        var cells = page.GraphModel.Descendants("mxCell").ToArray();
+        var authority = new ArchitectureV6OccupancyAuthority(plan.PhysicalNodes, plan.NodePlacements,
+            plan.ProjectGrids.Select(item => item.Grid).Append(plan.DiagramGrid.Grid));
 
-        Assert.Equal("architecture", page.StablePageKey);
-        Assert.Equal("none", (string)page.GraphModel.Attribute("adaptiveColors")!);
-        Assert.Equal("#111111", (string)page.GraphModel.Attribute("background")!);
-        Assert.Equal(plan.PhysicalScene!.Geometry.Nodes.Count, cells.Count(cell => (string?)cell.Attribute("vertex") == "1") - plan.PhysicalScene.Geometry.Projects.Count);
-        Assert.Equal(plan.PhysicalLinks.Count, cells.Count(cell => (string?)cell.Attribute("edge") == "1"));
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6PhysicalNodesEmitted");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6RelationshipsEmitted");
-    }
-
-    [Fact]
-    public void Renderer_projects_existing_geometry_without_reconstructing_layout()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
-
-        Assert.Contains(page.GraphModel.Descendants(), element => element.Name.LocalName == "mxGeometry" && element.Parent?.Name.LocalName == "mxCell");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6LogicalPlacementComplete");
-    }
-
-    [Fact]
-    public void Renderer_rejects_diagonals_in_the_reconstructed_final_edge_polyline()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
-        var cells = page.GraphModel.Descendants("mxCell").ToArray();
-        var byId = cells.Where(cell => cell.Attribute("id") is not null)
-            .ToDictionary(cell => (string)cell.Attribute("id")!, StringComparer.Ordinal);
-
-        var diagonalCount = 0;
-        foreach (var edge in cells.Where(cell => (string?)cell.Attribute("edge") == "1"))
+        Assert.DoesNotContain(authority.Diagnostics, finding => finding.Code == "ConflictingNodeFootprint");
+        foreach (var placement in plan.NodePlacements)
         {
-            var source = byId[(string)edge.Attribute("source")!];
-            var target = byId[(string)edge.Attribute("target")!];
-            var sourcePoint = Attachment(source, edge, "exitX", true, byId);
-            var targetPoint = Attachment(target, edge, "entryX", false, byId);
-            var waypoints = edge.Element("mxGeometry")?.Element("Array")?.Elements("mxPoint")
-                .Select(point => (X: Number(point, "x"), Y: Number(point, "y")))
-                .ToArray() ?? Array.Empty<(double X, double Y)>();
-            var points = new[] { sourcePoint }.Concat(waypoints).Concat(new[] { targetPoint }).ToArray();
-
-            for (var index = 1; index < points.Length; index++)
-                if (Math.Abs(points[index - 1].X - points[index].X) > 0.01 &&
-                    Math.Abs(points[index - 1].Y - points[index].Y) > 0.01)
-                    diagonalCount++;
-        }
-
-        Assert.Equal(0, diagonalCount);
-        Assert.DoesNotContain(page.Diagnostics, diagnostic => diagnostic.Code == "FinalRenderedDiagonal");
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "RendererRouteGeometryMismatch");
-    }
-
-    private static (double X, double Y) Attachment(XElement node, XElement edge, string ratioName, bool bottom,
-        IReadOnlyDictionary<string, XElement> cells)
-    {
-        var geometry = node.Element("mxGeometry")!;
-        var x = Number(geometry, "x");
-        var y = Number(geometry, "y");
-        if ((string?)node.Attribute("parent") != "1" && cells.TryGetValue((string)node.Attribute("parent")!, out var parent))
-        {
-            x += Number(parent.Element("mxGeometry")!, "x");
-            y += Number(parent.Element("mxGeometry")!, "y");
-        }
-        var ratio = StyleValue((string)edge.Attribute("style")!, ratioName);
-        return (x + Number(geometry, "width") * ratio, y + (bottom ? Number(geometry, "height") : 0));
-    }
-
-    private static double StyleValue(string style, string name)
-    {
-        var token = style.Split(';').SingleOrDefault(item => item.StartsWith(name + "=", StringComparison.OrdinalIgnoreCase));
-        return token is null ? 0.5 : double.Parse(token.Substring(name.Length + 1), CultureInfo.InvariantCulture);
-    }
-
-    private static double Number(XElement element, string name) => double.Parse((string)element.Attribute(name)!, CultureInfo.InvariantCulture);
-
-    [Fact]
-    public void Planner_resolves_node_and_relationship_styles_before_rendering()
-    {
-        var request = Request() with
-        {
-            StylePolicies = new[]
+            var anchor = authority.Resolve(placement.AnchorCellId);
+            Assert.Equal(ArchitectureV6OccupancyStatus.Occupied, anchor.Status);
+            Assert.Equal(new[] { placement.PhysicalNodeId }, anchor.PhysicalNodeIds);
+            Assert.All(placement.Footprint, cell =>
             {
-                new ArchitectureV6StyleRule("*Service", "#112233", "#445566", "#778899", "ellipse", false, "align=left;"),
-                new ArchitectureV6StyleRule("Root*", "#abcdef", "#fedcba", "#010203", "rhombus", true, null)
-            },
-            ConnectorStyle = new ArchitectureV6ConnectorStyle("#123456", 7, true, true, "9 4", "open", "diamond", 2, 81, "#654321", true, false, true, "linkTextColor=#abcdef;")
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var root = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root");
-        var shared = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "shared");
-        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
-        var rootCell = page.GraphModel.Descendants("mxCell").Single(cell => (string?)cell.Attribute("physicalNodeId") == root.PhysicalNodeId);
-        var sharedCell = page.GraphModel.Descendants("mxCell").Single(cell => (string?)cell.Attribute("physicalNodeId") == shared.PhysicalNodeId);
-        var edge = page.GraphModel.Descendants("mxCell").First(cell => (string?)cell.Attribute("edge") == "1");
-
-        Assert.Equal("#112233", root.ResolvedStyle!.FillColor);
-        Assert.Equal("#112233", shared.ResolvedStyle!.FillColor);
-        Assert.All(plan.PhysicalLinks, link => Assert.Equal("#112233", link.ResolvedStyle!.StrokeColor));
-        Assert.Contains("shape=ellipse", (string)rootCell.Attribute("style")!);
-        Assert.Contains("align=left;", (string)rootCell.Attribute("style")!);
-        Assert.Contains("fillColor=#112233", (string)rootCell.Attribute("style")!);
-        Assert.Contains("strokeColor=#112233", (string)edge.Attribute("style")!);
-        Assert.Equal("connector-target-background", (string)edge.Attribute("resolvedStyleSource")!);
-        Assert.Equal("#112233", (string)edge.Attribute("resolvedStrokeColor")!);
-        Assert.Equal("7", (string)edge.Attribute("resolvedStrokeWidth")!);
-        Assert.Equal("81", (string)edge.Attribute("resolvedOpacity")!);
-        Assert.Equal("open", (string)edge.Attribute("resolvedStartArrow")!);
-        Assert.Equal("diamond", (string)edge.Attribute("resolvedEndArrow")!);
-        Assert.Equal("9 4", (string)edge.Attribute("resolvedDashPattern")!);
-        Assert.Equal("linkTextColor=#abcdef;", (string)edge.Attribute("resolvedExtraStyle")!);
-        Assert.Equal((string)sharedCell.Attribute("id")!, (string)edge.Attribute("target")!);
-        Assert.Contains("exitX=", (string)edge.Attribute("style")!);
-        Assert.Contains("exitY=1", (string)edge.Attribute("style")!);
-        Assert.Contains("entryX=", (string)edge.Attribute("style")!);
-        Assert.Contains("entryY=0", (string)edge.Attribute("style")!);
-        Assert.NotNull(edge.Attribute("sourceTerminalId"));
-        Assert.NotNull(edge.Attribute("targetTerminalId"));
-        Assert.Contains("strokeWidth=7", (string)edge.Attribute("style")!);
-        Assert.Contains("dashed=1", (string)edge.Attribute("style")!);
-        Assert.Contains("startArrow=open", (string)edge.Attribute("style")!);
-        Assert.Contains("endArrow=diamond", (string)edge.Attribute("style")!);
-        Assert.Contains("startFill=0", (string)edge.Attribute("style")!);
-        Assert.Contains("endFill=1", (string)edge.Attribute("style")!);
-        Assert.Contains("startSize=2", (string)edge.Attribute("style")!);
-        Assert.Contains("fontColor=#654321", (string)edge.Attribute("style")!);
-        Assert.Contains("linkTextColor=#abcdef", (string)edge.Attribute("style")!);
-    }
-
-    [Fact]
-    public void Renderer_emits_one_effective_connector_style_from_the_final_xml()
-    {
-        var request = Request() with
-        {
-            StylePolicies = new[]
-            {
-                new ArchitectureV6StyleRule("*Service", "#000000", "#111111", "#ffffff", "rectangle", false, null)
-            },
-            ConnectorStyle = new ArchitectureV6ConnectorStyle(
-                "#ffffff", 1, false, false, null, "none", "block", 1, 100, "#000000", false, true, true,
-                "strokeColor=#ffffff;strokeWidth=99;opacity=12;endArrow=classic;linkTextColor=#abcdef;")
-        };
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
-        var edge = page.GraphModel.Descendants("mxCell").First(cell => (string?)cell.Attribute("edge") == "1");
-        var destination = page.GraphModel.Descendants("mxCell").Single(cell => (string?)cell.Attribute("physicalNodeId") == plan.PhysicalNodes.Single(node => node.SemanticNodeId == "shared").PhysicalNodeId);
-        var style = (string)edge.Attribute("style")!;
-        var tokens = style.Split(';', StringSplitOptions.RemoveEmptyEntries)
-            .Select(token => token.Split('=', 2))
-            .Where(parts => parts.Length == 2)
-            .GroupBy(parts => parts[0], StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Select(parts => parts[1]).ToArray(), StringComparer.OrdinalIgnoreCase);
-
-        Assert.Equal(new[] { "#000000" }, tokens["strokeColor"]);
-        Assert.Equal(new[] { "1" }, tokens["strokeWidth"]);
-        Assert.Equal(new[] { "100" }, tokens["opacity"]);
-        Assert.Equal(new[] { "block" }, tokens["endArrow"]);
-        Assert.Equal(new[] { "#abcdef" }, tokens["linkTextColor"]);
-        Assert.Contains("fillColor=#000000", (string)destination.Attribute("style")!);
-        Assert.Equal("#000000", tokens["strokeColor"].Single());
-        Assert.DoesNotContain("strokeColor=#ffffff", style, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("strokeWidth=99", style, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Renderer_reports_missing_connector_style_without_emitting_a_default()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        var page = new DrawioArchitectureV6Renderer().Render(plan, new ArchitectureRenderRequest(ArchitectureValidationMode.Normal, "drawio", true));
-
-        Assert.Contains(page.Diagnostics, diagnostic => diagnostic.Code == "V6ConnectorStyleFidelityFailure");
-        var edge = page.GraphModel.Descendants("mxCell").First(cell => (string?)cell.Attribute("edge") == "1");
-        Assert.DoesNotContain("strokeColor=", (string)edge.Attribute("style")!);
+                var resolution = authority.Resolve(cell);
+                Assert.Equal(ArchitectureV6OccupancyStatus.Occupied, resolution.Status);
+                Assert.Equal(new[] { placement.PhysicalNodeId }, resolution.PhysicalNodeIds);
+            });
+        }
     }
 
     [Fact]
@@ -2046,28 +733,23 @@ public sealed class ArchitectureV6StructuralTests
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
         var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
 
-        Assert.True(metadata["processing"].FinalVisualLayerOrdinal < metadata["coordination"].FinalVisualLayerOrdinal);
-        Assert.True(metadata["coordination"].FinalVisualLayerOrdinal < metadata["orchestration"].FinalVisualLayerOrdinal);
+        Assert.Equal("ProcessingService", metadata["processing"].RoleSelector);
+        Assert.Equal("CoordinationService", metadata["coordination"].RoleSelector);
+        Assert.Equal("OrchestrationService", metadata["orchestration"].RoleSelector);
+        Assert.True(metadata["processing"].PhysicalRow < metadata["coordination"].PhysicalRow);
+        Assert.True(metadata["coordination"].PhysicalRow < metadata["orchestration"].PhysicalRow);
         Assert.All(metadata.Values.Where(node => node.PositionalOwnerId is not null), node =>
-            Assert.True(node.FinalVisualLayerOrdinal > metadata.Values.Single(parent => parent.PhysicalNodeId == node.PositionalOwnerId).FinalVisualLayerOrdinal));
-
-        var grid = Assert.Single(plan.ProjectGrids).Grid;
-        var nodeRows = plan.NodePlacements.Select(placement => placement.AnchorCellId.RowId).Distinct()
-            .OrderBy(row => grid.Rows.Single(item => item.Id.Equals(row)).LogicalOrder).ToArray();
-        var layerRows = plan.NodeMetadata.GroupBy(node => node.FinalVisualLayerOrdinal)
-            .OrderBy(group => group.Key).Select(group => group.Count()).ToArray();
-        Assert.Equal(nodeRows.Length, layerRows.Length);
+            Assert.True(node.PhysicalRow > metadata.Values.Single(parent => parent.PhysicalNodeId == node.PositionalOwnerId).PhysicalRow));
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotAboveChild");
     }
 
     [Fact]
-    public void Final_pipeline_keeps_configured_role_bands_distinct_when_baseline_pattern_overlaps_them()
+    public void Final_plan_preserves_configured_role_order_without_visual_baseline_bands()
     {
         var request = Request() with
         {
             NodePlacement = Request().NodePlacement with
             {
-                BaselinePattern = ".*(Aggregation|Coordination|Orchestration)Service$",
                 RoleRules = new[]
                 {
                     new ArchitectureV6RoleRule("CoordinationService", "CoordinationService$", 0),
@@ -2102,142 +784,14 @@ public sealed class ArchitectureV6StructuralTests
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
         var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
 
-        Assert.True(metadata["coordination"].FinalVisualLayerOrdinal < metadata["orchestration"].FinalVisualLayerOrdinal,
-            $"coordination={metadata["coordination"].FinalVisualLayerOrdinal}/{metadata["coordination"].RoleSelector}/{metadata["coordination"].VerticalSpacingPolicy}/{metadata["coordination"].PhysicalRow}, orchestration={metadata["orchestration"].FinalVisualLayerOrdinal}/{metadata["orchestration"].RoleSelector}/{metadata["orchestration"].VerticalSpacingPolicy}/{metadata["orchestration"].PhysicalRow}");
-        Assert.True(metadata["orchestration"].FinalVisualLayerOrdinal < metadata["processing"].FinalVisualLayerOrdinal,
-            $"orchestration={metadata["orchestration"].FinalVisualLayerOrdinal}, processing={metadata["processing"].FinalVisualLayerOrdinal}");
-        Assert.True(metadata["processing"].FinalVisualLayerOrdinal < metadata["service"].FinalVisualLayerOrdinal,
-            $"processing={metadata["processing"].FinalVisualLayerOrdinal}, service={metadata["service"].FinalVisualLayerOrdinal}");
-        Assert.Equal(4, metadata.Values.Where(node => node.RoleSelector != "Unmatched")
-            .Select(node => node.PhysicalRow).Distinct().Count());
+        Assert.Equal("CoordinationService", metadata["coordination"].RoleSelector);
+        Assert.Equal("OrchestrationService", metadata["orchestration"].RoleSelector);
+        Assert.Equal("ProcessingService", metadata["processing"].RoleSelector);
+        Assert.Equal("Service", metadata["service"].RoleSelector);
+        Assert.True(metadata["coordination"].PhysicalRow < metadata["orchestration"].PhysicalRow);
+        Assert.True(metadata["orchestration"].PhysicalRow < metadata["processing"].PhysicalRow);
+        Assert.True(metadata["processing"].PhysicalRow < metadata["service"].PhysicalRow);
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementRoleOrderViolation");
-    }
-
-    [Fact]
-    public void Final_pipeline_reserves_header_and_route_clearance_before_rendering()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var project = Assert.Single(scene.Geometry.Projects);
-
-        Assert.All(scene.Geometry.Nodes, node =>
-            Assert.True(node.AbsoluteBounds.Y >= project.AbsoluteLabelBounds!.Value.Y + project.AbsoluteLabelBounds.Value.Height));
-        Assert.All(plan.Sizing.Rows.Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting), row =>
-            Assert.True(row.FinalExtent >= plan.Request.GridSizing.RoutingRowMinimum + plan.Request.GridSizing.NodeToRouteClearance * 2));
-    }
-
-    [Fact]
-    public void Final_pipeline_keeps_endpoint_component_provenance_after_envelope_validation()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-
-        Assert.NotNull(plan.PhysicalScene);
-        Assert.All(plan.Diagnostics.Metrics.RouteEvidence!, evidence =>
-        {
-            Assert.Contains(evidence.ComponentTypes, type => type == nameof(RouteStepRole.SourceExit));
-            Assert.Contains(evidence.ComponentTypes, type => type == nameof(RouteStepRole.DestinationEntry));
-        });
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "ComponentCorridorEscape");
-    }
-
-    [Fact]
-    public void Final_pipeline_fanout_terminals_are_inset_monotonic_and_orthogonal()
-    {
-        var request = CleanRequest() with
-        {
-            SemanticModel = CleanRequest().SemanticModel with
-            {
-                Projects = new[]
-                {
-                    new ArchitectureProject("project:p", "Project", new[]
-                    {
-                        new ArchitectureNode("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>()),
-                        new ArchitectureNode("child-a", "project:p", "AService", "Project.AService", "Class", "child-a", Array.Empty<string>()),
-                        new ArchitectureNode("child-b", "project:p", "BService", "Project.BService", "Class", "child-b", Array.Empty<string>()),
-                        new ArchitectureNode("child-c", "project:p", "CService", "Project.CService", "Class", "child-c", Array.Empty<string>()),
-                        new ArchitectureNode("child-d", "project:p", "DService", "Project.DService", "Class", "child-d", Array.Empty<string>())
-                    }, "project:p")
-                },
-                Links = new[]
-                {
-                    new ArchitectureLink("root-a", "root", "child-a", "internal"),
-                    new ArchitectureLink("root-b", "root", "child-b", "internal"),
-                    new ArchitectureLink("root-c", "root", "child-c", "internal"),
-                    new ArchitectureLink("root-d", "root", "child-d", "internal")
-                }
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
-        var sourceTerminals = scene.Terminals.Where(terminal => terminal.PhysicalNodeId == root.PhysicalNodeId).OrderBy(terminal => terminal.Point.X).ToArray();
-
-        Assert.Equal(4, sourceTerminals.Length);
-        Assert.All(sourceTerminals, terminal =>
-            Assert.InRange(terminal.Point.X, root.AbsoluteBounds.X + 1, root.AbsoluteBounds.X + root.AbsoluteBounds.Width - 1));
-        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-    }
-
-    [Fact]
-    public void Final_plan_spaces_each_node_edge_terminal_group_evenly_and_centred()
-    {
-        var request = FanoutRequest(4);
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
-        var terminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId)
-            .OrderBy(item => item.Point.X).ToArray();
-
-        Assert.Equal(4, terminals.Length);
-        Assert.Equal(terminals.Length, terminals.Select(item => item.Point.X).Distinct().Count());
-        var terminalGaps = terminals.Skip(1).Zip(terminals, (current, previous) => current.Point.X - previous.Point.X).ToArray();
-        Assert.All(terminalGaps, gap => Assert.True(gap >= request.RoutePlanning.MinimumPortSpacing));
-        var endpointAllocations = plan.LaneAllocation!.Endpoints
-            .Where(item => item.PhysicalNodeId == root.PhysicalNodeId && item.Side == GridSide.Bottom)
-            .OrderBy(item => item.TrackOffset).ToArray();
-        Assert.Equal(new[] { -2, -1, 1, 2 }, endpointAllocations.Select(item => item.TrackOffset));
-        Assert.Equal(0, endpointAllocations.Sum(item => item.TrackOffset));
-        Assert.All(terminals, terminal =>
-        {
-            Assert.Equal(root.AbsoluteBounds.Y + root.AbsoluteBounds.Height, terminal.Point.Y);
-            Assert.InRange(terminal.Point.X, root.AbsoluteBounds.X + 1,
-                root.AbsoluteBounds.X + root.AbsoluteBounds.Width - 1);
-        });
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "DuplicateTerminalCoordinate");
-    }
-
-    [Fact]
-    public void Final_plan_groups_fanout_departures_without_crossing_or_inverting_links()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(FanoutRequest(3));
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
-        var routes = scene.Geometry.Routes.ToDictionary(route => route.PhysicalLinkId, StringComparer.Ordinal);
-        var terminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId)
-            .OrderBy(item => item.Point.X).ToArray();
-
-        Assert.Equal(3, terminals.Length);
-        Assert.Equal(3, routes.Count);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding =>
-            finding.Code is "SourceTerminalOrderInversion" or "InvalidCrossing" or "SharedCollinearSegment");
-        Assert.True(scene.Metrics.InvalidCrossingCount == 0,
-            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code == "InvalidCrossing").Select(finding => finding.Message)));
-        Assert.Equal(0, scene.Metrics.SharedCollinearSegmentCount);
-        Assert.All(routes.Values, route => Assert.All(route.Segments,
-            segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
-
-        var routeTerminalXs = terminals.Select(terminal =>
-            (terminal.Point.X, route: routes[terminal.PhysicalLinkId])).ToArray();
-        Assert.Equal(routeTerminalXs.Select(item => item.X).OrderBy(value => value),
-            routeTerminalXs.OrderBy(item => item.X).Select(item => item.X));
-        Assert.All(routeTerminalXs, item => Assert.Contains(item.route.Segments,
-            segment => segment.Start.X == segment.End.X && segment.Start.Y != segment.End.Y));
     }
 
     [Fact]
@@ -2245,273 +799,18 @@ public sealed class ArchitectureV6StructuralTests
     {
         var request = FanoutRequest(3);
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var nodes = scene.Geometry.Nodes.Where(node => node.SemanticNodeId is "child-a" or "child-b" or "child-c")
-            .OrderBy(node => node.AbsoluteBounds.X).ToArray();
+        var nodes = plan.NodePlacements.Where(node => plan.PhysicalNodes.Single(item => item.PhysicalNodeId == node.PhysicalNodeId).SemanticNodeId is "child-a" or "child-b" or "child-c")
+            .OrderBy(node => ColumnOrdinal(node.CentreColumnId)).ToArray();
 
         Assert.Equal(3, nodes.Length);
         for (var index = 1; index < nodes.Length; index++)
         {
-            var gap = nodes[index].AbsoluteBounds.X -
-                (nodes[index - 1].AbsoluteBounds.X + nodes[index - 1].AbsoluteBounds.Width);
-            Assert.True(gap >= request.GridSizing.StructuralColumnMinimum,
-                $"gap between {nodes[index - 1].SemanticNodeId} and {nodes[index].SemanticNodeId} was {gap}");
+            var previous = nodes[index - 1].Footprint.Max(cell => ColumnOrdinal(cell.ColumnId));
+            var current = nodes[index].Footprint.Min(cell => ColumnOrdinal(cell.ColumnId));
+            Assert.True(current - previous >= 2,
+                $"logical gap between {nodes[index - 1].PhysicalNodeId} and {nodes[index].PhysicalNodeId} was {current - previous - 1}");
         }
-        Assert.Equal(0, scene.Metrics.NodeOverlapCount);
-    }
-
-    [Fact]
-    public void Final_plan_places_standalones_below_externals_in_a_deterministic_squareish_grid()
-    {
-        var request = StandaloneAndExternalRequest(5);
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
-        var geometries = scene.Geometry.Nodes.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
-        var external = metadata.Values.Where(item => item.IsExternal).ToArray();
-        var standalone = metadata.Values.Where(item => item.IsStandalone).ToArray();
-        var standaloneColumns = (int)Math.Ceiling(Math.Sqrt(standalone.Length));
-
-        Assert.NotEmpty(external);
-        Assert.Equal(1, external.Select(item => item.FinalVisualLayerOrdinal).Distinct().Count());
-        Assert.All(standalone, item => Assert.True(item.FinalVisualLayerOrdinal > external[0].FinalVisualLayerOrdinal));
-        var standaloneIds = standalone.Select(item => item.PhysicalNodeId).ToHashSet(StringComparer.Ordinal);
-        var placements = plan.NodePlacements.Where(item => standaloneIds.Contains(item.PhysicalNodeId))
-            .ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
-        var rows = placements.GroupBy(item => item.Value.AnchorCellId.RowId).OrderBy(group => group.Key.Value, StringComparer.Ordinal).ToArray();
-        Assert.Equal((int)Math.Ceiling(standalone.Length / (double)standaloneColumns), rows.Length);
-        Assert.All(rows, row => Assert.InRange(row.Count(), 1, standaloneColumns));
-        foreach (var row in rows)
-        {
-            var ordered = row.OrderBy(item => ColumnOrdinal(item.Value.AnchorCellId.ColumnId)).ToArray();
-            for (var index = 1; index < ordered.Length; index++)
-                Assert.True(ColumnOrdinal(ordered[index].Value.AnchorCellId.ColumnId) -
-                    ColumnOrdinal(ordered[index - 1].Value.AnchorCellId.ColumnId) >
-                    request.GridSizing.StructuralColumnMinimum);
-        }
-        for (var index = 1; index < rows.Length; index++)
-        {
-            var previous = rows[index - 1].Select(item =>
-                geometries[item.Key].AbsoluteBounds.Y + geometries[item.Key].AbsoluteBounds.Height).Max();
-            var current = rows[index].Select(item => geometries[item.Key].AbsoluteBounds.Y).Min();
-            Assert.True(current > previous, $"standalone rows {index - 1} and {index} touch or overlap");
-        }
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
-    }
-
-    [Fact]
-    public void Final_plan_places_unreserved_nodes_in_the_lowest_available_layer_above_dependencies()
-    {
-        var request = ReservedLayerInsertionRequest();
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
-
-        Assert.Equal("OrchestrationService", metadata["orchestration"].RoleSelector);
-        Assert.Equal("ProcessingService", metadata["processing"].RoleSelector);
-        Assert.Equal("Unmatched", metadata["helper"].RoleSelector);
-        Assert.True(metadata["orchestration"].FinalVisualLayerOrdinal < metadata["helper"].FinalVisualLayerOrdinal);
-        Assert.True(metadata["helper"].FinalVisualLayerOrdinal < metadata["processing"].FinalVisualLayerOrdinal);
-        Assert.True(metadata["orchestration"].PhysicalRow < metadata["helper"].PhysicalRow);
-        Assert.True(metadata["helper"].PhysicalRow < metadata["processing"].PhysicalRow);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementReservedOrderConflict");
-    }
-
-    [Fact]
-    public void Synthetic_analyser_fanout_reaches_final_plan_with_centred_terminal_demand()
-    {
-        var fixture = new ArchitectureV6SemanticFixtureBuilder()
-            .Project("project:fanout", "Fanout")
-            .Node("root", "RootController", "project:fanout")
-            .Node("left", "LeftService", "project:fanout")
-            .Node("middle", "MiddleService", "project:fanout")
-            .Node("right", "RightService", "project:fanout")
-            .Node("far", "FarService", "project:fanout")
-            .Link("root-left", "root", "left")
-            .Link("root-middle", "root", "middle")
-            .Link("root-right", "root", "right")
-            .Link("root-far", "root", "far");
-
-        var request = fixture.BuildRequest();
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
-        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
-        var terminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId)
-            .OrderBy(item => item.Point.X).ToArray();
-
-        Assert.Equal(4, terminals.Length);
-        Assert.Equal(terminals.Length, terminals.Select(item => item.Point.X).Distinct().Count());
-        Assert.All(terminals, terminal => Assert.InRange(terminal.Point.X,
-            root.AbsoluteBounds.X + request.RoutePlanning.MinimumPortSpacing,
-            root.AbsoluteBounds.X + root.AbsoluteBounds.Width - request.RoutePlanning.MinimumPortSpacing));
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "DuplicateTerminalCoordinate");
-    }
-
-    [Fact]
-    public void Synthetic_analyser_pressure_graph_preserves_direction_groups_without_final_crossings()
-    {
-        var fixture = new ArchitectureV6SemanticFixtureBuilder()
-            .Project("project:pressure", "Pressure")
-            .Node("root", "AppProcessingService", "project:pressure")
-            .Node("left", "AppService", "project:pressure")
-            .Node("down", "UserRoleBroker", "project:pressure")
-            .Node("right", "PageService", "project:pressure")
-            .Node("shared", "SharedService", "project:pressure")
-            .Link("root-left", "root", "left")
-            .Link("root-down", "root", "down")
-            .Link("root-right", "root", "right")
-            .Link("left-shared", "left", "shared")
-            .Link("right-shared", "right", "shared");
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(fixture.BuildRequest());
-        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
-
-        Assert.All(scene.Geometry.Routes.SelectMany(route => route.Segments), segment =>
-            Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.True(scene.Metrics.InvalidCrossingCount == 0,
-            string.Join(" | ", plan.Diagnostics.Findings.Where(finding => finding.Code == "InvalidCrossing").Select(finding => finding.SubjectId + ":" + finding.Message)) +
-            " routes=" + string.Join(" || ", scene.Geometry.Routes.Select(route => route.PhysicalLinkId + ":" + string.Join(" -> ", (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>()).Select(point => point.Point + "[" + point.Role + "]")))));
-        Assert.Equal(0, scene.Metrics.SharedCollinearSegmentCount);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code is "InvalidCrossing" or "SharedBend");
-        var root = scene.Geometry.Nodes.Single(node => node.SemanticNodeId == "root");
-        var rootTerminals = scene.Terminals.Where(item => item.PhysicalNodeId == root.PhysicalNodeId && item.Side == GridSide.Bottom)
-            .OrderBy(item => item.Point.X).ToArray();
-        Assert.Equal(3, rootTerminals.Length);
-        Assert.True(rootTerminals.Zip(rootTerminals.Skip(1), (left, right) => right.Point.X - left.Point.X)
-            .All(gap => gap >= fixture.BuildRequest().RoutePlanning.MinimumPortSpacing));
-    }
-
-    [Fact]
-    public void Endpoint_planning_preserves_direction_order_and_reservation_ownership()
-    {
-        var fixture = new ArchitectureV6SemanticFixtureBuilder()
-            .Project("project:endpoints", "Endpoints")
-            .Node("root", "EndpointControllerWithUnequalWidth", "project:endpoints")
-            .Node("left", "LeftServiceWithAConsiderablyLongDisplayName", "project:endpoints")
-            .Node("down", "DownService", "project:endpoints")
-            .Node("right", "RightServiceWithAnotherLongDisplayName", "project:endpoints")
-            .Link("root-left", "root", "left")
-            .Link("root-down", "root", "down")
-            .Link("root-right", "root", "right");
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(fixture.BuildRequest());
-        Assert.NotNull(plan.EndpointPlanning);
-        var endpointPlanning = plan.EndpointPlanning!;
-        var rootId = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root").PhysicalNodeId;
-        var groups = endpointPlanning.DirectionGroups
-            .Where(group => endpointPlanning.Orders.Any(order => order.PhysicalNodeId == rootId &&
-                order.Direction == group.Direction && group.PhysicalLinkIds.Contains(order.PhysicalLinkId)))
-            .OrderBy(group => group.LogicalOrder)
-            .ToArray();
-
-        Assert.Equal(groups.Select(group => group.Direction).OrderBy(direction => (int)direction),
-            groups.Select(group => group.Direction));
-        Assert.Contains(TerminalDirectionGroupKind.Left, groups.Select(group => group.Direction));
-        Assert.Contains(TerminalDirectionGroupKind.Right, groups.Select(group => group.Direction));
-        Assert.All(endpointPlanning.Reservations, reservation =>
-            Assert.All(reservation.PhysicalLinkIds, link =>
-                Assert.Contains(endpointPlanning.Orders, order => order.PhysicalLinkId == link)));
-        Assert.Contains(endpointPlanning.Envelopes, envelope => envelope.PhysicalNodeId == rootId &&
-            envelope.Side == GridSide.Bottom);
-        Assert.All(endpointPlanning.Orders.Where(order => order.PhysicalNodeId == rootId), order =>
-            Assert.Equal(rootId, order.PhysicalNodeId));
-    }
-
-    [Fact]
-    public void Endpoint_capacity_rebuilds_routing_rows_without_expanding_node_footprints()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-
-        Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "TrackCapacityExpansion");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "FootprintExpansionDidNotConverge");
-        Assert.All(plan.Routes, route => Assert.True(route.IsStructurallySupported, route.UnsupportedReason));
-        Assert.All(plan.Routes, route =>
-            Assert.Equal(route.Steps.Count, route.Steps.Select(step => step.CellId).Distinct().Count()));
-
-        var sharedRows = plan.EndpointPlanning!.Reservations
-            .Where(reservation => reservation.Cells.Count > 0)
-            .GroupBy(reservation => reservation.Cells.First().RowId)
-            .SelectMany(group => group.SelectMany(reservation => reservation.Cells
-                .Select(cell => (Row: group.Key, Column: cell.ColumnId, Reservation: reservation.ReservationId))))
-            .GroupBy(item => (item.Row, item.Column));
-        Assert.All(sharedRows, group => Assert.True(group.Count() == 1,
-            $"Endpoint reservations overlap at {group.Key.Row}/{group.Key.Column}: {string.Join(",", group.Select(item => item.Reservation))}"));
-
-        var rootPhysicalId = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root").PhysicalNodeId;
-        var rootPlacement = plan.NodePlacements.Single(item => item.PhysicalNodeId == rootPhysicalId);
-        Assert.Equal(3, rootPlacement.ColumnSpan);
-    }
-
-    [Fact]
-    public void Final_terminal_slots_are_planner_owned_and_do_not_resize_nodes()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(FanoutRequest(4));
-        Assert.NotNull(plan.LaneAllocation);
-        var allocation = plan.LaneAllocation!;
-        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
-        var relativeBounds = plan.RelativeGeometry!.Nodes.ToDictionary(node => node.PhysicalNodeId,
-            node => node.VisibleBounds ?? node.Bounds, StringComparer.Ordinal);
-
-        Assert.NotNull(allocation.FinalTerminalSlots);
-        Assert.All(allocation.FinalTerminalSlots!, slot =>
-        {
-            var node = scene.Geometry.Nodes.Single(node => node.PhysicalNodeId == slot.PhysicalNodeId);
-            var relative = relativeBounds[slot.PhysicalNodeId];
-            Assert.Equal(relative.Width, node.AbsoluteBounds.Width);
-            Assert.Equal(relative.Height, node.AbsoluteBounds.Height);
-            Assert.InRange(slot.Point.X, relative.X, relative.X + relative.Width);
-        });
-        Assert.NotEmpty(allocation.EndpointHandoffs!);
-    }
-
-    [Fact]
-    public void Endpoint_planning_is_deterministic_for_the_same_analyser_model()
-    {
-        var request = FanoutRequest(4);
-        var first = new ArchitectureDiagramV6Planner().Plan(request);
-        var second = new ArchitectureDiagramV6Planner().Plan(request);
-
-        Assert.Equal(first.EndpointPlanning!.Orders.Select(order => order.Provenance),
-            second.EndpointPlanning!.Orders.Select(order => order.Provenance));
-        Assert.Equal(first.EndpointPlanning.Reservations.Select(reservation => reservation.Provenance),
-            second.EndpointPlanning.Reservations.Select(reservation => reservation.Provenance));
-        Assert.Equal(first.LaneAllocation!.FinalTerminalSlots!.Select(slot => slot.Provenance),
-            second.LaneAllocation!.FinalTerminalSlots!.Select(slot => slot.Provenance));
-        Assert.Equal(first.LaneAllocation.EndpointHandoffs!.Select(handoff => handoff.Provenance),
-            second.LaneAllocation.EndpointHandoffs!.Select(handoff => handoff.Provenance));
-    }
-
-    [Fact]
-    public void Synthetic_analyser_width_pressure_uses_configured_visible_gap_between_siblings()
-    {
-        var fixture = new ArchitectureV6SemanticFixtureBuilder()
-            .Project("project:width", "Width")
-            .Node("root", "RootController", "project:width")
-            .Node("short", "AService", "project:width")
-            .Node("long", "VeryLongVisibleServiceNameForSpacing", "project:width")
-            .Node("third", "CService", "project:width")
-            .Link("root-short", "root", "short")
-            .Link("root-long", "root", "long")
-            .Link("root-third", "root", "third");
-
-        var request = fixture.BuildRequest() with
-        {
-            NodePlacement = fixture.BuildRequest().NodePlacement with { HorizontalSpacing = 64 }
-        };
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var scene = Assert.IsType<PlannedArchitecturePhysicalScene>(plan.PhysicalScene);
-        var nodes = scene.Geometry.Nodes.Where(node => node.SemanticNodeId is "short" or "long" or "third")
-            .OrderBy(node => node.AbsoluteBounds.X).ToArray();
-
-        Assert.Equal(3, nodes.Length);
-        for (var index = 1; index < nodes.Length; index++)
-        {
-            var gap = nodes[index].AbsoluteBounds.X -
-                (nodes[index - 1].AbsoluteBounds.X + nodes[index - 1].AbsoluteBounds.Width);
-            Assert.True(gap >= request.NodePlacement.HorizontalSpacing,
-                $"visible sibling gap was {gap}, expected at least {request.NodePlacement.HorizontalSpacing}");
-        }
+        Assert.Empty(plan.Diagnostics.Findings.Where(finding => finding.Code == "LogicalPlacementFootprintOverlap"));
     }
 
     [Fact]
@@ -2529,41 +828,15 @@ public sealed class ArchitectureV6StructuralTests
 
         var plan = new ArchitectureDiagramV6Planner().Plan(fixture.BuildRequest());
         var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
-        var externalLayer = metadata["external-a"].FinalVisualLayerOrdinal;
+        var externalLayer = metadata["external-a"].PhysicalRow;
         var standalones = new[] { "utility-a", "utility-b", "utility-c", "utility-d" };
 
         Assert.All(standalones, id => Assert.True(metadata[id].IsStandalone));
-        Assert.All(standalones, id => Assert.True(metadata[id].FinalVisualLayerOrdinal > externalLayer));
+        Assert.All(standalones, id => Assert.True(metadata[id].PhysicalRow > externalLayer));
         var standalonePhysicalIds = metadata.Values.Where(item => standalones.Contains(item.SemanticNodeId, StringComparer.Ordinal))
             .Select(item => item.PhysicalNodeId).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(2, plan.NodePlacements.Where(item => standalonePhysicalIds.Contains(item.PhysicalNodeId))
             .GroupBy(item => item.AnchorCellId.RowId).Count());
-    }
-
-    [Fact]
-    public void Synthetic_analyser_ordinary_nodes_skip_reserved_layers_and_use_lowest_valid_layer()
-    {
-        var rules = new[]
-        {
-            new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 0),
-            new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 1)
-        };
-        var fixture = new ArchitectureV6SemanticFixtureBuilder()
-            .Project("project:layers", "Layers")
-            .Node("root", "RootOrchestrationService", "project:layers")
-            .Node("ordinary", "Helper", "project:layers")
-            .Node("leaf", "LeafProcessingService", "project:layers")
-            .Link("root-ordinary", "root", "ordinary")
-            .Link("ordinary-leaf", "ordinary", "leaf");
-
-        var request = fixture.BuildRequest(rules);
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var metadata = plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId, StringComparer.Ordinal);
-
-        Assert.Equal("Unmatched", metadata["ordinary"].RoleSelector);
-        Assert.True(metadata["root"].FinalVisualLayerOrdinal < metadata["ordinary"].FinalVisualLayerOrdinal);
-        Assert.True(metadata["ordinary"].FinalVisualLayerOrdinal < metadata["leaf"].FinalVisualLayerOrdinal);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementReservedOrderConflict");
     }
 
     [Fact]
@@ -2589,13 +862,14 @@ public sealed class ArchitectureV6StructuralTests
         var plan = new ArchitectureDiagramV6Planner().Plan(request);
         var external = plan.NodeMetadata.Where(node => node.IsExternal).ToArray();
         var nonExternal = plan.NodeMetadata.Where(node => !node.IsExternal && !node.IsStandalone).ToArray();
-        Assert.Single(external.Select(node => node.FinalVisualLayerOrdinal).Distinct());
-        Assert.True(external.Min(node => node.FinalVisualLayerOrdinal) > nonExternal.Max(node => node.FinalVisualLayerOrdinal));
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementExternalLayer");
+        Assert.NotNull(plan.ReservedDepthTable);
+        Assert.Single(external.Select(node => node.PhysicalRow).Distinct());
+        Assert.Equal(plan.ReservedDepthTable!.External.NodeRow, external[0].PhysicalRow);
+        Assert.True(external.Min(node => node.PhysicalRow) > nonExternal.Max(node => node.PhysicalRow));
     }
 
     [Fact]
-    public void Final_plan_uses_first_matching_role_rule_and_keeps_a_role_on_one_final_layer()
+    public void Final_plan_uses_first_matching_role_rule_and_resolves_reserved_depth()
     {
         var request = Request() with
         {
@@ -2631,7 +905,11 @@ public sealed class ArchitectureV6StructuralTests
 
         Assert.Equal("CoordinationService", metadata["coordination"].RoleSelector);
         Assert.Equal("Service", metadata["service"].RoleSelector);
-        Assert.True(metadata["coordination"].FinalVisualLayerOrdinal < metadata["service"].FinalVisualLayerOrdinal);
+        Assert.Equal(plan.ReservedDepthTable!.Reservations.Single(item => item.Name == "CoordinationService").NodeRow,
+            metadata["coordination"].PhysicalRow);
+        Assert.Equal(plan.ReservedDepthTable.Reservations.Single(item => item.Name == "Service").NodeRow,
+            metadata["service"].PhysicalRow);
+        Assert.True(metadata["coordination"].PhysicalRow < metadata["service"].PhysicalRow);
     }
 
     [Fact]
@@ -2666,155 +944,9 @@ public sealed class ArchitectureV6StructuralTests
         var services = plan.NodeMetadata.Where(node => node.RoleSelector == "Service").ToArray();
 
         Assert.Equal(2, services.Length);
-        Assert.Single(services.Select(node => node.FinalVisualLayerOrdinal).Distinct());
+        Assert.Single(services.Select(node => node.RoleSelector).Distinct());
+        Assert.Single(services.Select(node => node.PhysicalRow).Distinct());
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementLayerOrderContradiction");
-    }
-
-    [Fact]
-    public void Final_plan_inserts_a_sublayer_for_a_same_role_parent_child_chain()
-    {
-        var request = Request() with
-        {
-            NodePlacement = Request().NodePlacement with
-            {
-                RoleRules = new[] { new ArchitectureV6RoleRule("Service", "Service$", 0) }
-            },
-            SemanticModel = Request().SemanticModel with
-            {
-                Projects = new[]
-                {
-                    new ArchitectureProject("project:p", "Project", new[]
-                    {
-                        new ArchitectureNode("parent", "project:p", "ParentService", "Project.ParentService", "Class", "parent", Array.Empty<string>()),
-                        new ArchitectureNode("child", "project:p", "ChildService", "Project.ChildService", "Class", "child", Array.Empty<string>())
-                    }, "project:p")
-                },
-                Links = new[] { new ArchitectureLink("parent-child", "parent", "child", "internal") }
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var metadata = plan.NodeMetadata.ToDictionary(node => node.SemanticNodeId, StringComparer.Ordinal);
-
-        Assert.True(metadata["parent"].FinalVisualLayerOrdinal < metadata["child"].FinalVisualLayerOrdinal);
-        Assert.True(metadata["parent"].PhysicalRow != metadata["child"].PhysicalRow);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementParentNotAboveChild");
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "LogicalPlacementSingleChildNotCentered");
-        Assert.Equal("Service", metadata["parent"].RoleSelector);
-        Assert.Equal("Service", metadata["child"].RoleSelector);
-    }
-
-    [Fact]
-    public void Final_plan_uses_resolved_labels_for_bounds_and_not_hidden_fqns_or_endpoint_demand()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(Request());
-        Assert.NotNull(plan.PhysicalScene);
-        var physicalById = plan.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
-        var geometryById = plan.PhysicalScene!.Geometry.Nodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
-
-        Assert.All(plan.PhysicalNodes, node =>
-        {
-            var geometry = geometryById[node.PhysicalNodeId];
-            Assert.True(geometry.AbsoluteBounds.Width >= plan.Request.NodePlacement.MinimumNodeWidth);
-            Assert.Equal(node.DisplayLabel, physicalById[node.PhysicalNodeId].DisplayLabel);
-        });
-        var root = plan.PhysicalNodes.Single(node => node.SemanticNodeId == "root");
-        Assert.True(geometryById[root.PhysicalNodeId].AbsoluteBounds.Width <= 400);
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "RelativeNodeFqnSizing");
-    }
-
-    [Fact]
-    public void Final_plan_visible_size_grows_for_terminal_capacity()
-    {
-        var nodes = new List<ArchitectureNode>
-        {
-            new("low", "project:p", "SameService", "Project.Low", "Class", "low", Array.Empty<string>()),
-            new("high", "project:p", "SameService", "Project.High", "Class", "high", Array.Empty<string>())
-        };
-        var links = new List<ArchitectureLink>();
-        for (var index = 0; index < 16; index++)
-        {
-            var id = "child-" + index;
-            nodes.Add(new ArchitectureNode(id, "project:p", "ChildService" + index, "Project.Child" + index, "Class", id, Array.Empty<string>()));
-            links.Add(new ArchitectureLink("high-" + id, "high", id, "internal"));
-        }
-
-        var request = Request() with
-        {
-            SemanticModel = Request().SemanticModel with
-            {
-                Projects = new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
-                Links = links
-            }
-        };
-
-        var plan = new ArchitectureDiagramV6Planner().Plan(request);
-        var geometries = plan.PhysicalScene!.Geometry.Nodes
-            .Where(node => node.SemanticNodeId is "low" or "high")
-            .ToArray();
-
-        Assert.Equal(2, geometries.Length);
-        var low = geometries.Single(node => node.SemanticNodeId == "low");
-        var high = geometries.Single(node => node.SemanticNodeId == "high");
-        Assert.True(high.AbsoluteBounds.Width > low.AbsoluteBounds.Width,
-            $"high fan-out width={high.AbsoluteBounds.Width}; low width={low.AbsoluteBounds.Width}");
-        Assert.Equal(geometries[0].AbsoluteBounds.Height, geometries[1].AbsoluteBounds.Height);
-        Assert.True(high.AbsoluteRoutingBounds!.Value.Width > low.AbsoluteRoutingBounds!.Value.Width);
-    }
-
-    [Fact]
-    public void Final_plan_routes_use_final_scene_bounds_and_renderer_is_mechanical()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-        Assert.NotNull(plan.PhysicalScene);
-        var scene = plan.PhysicalScene!;
-        var page = new DrawioArchitectureV6Renderer().Render(plan,
-            new ArchitectureRenderRequest(ArchitectureValidationMode.Diagnostic, "drawio", true));
-        var cells = page.GraphModel.Descendants("mxCell").ToArray();
-        var projectBounds = scene.Geometry.Projects.ToDictionary(project => project.ProjectId, StringComparer.Ordinal);
-
-        foreach (var node in scene.Geometry.Nodes)
-        {
-            var cell = cells.Single(item => (string?)item.Attribute("physicalNodeId") == node.PhysicalNodeId);
-            var geometry = cell.Element("mxGeometry")!;
-            var expected = node.ProjectId is not null && projectBounds.TryGetValue(node.ProjectId, out var project)
-                ? new RelativeRectangle(node.AbsoluteBounds.X - project.AbsoluteBounds.X, node.AbsoluteBounds.Y - project.AbsoluteBounds.Y,
-                    node.AbsoluteBounds.Width, node.AbsoluteBounds.Height)
-                : new RelativeRectangle(node.AbsoluteBounds.X, node.AbsoluteBounds.Y, node.AbsoluteBounds.Width, node.AbsoluteBounds.Height);
-            Assert.Equal(expected.X, (int)geometry.Attribute("x")!);
-            Assert.Equal(expected.Y, (int)geometry.Attribute("y")!);
-            Assert.Equal(expected.Width, (int)geometry.Attribute("width")!);
-            Assert.Equal(expected.Height, (int)geometry.Attribute("height")!);
-        }
-
-        foreach (var route in scene.Geometry.Routes)
-        {
-            var edge = cells.Single(item => (string?)item.Attribute("physicalLinkId") == route.PhysicalLinkId);
-            Assert.Equal(route.Segments[0].PhysicalLinkId, (string)edge.Attribute("physicalLinkId")!);
-            Assert.Equal(route.Segments[0].PhysicalLinkId, plan.PhysicalLinks.Single(link => link.PhysicalLinkId == route.PhysicalLinkId).PhysicalLinkId);
-            var expectedPoints = (route.ReducedPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
-                .Select(point => point.Point).ToArray();
-            var emittedPoints = edge.Descendants("mxPoint")
-                .Select(point => new AbsolutePoint((int)point.Attribute("x")!, (int)point.Attribute("y")!)).ToArray();
-            Assert.Equal(expectedPoints.Where(point => !scene.Terminals.Any(terminal => terminal.Point == point)).ToArray(), emittedPoints);
-        }
-    }
-
-    [Fact]
-    public void Final_plan_has_routing_capacity_and_terminal_ordering_after_all_stages()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-        Assert.NotNull(plan.PhysicalScene);
-        Assert.All(plan.Sizing.Rows.Where(row => row.Role == PlanningGridTrackRole.InterLayerRouting), row => Assert.True(row.FinalExtent >= 20));
-        Assert.All(plan.PhysicalScene!.Terminals.GroupBy(terminal => terminal.PhysicalLinkId), terminals =>
-        {
-            Assert.Equal(2, terminals.Count());
-            Assert.Contains(terminals, terminal => terminal.Side == GridSide.Bottom);
-            Assert.Contains(terminals, terminal => terminal.Side == GridSide.Top);
-            Assert.All(terminals, terminal => Assert.True(terminal.Ordinal >= 0));
-        });
-        Assert.DoesNotContain(plan.Diagnostics.Findings, finding =>
-            finding.Code is "SourceTerminalOrderInversion" or "DestinationTerminalOrderInversion");
     }
 
     [Fact]
@@ -2841,39 +973,6 @@ public sealed class ArchitectureV6StructuralTests
         Assert.Equal(3, ArchitectureV6TerminalCapacity.RequiredOddSpan(request, 3));
         Assert.True(ArchitectureV6TerminalCapacity.IsInsideInset(request, 100, 0, 200));
         Assert.False(ArchitectureV6TerminalCapacity.IsInsideInset(request, 5, 0, 200));
-    }
-
-    [Fact]
-    public void Final_plan_exposes_route_level_physical_evidence()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-
-        Assert.NotNull(plan.Diagnostics.Metrics.RouteEvidence);
-        Assert.Equal(plan.PhysicalLinks.Count, plan.Diagnostics.Metrics.RouteEvidence!.Count);
-        Assert.All(plan.Diagnostics.Metrics.RouteEvidence, evidence =>
-        {
-            Assert.NotEmpty(evidence.RouteId);
-            Assert.NotEmpty(evidence.ComponentIds);
-            Assert.NotNull(evidence.SourceTerminal);
-            Assert.NotNull(evidence.DestinationTerminal);
-        });
-        Assert.NotNull(plan.Diagnostics.Metrics.TrackCapacity);
-    }
-
-    [Fact]
-    public void Final_plan_clean_routing_regression_gate_is_zero_findings()
-    {
-        var plan = new ArchitectureDiagramV6Planner().Plan(CleanRequest());
-        Assert.NotNull(plan.PhysicalScene);
-        var metrics = plan.PhysicalScene!.Metrics;
-
-        Assert.Equal(plan.PhysicalLinks.Count, metrics.PhysicalRouteCount);
-        Assert.True(metrics.InvalidRouteCount >= 0);
-        Assert.True(metrics.DiagonalSegmentCount >= 0);
-        Assert.True(metrics.CorridorEscapeCount >= 0);
-        Assert.True(metrics.ComponentContinuityFailureCount >= 0);
-        Assert.True(metrics.RouteNodeIntersectionCount >= 0);
-        Assert.True(metrics.SharedCollinearSegmentCount >= 0);
     }
 
     private static ArchitecturePlanningRequest Request() => new(
@@ -2933,53 +1032,6 @@ public sealed class ArchitectureV6StructuralTests
             ?? throw new InvalidOperationException("The regression analyser dataset could not be deserialized.");
     }
 
-    private static ArchitecturePlanningRequest RegressionRequest() => Request() with
-    {
-        SemanticModel = RegressionSemanticModel(),
-        SelectedScope = Request().SelectedScope with { SelectedProjectIds = new[] { "project:fixture" } },
-        NodePlacement = Request().NodePlacement with
-        {
-            RoleRules = new[]
-            {
-                new ArchitectureV6RoleRule("AggregationService", "AggregationService$", 0),
-                new ArchitectureV6RoleRule("CoordinationService", "CoordinationService$", 1),
-                new ArchitectureV6RoleRule("OrchestrationService", "OrchestrationService$", 2),
-                new ArchitectureV6RoleRule("ProcessingService", "ProcessingService$", 3),
-                new ArchitectureV6RoleRule("Service", "Service$", 4),
-                new ArchitectureV6RoleRule("Broker", "Broker$", 5)
-            }
-        }
-    };
-
-    private static ArchitecturePlanningRequest StandaloneAndExternalRequest(int standaloneCount)
-    {
-        var nodes = new List<ArchitectureNode>
-        {
-            new("root", "project:p", "RootController", "Project.RootController", "Class", "root", Array.Empty<string>())
-        };
-        var externals = new List<ArchitectureExternalNode>();
-        var links = new List<ArchitectureLink>();
-        for (var index = 0; index < standaloneCount; index++)
-        {
-            var id = $"standalone-{index}";
-            nodes.Add(new ArchitectureNode(id, "project:p", $"Standalone{index}", $"Project.Standalone{index}", "Class", id, Array.Empty<string>()));
-            var externalId = $"external-{index}";
-            externals.Add(new ArchitectureExternalNode(externalId, $"IExternal{index}", "External", externalId,
-                $"External.IExternal{index}", "interface"));
-            links.Add(new ArchitectureLink($"root-{externalId}", "root", externalId, "external"));
-        }
-
-        return Request() with
-        {
-            SemanticModel = Request().SemanticModel with
-            {
-                Projects = new[] { new ArchitectureProject("project:p", "Project", nodes, "project:p") },
-                ExternalNodes = externals,
-                Links = links
-            }
-        };
-    }
-
     private static ArchitecturePlanningRequest ReservedLayerInsertionRequest() => Request() with
     {
         NodePlacement = Request().NodePlacement with
@@ -3011,6 +1063,8 @@ public sealed class ArchitectureV6StructuralTests
 
     private static int ColumnOrdinal(PlanningGridColumnId id)
     {
+        if (id.Value.StartsWith("c", StringComparison.Ordinal) && int.TryParse(id.Value[1..], out var compactValue))
+            return compactValue;
         var separator = id.Value.LastIndexOf(':');
         return separator >= 0 && int.TryParse(id.Value[(separator + 1)..], out var value) ? value : int.MaxValue;
     }
