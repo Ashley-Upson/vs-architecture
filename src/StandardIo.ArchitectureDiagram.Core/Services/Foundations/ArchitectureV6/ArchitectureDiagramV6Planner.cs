@@ -204,15 +204,14 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             var links = request.SemanticModel.Links.Where(link => nodes.ContainsKey(link.SourceId) && nodes.ContainsKey(link.TargetId)).ToArray();
             var parents = links.GroupBy(link => link.TargetId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
             var children = links.GroupBy(link => link.SourceId).ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-            var roots = FindRoots(parents);
+            var positionalOwners = SelectPositionalOwners(discoveredOrder, parents);
+            var positionalRoots = discoveredOrder.Where(id => !positionalOwners.ContainsKey(id)).ToArray();
+            var semanticRoots = FindRoots(parents);
             var physicalNodes = discoveredOrder.Select(id =>
             {
                 var info = nodes[id];
-                var semanticPositionalOwnerId = parents.TryGetValue(id, out var incoming)
-                    ? incoming.Select(link => link.SourceId)
-                        .Where(nodes.ContainsKey)
-                        .OrderBy(parentId => Array.IndexOf(discoveredOrder, parentId))
-                        .FirstOrDefault()
+                var semanticPositionalOwnerId = positionalOwners.TryGetValue(id, out var selectedOwner)
+                    ? selectedOwner
                     : null;
                 var positionalOwnerId = semanticPositionalOwnerId is null ? null : $"physical:{semanticPositionalOwnerId}";
                 return new PlannedPhysicalNode($"physical:{id}", id, PhysicalNodeProjectionMode.Canonical, positionalOwnerId,
@@ -290,10 +289,10 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 Array.Empty<PlannedPhysicalLinkMetadata>(),
                 nodeMap,
                 linkMap,
-                roots.Select(id => bySemantic[id].PhysicalNodeId).ToArray(),
+                positionalRoots.Select(id => bySemantic[id].PhysicalNodeId).ToArray(),
                 physicalNodes.Where(node => node.IsExternal).Select(node => node.PhysicalNodeId).ToArray(),
                 physicalNodes.Where(node => node.IsStandalone).Select(node => node.PhysicalNodeId).ToArray(),
-                FindCycles(children, roots),
+                FindCycles(children, semanticRoots),
                 unaccountedNodes,
                 unaccountedLinks,
                 diagnostics);
@@ -350,6 +349,60 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             .Where(id => !parents.ContainsKey(id) || parents[id].Length == 0)
             .Concat(request.SemanticModel.Selection?.Roots.Select(root => root.SemanticNodeId) ?? Array.Empty<string>())
             .Where(nodes.ContainsKey).Distinct(StringComparer.Ordinal).ToArray();
+
+        private Dictionary<string, string> SelectPositionalOwners(
+            IReadOnlyList<string> discoveredOrder,
+            IReadOnlyDictionary<string, ArchitectureLink[]> parents)
+        {
+            var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var targetId in discoveredOrder)
+            {
+                if (!parents.TryGetValue(targetId, out var incoming)) continue;
+                var eligibleParents = incoming.Select(link => link.SourceId).Where(nodes.ContainsKey).ToArray();
+                if (eligibleParents.Length > 1)
+                    diagnostics.Add(new ArchitecturePlanningDiagnostic(
+                        "ProjectionMultipleSemanticParents",
+                        $"Semantic node '{targetId}' has {eligibleParents.Length} incoming parents; the first FIFO parent owns positional construction and the others remain semantic routing relationships.",
+                        PlanningDiagnosticSubject.SemanticNode,
+                        targetId,
+                        ArchitecturePlanningDiagnosticSeverity.Warning));
+
+                foreach (var parentId in eligibleParents)
+                {
+                    if (WouldCreatePositionalCycle(parentId, targetId, owners))
+                    {
+                        owners.Remove(parentId);
+                        owners[targetId] = parentId;
+                        diagnostics.Add(new ArchitecturePlanningDiagnostic(
+                            "ProjectionPositionalCycleBreak",
+                            $"Positional ownership cycle involving '{parentId}' and '{targetId}' was broken deterministically at the earlier owner edge; semantic relationships remain retained for routing.",
+                            PlanningDiagnosticSubject.SemanticLink,
+                            incoming.First(link => link.SourceId == parentId).Id,
+                            ArchitecturePlanningDiagnosticSeverity.Warning));
+                        break;
+                    }
+
+                    owners[targetId] = parentId;
+                    break;
+                }
+            }
+
+            return owners;
+        }
+
+        private static bool WouldCreatePositionalCycle(string parentId, string targetId,
+            IReadOnlyDictionary<string, string> owners)
+        {
+            var current = parentId;
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            while (visited.Add(current))
+            {
+                if (string.Equals(current, targetId, StringComparison.Ordinal)) return true;
+                if (!owners.TryGetValue(current, out current!)) return false;
+            }
+
+            return true;
+        }
 
         private IReadOnlyList<string> FindCycles(IReadOnlyDictionary<string, ArchitectureLink[]> children, IReadOnlyList<string> roots)
         {

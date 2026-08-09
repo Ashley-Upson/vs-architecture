@@ -93,7 +93,7 @@ internal sealed class ArchitectureV6SemanticFixtureBuilder
         var placement = nodePlacement ?? new NodePlacementPolicy(
             "*OrchestrationService", 120, 60, 20, 40, roleRules);
         if (roleRules is not null)
-            placement = placement with { RoleRules = roleRules };
+            placement = placement with { RoleRules = roleRules, ReservedLayerTypePatterns = roleRules };
 
         return new ArchitecturePlanningRequest(
             BuildModel(),

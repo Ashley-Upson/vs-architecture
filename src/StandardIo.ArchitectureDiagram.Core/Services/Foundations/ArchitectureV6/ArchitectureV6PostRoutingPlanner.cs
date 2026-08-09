@@ -29,10 +29,11 @@ internal sealed class ArchitectureV6PostRoutingPlanner
         var findings = new List<ArchitecturePlanningDiagnostic>();
         var runs = BuildRuns();
         var endpointDemands = BuildEndpointDemands();
+        var destinationApproaches = BuildDestinationApproaches(runs);
         var terminalOrders = BuildTerminalOrders();
         var allocation = new ArchitectureV6LaneAllocator(request, projection.PhysicalLinks,
             placement.NodePlacements, placement.NodeMetadata, frozenRoutes, runs,
-            endpointDemands, Array.Empty<DestinationApproachReservation>(), terminalOrders).Build();
+            endpointDemands, destinationApproaches, terminalOrders).Build();
 
         // The allocator may attach lane identities to steps, but the cell
         // sequence itself remains the exact frozen sequence.
@@ -99,6 +100,63 @@ internal sealed class ArchitectureV6PostRoutingPlanner
             new NodeEndpointDemand(route.PhysicalLinkId, route.Source, request.RoutePlanning.MinimumPortSpacing, route.DestinationApproachReservationId),
             new NodeEndpointDemand(route.PhysicalLinkId, route.Destination, request.RoutePlanning.MinimumPortSpacing, route.DestinationApproachReservationId)
         }).ToArray();
+
+    private IReadOnlyList<DestinationApproachReservation> BuildDestinationApproaches(
+        IReadOnlyList<PlannedStraightRun> runs)
+    {
+        return frozenRoutes
+            .GroupBy(route => route.Destination.PhysicalNodeId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var orderedRoutes = group.OrderBy(route => route.PhysicalLinkId, StringComparer.Ordinal).ToArray();
+                var destination = orderedRoutes[0].Destination;
+                var reservationId = $"approach:{destination.PhysicalNodeId}";
+                var approachCells = orderedRoutes
+                    .Select(route => DestinationApproachCell(route, runs))
+                    .Where(item => item is not null)
+                    .Select(item => item!.Value)
+                    .Distinct()
+                    .OrderBy(item => item.GridId.Value, StringComparer.Ordinal)
+                    .ThenBy(item => item.RowId.Value, StringComparer.Ordinal)
+                    .ThenBy(item => item.ColumnId.Value, StringComparer.Ordinal)
+                    .ToArray();
+
+                if (approachCells.Length == 0) return null;
+
+                return new DestinationApproachReservation(reservationId, destination.PhysicalNodeId,
+                    approachCells[0].GridId, approachCells,
+                    orderedRoutes.Select(route => route.PhysicalLinkId).ToArray(),
+                    projection.PhysicalNodes.Single(node => node.PhysicalNodeId == destination.PhysicalNodeId).IsExternal
+                        ? "external-direct" : "direct");
+            })
+            .Where(reservation => reservation is not null)
+            .Cast<DestinationApproachReservation>()
+            .ToArray();
+    }
+
+    private static PlanningGridCellId? DestinationApproachCell(PlannedGridRoute route,
+        IReadOnlyList<PlannedStraightRun> runs)
+    {
+        var steps = route.Steps.OrderBy(step => step.Order).ToArray();
+        if (steps.Length < 2) return null;
+
+        var destinationCell = steps[steps.Length - 1];
+        var approachStep = steps
+            .Take(steps.Length - 1)
+            .Reverse()
+            .FirstOrDefault(step => runs.Any(run => run.RouteId == route.PhysicalLinkId &&
+                run.Axis == RouteAxis.Vertical && run.GridId.Equals(destinationCell.GridId) &&
+                run.Cells.Contains(step.CellId) && run.Cells.Contains(destinationCell.CellId)));
+        if (approachStep is not null) return approachStep.CellId;
+
+        // Unsupported or compact frozen paths may not have produced a complete
+        // compiled run, but their final topology cell still owns the approach
+        // demand. Keep the reservation arithmetic-only and never add a cell.
+        var finalTopologyCell = steps[steps.Length - 2];
+        return finalTopologyCell.GridId.Equals(destinationCell.GridId)
+            ? finalTopologyCell.CellId : (PlanningGridCellId?)null;
+    }
 
     private IReadOnlyList<TerminalOrder> BuildTerminalOrders() => frozenRoutes
         .SelectMany(route => new[]

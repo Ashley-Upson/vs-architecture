@@ -20,6 +20,7 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
     private readonly Dictionary<string, string?> owners = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<string>> children = new(StringComparer.Ordinal);
     private readonly Dictionary<string, LayoutNode> layouts = new(StringComparer.Ordinal);
+    private readonly List<ArchitecturePlanningDiagnostic> ownershipDiagnostics = new();
 
     public ArchitectureV6CanonicalPlacementBuilder(
         ArchitecturePlanningRequest request,
@@ -87,7 +88,7 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
             .ToArray();
         var diagramGrid = BuildDiagramGrid(projectGridArray);
         var allReservations = reservationsByProject.Values.SelectMany(items => items).ToArray();
-        var diagnostics = new List<ArchitecturePlanningDiagnostic>();
+        var diagnostics = new List<ArchitecturePlanningDiagnostic>(ownershipDiagnostics);
         foreach (var metrics in compositionMetrics)
             diagnostics.Add(metrics.ToDiagnostic());
         Validate(allPlacements, projectGridArray, diagnostics);
@@ -111,12 +112,12 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         var nextColumn = 0;
         foreach (var root in roots)
         {
-            var unit = Measure(root.PhysicalNodeId, 1);
-            Place(root.PhysicalNodeId, nextColumn, 1);
+            var rootRow = RequiredRow(root) ?? 1;
+            var unit = Measure(root.PhysicalNodeId, rootRow);
+            Place(root.PhysicalNodeId, nextColumn, rootRow);
             treeWidths.Add((root.PhysicalNodeId, unit.Width));
             nextColumn += unit.Width + Separation;
         }
-
         var detached = projectNodes.Where(node => owners[node.PhysicalNodeId] is not null && !node.IsExternal && !node.IsStandalone)
             .Where(node => IsDetached(node)).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
         var detachedWidths = new List<(string Id, int Width)>();
@@ -129,17 +130,17 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
             nextColumn += unit.Width + Separation;
         }
 
-        // Every selected physical node must receive a placement before the grid is frozen. This
-        // deterministic completion is only for ownership cases which could not be reached from
-        // a root tree; it does not alter the frozen reservation table or route topology.
-        foreach (var node in projectNodes.Where(node => !layouts.ContainsKey(node.PhysicalNodeId) && !node.IsExternal && !node.IsStandalone)
-                     .OrderBy(node => order[node.PhysicalNodeId]))
+        var unresolved = projectNodes
+            .Where(node => !layouts.ContainsKey(node.PhysicalNodeId) && !node.IsExternal && !node.IsStandalone)
+            .OrderBy(node => order[node.PhysicalNodeId])
+            .ToArray();
+        if (unresolved.Length > 0)
         {
-            var row = RequiredRow(node) ?? 1;
-            var unit = Measure(node.PhysicalNodeId, row);
-            Place(node.PhysicalNodeId, nextColumn, row);
-            detachedWidths.Add((node.PhysicalNodeId, unit.Width));
-            nextColumn += unit.Width + Separation;
+            foreach (var node in unresolved)
+                ownershipDiagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementUnresolvedNode",
+                    "No recursive positional tree or detached placement unit owns this physical node; placement cannot continue without a fallback authority.",
+                    PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+            throw new InvalidOperationException($"V6 placement could not establish an authoritative tree path for: {string.Join(", ", unresolved.Select(node => node.PhysicalNodeId))}");
         }
 
         var externalRow = reservations.External.NodeRow;
@@ -157,7 +158,7 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
 
         var standaloneRow = externalRow + 2;
         var standalones = projectNodes.Where(node => node.IsStandalone && !node.IsExternal).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
-        var standaloneWidth = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalones.Length)));
+        var standaloneWidth = ChooseStandaloneColumns(standalones);
         var standaloneStart = nextColumn;
         var standaloneRowCursors = new Dictionary<int, int>();
         for (var index = 0; index < standalones.Length; index++)
@@ -208,6 +209,47 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
             Separation, columns.Count);
         return new ProjectRoutingGrid(projectId, grid, subtreeReservations, null,
             projectNodes.Select(node => node.PhysicalNodeId).ToArray(), projectNodes.Where(node => node.IsExternal).Select(node => node.PhysicalNodeId).ToArray());
+    }
+
+    private int ChooseStandaloneColumns(IReadOnlyList<PlannedPhysicalNode> standalones)
+    {
+        if (standalones.Count == 0) return 1;
+        var preferredColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalones.Count)));
+        if (standalones.Count <= 5) return preferredColumns;
+
+        var bestColumns = preferredColumns;
+        var bestScore = double.PositiveInfinity;
+        for (var columns = 1; columns <= standalones.Count; columns++)
+        {
+            var rows = (standalones.Count + columns - 1) / columns;
+            var widestRow = 0;
+            for (var row = 0; row < rows; row++)
+            {
+                var start = row * columns;
+                var count = Math.Min(columns, standalones.Count - start);
+                var firstCentre = Span(standalones[start]) / 2;
+                var cursor = 0;
+                var lastCentre = firstCentre;
+                for (var index = start; index < start + count; index++)
+                {
+                    var span = Span(standalones[index]);
+                    lastCentre = cursor + span / 2;
+                    cursor += span + Separation;
+                }
+                var width = lastCentre - firstCentre + 1;
+                widestRow = Math.Max(widestRow, width);
+            }
+
+            var height = rows + Math.Max(0, rows - 1);
+            var score = Math.Abs(widestRow - height);
+            if (score < bestScore || score.Equals(bestScore) && columns < bestColumns)
+            {
+                bestColumns = columns;
+                bestScore = score;
+            }
+        }
+
+        return bestColumns;
     }
 
     private LayoutNode Measure(string id, int row)
@@ -271,39 +313,14 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
             var owner = node.PositionalOwnerId;
-            if (owner is null || !nodes.ContainsKey(owner) || nodes[owner].ProjectId != node.ProjectId)
-                owner = projection.PhysicalLinks
-                    .Where(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId && nodes.ContainsKey(link.SourcePhysicalNodeId))
-                    .Select(link => link.SourcePhysicalNodeId)
-                    .Where(parent => nodes[parent].ProjectId == node.ProjectId)
-                    .OrderBy(parent => order[parent])
-                    .ThenBy(parent => parent, StringComparer.Ordinal)
-                    .FirstOrDefault();
-            owners[node.PhysicalNodeId] = owner;
-        }
-
-        // The physical owner relation is a tree aid, not a second semantic
-        // graph. Break any ownership cycle deterministically so cyclic
-        // semantic dependencies remain finite and reusable.
-        foreach (var start in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
-        {
-            var path = new List<string>();
-            var indexByNode = new Dictionary<string, int>(StringComparer.Ordinal);
-            var current = start.PhysicalNodeId;
-            while (current is not null && owners.TryGetValue(current, out var next) && next is not null)
+            if (owner is not null && (!nodes.ContainsKey(owner) || nodes[owner].ProjectId != node.ProjectId))
             {
-                if (indexByNode.TryGetValue(current, out var cycleStart))
-                {
-                    var cycle = path.Skip(cycleStart).ToArray();
-                    foreach (var cycleNode in cycle)
-                        owners[cycleNode] = null;
-                    break;
-                }
-
-                indexByNode[current] = path.Count;
-                path.Add(current);
-                current = next;
+                ownershipDiagnostics.Add(new ArchitecturePlanningDiagnostic("InvalidProjectedPositionalOwner",
+                    "Projection supplied a positional owner that is missing or belongs to another project.",
+                    PlanningDiagnosticSubject.PhysicalNode, node.PhysicalNodeId));
+                owner = null;
             }
+            owners[node.PhysicalNodeId] = owner;
         }
 
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
@@ -354,9 +371,9 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
     private static DiagramRoutingGrid BuildDiagramGrid(IReadOnlyList<ProjectRoutingGrid> projects)
     {
         var gridId = new PlanningGridId("diagram");
-        var maxRows = projects.Select(project => project.Grid.Rows.Count).DefaultIfEmpty(5).Max();
-        var width = projects.Sum(project => project.Grid.Columns.Count + Separation);
-        var rows = Enumerable.Range(0, Math.Max(5, maxRows)).Select(index => new PlanningGridRow(new PlanningGridRowId("r" + index), index, 1, 1, 1, 0, 0,
+        var height = projects.Select(project => project.Grid.Transform.Origin.Y + project.Grid.Rows.Count).DefaultIfEmpty(5).Max();
+        var width = projects.Select(project => project.Grid.Transform.Origin.X + project.Grid.Columns.Count).DefaultIfEmpty(1).Max();
+        var rows = Enumerable.Range(0, Math.Max(5, height)).Select(index => new PlanningGridRow(new PlanningGridRowId("r" + index), index, 1, 1, 1, 0, 0,
             index % 2 == 0 ? PlanningGridTrackRole.DiagramProjectPlacement : PlanningGridTrackRole.DiagramCrossProjectRouting, "diagram-composition", "fifo-project-order")).ToArray();
         var columns = Enumerable.Range(0, Math.Max(1, width)).Select(index => new PlanningGridColumn(new PlanningGridColumnId("c" + index), index, 1, 1, 1, 0, 0,
             PlanningGridTrackRole.DiagramProjectPlacement, "diagram-composition", "fifo-project-order")).ToArray();
@@ -367,7 +384,7 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
             cells[id] = new PlanningGridCell(id, CellCapability.RoutingAllowed, CellOccupancy.Empty, Array.Empty<string>());
         }
         var grid = new PlanningGrid(gridId, rows, columns, cells, new GridTransform(gridId, new RelativePoint(0, 0)));
-        var footprints = projects.Select((project, index) => new RelativeRectangle(project.Grid.Transform.Origin.X + index * (project.Grid.Columns.Count + Separation), project.Grid.Transform.Origin.Y,
+        var footprints = projects.Select(project => new RelativeRectangle(project.Grid.Transform.Origin.X, project.Grid.Transform.Origin.Y,
             project.Grid.Columns.Count, project.Grid.Rows.Count)).ToArray();
         return new DiagramRoutingGrid(grid, footprints, Array.Empty<GridTransition>());
     }

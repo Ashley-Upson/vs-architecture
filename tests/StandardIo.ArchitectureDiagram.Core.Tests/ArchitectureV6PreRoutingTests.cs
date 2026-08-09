@@ -53,6 +53,47 @@ public sealed class ArchitectureV6PreRoutingTests
             .Select(link => link.SourcePhysicalNodeId));
         Assert.Empty(projection.UnaccountedSemanticLinkIds);
         Assert.Equal(2, projection.SemanticLinkToPhysicalLinkIds.Count);
+        Assert.Contains(projection.Diagnostics, diagnostic => diagnostic.Code == "ProjectionMultipleSemanticParents"
+            && diagnostic.SubjectId == "shared");
+    }
+
+    [Fact]
+    public void Projection_uses_fifo_incoming_parent_even_when_parent_is_discovered_later()
+    {
+        var request = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("child", "ChildService", "p")
+            .Node("parent", "ParentService", "p")
+            .Link("parent-child", "parent", "child")
+            .BuildRequest();
+
+        var projection = ArchitectureV6ProjectionStage.Build(request);
+
+        Assert.Equal("physical:parent", projection.PhysicalNodes.Single(node => node.SemanticNodeId == "child").PositionalOwnerId);
+    }
+
+    [Fact]
+    public void Projection_breaks_positional_cycles_deterministically_without_dropping_semantic_links()
+    {
+        var request = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("a", "AService", "p")
+            .Node("b", "BService", "p")
+            .Link("a-b", "a", "b")
+            .Link("b-a", "b", "a")
+            .BuildRequest();
+
+        var first = ArchitectureV6ProjectionStage.Build(request);
+        var second = ArchitectureV6ProjectionStage.Build(request);
+
+        Assert.Equal(1, first.PhysicalNodes.Count(node => node.PositionalOwnerId is null));
+        Assert.Single(first.PhysicalNodes.Where(node => node.PositionalOwnerId is not null));
+        Assert.Equal(first.PhysicalNodes.Select(node => (node.PhysicalNodeId, node.PositionalOwnerId)),
+            second.PhysicalNodes.Select(node => (node.PhysicalNodeId, node.PositionalOwnerId)));
+        Assert.Equal(new[] { "a-b", "b-a" }, first.PhysicalLinks.Select(link => link.SemanticLinkId));
+        Assert.Empty(first.UnaccountedSemanticLinkIds);
+        Assert.Contains(first.Diagnostics, diagnostic => diagnostic.Code == "ProjectionPositionalCycleBreak");
+        Assert.NotEmpty(first.CycleSemanticNodeIds);
     }
 
     [Fact]

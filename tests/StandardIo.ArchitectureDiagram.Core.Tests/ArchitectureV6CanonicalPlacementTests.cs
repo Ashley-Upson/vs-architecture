@@ -255,6 +255,71 @@ public sealed class ArchitectureV6CanonicalPlacementTests
     }
 
     [Fact]
+    public void Common_diagram_grid_uses_each_atomic_project_transform_once()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("first", "First")
+            .Project("second", "Second")
+            .Project("third", "Third")
+            .Node("first-node", "FirstService", "first")
+            .Node("second-node", "SecondService", "second")
+            .Node("third-node", "ThirdService", "third");
+        var result = Build(fixture.BuildRequest() with
+        {
+            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "first", "second", "third" }, Array.Empty<string>())
+        });
+
+        var projects = result.Placement.ProjectGrids;
+        var footprints = result.Placement.DiagramGrid.ProjectFootprints;
+
+        Assert.Equal(projects.Count, footprints.Count);
+        for (var index = 0; index < projects.Count; index++)
+        {
+            var project = projects[index];
+            var footprint = footprints[index];
+            Assert.Equal(project.Grid.Transform.Origin.X, footprint.X);
+            Assert.Equal(project.Grid.Transform.Origin.Y, footprint.Y);
+            Assert.Equal(project.Grid.Columns.Count, footprint.Width);
+            Assert.Equal(project.Grid.Rows.Count, footprint.Height);
+            Assert.True(footprint.X >= 0);
+            Assert.True(footprint.X + footprint.Width <= result.Placement.DiagramGrid.Grid.Columns.Count);
+            Assert.True(footprint.Y + footprint.Height <= result.Placement.DiagramGrid.Grid.Rows.Count);
+        }
+
+        for (var index = 1; index < footprints.Count; index++)
+            Assert.Equal(1, footprints[index].X - (footprints[index - 1].X + footprints[index - 1].Width));
+
+        Assert.Equal(footprints.Max(footprint => footprint.X + footprint.Width), result.Placement.DiagramGrid.Grid.Columns.Count);
+        Assert.Equal(footprints.Max(footprint => footprint.Y + footprint.Height), result.Placement.DiagramGrid.Grid.Rows.Count);
+    }
+
+    [Fact]
+    public void Common_diagram_grid_dimensions_and_footprints_remain_frozen_after_routing()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("first", "First")
+            .Project("second", "Second")
+            .Node("source", "SourceService", "first")
+            .Node("target", "TargetService", "second")
+            .Link("cross", "source", "target", "cross-project");
+        var request = fixture.BuildRequest() with
+        {
+            SelectedScope = new ArchitectureSelectionScope("SelectedProjects", new[] { "first", "second" }, Array.Empty<string>())
+        };
+
+        var placement = Build(request);
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+
+        Assert.NotNull(plan.PlacementFreeze);
+        Assert.Equal(placement.Freeze.DiagramGrid.Grid.Rows.Count, plan.PlacementFreeze!.DiagramGrid.Grid.Rows.Count);
+        Assert.Equal(placement.Freeze.DiagramGrid.Grid.Columns.Count, plan.PlacementFreeze.DiagramGrid.Grid.Columns.Count);
+        Assert.Equal(placement.Freeze.DiagramGrid.ProjectFootprints, plan.PlacementFreeze.DiagramGrid.ProjectFootprints);
+        Assert.Equal(plan.PlacementFreeze.DiagramGrid.Grid.Rows.Count, plan.DiagramGrid.Grid.Rows.Count);
+        Assert.Equal(plan.PlacementFreeze.DiagramGrid.Grid.Columns.Count, plan.DiagramGrid.Grid.Columns.Count);
+        Assert.Equal(plan.PlacementFreeze.DiagramGrid.ProjectFootprints, plan.DiagramGrid.ProjectFootprints);
+    }
+
+    [Fact]
     public void Child_and_placement_order_follow_projection_order_not_physical_ids()
     {
         var first = Build(new ArchitectureV6SemanticFixtureBuilder()

@@ -103,4 +103,51 @@ public sealed class ArchitectureV6PostRoutingTests
         Assert.Contains(plan.Diagnostics.Findings, finding => finding.Code == "V6StageDeferred.Rendering");
         Assert.DoesNotContain(plan.Diagnostics.Findings, finding => finding.Code == "V6StageDeferred.PhysicalSizing");
     }
+
+    [Fact]
+    public void Post_routing_populates_destination_approach_demand_from_frozen_topology()
+    {
+        var request = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("source", "SourceService", "p")
+            .Node("target", "TargetService", "p")
+            .Link("link", "source", "target")
+            .BuildRequest();
+
+        var plan = new ArchitectureDiagramV6Planner().Plan(request);
+        var allocation = plan.LaneAllocation;
+        Assert.NotNull(allocation);
+
+        var approach = Assert.Single(allocation!.DestinationApproaches);
+        Assert.Equal("physical:target", approach.PhysicalNodeId);
+        Assert.Equal("physical-link:link:0", approach.PhysicalLinkId);
+        Assert.Equal("approach:physical:target", approach.ReservationId);
+    }
+
+    [Fact]
+    public void Post_routing_preserves_frozen_route_cell_fingerprints()
+    {
+        var request = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("source", "SourceService", "p")
+            .Node("target", "TargetService", "p")
+            .Link("link", "source", "target")
+            .BuildRequest();
+
+        var projection = ArchitectureV6ProjectionStage.Build(request);
+        var spans = new ArchitectureV6PreRoutingSpanSizer(request, projection).Build();
+        var depthPlanner = new ArchitectureV6ReservedDepthPlanner(request, projection);
+        var depthRequirements = depthPlanner.Inspect();
+        var placement = new ArchitectureV6CanonicalPlacementBuilder(request, projection, spans,
+            depthPlanner.BuildFrozenTable(depthRequirements)).Build().Placement;
+        var frozen = new ArchitectureV6LogicalCellRouter(projection.PhysicalNodes, projection.PhysicalLinks,
+            placement.NodePlacements, placement.ProjectGrids, placement.DiagramGrid, placement.NodeMetadata).Build().Routes;
+        var fingerprints = frozen.ToDictionary(route => route.PhysicalLinkId,
+            route => string.Join("|", route.Steps.OrderBy(step => step.Order).Select(step => step.CellId.ToString())));
+
+        var postRouting = new ArchitectureV6PostRoutingPlanner(request, projection, placement, frozen).Build();
+
+        Assert.Equal(fingerprints, postRouting.Allocation.Routes.ToDictionary(route => route.PhysicalLinkId,
+            route => string.Join("|", route.Steps.OrderBy(step => step.Order).Select(step => step.CellId.ToString()))));
+    }
 }
