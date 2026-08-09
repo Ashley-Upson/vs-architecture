@@ -159,6 +159,71 @@ public sealed class ArchitectureV6CanonicalPlacementTests
     }
 
     [Fact]
+    public void Standalone_rows_use_cumulative_actual_spans_and_report_composition_metrics()
+    {
+        var result = Build(new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("wide", new string('W', 100) + "Service", "p")
+            .Node("narrow", "NarrowService", "p")
+            .Node("third", "ThirdService", "p")
+            .Node("fourth", "FourthService", "p"));
+
+        var row = new[] { "wide", "narrow" }.Select(id => Node(result, id)).Select(item => Row(result, item)).Distinct().Single();
+        var sameRow = new[] { "wide", "narrow" }.Select(id => Node(result, id)).OrderBy(item => Column(item)).ToArray();
+        var leftEnd = sameRow[0].Footprint.Max(cell => Column(cell.ColumnId));
+        var rightStart = sameRow[1].Footprint.Min(cell => Column(cell.ColumnId));
+
+        Assert.Equal(1, rightStart - leftEnd - 1);
+        Assert.Empty(result.Placement.Diagnostics.Where(item => item.Code == "LogicalPlacementFootprintOverlap"));
+        var metrics = result.Placement.Diagnostics.Single(item => item.Code == "LogicalPlacementCompositionMetrics");
+        Assert.Contains("standaloneRegionWidth=", metrics.Message, StringComparison.Ordinal);
+        Assert.Contains("atomicUnitSeparation=1", metrics.Message, StringComparison.Ordinal);
+        Assert.Contains("finalProjectGridWidth=", metrics.Message, StringComparison.Ordinal);
+        Assert.Equal(2, sameRow.Length);
+        Assert.All(sameRow, item => Assert.Equal(row, Row(result, item)));
+    }
+
+    [Fact]
+    public void Independent_top_level_tree_units_have_one_logical_separation_column()
+    {
+        var result = Build(new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("left-root", "LeftRootService", "p")
+            .Node("left-child", "LeftChildService", "p")
+            .Node("right-root", "RightRootService", "p")
+            .Node("right-child", "RightChildService", "p")
+            .Link("left-link", "left-root", "left-child")
+            .Link("right-link", "right-root", "right-child"));
+
+        var leftUnit = new[] { Node(result, "left-root"), Node(result, "left-child") };
+        var rightUnit = new[] { Node(result, "right-root"), Node(result, "right-child") };
+        var leftEnd = leftUnit.Max(item => item.Footprint.Max(cell => Column(cell.ColumnId)));
+        var rightStart = rightUnit.Min(item => item.Footprint.Min(cell => Column(cell.ColumnId)));
+
+        Assert.Equal(1, rightStart - leftEnd - 1);
+        Assert.DoesNotContain(result.Placement.Diagnostics, item => item.Code == "LogicalPlacementFootprintOverlap");
+        var metric = result.Placement.Diagnostics.Single(item => item.Code == "LogicalPlacementCompositionMetrics");
+        Assert.Contains("topLevelTrees=2", metric.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Placement_composition_metrics_are_deterministic()
+    {
+        var fixture = new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("root", "RootService", "p")
+            .Node("child", "ChildService", "p")
+            .Link("link", "root", "child");
+
+        var first = Build(fixture.BuildRequest());
+        var second = Build(fixture.BuildRequest());
+
+        Assert.Equal(
+            first.Placement.Diagnostics.Single(item => item.Code == "LogicalPlacementCompositionMetrics").Message,
+            second.Placement.Diagnostics.Single(item => item.Code == "LogicalPlacementCompositionMetrics").Message);
+    }
+
+    [Fact]
     public void Placement_freeze_is_deterministic_and_exposes_immutable_records()
     {
         var fixture = new ArchitectureV6SemanticFixtureBuilder()

@@ -45,17 +45,20 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         var projectGrids = new List<ProjectRoutingGrid>();
         var metadata = new List<PhysicalNodePlacementMetadata>();
         var linkMetadata = new List<PlannedPhysicalLinkMetadata>();
+        var compositionMetrics = new List<PlacementCompositionMetrics>();
         var rowByNode = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var projectId in ProjectOrder())
         {
             var projectNodes = nodes.Values.Where(node => ProjectOf(node) == projectId)
                 .OrderBy(node => order[node.PhysicalNodeId]).ToArray();
-            var project = BuildProject(projectId, projectNodes, out var projectPlacements, out var subtreeReservations, out var projectMetadata);
+            var project = BuildProject(projectId, projectNodes, out var projectPlacements, out var subtreeReservations, out var projectMetadata,
+                out var projectCompositionMetrics);
             placementsByProject[projectId] = projectPlacements;
             reservationsByProject[projectId] = subtreeReservations;
             projectGrids.Add(project);
             metadata.AddRange(projectMetadata);
+            compositionMetrics.Add(projectCompositionMetrics);
             foreach (var item in projectMetadata)
                 rowByNode[item.PhysicalNodeId] = item.PhysicalRow;
         }
@@ -85,6 +88,8 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         var diagramGrid = BuildDiagramGrid(projectGridArray);
         var allReservations = reservationsByProject.Values.SelectMany(items => items).ToArray();
         var diagnostics = new List<ArchitecturePlanningDiagnostic>();
+        foreach (var metrics in compositionMetrics)
+            diagnostics.Add(metrics.ToDiagnostic());
         Validate(allPlacements, projectGridArray, diagnostics);
         var result = new LogicalPlacementResult(projectGridArray, diagramGrid, metadata, linkMetadata, allReservations,
             diagnostics, allPlacements, new PlacementPerformance(0, 0, 0, 0, 0, 0, 0));
@@ -97,26 +102,30 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
 
     private ProjectRoutingGrid BuildProject(string projectId, IReadOnlyList<PlannedPhysicalNode> projectNodes,
         out List<PlannedNodePlacement> placements, out List<SubtreeReservation> subtreeReservations,
-        out List<PhysicalNodePlacementMetadata> metadata)
+        out List<PhysicalNodePlacementMetadata> metadata, out PlacementCompositionMetrics compositionMetrics)
     {
         layouts.Clear();
         var roots = projectNodes.Where(node => owners[node.PhysicalNodeId] is null && !node.IsExternal && !node.IsStandalone)
             .OrderBy(node => order[node.PhysicalNodeId]).ToArray();
+        var treeWidths = new List<(string Id, int Width)>();
         var nextColumn = 0;
         foreach (var root in roots)
         {
             var unit = Measure(root.PhysicalNodeId, 1);
             Place(root.PhysicalNodeId, nextColumn, 1);
+            treeWidths.Add((root.PhysicalNodeId, unit.Width));
             nextColumn += unit.Width + Separation;
         }
 
         var detached = projectNodes.Where(node => owners[node.PhysicalNodeId] is not null && !node.IsExternal && !node.IsStandalone)
             .Where(node => IsDetached(node)).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
+        var detachedWidths = new List<(string Id, int Width)>();
         foreach (var node in detached)
         {
             if (layouts.ContainsKey(node.PhysicalNodeId)) continue;
             var unit = Measure(node.PhysicalNodeId, RequiredRow(node)!.Value);
             Place(node.PhysicalNodeId, nextColumn, RequiredRow(node)!.Value);
+            detachedWidths.Add((node.PhysicalNodeId, unit.Width));
             nextColumn += unit.Width + Separation;
         }
 
@@ -129,17 +138,19 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
             var row = RequiredRow(node) ?? 1;
             var unit = Measure(node.PhysicalNodeId, row);
             Place(node.PhysicalNodeId, nextColumn, row);
+            detachedWidths.Add((node.PhysicalNodeId, unit.Width));
             nextColumn += unit.Width + Separation;
         }
 
         var externalRow = reservations.External.NodeRow;
+        var externalStart = nextColumn;
         var externalNodes = projectNodes.Where(node => node.IsExternal).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
         foreach (var node in externalNodes)
         {
             var owner = owners[node.PhysicalNodeId];
             var preferred = owner is not null && layouts.TryGetValue(owner, out var ownerLayout) ? ownerLayout.Center : nextColumn;
             var center = preferred;
-            while (layouts.Values.Any(item => item.Row == externalRow && Math.Abs(item.Center - center) < Span(node))) center++;
+            while (layouts.Values.Any(item => item.Row == externalRow && RangesOverlap(item.Center, item.Span, center, Span(node)))) center++;
             layouts[node.PhysicalNodeId] = new LayoutNode(node.PhysicalNodeId, externalRow, center, Span(node), false);
             nextColumn = Math.Max(nextColumn, center + Span(node) / 2 + Separation);
         }
@@ -147,11 +158,15 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         var standaloneRow = externalRow + 2;
         var standalones = projectNodes.Where(node => node.IsStandalone && !node.IsExternal).OrderBy(node => order[node.PhysicalNodeId]).ToArray();
         var standaloneWidth = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standalones.Length)));
+        var standaloneStart = nextColumn;
+        var standaloneRowCursors = new Dictionary<int, int>();
         for (var index = 0; index < standalones.Length; index++)
         {
             var row = standaloneRow + (index / standaloneWidth) * 2;
-            var column = nextColumn + (index % standaloneWidth) * (Span(standalones[index]) + Separation);
-            layouts[standalones[index].PhysicalNodeId] = new LayoutNode(standalones[index].PhysicalNodeId, row, column + Span(standalones[index]) / 2, Span(standalones[index]), false);
+            var column = standaloneRowCursors.TryGetValue(row, out var cursor) ? cursor : standaloneStart;
+            var span = Span(standalones[index]);
+            layouts[standalones[index].PhysicalNodeId] = new LayoutNode(standalones[index].PhysicalNodeId, row, column + span / 2, span, false);
+            standaloneRowCursors[row] = column + span + Separation;
         }
 
         var maxRow = layouts.Values.Select(item => item.Row).DefaultIfEmpty(1).Max();
@@ -183,6 +198,14 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
                 RoleSelector: node.ResolvedRole, PhysicalRow: layout.Row, PhysicalColumn: layout.Center, ParentSemanticId: owners[node.PhysicalNodeId],
                 VerticalSpacingPolicy: node.IsStandalone ? "standalone-square-region" : "logical-layer"));
         }
+        var standaloneEnd = standaloneRowCursors.Values.DefaultIfEmpty(standaloneStart).Max() -
+            (standalones.Length == 0 ? 0 : Separation);
+        var externalEnd = layouts.Values.Where(item => item.Row == externalRow)
+            .Select(item => item.Center + item.Span / 2).DefaultIfEmpty(externalStart - 1).Max();
+        compositionMetrics = new PlacementCompositionMetrics(projectId, roots.Length, treeWidths, detachedWidths,
+            standalones.Length == 0 ? 0 : standaloneEnd - standaloneStart + 1,
+            externalEnd < externalStart ? 0 : externalEnd - externalStart + 1,
+            Separation, columns.Count);
         return new ProjectRoutingGrid(projectId, grid, subtreeReservations, null,
             projectNodes.Select(node => node.PhysicalNodeId).ToArray(), projectNodes.Where(node => node.IsExternal).Select(node => node.PhysicalNodeId).ToArray());
     }
@@ -193,8 +216,13 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         var childIds = children[id].Where(child => !nodes[child].IsExternal && !nodes[child].IsStandalone && !IsDetached(nodes[child]))
             .OrderBy(child => order[child]).ToArray();
         var width = Span(nodes[id]);
-        foreach (var child in childIds) width += Measure(child, Math.Max(row + 2, RequiredRow(nodes[child]) ?? row + 2)).Width + Separation;
-        if (childIds.Length > 0) width -= Separation;
+        var childWidths = childIds
+            .Select(child => Measure(child, Math.Max(row + 2, RequiredRow(nodes[child]) ?? row + 2)).Width)
+            .ToArray();
+        if (childWidths.Length == 1)
+            width = Math.Max(width, childWidths[0]);
+        else if (childWidths.Length > 1)
+            width = Math.Max(width, childWidths.Sum() + (childWidths.Length - 1) * Separation);
         return new LayoutNode(id, row, 0, Math.Max(Span(nodes[id]), width), true);
     }
 
@@ -283,6 +311,10 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
         return cells;
     }
 
+    private static bool RangesOverlap(int leftCentre, int leftSpan, int rightCentre, int rightSpan) =>
+        leftCentre - leftSpan / 2 <= rightCentre + rightSpan / 2 &&
+        rightCentre - rightSpan / 2 <= leftCentre + leftSpan / 2;
+
     private static DiagramRoutingGrid BuildDiagramGrid(IReadOnlyList<ProjectRoutingGrid> projects)
     {
         var gridId = new PlanningGridId("diagram");
@@ -309,7 +341,12 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
     {
         foreach (var group in placements.SelectMany(item => item.Footprint.Select(cell => (cell, item.PhysicalNodeId)))
             .GroupBy(item => item.cell).Where(group => group.Select(item => item.PhysicalNodeId).Distinct(StringComparer.Ordinal).Count() > 1))
-            diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementFootprintOverlap", "Canonical placement footprints overlap.", PlanningDiagnosticSubject.PhysicalNode, group.Key.ToString()));
+        {
+            var owners = group.Select(item => item.PhysicalNodeId).Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
+            diagnostics.Add(new ArchitecturePlanningDiagnostic("LogicalPlacementFootprintOverlap",
+                $"Canonical placement footprints overlap; owners={string.Join(",", owners)}; phase=placement-cell-materialisation.",
+                PlanningDiagnosticSubject.PhysicalNode, group.Key.ToString()));
+        }
     }
 
     private static string Fingerprint(IReadOnlyList<ArchitectureV6FrozenNodePlacement> nodes, IReadOnlyList<ProjectRoutingGrid> projects)
@@ -322,6 +359,25 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
     private sealed record LayoutNode(string Id, int Row, int Center, int Span, bool IsTree)
     {
         public int Width => Span;
+    }
+
+    private sealed record PlacementCompositionMetrics(
+        string ProjectId,
+        int TopLevelTreeCount,
+        IReadOnlyList<(string Id, int Width)> TreeWidths,
+        IReadOnlyList<(string Id, int Width)> DetachedUnitWidths,
+        int StandaloneRegionWidth,
+        int ExternalRegionContribution,
+        int AtomicUnitSeparation,
+        int FinalProjectGridWidth)
+    {
+        public ArchitecturePlanningDiagnostic ToDiagnostic() => new(
+            "LogicalPlacementCompositionMetrics",
+            $"project={ProjectId};topLevelTrees={TopLevelTreeCount};treeWidths={Format(TreeWidths)};detachedWidths={Format(DetachedUnitWidths)};standaloneRegionWidth={StandaloneRegionWidth};externalRegionContribution={ExternalRegionContribution};atomicUnitSeparation={AtomicUnitSeparation};finalProjectGridWidth={FinalProjectGridWidth}.",
+            PlanningDiagnosticSubject.Grid, "project:" + ProjectId, ArchitecturePlanningDiagnosticSeverity.Info);
+
+        private static string Format(IReadOnlyList<(string Id, int Width)> values) =>
+            values.Count == 0 ? "none" : string.Join(",", values.Select(value => value.Id + ":" + value.Width));
     }
 }
 
