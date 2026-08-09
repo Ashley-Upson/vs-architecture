@@ -134,10 +134,98 @@ public sealed class ArchitectureDiagramV6Validator : IPlannedArchitectureDiagram
         }
 
         foreach (var route in geometry.Routes)
-            foreach (var segment in route.Segments)
-                if (segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y)
+        {
+            var link = diagram.PhysicalLinks.SingleOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId);
+            if (link is null) continue;
+
+            // The renderer emits ReducedPoints (falling back to RawPoints) and
+            // uses the terminal attachment points as the effective edge
+            // endpoints. Segments is deliberately not used here: the
+            // materialiser currently omits diagonal pairs from that derived
+            // collection, which would let invalid emitted geometry evade the
+            // authoritative final validation surface.
+            var polyline = EmittedEquivalentPolyline(scene, route, link);
+            for (var index = 1; index < polyline.Count; index++)
+            {
+                var start = polyline[index - 1];
+                var end = polyline[index];
+                if (start.X != end.X && start.Y != end.Y)
                     findings.Add(new ArchitecturePlanningDiagnostic("PhysicalSceneDiagonalSegment",
-                        "A final physical route segment must be orthogonal.", PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId));
+                        "A final emitted-equivalent physical route segment must be orthogonal.",
+                        PlanningDiagnosticSubject.PhysicalSegment, route.PhysicalLinkId));
+
+                foreach (var node in geometry.Nodes)
+                {
+                    if (node.PhysicalNodeId == link.SourcePhysicalNodeId ||
+                        node.PhysicalNodeId == link.DestinationPhysicalNodeId)
+                        continue;
+                    if (SegmentIntersectsInterior(start, end, node.AbsoluteBounds))
+                        findings.Add(new ArchitecturePlanningDiagnostic("RouteNodeIntersection",
+                            "A final emitted-equivalent route segment intersects an unrelated node rectangle.",
+                            PlanningDiagnosticSubject.PhysicalSegment,
+                            route.PhysicalLinkId + "|" + node.PhysicalNodeId));
+                }
+            }
+        }
+    }
+
+    private static IReadOnlyList<AbsolutePoint> EmittedEquivalentPolyline(
+        PlannedArchitecturePhysicalScene scene,
+        PlannedPhysicalRoute route,
+        PlannedPhysicalLink link)
+    {
+        var sourceTerminal = scene.Terminals.SingleOrDefault(item =>
+            item.PhysicalLinkId == link.PhysicalLinkId &&
+            item.PhysicalNodeId == link.SourcePhysicalNodeId &&
+            item.Side == GridSide.Bottom);
+        var destinationTerminal = scene.Terminals.SingleOrDefault(item =>
+            item.PhysicalLinkId == link.PhysicalLinkId &&
+            item.PhysicalNodeId == link.DestinationPhysicalNodeId &&
+            item.Side == GridSide.Top);
+        if (sourceTerminal is null || destinationTerminal is null)
+            return Array.Empty<AbsolutePoint>();
+
+        var points = new List<AbsolutePoint> { sourceTerminal.Point };
+        foreach (var point in route.ReducedPoints ?? route.RawPoints ?? Array.Empty<PlannedPhysicalRoutePoint>())
+        {
+            if (point.Point == sourceTerminal.Point || point.Point == destinationTerminal.Point)
+                continue;
+            if (points[points.Count - 1] != point.Point)
+                points.Add(point.Point);
+        }
+        if (points[points.Count - 1] != destinationTerminal.Point)
+            points.Add(destinationTerminal.Point);
+        return points;
+    }
+
+    private static bool SegmentIntersectsInterior(AbsolutePoint start, AbsolutePoint end,
+        AbsoluteRectangle rectangle)
+    {
+        var dx = (double)end.X - start.X;
+        var dy = (double)end.Y - start.Y;
+        var tMin = 0d;
+        var tMax = 1d;
+        foreach (var (p, q) in new[]
+        {
+            (-dx, start.X - rectangle.X),
+            (dx, rectangle.X + rectangle.Width - start.X),
+            (-dy, start.Y - rectangle.Y),
+            (dy, rectangle.Y + rectangle.Height - start.Y)
+        })
+        {
+            if (p == 0)
+            {
+                if (q <= 0) return false;
+                continue;
+            }
+
+            var ratio = q / p;
+            if (p < 0) tMin = Math.Max(tMin, ratio);
+            else tMax = Math.Min(tMax, ratio);
+            if (tMin >= tMax) return false;
+        }
+
+        return tMax > 0 && tMin < 1;
     }
 
     private static void ValidateGeometry(PlannedArchitectureDiagram diagram, ICollection<ArchitecturePlanningDiagnostic> findings)
