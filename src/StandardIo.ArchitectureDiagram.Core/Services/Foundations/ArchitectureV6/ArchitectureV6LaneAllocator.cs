@@ -173,12 +173,38 @@ internal sealed class ArchitectureV6LaneAllocator
         {
             Steps = route.Steps.Select(step =>
             {
-                var run = runs.FirstOrDefault(candidate => candidate.RouteId == route.PhysicalLinkId && candidate.GridId.Equals(step.GridId) && candidate.Cells.Contains(step.CellId));
+                // A turn cell is intentionally shared by the horizontal and
+                // vertical runs that meet there. Ordinary steps must bind to
+                // their traversal axis; selecting the first containing run
+                // can silently bind a horizontal step to a vertical lane (or
+                // vice versa). Turns retain both authoritative identities in
+                // PlannedTurnAllocation; the single step lane is only the
+                // deterministic lane for the side represented by the step.
+                var candidates = runs.Where(candidate => candidate.RouteId == route.PhysicalLinkId &&
+                    candidate.GridId.Equals(step.GridId) && candidate.Cells.Contains(step.CellId));
+                var run = step.Role == RouteStepRole.Turn
+                    // The turn's complete horizontal/vertical identity is
+                    // retained by AllocateTurns. Keep the existing primary
+                    // lane field deterministic for consumers that only
+                    // understand one lane on a route step.
+                    ? candidates.FirstOrDefault()
+                    : candidates
+                        .Where(candidate => candidate.Axis == StepAxis(step))
+                        .OrderBy(candidate => candidate.StartTransition, StringComparer.Ordinal)
+                        .ThenBy(candidate => candidate.EndTransition, StringComparer.Ordinal)
+                        .FirstOrDefault();
                 if (run is null || !runAllocations.TryGetValue(run, out var allocation)) return step;
                 return step with { AllocatedLane = allocation.Lane, StraightRunId = allocation.RunId };
             }).ToArray()
         }).ToArray();
     }
+
+    private static RouteAxis StepAxis(PlannedGridRouteStep step) =>
+        step.Role == RouteStepRole.Turn
+            ? step.ExitSide is GridSide.Left or GridSide.Right ? RouteAxis.Horizontal : RouteAxis.Vertical
+            : step.EntrySide is GridSide.Left or GridSide.Right || step.ExitSide is GridSide.Left or GridSide.Right
+                ? RouteAxis.Horizontal
+                : RouteAxis.Vertical;
 
     private IReadOnlyList<PlannedTurnAllocation> AllocateTurns(IReadOnlyList<PlannedGridRoute> updatedRoutes, IReadOnlyDictionary<PlannedStraightRun, PlannedLaneAllocation> runAllocations)
     {

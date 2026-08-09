@@ -168,7 +168,8 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
             preRoutingSpanRequirements: preRoutingSpans,
             reservedDepthRequirements: reservedDepthRequirements,
             placementFreeze: placementFreeze,
-            relativeGeometry: postRouting?.Sizing.RelativeGeometry)
+            relativeGeometry: postRouting?.Sizing.RelativeGeometry,
+            laneAllocation: postRouting?.Allocation)
         {
             Geometry = postRouting?.Scene.Geometry,
             PhysicalScene = postRouting?.Scene

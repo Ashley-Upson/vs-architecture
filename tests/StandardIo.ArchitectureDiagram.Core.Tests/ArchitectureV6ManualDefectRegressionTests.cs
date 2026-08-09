@@ -180,6 +180,32 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
     }
 
     [Fact]
+    public void Shared_horizontal_and_vertical_runs_receive_distinct_lane_ordinals_before_materialisation()
+    {
+        var plan = Plan(RegressionRequest());
+        var allocation = plan.LaneAllocation;
+        Assert.NotNull(allocation);
+
+        Assert.Contains(true, allocation!.HorizontalLanes.GroupBy(lane => (lane.GridId, lane.DomainId))
+            .SelectMany(group => OverlappingLanePairs(group)));
+        Assert.Contains(true, allocation.VerticalLanes.GroupBy(lane => (lane.GridId, lane.DomainId))
+            .SelectMany(group => OverlappingLanePairs(group)));
+    }
+
+    private static IEnumerable<bool> OverlappingLanePairs(IEnumerable<PlannedLaneAllocation> lanes)
+    {
+        var ordered = lanes.ToArray();
+        for (var left = 0; left < ordered.Length; left++)
+        for (var right = left + 1; right < ordered.Length; right++)
+        {
+            var first = ordered[left];
+            var second = ordered[right];
+            if (first.IntervalStart <= second.IntervalEnd + 1 && second.IntervalStart <= first.IntervalEnd + 1)
+                yield return first.Ordinal != second.Ordinal;
+        }
+    }
+
+    [Fact]
     public void Final_scene_routes_do_not_cross_unrelated_node_rectangles()
     {
         var plan = Plan(RegressionRequest());
