@@ -91,18 +91,20 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
                 var childTarget = Math.Max(NaturalLayer(childId), ReservedLayer(nodes[childId]) ?? 0);
                 childUnits.Add(childTarget <= layer ? BuildDetachedUnit(childId, childTarget, true) : BuildNode(childId, layer, false));
             }
-
             var directChildren = childUnits.Where(unit => !unit.IsDetached).ToArray();
-            var detachedChildren = childUnits.Where(unit => unit.IsDetached).Select(unit => unit.Complete).ToList();
+            var detachedChildren = childUnits.SelectMany(unit => unit.Detached)
+                .Concat(childUnits.Where(unit => unit.IsDetached).Select(unit => unit.Complete)).ToList();
             var childWidth = 0;
             var positionedChildren = new List<ArchitectureV7TreeGridPlacementUnit>();
             foreach (var child in directChildren)
             {
-                var placed = OffsetUnit(child.Complete, childWidth, false);
+                var normalizedChild = NormalizeUnit(child.Main, false);
+                var placed = OffsetUnit(normalizedChild, childWidth, false);
                 positionedChildren.Add(placed);
-                childWidth = checked(childWidth + placed.Width + 1);
+                childWidth = checked(childWidth + RequiredWidth(normalizedChild) + 1);
             }
             if (positionedChildren.Count > 0) childWidth--;
+            AssertPackedUnits(positionedChildren);
 
             var parentCentre = positionedChildren.Count == 0
                 ? (span.LogicalSpan - 1) / 2
@@ -125,17 +127,19 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
                 placements.Max(item => item.LocalRow) + 1, parentCentre, placement.LocalRow, detached,
                 "v7-recursive-main;root=" + physicalNodeId);
             var detachedUnits = new List<ArchitectureV7TreeGridPlacementUnit>();
-            var detachedCursor = width;
+            var detachedCursor = Math.Max(width, placements.Max(item => item.LocalColumn + item.LogicalSpan));
             foreach (var child in detachedChildren)
             {
+                var detachedUnit = NormalizeUnit(child, true);
                 detachedCursor = checked(detachedCursor + 1);
-                detachedUnits.Add(OffsetUnit(child, detachedCursor, true));
-                detachedCursor = checked(detachedCursor + child.Width);
+                detachedUnits.Add(OffsetUnit(detachedUnit, detachedCursor, true));
+                detachedCursor = checked(detachedCursor + RequiredWidth(detachedUnit));
             }
             var completePlacements = placements.Concat(detachedUnits.SelectMany(unit => unit.Placements)).ToArray();
             var complete = new ArchitectureV7TreeGridPlacementUnit("complete:" + physicalNodeId, physicalNodeId, completePlacements,
-                detachedCursor, completePlacements.Max(item => item.LocalRow) + 1, parentCentre, placement.LocalRow, detached,
+                Math.Max(detachedCursor, completePlacements.Max(item => item.LocalColumn + item.LogicalSpan)), completePlacements.Max(item => item.LocalRow) + 1, parentCentre, placement.LocalRow, detached,
                 "v7-recursive-complete;root=" + physicalNodeId);
+            AssertNoOverlap(complete.Placements, "tree=" + physicalNodeId);
             return new BuiltNode(main, detachedUnits, complete, detached, completePlacements);
         }
 
@@ -143,6 +147,48 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         {
             var unit = BuildNode(physicalNodeId, null, true);
             return unit with { IsDetached = true };
+        }
+
+        void AssertPackedUnits(IReadOnlyList<ArchitectureV7TreeGridPlacementUnit> units)
+        {
+            for (var index = 0; index < units.Count; index++)
+                for (var other = index + 1; other < units.Count; other++)
+                {
+                    var left = units[index];
+                    var right = units[other];
+                    if (left.Placements.Any(a => right.Placements.Any(b => a.LocalRow == b.LocalRow && a.LocalColumn < b.LocalColumn + b.LogicalSpan && b.LocalColumn < a.LocalColumn + a.LogicalSpan)))
+                        throw new InvalidOperationException("V7 recursive tree packing produced overlapping child units before project composition.");
+                    var leftRight = left.Placements.Max(item => item.LocalColumn + item.LogicalSpan);
+                    var rightLeft = right.Placements.Min(item => item.LocalColumn);
+                    if (leftRight + 1 > rightLeft)
+                        throw new InvalidOperationException("V7 recursive tree packing lost the required one-column child-unit separation.");
+                }
+        }
+
+        static int RequiredWidth(ArchitectureV7TreeGridPlacementUnit unit) =>
+            unit.Placements.Count == 0 ? 0 : unit.Placements.Max(item => item.LocalColumn + item.LogicalSpan);
+
+        static ArchitectureV7TreeGridPlacementUnit NormalizeUnit(ArchitectureV7TreeGridPlacementUnit unit, bool detached)
+        {
+            if (unit.Placements.Count == 0)
+                return new ArchitectureV7TreeGridPlacementUnit(unit.UnitId, unit.RootPhysicalNodeId, unit.Placements,
+                    0, unit.Height, unit.RootCentreCell, unit.RootRow, detached, unit.Provenance);
+            var minimum = unit.Placements.Min(item => item.LocalColumn);
+            var reframed = OffsetUnit(unit, -minimum, detached);
+            return new ArchitectureV7TreeGridPlacementUnit(reframed.UnitId, reframed.RootPhysicalNodeId, reframed.Placements,
+                RequiredWidth(reframed), reframed.Height, reframed.RootCentreCell, reframed.RootRow, detached, reframed.Provenance);
+        }
+
+        static void AssertNoOverlap(IReadOnlyList<ArchitectureV7TreeGridNodePlacement> placements, string context)
+        {
+            for (var index = 0; index < placements.Count; index++)
+                for (var other = index + 1; other < placements.Count; other++)
+                {
+                    var left = placements[index];
+                    var right = placements[other];
+                    if (left.LocalRow == right.LocalRow && left.LocalColumn < right.LocalColumn + right.LogicalSpan && right.LocalColumn < left.LocalColumn + left.LogicalSpan)
+                        throw new InvalidOperationException($"V7 recursive tree footprint overlap: {context}; {left.PhysicalNodeId}@{left.LocalRow}:{left.LocalColumn}+{left.LogicalSpan} with {right.PhysicalNodeId}@{right.LocalRow}:{right.LocalColumn}+{right.LogicalSpan}");
+                }
         }
     }
 

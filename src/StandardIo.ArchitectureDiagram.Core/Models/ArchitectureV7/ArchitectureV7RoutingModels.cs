@@ -12,6 +12,26 @@ public sealed record ArchitectureV7RouteDiagnostic(
     bool IsHardFailure,
     IReadOnlyList<ArchitectureV7RouteCell> AttemptedCells);
 
+public sealed record ArchitectureV7RouteCandidateEvidence(
+    int CandidateColumn,
+    bool Accepted,
+    string RejectionReason,
+    IReadOnlyList<ArchitectureV7RouteCell> TraversedCells);
+
+public sealed record ArchitectureV7RouteAttemptEvidence(
+    string Scenario,
+    IReadOnlyList<ArchitectureV7RouteCell> AttemptedCells,
+    ArchitectureV7RouteCell? FailureCell,
+    string? EntryDirection,
+    string? ExitDirection,
+    ArchitectureV7CellCapability? FailureCapability,
+    string? RejectionReason,
+    int? CurrentContinuationColumn,
+    int? IntendedDestinationColumn,
+    IReadOnlyList<ArchitectureV7RouteCandidateEvidence> Candidates,
+    IReadOnlyList<string> EndpointClassifications,
+    string Provenance);
+
 public sealed class ArchitectureV7LogicalRoute
 {
     public ArchitectureV7LogicalRoute(
@@ -22,7 +42,8 @@ public sealed class ArchitectureV7LogicalRoute
         IReadOnlyList<ArchitectureV7RouteCell> cells,
         bool isComplete,
         IReadOnlyList<ArchitectureV7RouteDiagnostic> diagnostics,
-        string provenance)
+        string provenance,
+        IReadOnlyList<ArchitectureV7RouteAttemptEvidence>? attemptEvidence = null)
     {
         PhysicalLinkId = physicalLinkId ?? throw new ArgumentNullException(nameof(physicalLinkId));
         SemanticLinkId = semanticLinkId ?? throw new ArgumentNullException(nameof(semanticLinkId));
@@ -32,6 +53,7 @@ public sealed class ArchitectureV7LogicalRoute
         IsComplete = isComplete;
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<ArchitectureV7RouteDiagnostic>()).ToArray());
         Provenance = provenance ?? throw new ArgumentNullException(nameof(provenance));
+        AttemptEvidence = Array.AsReadOnly((attemptEvidence ?? Array.Empty<ArchitectureV7RouteAttemptEvidence>()).ToArray());
     }
 
     public string PhysicalLinkId { get; }
@@ -42,6 +64,7 @@ public sealed class ArchitectureV7LogicalRoute
     public bool IsComplete { get; }
     public IReadOnlyList<ArchitectureV7RouteDiagnostic> Diagnostics { get; }
     public string Provenance { get; }
+    public IReadOnlyList<ArchitectureV7RouteAttemptEvidence> AttemptEvidence { get; }
 }
 
 public sealed class ArchitectureV7LogicalRouteFreeze

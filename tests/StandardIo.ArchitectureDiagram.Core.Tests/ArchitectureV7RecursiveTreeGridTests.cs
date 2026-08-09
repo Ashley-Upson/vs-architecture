@@ -12,6 +12,38 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class ArchitectureV7RecursiveTreeGridTests
 {
     [Fact]
+    public void Reduced_real_tree_roots_pack_complete_detached_child_units_without_overlap()
+    {
+        var packageName = new string('P', 70) + "PackageBroker";
+        var cacheName = new string('C', 70) + "PageRenderCacheAggregationService";
+        var nodes = new[]
+        {
+            Node("tree-physical-type-63a43a0df7db1529", new string('R', 120)),
+            Node("content", new string('M', 90) + "ContentManagementMigrationAggregationService"),
+            Node("branch", new string('B', 80)),
+            Node("branch-parent", new string('C', 70)),
+            Node("package", packageName),
+            Node("tree-physical-type-d7e0c44624cbe67e", new string('S', 120)),
+            Node("privilege", new string('P', 70) + "PrivilegeBroker"),
+            Node("cache", cacheName),
+            Node("user-role", new string('U', 70) + "UserRoleBroker")
+        };
+        var links = new[]
+        {
+            Link("a", nodes[0].Id, "content"), Link("b", nodes[0].Id, "branch"), Link("c", "branch", "branch-parent"), Link("d", "branch-parent", "package"),
+            Link("e", nodes[5].Id, "privilege"), Link("f", nodes[5].Id, "cache"), Link("g", "cache", "user-role")
+        };
+        var reservations = Frozen(new ArchitectureV7FrozenReservation("PackageBroker", "*packagebroker", 0, 1, 1, false), new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 5, true));
+        var result = Build(Diagram(nodes, links), reservations);
+        foreach (var tree in result.Trees)
+        {
+            var occupied = new HashSet<(int Row, int Column)>();
+            foreach (var placement in tree.Placements)
+                foreach (var column in Enumerable.Range(placement.LocalColumn, placement.LogicalSpan))
+                    Assert.True(occupied.Add((placement.LocalRow, column)), tree.TreeId + " overlap at " + placement.PhysicalNodeId);
+        }
+    }
+    [Fact]
     public void One_child_is_directly_below_and_exactly_centred()
     {
         var result = Build(Diagram(new[] { Node("root", "Root"), Node("child", "Child") }, new[] { Link("one", "root", "child") }));

@@ -58,6 +58,39 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             Math.Max(1, job.Rendering.Layout.HorizontalSpacing / 2d), job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration);
         var acceptance = new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, reservation, placement, routes, allocation, scene, sceneConfiguration);
+        var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
+        var routingEvidence = evidenceStage.Analyze(placement, routes);
+        var placementEvidence = evidenceStage.Placement(placement).Select(item => new
+        {
+            item.PhysicalNodeId,
+            PositionalParentId = ownership.Decisions.FirstOrDefault(x => x.PhysicalNodeId == item.PhysicalNodeId)?.PositionalParentPhysicalNodeId,
+            item.TreeRootId,
+            item.DetachedUnitId,
+            item.ProjectId,
+            item.TreeLocalCentre,
+            item.TreeLocalSpan,
+            item.TreeLocalBounds,
+            item.ProjectCentre,
+            item.ProjectSpan,
+            item.ProjectBounds,
+            item.CommonGridCentre,
+            item.CommonGridSpan,
+            item.CommonGridBounds,
+            item.AtomicTopLevelUnitId,
+            item.ImmediateSiblingUnits,
+            item.CompositionOffset,
+            item.Provenance
+        }).ToArray();
+        var overlapNodes = new[] { "physical:type_3142721cf6d670be", "physical:type_79f523abe24dbcf2", "physical:type_837c11765e8a3c8a" };
+        var externalNodes = new[] { "physical:external_384594ffb4b54910", "physical:external_6a5ebf9229bdd229:duplicate:4", "physical:external_1d9865dc23352050", "physical:external_6a5ebf9229bdd229:duplicate:10", "physical:external_d6f27d4352f01a68" };
+        var representative = new
+        {
+            DirectChild = routingEvidence.Where(x => x.Scenario == "direct-child").ToArray(),
+            Downward = routingEvidence.Where(x => x.Scenario.Contains("downward", StringComparison.Ordinal) && !overlapNodes.Contains(x.SourcePhysicalNodeId, StringComparer.Ordinal) && !overlapNodes.Contains(x.TargetPhysicalNodeId, StringComparer.Ordinal)).Take(3).ToArray(),
+            Upward = routingEvidence.Where(x => x.Scenario.Contains("upward", StringComparison.Ordinal) && !overlapNodes.Contains(x.SourcePhysicalNodeId, StringComparer.Ordinal) && !overlapNodes.Contains(x.TargetPhysicalNodeId, StringComparer.Ordinal)).Take(3).ToArray(),
+            OverlapNodes = placementEvidence.Where(x => overlapNodes.Contains(x.PhysicalNodeId, StringComparer.Ordinal)).ToArray(),
+            ExternalSeparation = placementEvidence.Where(x => externalNodes.Contains(x.PhysicalNodeId, StringComparer.Ordinal)).ToArray()
+        };
         var strict = mode == ArchitectureRenderingMode.StrictValidation;
         var findings = acceptance.Findings.Select(finding => new ValidationFinding(finding.Code, finding.SubjectId ?? finding.Stage, finding.SubjectId, null, 1, finding.Message, true)).ToArray();
         DrawioPage page;
@@ -125,6 +158,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 {
                     ["final-v7-acceptance-report.json"] = JsonSerializer.Serialize(acceptanceSummary, new JsonSerializerOptions { WriteIndented = true }),
                     ["renderer-fidelity-report.json"] = JsonSerializer.Serialize(rendererFidelity, new JsonSerializerOptions { WriteIndented = true })
+                    , ["v7-routing-placement-evidence.json"] = JsonSerializer.Serialize(new { routingEvidence, placementEvidence, representative }, new JsonSerializerOptions { WriteIndented = true })
                 }, acceptance.HardFailureCount + rendererFindings.Length, routes.Routes.Count(x => !x.IsComplete)),
             serializationRepeatCount > 0 ? new SerializationRepeatResult(serializationRepeatCount, true, Array.Empty<string>()) : null));
     }

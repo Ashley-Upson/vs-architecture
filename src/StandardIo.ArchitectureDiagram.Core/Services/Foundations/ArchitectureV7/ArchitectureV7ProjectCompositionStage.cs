@@ -115,7 +115,9 @@ public sealed class ArchitectureV7ProjectCompositionStage
             {
                 var left = centre - (span - 1) / 2;
                 if (left < 0) continue;
-                if (Enumerable.Range(left, span).All(column => !occupied.Contains((row, column))))
+                var right = left + span - 1;
+                if (Enumerable.Range(left, span).All(column => !occupied.Contains((row, column))) &&
+                    !occupied.Contains((row, left - 1)) && !occupied.Contains((row, right + 1)))
                 {
                     width = Math.Max(width, left + span);
                     return centre;

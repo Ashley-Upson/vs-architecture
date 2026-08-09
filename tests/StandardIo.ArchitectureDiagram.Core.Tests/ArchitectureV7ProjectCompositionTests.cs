@@ -52,6 +52,24 @@ public sealed class ArchitectureV7ProjectCompositionTests
     }
 
     [Fact]
+    public void Wide_external_units_have_exactly_one_logical_separation_column()
+    {
+        var wide = new string('X', 650);
+        var diagram = new ArchitectureDiagramModel(
+            new[] { new ArchitectureProject("project", "Project", new[] { Node("owner", "Owner") }, "project") },
+            new[]
+            {
+                new ArchitectureExternalNode("external-a", wide + "A", "External", "external-a", "External.A", "interface"),
+                new ArchitectureExternalNode("external-b", wide + "B", "External", "external-b", "External.B", "interface")
+            },
+            new[] { Link("a", "owner", "external-a"), Link("b", "owner", "external-b") }, null);
+        var freeze = Compose(diagram);
+        var external = freeze.External.Placements.OrderBy(item => item.DiagramColumn).ToArray();
+        Assert.Equal(2, external.Length);
+        Assert.Equal(external[0].DiagramColumn + external[0].LogicalSpan + 1, external[1].DiagramColumn);
+    }
+
+    [Fact]
     public void Connected_ordinary_nodes_do_not_enter_standalone_region_or_row_one()
     {
         var diagram = Diagram(new[] { Node("root", "Root"), Node("child", "Child"), Node("standalone", "Standalone") }, new[] { Link("one", "root", "child") });

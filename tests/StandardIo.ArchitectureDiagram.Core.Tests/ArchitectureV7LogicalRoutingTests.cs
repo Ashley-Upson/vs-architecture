@@ -18,6 +18,24 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
+    public void RoutingAllowed_permits_vertical_down_entry_and_down_exit()
+    {
+        var route = Route(new[] { PlacementNode("s", 1, 2), PlacementNode("t", 3, 2) }, Link("routing-allowed-down", "s", "t"), 5, 5,
+            Grid(5, 5, (2, 2, ArchitectureV7CellCapability.RoutingAllowed)));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code)));
+        Assert.Equal(new[] { (1, 2), (2, 2), (3, 2) }, route.Cells.Select(item => (item.Row, item.Column)));
+    }
+
+    [Fact]
+    public void RoutingAllowed_rejects_horizontal_exit_and_bend_at_upward_escape()
+    {
+        var route = Route(new[] { PlacementNode("s", 5, 2), PlacementNode("t", 1, 5) }, Link("routing-allowed-bend", "s", "t"), 9, 9,
+            Grid(9, 9, (6, 2, ArchitectureV7CellCapability.RoutingAllowed)));
+        Assert.False(route.IsComplete);
+        Assert.Contains(route.Diagnostics, item => item.IsHardFailure);
+    }
+
+    [Fact]
     public void Downward_route_aligns_on_row_above_destination_and_enters_downward()
     {
         var route = Route(new[] { PlacementNode("s", 1, 1), PlacementNode("t", 7, 5) }, Link("l", "s", "t"), 9, 9, GeneralGrid(9, 9));

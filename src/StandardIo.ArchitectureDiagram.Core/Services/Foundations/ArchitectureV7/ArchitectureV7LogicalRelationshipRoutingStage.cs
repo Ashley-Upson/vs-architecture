@@ -185,6 +185,7 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
         {
             if (capability.HasFlag(ArchitectureV7CellCapability.HeaderBlocked)) return false;
             if (capability.HasFlag(ArchitectureV7CellCapability.GeneralRouting)) return true;
+            if (capability.HasFlag(ArchitectureV7CellCapability.RoutingAllowed) && entry == exit && entry != Direction.None) return true;
             if (capability.HasFlag(ArchitectureV7CellCapability.NodeAllowed) && entry == exit && (entry == Direction.Up || entry == Direction.Down)) return true;
             if (capability.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly) && entry == exit) return true;
             return false;
