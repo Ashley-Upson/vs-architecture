@@ -165,14 +165,14 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     {
         var result = new List<CompiledPoint> { points[0] };
         var first = points[1];
-        if (source.Position.X != first.Point.X || source.Position.Y != first.Point.Y)
+        if (source.Position.X != first.Point.X && source.Position.Y != first.Point.Y)
         {
             if (!allocation.Handoffs.Any(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture)) diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation.", true, route.PhysicalLinkId));
             else result.Add(new(0, route.Cells[0], new(first.Point.X, source.Position.Y, "allocated-source-handoff"), first.RunId, first.LaneId, "allocated-orthogonal-source-handoff"));
         }
         result.AddRange(points.Skip(1).Take(points.Count - 2));
         var last = points[points.Count - 1]; var previous = result[result.Count - 1];
-        if (previous.Point.X != destination.Position.X || previous.Point.Y != destination.Position.Y)
+        if (previous.Point.X != destination.Position.X && previous.Point.Y != destination.Position.Y)
         {
             if (!allocation.Handoffs.Any(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival)) diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation.", true, route.PhysicalLinkId));
             else result.Add(new(route.Cells.Count - 1, route.Cells[route.Cells.Count - 1], new(destination.Position.X, previous.Point.Y, "allocated-destination-handoff"), last.RunId, last.LaneId, "allocated-orthogonal-destination-handoff"));
