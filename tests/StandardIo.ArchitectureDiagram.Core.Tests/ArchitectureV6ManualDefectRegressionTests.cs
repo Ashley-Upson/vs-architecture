@@ -202,6 +202,68 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
     }
 
     [Fact]
+    public void Ordinary_broker_children_of_multiple_service_roots_follow_external_dependency_depth()
+    {
+        var plan = Plan(new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            .Node("processing", "AppProcessingService", "p")
+            .Node("service", "AppService", "p")
+            .Node("app-broker", "AppBroker", "p")
+            .Node("page-broker", "PageBroker", "p")
+            .Node("role-broker", "UserRoleBroker", "p")
+            .External("app-store", "IAppStore")
+            .External("page-store", "IPageStore")
+            .External("role-store", "IUserRoleStore")
+            .Link("processing-role", "processing", "role-broker")
+            .Link("service-app", "service", "app-broker")
+            .Link("service-page", "service", "page-broker")
+            .Link("app-external", "app-broker", "app-store", "external")
+            .Link("page-external", "page-broker", "page-store", "external")
+            .Link("role-external", "role-broker", "role-store", "external"),
+            placement: new NodePlacementPolicy(
+                "", 120, 60, 20, 40,
+                new[] { new ArchitectureV6RoleRule("Processing", "*ProcessingService", 0) },
+                 ReservedLayerTypePatterns: new[] { new ArchitectureV6RoleRule("Processing", "*ProcessingService", 0) }));
+
+        var processing = PlacementBySemantic(plan, "processing");
+        var service = PlacementBySemantic(plan, "service");
+        var brokers = new[] { PlacementBySemantic(plan, "app-broker"), PlacementBySemantic(plan, "page-broker"), PlacementBySemantic(plan, "role-broker") };
+        var external = plan.NodeMetadata.Where(item => item.IsExternal).Select(item => Placement(plan, item.PhysicalNodeId)).ToArray();
+
+        Assert.All(brokers, broker => Assert.True(Row(broker) > Math.Max(Row(processing), Row(service)),
+            $"broker row={Row(broker)}, processing={Row(processing)}, service={Row(service)}"));
+        Assert.All(brokers, broker => Assert.True(Row(broker) < external.Max(Row),
+            $"broker row={Row(broker)}, external max={external.Max(Row)}"));
+    }
+
+    [Fact]
+    public void Ordinary_dependency_discovered_before_its_user_still_follows_the_user_depth()
+    {
+        var plan = Plan(new ArchitectureV6SemanticFixtureBuilder()
+            .Project("p", "Project")
+            // This models analyser discovery of a shared dependency before the
+            // controller/service that first uses it.
+            .Node("broker", "AppBroker", "p")
+            .Node("service", "AppService", "p")
+            .External("store", "IAppStore")
+            .Link("service-broker", "service", "broker")
+            .Link("broker-store", "broker", "store", "external"),
+            placement: new NodePlacementPolicy(
+                "NoBaseline$", 120, 60, 20, 40,
+                ReservedLayerTypePatterns: Array.Empty<ArchitectureV6RoleRule>()));
+
+        var service = PlacementBySemantic(plan, "service");
+        var broker = PlacementBySemantic(plan, "broker");
+        var store = PlacementBySemantic(plan, "store");
+
+        Assert.True(Row(service) < Row(broker),
+            $"service={Row(service)}, broker={Row(broker)}; " +
+            Describe(plan.NodeMetadata.ToDictionary(item => item.SemanticNodeId), "service", "broker"));
+        Assert.True(Row(broker) < Row(store),
+            $"broker={Row(broker)}, store={Row(store)}");
+    }
+
+    [Fact]
     public void Shared_horizontal_and_vertical_runs_receive_distinct_lane_ordinals_before_materialisation()
     {
         var plan = Plan(RegressionRequest());

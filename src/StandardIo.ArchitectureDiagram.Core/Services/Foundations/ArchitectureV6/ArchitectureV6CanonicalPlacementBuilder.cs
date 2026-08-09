@@ -267,17 +267,53 @@ internal sealed class ArchitectureV6CanonicalPlacementBuilder
 
     private void ResolveOwnership()
     {
-        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId])) children[node.PhysicalNodeId] = new List<string>();
+        owners.Clear();
         foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
         {
             var owner = node.PositionalOwnerId;
-            if (owner is null || !nodes.ContainsKey(owner) || nodes[owner].ProjectId != node.ProjectId || order[owner] >= order[node.PhysicalNodeId]) owner = projection.PhysicalLinks
-                .Where(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId && nodes.ContainsKey(link.SourcePhysicalNodeId))
-                .Select(link => link.SourcePhysicalNodeId).Where(parent => nodes[parent].ProjectId == node.ProjectId && order[parent] < order[node.PhysicalNodeId])
-                .OrderBy(parent => order[parent]).FirstOrDefault();
+            if (owner is null || !nodes.ContainsKey(owner) || nodes[owner].ProjectId != node.ProjectId)
+                owner = projection.PhysicalLinks
+                    .Where(link => link.DestinationPhysicalNodeId == node.PhysicalNodeId && nodes.ContainsKey(link.SourcePhysicalNodeId))
+                    .Select(link => link.SourcePhysicalNodeId)
+                    .Where(parent => nodes[parent].ProjectId == node.ProjectId)
+                    .OrderBy(parent => order[parent])
+                    .ThenBy(parent => parent, StringComparer.Ordinal)
+                    .FirstOrDefault();
             owners[node.PhysicalNodeId] = owner;
-            if (owner is not null) children[owner].Add(node.PhysicalNodeId);
         }
+
+        // The physical owner relation is a tree aid, not a second semantic
+        // graph. Break any ownership cycle deterministically so cyclic
+        // semantic dependencies remain finite and reusable.
+        foreach (var start in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+        {
+            var path = new List<string>();
+            var indexByNode = new Dictionary<string, int>(StringComparer.Ordinal);
+            var current = start.PhysicalNodeId;
+            while (current is not null && owners.TryGetValue(current, out var next) && next is not null)
+            {
+                if (indexByNode.TryGetValue(current, out var cycleStart))
+                {
+                    var cycle = path.Skip(cycleStart).ToArray();
+                    foreach (var cycleNode in cycle)
+                        owners[cycleNode] = null;
+                    break;
+                }
+
+                indexByNode[current] = path.Count;
+                path.Add(current);
+                current = next;
+            }
+        }
+
+        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+            children[node.PhysicalNodeId] = new List<string>();
+        foreach (var item in owners.OrderBy(item => order[item.Key]))
+            if (item.Value is not null) children[item.Value].Add(item.Key);
+        foreach (var node in nodes.Values.OrderBy(node => order[node.PhysicalNodeId]))
+            children[node.PhysicalNodeId].Sort((left, right) => order[left] != order[right]
+                ? order[left].CompareTo(order[right])
+                : string.CompareOrdinal(left, right));
     }
 
     private static IReadOnlyList<PlanningGridRow> BuildRows(PlanningGridId gridId, int minimum, int maximum)

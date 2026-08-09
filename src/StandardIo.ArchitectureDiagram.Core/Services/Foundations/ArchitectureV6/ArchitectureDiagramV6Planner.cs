@@ -211,7 +211,6 @@ public sealed class ArchitectureDiagramV6Planner : IArchitectureDiagramPlanner
                 var semanticPositionalOwnerId = parents.TryGetValue(id, out var incoming)
                     ? incoming.Select(link => link.SourceId)
                         .Where(nodes.ContainsKey)
-                        .Where(parentId => Array.IndexOf(discoveredOrder, parentId) < Array.IndexOf(discoveredOrder, id))
                         .OrderBy(parentId => Array.IndexOf(discoveredOrder, parentId))
                         .FirstOrDefault()
                     : null;
