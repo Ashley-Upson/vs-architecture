@@ -7,7 +7,7 @@ public static partial class IServiceCollectionExtensions
 {
     private static void AddArchitectureDiagramOrchestrationServices(IServiceCollection services) =>
         services
-            .AddTransient<IArchitectureGenerationService, ArchitectureGenerationService>()
+            .AddTransient<IArchitectureGenerationService, ArchitectureV7ProductionGenerationService>()
             .AddTransient<ITypedDiagramGenerationOrchestrator, TypedDiagramGenerationOrchestrator>()
             .AddTransient<IDiagramGenerationOrchestrationService, DiagramGenerationOrchestrationService>();
 }

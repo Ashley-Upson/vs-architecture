@@ -7,7 +7,6 @@ using Microsoft.CodeAnalysis;
 using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
-using StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV6;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.DataModels;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Drawios;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
@@ -22,7 +21,7 @@ public sealed class TypedDiagramGenerationOrchestrator : ITypedDiagramGeneration
     private readonly IDrawioDocumentComposer _composer;
 
     public TypedDiagramGenerationOrchestrator()
-        : this(new ArchitectureGenerationService(new RoslynDependencyAnalyzer(), new ArchitectureDiagramV6Planner(), new ArchitectureDiagramV6Validator(), new DrawioArchitectureV6Renderer(), new DrawioDocumentComposer()),
+        : this(new ArchitectureV7ProductionGenerationService(new RoslynDependencyAnalyzer(), new DrawioDocumentComposer()),
             new RoslynDataModelAnalyser(), new DrawioDataModelRenderer(), new DrawioDocumentComposer())
     {
     }

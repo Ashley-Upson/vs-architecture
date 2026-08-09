@@ -180,7 +180,9 @@ public static class Program
                     architecture.Findings,
                     architecture.PlanningMetrics,
                     Diagnostics = architecture.Diagnostics.ReportJson
-                }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+                 }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+            foreach (var focusedOutput in architecture.Diagnostics.FocusedOutputs)
+                await broker.WriteTextAsync(Path.Combine(directory, focusedOutput.Key), focusedOutput.Value).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 
