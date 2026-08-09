@@ -85,6 +85,10 @@ internal sealed class ArchitectureV6LaneAllocator
         }
 
         var endpointAllocations = AllocateEndpoints(runAllocations);
+        var endpointHandoff = AllocateEndpointHandoffs(endpointAllocations, horizontal, vertical);
+        endpointAllocations = endpointHandoff.UpdatedEndpoints;
+        horizontal.AddRange(endpointHandoff.Horizontal);
+        vertical.AddRange(endpointHandoff.Vertical);
         var approachAllocations = AllocateApproaches();
         var updatedRoutes = ApplyRunLanes(runAllocations);
         var turns = AllocateTurns(updatedRoutes, runAllocations);
@@ -107,6 +111,110 @@ internal sealed class ArchitectureV6LaneAllocator
                 turnCellGroups.Length, turnCellGroups.Select(group => group.Count()).DefaultIfEmpty(0).Max(),
                 intervalComparisons, turns.Count));
     }
+
+    private (IReadOnlyList<PlannedEndpointAllocation> UpdatedEndpoints,
+        IReadOnlyList<PlannedLaneAllocation> Horizontal,
+        IReadOnlyList<PlannedLaneAllocation> Vertical) AllocateEndpointHandoffs(
+        IReadOnlyList<PlannedEndpointAllocation> endpoints,
+        IReadOnlyList<PlannedLaneAllocation> existingHorizontal,
+        IReadOnlyList<PlannedLaneAllocation> existingVertical)
+    {
+        var demands = endpoints.Select(endpoint =>
+        {
+            var route = routes.Single(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
+            var steps = route.Steps
+                .Where(step => step.Role is not RouteStepRole.SourceExit and not RouteStepRole.DestinationEntry)
+                .OrderBy(step => step.Order).ToArray();
+            var step = endpoint.Side == GridSide.Bottom ? steps.FirstOrDefault() : steps.LastOrDefault();
+            if (step is null) return new EndpointHandoffDemand(endpoint, null, null, null, 0, 0, 0, 0);
+            var node = placements.Single(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
+            var endpointColumn = endpoint.TerminalColumnId is null
+                ? ParseValue(node.CentreColumnId.Value)
+                : ParseValue(endpoint.TerminalColumnId.Value.Value);
+            var stepColumn = ParseValue(step.CellId.ColumnId.Value);
+            var stepRow = ParseValue(step.CellId.RowId.Value);
+            var nodeRow = ParseValue(node.AnchorCellId.RowId.Value);
+            return new EndpointHandoffDemand(endpoint, step, endpointColumn, stepColumn,
+                Math.Min(endpointColumn, stepColumn), Math.Max(endpointColumn, stepColumn),
+                Math.Min(nodeRow, stepRow), Math.Max(nodeRow, stepRow));
+        }).Where(item => item.Step is not null).ToArray();
+
+        var horizontal = AllocateEndpointAxis(demands, RouteAxis.Horizontal, item => EndpointDomain(item.Step!, RouteAxis.Horizontal),
+            item => (item.IntervalStart, item.IntervalEnd), existingHorizontal);
+        var vertical = AllocateEndpointAxis(demands, RouteAxis.Vertical, item => EndpointDomain(item.Step!, RouteAxis.Vertical),
+            item => (item.RowStart, item.RowEnd), existingVertical);
+        var updated = endpoints.Select(endpoint =>
+        {
+            var route = routes.Single(item => item.PhysicalLinkId == endpoint.PhysicalLinkId);
+            var orderedSteps = route.Steps
+                .Where(item => item.Role is not RouteStepRole.SourceExit and not RouteStepRole.DestinationEntry)
+                .OrderBy(item => item.Order)
+                .ToArray();
+            var step = endpoint.Side == GridSide.Bottom ? orderedSteps.FirstOrDefault() : orderedSteps.LastOrDefault();
+            if (step is null) return endpoint;
+            var lanes = horizontal.Concat(vertical)
+                .Where(item => item.DomainId == EndpointDomain(step, item.Axis))
+                .ToArray();
+            return endpoint with
+            {
+                HandoffHorizontalLane = (endpoint.Side == GridSide.Bottom
+                    ? lanes.Where(item => item.Axis == RouteAxis.Horizontal && item.RouteId == endpoint.PhysicalLinkId).OrderBy(item => item.Ordinal).FirstOrDefault()
+                    : lanes.Where(item => item.Axis == RouteAxis.Horizontal && item.RouteId == endpoint.PhysicalLinkId).OrderByDescending(item => item.Ordinal).FirstOrDefault())?.Lane,
+                HandoffVerticalLane = (endpoint.Side == GridSide.Bottom
+                    ? lanes.Where(item => item.Axis == RouteAxis.Vertical && item.RouteId == endpoint.PhysicalLinkId).OrderBy(item => item.Ordinal).FirstOrDefault()
+                    : lanes.Where(item => item.Axis == RouteAxis.Vertical && item.RouteId == endpoint.PhysicalLinkId).OrderByDescending(item => item.Ordinal).FirstOrDefault())?.Lane
+            };
+        }).ToArray();
+        return (updated, horizontal, vertical);
+    }
+
+    private static string EndpointDomain(PlannedGridRouteStep step, RouteAxis axis) =>
+        step.GridId.Value + ":" + axis + ":" +
+        (axis == RouteAxis.Horizontal ? step.CellId.RowId.Value : step.CellId.ColumnId.Value);
+
+    private IReadOnlyList<PlannedLaneAllocation> AllocateEndpointAxis(
+        IReadOnlyList<EndpointHandoffDemand> demands, RouteAxis axis,
+        Func<EndpointHandoffDemand, string> domainKey,
+        Func<EndpointHandoffDemand, (int Start, int End)> interval,
+        IReadOnlyList<PlannedLaneAllocation> existing)
+    {
+        var result = new List<PlannedLaneAllocation>();
+        foreach (var domain in demands.GroupBy(domainKey, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            var allocated = new List<PlannedLaneAllocation>();
+            var baseOrdinal = existing.Where(item => item.Axis == axis && item.DomainId == domain.Key)
+                .Select(item => item.Ordinal).DefaultIfEmpty(-1).Max() + 1 + (axis == RouteAxis.Vertical ? 1 : 0);
+            foreach (var demand in domain.OrderBy(item => RouteOrder(item.Endpoint.PhysicalLinkId)).ThenBy(item => item.Endpoint.PhysicalLinkId, StringComparer.Ordinal))
+            {
+                var range = interval(demand);
+                // Endpoint handoffs are separate physical demands even when
+                // their logical intervals do not overlap. Keeping one
+                // deterministic lane per demand prevents later terminal
+                // geometry from collapsing distinct handoffs onto one track.
+                var ordinal = baseOrdinal + allocated.Count;
+                var lane = new LaneId($"endpoint:{axis}:{domain.Key}:lane:{ordinal}");
+                var cell = demand.Step!.CellId;
+                var allocation = new PlannedLaneAllocation(
+                    $"endpoint:{axis}:{demand.Endpoint.PhysicalLinkId}:{demand.Endpoint.Side}",
+                    demand.Endpoint.PhysicalLinkId, cell.GridId, axis, domain.Key, ordinal, lane,
+                    new[] { cell }, range.Start, range.End, Topology(demand.Endpoint.PhysicalLinkId),
+                    Ownership(demand.Endpoint.PhysicalLinkId), "collective:endpoint-handoff");
+                allocated.Add(allocation);
+                result.Add(allocation);
+            }
+        }
+        return result;
+    }
+
+    private sealed record EndpointHandoffDemand(
+        PlannedEndpointAllocation Endpoint,
+        PlannedGridRouteStep? Step,
+        int? EndpointColumn,
+        int? StepColumn,
+        int IntervalStart,
+        int IntervalEnd,
+        int RowStart,
+        int RowEnd);
 
     private IReadOnlyList<PlannedEndpointAllocation> AllocateEndpoints(
         IReadOnlyDictionary<PlannedStraightRun, PlannedLaneAllocation> runAllocations)

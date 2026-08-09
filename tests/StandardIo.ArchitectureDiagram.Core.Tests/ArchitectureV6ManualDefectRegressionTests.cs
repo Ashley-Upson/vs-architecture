@@ -174,8 +174,6 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
         var shared = SharedPhysicalIntervals(plan);
 
         Assert.NotEmpty(sharedLogicalCells);
-        Assert.Contains(shared, item => item.Contains("Horizontal", StringComparison.Ordinal));
-        Assert.Contains(shared, item => item.Contains("Vertical", StringComparison.Ordinal));
         Assert.True(shared.Count == 0, string.Join(Environment.NewLine, shared));
     }
 

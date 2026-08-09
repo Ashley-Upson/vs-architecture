@@ -272,9 +272,9 @@ internal sealed class MechanicalCompiler
                         step.Role == RouteStepRole.Turn ? $"turn:{step.Order}" : null, null, step.CellId, "cell-lane-centreline"));
             }
             if (sourceTerminal is not null && ordinarySteps.Length > 0)
-                InsertSourceHandoff(points, sourceTerminal, route.PhysicalLinkId);
+                InsertSourceHandoff(points, sourceTerminal, route, ordinarySteps[0], transforms);
             if (destinationTerminal is not null && ordinarySteps.Length > 0)
-                InsertDestinationHandoff(points, destinationTerminal, route.PhysicalLinkId);
+                InsertDestinationHandoff(points, destinationTerminal, route, ordinarySteps[ordinarySteps.Length - 1], transforms);
             if (destinationTerminal is not null) points.Add(new PlannedPhysicalRoutePoint(destinationTerminal.TerminalId,
                 route.PhysicalLinkId, route.Destination.GridId ?? placement.ProjectGrids.Single(item => item.ProjectId == route.DestinationProjectId).Grid.Id,
                 destinationTerminal.Point, RouteStepRole.DestinationEntry, "terminal", int.MaxValue, null, null, null, null, "terminal"));
@@ -301,26 +301,69 @@ internal sealed class MechanicalCompiler
         }).ToArray();
     }
 
-    private static void InsertSourceHandoff(IList<PlannedPhysicalRoutePoint> points,
-        PlannedPhysicalTerminal terminal, string routeId)
+    private void InsertSourceHandoff(IList<PlannedPhysicalRoutePoint> points,
+        PlannedPhysicalTerminal terminal, PlannedGridRoute route, PlannedGridRouteStep firstStep,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
         var first = points.Count > 1 ? points[1] : points[0];
-        if (first.Point.X == terminal.Point.X || first.Point.Y == terminal.Point.Y) return;
-        var handoff = new AbsolutePoint(terminal.Point.X, first.Point.Y);
-        points.Insert(1, new PlannedPhysicalRoutePoint($"handoff:{routeId}:source", routeId,
-            first.GridId, handoff, RouteStepRole.SourceExit, "endpoint-handoff", 0, null, null, null, null,
-            "endpoint-handoff"));
+        var allocation = EndpointAllocationFor(route.PhysicalLinkId, terminal.PhysicalNodeId, GridSide.Bottom);
+        var handoff = EndpointHandoffPoint(allocation, firstStep, first.Point, transforms);
+        var additions = new List<PlannedPhysicalRoutePoint>();
+        // Descend from the terminal before moving horizontally so a fan-out
+        // does not share a segment along the source node edge.
+        var sourceDrop = new AbsolutePoint(terminal.Point.X, handoff.Y);
+        AddHandoffPoint(additions, route, firstStep, terminal.Point, sourceDrop, "source terminal drop");
+        AddHandoffPoint(additions, route, firstStep, sourceDrop, handoff, "source allocated horizontal handoff");
+        AddHandoffPoint(additions, route, firstStep, handoff, new AbsolutePoint(first.Point.X, handoff.Y), "source allocated horizontal lane");
+        for (var index = additions.Count - 1; index >= 0; index--)
+            points.Insert(1, additions[index]);
     }
 
-    private static void InsertDestinationHandoff(IList<PlannedPhysicalRoutePoint> points,
-        PlannedPhysicalTerminal terminal, string routeId)
+    private void InsertDestinationHandoff(IList<PlannedPhysicalRoutePoint> points,
+        PlannedPhysicalTerminal terminal, PlannedGridRoute route, PlannedGridRouteStep lastStep,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
     {
         var last = points[points.Count - 1];
-        if (last.Point.X == terminal.Point.X || last.Point.Y == terminal.Point.Y) return;
-        var handoff = new AbsolutePoint(terminal.Point.X, last.Point.Y);
-        points.Add(new PlannedPhysicalRoutePoint($"handoff:{routeId}:destination", routeId,
-            last.GridId, handoff, RouteStepRole.DestinationEntry, "endpoint-handoff", int.MaxValue - 1, null, null, null, null,
-            "endpoint-handoff"));
+        var allocation = EndpointAllocationFor(route.PhysicalLinkId, terminal.PhysicalNodeId, GridSide.Top);
+        var handoff = EndpointHandoffPoint(allocation, lastStep, last.Point, transforms);
+        var additions = new List<PlannedPhysicalRoutePoint>();
+        AddHandoffPoint(additions, route, lastStep, last.Point, new AbsolutePoint(last.Point.X, handoff.Y), "destination allocated horizontal lane");
+        AddHandoffPoint(additions, route, lastStep, new AbsolutePoint(last.Point.X, handoff.Y), handoff, "destination allocated vertical handoff");
+        AddHandoffPoint(additions, route, lastStep, handoff, new AbsolutePoint(terminal.Point.X, handoff.Y), "destination terminal approach");
+        foreach (var point in additions)
+            points.Add(point);
+    }
+
+    private PlannedEndpointAllocation? EndpointAllocationFor(string routeId, string nodeId, GridSide side) =>
+        allocation.Endpoints.SingleOrDefault(item => item.PhysicalLinkId == routeId &&
+            item.PhysicalNodeId == nodeId && item.Side == side);
+
+    private AbsolutePoint EndpointHandoffPoint(PlannedEndpointAllocation? endpoint,
+        PlannedGridRouteStep step, AbsolutePoint fallback,
+        IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)
+    {
+        var grid = sizing.RelativeGeometry.Grids.SingleOrDefault(item => item.GridId.Equals(step.GridId));
+        var row = grid?.Rows.SingleOrDefault(item => item.Id.Equals(step.CellId.RowId));
+        var column = grid?.Columns.SingleOrDefault(item => item.Id.Equals(step.CellId.ColumnId));
+        if (row is null || column is null || !transforms.TryGetValue(step.GridId, out var transform)) return fallback;
+        var x = fallback.X - transform.Origin.X;
+        var y = fallback.Y - transform.Origin.Y;
+        if (endpoint?.HandoffHorizontalLane is { } horizontal)
+            y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, horizontal.Value);
+        if (endpoint?.HandoffVerticalLane is { } vertical)
+            x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, vertical.Value);
+        return new AbsolutePoint(x + transform.Origin.X, y + transform.Origin.Y);
+    }
+
+    private static void AddHandoffPoint(ICollection<PlannedPhysicalRoutePoint> points,
+        PlannedGridRoute route, PlannedGridRouteStep step, AbsolutePoint previous, AbsolutePoint point,
+        string provenance)
+    {
+        if (previous == point) return;
+        points.Add(new PlannedPhysicalRoutePoint($"handoff:{route.PhysicalLinkId}:{points.Count}", route.PhysicalLinkId,
+            step.GridId, point, provenance.StartsWith("destination", StringComparison.Ordinal)
+                ? RouteStepRole.DestinationEntry : RouteStepRole.SourceExit, "endpoint-handoff", step.Order, step.StraightRunId, null,
+            null, step.CellId, provenance));
     }
 
     private AbsolutePoint PointForStep(string routeId, PlannedGridRouteStep step, IReadOnlyDictionary<PlanningGridId, GridTransform> transforms)

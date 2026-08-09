@@ -28,7 +28,9 @@ public sealed record PlannedEndpointAllocation(
     string DomainId,
     string Provenance,
     LaneId? TerminalLane = null,
-    PlanningGridColumnId? TerminalColumnId = null);
+    PlanningGridColumnId? TerminalColumnId = null,
+    LaneId? HandoffHorizontalLane = null,
+    LaneId? HandoffVerticalLane = null);
 
 public sealed record PlannedDestinationApproachAllocation(
     string ReservationId,
