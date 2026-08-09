@@ -333,14 +333,55 @@ internal sealed class MechanicalCompiler
         if (row is null || column is null) return new AbsolutePoint(0, 0);
         var x = column.RelativeOffset + column.FinalExtent / 2;
         var y = row.RelativeOffset + row.FinalExtent / 2;
-        var lane = step.AllocatedLane is null ? null : allocation.HorizontalLanes.Concat(allocation.VerticalLanes)
-            .FirstOrDefault(item => item.Lane == step.AllocatedLane);
-        if (step.EntrySide is GridSide.Left or GridSide.Right || step.ExitSide is GridSide.Left or GridSide.Right)
-            y = row.RelativeOffset + row.FinalExtent / 2 + (lane?.Ordinal ?? 0) * request.RoutePlanning.MinimumParallelSpacing;
-        else if (step.Role != RouteStepRole.SourceExit && step.Role != RouteStepRole.DestinationEntry)
-            x = column.RelativeOffset + column.FinalExtent / 2 + (lane?.Ordinal ?? 0) * request.RoutePlanning.MinimumParallelSpacing;
+        if (step.Role == RouteStepRole.Turn)
+        {
+            var turn = allocation.Turns
+                .Where(item => item.RouteId == routeId && item.CellId == step.CellId.ToString())
+                .Select(item =>
+                {
+                    var horizontal = allocation.HorizontalLanes.SingleOrDefault(lane => lane.RunId == item.HorizontalRunId);
+                    var vertical = allocation.VerticalLanes.SingleOrDefault(lane => lane.RunId == item.VerticalRunId);
+                    return (item, horizontal, vertical, score: TurnLaneMatchScore(routeId, step, horizontal, vertical));
+                })
+                .OrderByDescending(item => item.score)
+                .ThenBy(item => item.item.BendIdentity, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (turn.horizontal is not null)
+                y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, turn.horizontal.Lane.Value);
+            if (turn.vertical is not null)
+                x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, turn.vertical.Lane.Value);
+        }
+        else if (step.EntrySide is GridSide.Left or GridSide.Right || step.ExitSide is GridSide.Left or GridSide.Right)
+        {
+            if (step.AllocatedLane is not null)
+                y = LaneCoordinate(row.RelativeOffset, row.FinalExtent, allocation.HorizontalLanes, step.AllocatedLane.Value.Value);
+        }
+        else if (step.Role != RouteStepRole.SourceExit && step.Role != RouteStepRole.DestinationEntry && step.AllocatedLane is not null)
+        {
+            x = LaneCoordinate(column.RelativeOffset, column.FinalExtent, allocation.VerticalLanes, step.AllocatedLane.Value.Value);
+        }
         var transform = transforms[step.GridId].Origin;
         return new AbsolutePoint(x + transform.X, y + transform.Y);
+    }
+
+    private int TurnLaneMatchScore(string routeId, PlannedGridRouteStep turn,
+        PlannedLaneAllocation? horizontal, PlannedLaneAllocation? vertical)
+    {
+        var neighbours = allocation.Routes.Single(route => route.PhysicalLinkId == routeId).Steps
+            .Where(step => step.Order == turn.Order - 1 || step.Order == turn.Order + 1)
+            .ToArray();
+        return neighbours.Count(step => horizontal?.Cells.Contains(step.CellId) == true ||
+                                        vertical?.Cells.Contains(step.CellId) == true);
+    }
+
+    private int LaneCoordinate(int offset, int extent, IReadOnlyList<PlannedLaneAllocation> lanes, string laneId)
+    {
+        var ordinal = lanes.Where(item => item.Lane.Value == laneId)
+            .Select(item => item.Ordinal)
+            .DefaultIfEmpty(0)
+            .First();
+        return ArchitectureV6LaneGeometry.Coordinate(offset, ordinal,
+            request.RoutePlanning.MinimumPortSpacing, request.RoutePlanning.MinimumParallelSpacing);
     }
 
     private static IReadOnlyList<PlanningGridCellId> SegmentCells(PlannedGridRoute route,

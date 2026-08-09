@@ -105,7 +105,7 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
             foreach (var pair in points.Zip(points.Skip(1), (first, second) => (first, second)))
             {
                 Assert.True(pair.first.Point.X == pair.second.Point.X || pair.first.Point.Y == pair.second.Point.Y,
-                    $"{route.PhysicalLinkId}: {pair.first.Point} -> {pair.second.Point}");
+                    $"{route.PhysicalLinkId}: {pair.first.PointId} [{pair.first.Role}/{pair.first.ComponentId}/{pair.first.CellId}] {pair.first.Point} -> {pair.second.PointId} [{pair.second.Role}/{pair.second.ComponentId}/{pair.second.CellId}] {pair.second.Point}; turns={string.Join(" | ", plan.LaneAllocation!.Turns.Where(turn => turn.RouteId == route.PhysicalLinkId).Select(turn => $"{turn.CellId}:{turn.HorizontalRunId}/{turn.VerticalRunId}"))}");
             }
         }
     }
@@ -217,7 +217,7 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
     }
 
     [Fact]
-    public void Authoritative_validator_reports_renderer_equivalent_node_intersections_before_geometry_correction()
+    public void Authoritative_validator_matches_renderer_equivalent_geometry_after_correction()
     {
         var plan = Plan(RegressionRequest());
         var validation = new ArchitectureDiagramV6Validator().Validate(plan);
@@ -241,12 +241,12 @@ public sealed class ArchitectureV6ManualDefectRegressionTests
             .SelectMany(route => route.Segments)
             .Count(segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
 
-        Assert.Equal(6, intersections.Length);
+        Assert.Empty(intersections);
         Assert.Equal(independentlyReconstructed, validatorSubjects);
-        Assert.All(intersections, finding => Assert.False(string.IsNullOrWhiteSpace(finding.SubjectId)));
-        Assert.True(emittedDiagonalCount > 0);
+        Assert.Equal(0, independentlyReconstructed.Length);
+        Assert.Equal(0, emittedDiagonalCount);
         Assert.Equal(0, filteredSegmentDiagonalCount);
-        Assert.NotEmpty(validation.Findings.Where(item => item.Code == "PhysicalSceneDiagonalSegment"));
+        Assert.Empty(validation.Findings.Where(item => item.Code == "PhysicalSceneDiagonalSegment"));
     }
 
     [Fact]
