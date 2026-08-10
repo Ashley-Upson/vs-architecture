@@ -102,7 +102,12 @@ public sealed class ArchitectureV7ProjectCompositionTests
             Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting)));
         var innerTop = project.Cells.Where(cell => cell.Row == project.Transform.RegionOriginRow + 1).ToArray();
         Assert.NotEmpty(innerTop);
-        Assert.All(innerTop, cell => Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly) && cell.Capabilities.HasFlag(ArchitectureV7CellCapability.HeaderBlocked)));
+        var headerText = innerTop.Where(cell => cell.Capabilities.HasFlag(ArchitectureV7CellCapability.Blocked)).ToArray();
+        Assert.Single(headerText);
+        Assert.All(headerText, cell => Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.HeaderBlocked)));
+        Assert.All(innerTop.Except(headerText), cell =>
+            Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly) &&
+                !cell.Capabilities.HasFlag(ArchitectureV7CellCapability.HeaderBlocked)));
         Assert.All(project.Cells.Where(cell => cell.Column == project.Transform.RegionOriginColumn + 1 && cell.Row > project.Transform.RegionOriginRow + 1), cell =>
             Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly)));
     }
@@ -154,6 +159,35 @@ public sealed class ArchitectureV7ProjectCompositionTests
              cell.Capabilities.HasFlag(ArchitectureV7CellCapability.HeaderBlocked) ||
              cell.Capabilities.HasFlag(ArchitectureV7CellCapability.NodeAllowed))).ToArray();
         Assert.Empty(invalid);
+    }
+
+    [Fact]
+    public void Standalone_separator_rows_are_explicitly_non_routing_and_survive_common_grid_composition()
+    {
+        var freeze = Compose(Diagram(new[] { Node("project-node", "ProjectNode"), Node("project-child", "ProjectChild"), Node("standalone", "Standalone") },
+            new[] { Link("project-link", "project-node", "project-child") }));
+        var standalone = Assert.Single(freeze.Standalone.Placements);
+        var separator = freeze.DiagramGrid.Cells.Where(cell => cell.Row == standalone.DiagramRow - 1).ToArray();
+        Assert.NotEmpty(separator);
+        Assert.All(separator, cell =>
+        {
+            Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.NonRoutingSeparator));
+            Assert.False(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting));
+            Assert.False(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed));
+            Assert.False(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.NodeAllowed));
+        });
+    }
+
+    [Fact]
+    public void Project_header_text_is_blocked_but_remaining_header_cells_are_straight_only()
+    {
+        var trees = BuildTrees(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()));
+        var configuration = new ArchitectureV7PrePlacementConfiguration(100, 100, 10, 10, 10, 0, Array.Empty<ArchitectureV7ReservedRoleRule>());
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(trees, configuration);
+        var project = Assert.Single(freeze.Projects);
+        var header = project.Cells.Where(cell => cell.Row == project.Transform.RegionOriginRow + 1).ToArray();
+        Assert.Contains(header, cell => cell.Capabilities.HasFlag(ArchitectureV7CellCapability.Blocked));
+        Assert.Contains(header, cell => cell.Capabilities.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly) && !cell.Capabilities.HasFlag(ArchitectureV7CellCapability.Blocked));
     }
 
     [Fact]

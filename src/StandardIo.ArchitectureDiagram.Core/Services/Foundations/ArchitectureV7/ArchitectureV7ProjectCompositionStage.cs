@@ -9,7 +9,9 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV
 
 public sealed class ArchitectureV7ProjectCompositionStage
 {
-    public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees)
+    public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees) => Compose(trees, null);
+
+    public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees, ArchitectureV7PrePlacementConfiguration? configuration)
     {
         if (trees is null) throw new ArgumentNullException(nameof(trees));
         var projection = trees.Sizing.Ownership.Projection;
@@ -37,7 +39,8 @@ public sealed class ArchitectureV7ProjectCompositionStage
             var transform = new ArchitectureV7ProjectTransform(projectId, 0, projectCursor, 2, projectCursor + 2,
                 interiorWidth + 4, interiorHeight + 4);
             transforms.Add(transform);
-            var projectCells = BuildProjectCells(transform, interiorWidth, interiorHeight, projectTrees);
+            var headerTextWidth = HeaderTextCellCount(projectId, configuration);
+            var projectCells = BuildProjectCells(transform, interiorWidth, interiorHeight, projectTrees, headerTextWidth);
             projects.Add(new ArchitectureV7ProjectRegion(projectId, transform, projectTrees.Select(tree => tree.TreeId).ToArray(), projectCells, interiorWidth, interiorHeight));
             var treeCursor = 0;
             foreach (var tree in projectTrees)
@@ -85,7 +88,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
             trees.Reservations.Fingerprint, fingerprint);
     }
 
-    private static IReadOnlyList<ArchitectureV7LogicalCell> BuildProjectCells(ArchitectureV7ProjectTransform transform, int interiorWidth, int interiorHeight, IReadOnlyList<ArchitectureV7TopLevelTreeGrid> projectTrees)
+    private static IReadOnlyList<ArchitectureV7LogicalCell> BuildProjectCells(ArchitectureV7ProjectTransform transform, int interiorWidth, int interiorHeight, IReadOnlyList<ArchitectureV7TopLevelTreeGrid> projectTrees, int headerTextWidth)
     {
         var cells = new List<ArchitectureV7LogicalCell>();
         for (var row = 0; row < transform.Height; row++)
@@ -95,7 +98,9 @@ public sealed class ArchitectureV7ProjectCompositionStage
                 var inner = row == 1 || row == transform.Height - 2 || column == 1 || column == transform.Width - 2;
                 var capability = ArchitectureV7CellCapability.None;
                 if (outer && !inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
-                if (inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly | (row == 1 ? ArchitectureV7CellCapability.HeaderBlocked : ArchitectureV7CellCapability.None);
+                if (inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
+                if (row == 1 && column >= 2 && column < 2 + headerTextWidth)
+                    capability |= ArchitectureV7CellCapability.Blocked | ArchitectureV7CellCapability.HeaderBlocked;
                 if (!outer && !inner) capability |= (row - 2) % 2 == 1
                     ? ArchitectureV7CellCapability.NodeAllowed
                     : ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
@@ -116,6 +121,13 @@ public sealed class ArchitectureV7ProjectCompositionStage
             treeCursor = checked(treeCursor + tree.Width + 1);
         }
         return cells;
+    }
+
+    private static int HeaderTextCellCount(string projectId, ArchitectureV7PrePlacementConfiguration? configuration)
+    {
+        if (configuration is null) return 1;
+        var requiredPixels = projectId.Length * Math.Max(1, configuration.LabelCharacterWidth) + 2 * Math.Max(0, configuration.LabelHorizontalMargin);
+        return Math.Max(1, (int)Math.Ceiling(requiredPixels / (double)Math.Max(1, configuration.ConfiguredBaseCellWidth)));
     }
 
     private static ArchitectureV7FrozenNodePlacement FreezeNode(ArchitectureV7PhysicalNode node, ArchitectureV7TreeGridNodePlacement? local, int row, int column, string treeId,
@@ -187,12 +199,17 @@ public sealed class ArchitectureV7ProjectCompositionStage
                 cells[(row, column)] = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
         foreach (var project in projects)
             foreach (var cell in project.Cells) cells[(cell.Row, cell.Column)] = cell.Capabilities;
+        var separatorRows = new HashSet<int>(standalone.Placements.Select(item => item.DiagramRow - 1));
+        if (standalone.Placements.Count > 0) separatorRows.Add(external.NodeRow + 1);
+        foreach (var row in separatorRows.Where(row => row >= 0 && row < rows))
+            for (var column = 0; column < columns; column++)
+                cells[(row, column)] = ArchitectureV7CellCapability.NonRoutingSeparator;
         foreach (var placement in placements)
         {
             foreach (var cell in placement.LogicalFootprint)
             {
                 var existing = cells.TryGetValue(cell, out var capability) ? capability : ArchitectureV7CellCapability.None;
-                if ((existing & ArchitectureV7CellCapability.Blocked) != 0) continue;
+                if ((existing & (ArchitectureV7CellCapability.Blocked | ArchitectureV7CellCapability.NonRoutingSeparator)) != 0) continue;
                 var restricted = existing & (ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly | ArchitectureV7CellCapability.HeaderBlocked);
                 cells[cell] = restricted | ArchitectureV7CellCapability.NodeAllowed;
             }

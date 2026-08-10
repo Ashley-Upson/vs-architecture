@@ -284,6 +284,28 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
+    public void Standalone_separator_rejects_entry_passage_and_bend_even_when_general_routing_is_present()
+    {
+        var separator = ArchitectureV7CellCapability.NonRoutingSeparator | ArchitectureV7CellCapability.GeneralRouting | ArchitectureV7CellCapability.RoutingAllowed;
+        var route = Route(new[] { PlacementNode("s", 1, 2), PlacementNode("t", 5, 2) }, Link("separator", "s", "t"), 7, 7,
+            Grid(7, 7, (2, 2, separator)));
+        Assert.False(route.IsComplete);
+        Assert.Contains(route.Diagnostics, diagnostic => diagnostic.IsHardFailure);
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(separator, ArchitectureV7TraversalDirection.Left, ArchitectureV7TraversalDirection.Right));
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(separator, ArchitectureV7TraversalDirection.Up, ArchitectureV7TraversalDirection.Down));
+    }
+
+    [Fact]
+    public void Non_text_header_allows_straight_vertical_passage_but_rejects_a_bend()
+    {
+        var straight = ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
+        Assert.True(ArchitectureV7CellTraversalPolicy.Allows(straight, ArchitectureV7TraversalDirection.Up, ArchitectureV7TraversalDirection.Up));
+        Assert.True(ArchitectureV7CellTraversalPolicy.Allows(straight, ArchitectureV7TraversalDirection.Down, ArchitectureV7TraversalDirection.Down));
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(straight, ArchitectureV7TraversalDirection.Left, ArchitectureV7TraversalDirection.Down));
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(straight, ArchitectureV7TraversalDirection.Down, ArchitectureV7TraversalDirection.Right));
+    }
+
+    [Fact]
     public void General_routing_allows_bends_and_other_routes_do_not_block_pathfinding()
     {
         var grid = GeneralGrid(9, 9);

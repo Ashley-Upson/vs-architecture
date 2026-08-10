@@ -24,6 +24,8 @@ public sealed class ArchitectureV7TraversalPolicyTests
     [InlineData(ArchitectureV7CellCapability.StraightPassthroughOnly, ArchitectureV7TraversalDirection.Up, ArchitectureV7TraversalDirection.Down)]
     [InlineData(ArchitectureV7CellCapability.GeneralRouting, ArchitectureV7TraversalDirection.None, ArchitectureV7TraversalDirection.Down)]
     [InlineData(ArchitectureV7CellCapability.HeaderBlocked | ArchitectureV7CellCapability.GeneralRouting, ArchitectureV7TraversalDirection.Left, ArchitectureV7TraversalDirection.Right)]
+    [InlineData(ArchitectureV7CellCapability.NonRoutingSeparator | ArchitectureV7CellCapability.GeneralRouting, ArchitectureV7TraversalDirection.Left, ArchitectureV7TraversalDirection.Right)]
+    [InlineData(ArchitectureV7CellCapability.Blocked | ArchitectureV7CellCapability.StraightPassthroughOnly, ArchitectureV7TraversalDirection.Up, ArchitectureV7TraversalDirection.Up)]
     public void Capability_rejects_undocumented_or_blocked_traversal(ArchitectureV7CellCapability capability, ArchitectureV7TraversalDirection entry, ArchitectureV7TraversalDirection exit)
     {
         Assert.False(ArchitectureV7CellTraversalPolicy.Allows(capability, entry, exit));
