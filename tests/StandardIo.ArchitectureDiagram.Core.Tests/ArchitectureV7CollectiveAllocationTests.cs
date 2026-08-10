@@ -69,6 +69,58 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Endpoint_handoff_resource_contains_frozen_run_lane_offsets_and_route_indices()
+    {
+        var routes = new[]
+        {
+            Route("a", "s", "t", (1, 3), (2, 3), (3, 1)),
+            Route("b", "s", "u", (1, 3), (2, 3), (3, 5))
+        };
+
+        var result = Allocate(routes, Nodes("s", "t", "u"), spacing: 4);
+
+        Assert.NotEmpty(result.Handoffs);
+        Assert.All(result.Handoffs, handoff =>
+        {
+            Assert.StartsWith("handoff:", handoff.ResourceId, StringComparison.Ordinal);
+            Assert.NotEmpty(handoff.AdjacentRunId);
+            Assert.NotEmpty(handoff.AdjacentLaneId);
+            Assert.NotNull(handoff.LogicalCell);
+            Assert.Equal(2, handoff.AuthoritativeCells.Count);
+            Assert.Equal(Math.Abs(handoff.RelativePhysicalOffset), handoff.RequiredClearance);
+            Assert.NotEqual(handoff.TerminalAxisOffset, handoff.LaneAxisOffset);
+            Assert.True(handoff.StartRouteIndex >= 0);
+            Assert.True(handoff.EndRouteIndex > handoff.StartRouteIndex);
+        });
+    }
+
+    [Fact]
+    public void Endpoint_handoff_resource_order_is_deterministic_under_route_shuffle()
+    {
+        var routes = new[]
+        {
+            Route("b", "s", "u", (1, 3), (2, 3), (3, 5)),
+            Route("a", "s", "t", (1, 3), (2, 3), (3, 1))
+        };
+
+        var result = Allocate(routes, Nodes("s", "t", "u"), spacing: 4);
+        var reversed = Allocate(routes.AsEnumerable().Reverse().ToArray(), Nodes("s", "t", "u"), spacing: 4);
+
+        Assert.Equal(result.AllocationFingerprint, reversed.AllocationFingerprint);
+        Assert.Equal(result.Handoffs.Select(x => x.ResourceId), reversed.Handoffs.Select(x => x.ResourceId));
+    }
+
+    [Fact]
+    public void Allocation_preserves_frozen_placement_and_route_fingerprints()
+    {
+        var routes = new[] { Route("a", "s", "t", (1, 1), (2, 1), (3, 1)) };
+        var result = Allocate(routes, Nodes("s", "t"));
+
+        Assert.Equal("placement", result.PlacementFingerprint);
+        Assert.Equal("routes", result.RouteFingerprint);
+    }
+
+    [Fact]
     public void Bends_are_transitions_between_runs_and_perpendicular_crossings_are_clean()
     {
         var routes = new[]

@@ -57,14 +57,74 @@ public sealed record ArchitectureV7EndpointApproachReservation(
     IReadOnlyList<ArchitectureV7RouteCell> ApproachCells,
     string Provenance);
 
-public sealed record ArchitectureV7EndpointHandoff(
-    string PhysicalLinkId,
-    string PhysicalNodeId,
-    ArchitectureV7EndpointKind EndpointKind,
-    int TerminalSlotOrdinal,
-    IReadOnlyList<ArchitectureV7RouteCell> AuthoritativeCells,
-    string Reason,
-    string Provenance);
+public sealed class ArchitectureV7EndpointHandoff
+{
+    public ArchitectureV7EndpointHandoff(
+        string physicalLinkId,
+        string physicalNodeId,
+        ArchitectureV7EndpointKind endpointKind,
+        int terminalSlotOrdinal,
+        IReadOnlyList<ArchitectureV7RouteCell> authoritativeCells,
+        string reason,
+        string provenance,
+        string handoffId = "",
+        ArchitectureV7RouteCell? logicalCell = null,
+        int startRouteIndex = -1,
+        int endRouteIndex = -1,
+        string adjacentRunId = "",
+        string adjacentLaneId = "",
+        ArchitectureV7RunOrientation handoffOrientation = ArchitectureV7RunOrientation.Vertical,
+        ArchitectureV7EndpointDirection endpointDirection = ArchitectureV7EndpointDirection.Down,
+        double terminalAxisOffset = 0,
+        double laneAxisOffset = 0,
+        double relativePhysicalOffset = 0,
+        double requiredClearance = 0)
+    {
+        PhysicalLinkId = physicalLinkId;
+        PhysicalNodeId = physicalNodeId;
+        EndpointKind = endpointKind;
+        TerminalSlotOrdinal = terminalSlotOrdinal;
+        AuthoritativeCells = Array.AsReadOnly((authoritativeCells ?? Array.Empty<ArchitectureV7RouteCell>()).ToArray());
+        Reason = reason;
+        Provenance = provenance;
+        HandoffId = handoffId;
+        LogicalCell = logicalCell;
+        StartRouteIndex = startRouteIndex;
+        EndRouteIndex = endRouteIndex;
+        AdjacentRunId = adjacentRunId;
+        AdjacentLaneId = adjacentLaneId;
+        HandoffOrientation = handoffOrientation;
+        EndpointDirection = endpointDirection;
+        TerminalAxisOffset = terminalAxisOffset;
+        LaneAxisOffset = laneAxisOffset;
+        RelativePhysicalOffset = relativePhysicalOffset;
+        RequiredClearance = requiredClearance;
+    }
+
+    public string PhysicalLinkId { get; }
+    public string PhysicalNodeId { get; }
+    public ArchitectureV7EndpointKind EndpointKind { get; }
+    public int TerminalSlotOrdinal { get; }
+    public IReadOnlyList<ArchitectureV7RouteCell> AuthoritativeCells { get; }
+    public string Reason { get; }
+    public string Provenance { get; }
+    public string HandoffId { get; }
+    public ArchitectureV7RouteCell? LogicalCell { get; }
+    public int StartRouteIndex { get; }
+    public int EndRouteIndex { get; }
+    public string AdjacentRunId { get; }
+    public string AdjacentLaneId { get; }
+    public ArchitectureV7RunOrientation HandoffOrientation { get; }
+    public ArchitectureV7EndpointDirection EndpointDirection { get; }
+    public double TerminalAxisOffset { get; }
+    public double LaneAxisOffset { get; }
+    public double RelativePhysicalOffset { get; }
+    public double RequiredClearance { get; }
+
+    public string ResourceId => string.IsNullOrEmpty(HandoffId)
+        ? $"handoff:{PhysicalLinkId}:{EndpointKind}:{TerminalSlotOrdinal}"
+        : HandoffId;
+}
 
 public sealed record ArchitectureV7BendAllocation(
     string BendId,
@@ -75,14 +135,27 @@ public sealed record ArchitectureV7BendAllocation(
     ArchitectureV7RunOrientation OutgoingOrientation,
     string IncomingRunId,
     string OutgoingRunId,
-    string Provenance);
+    string Provenance,
+    string IncomingLaneId = "",
+    string OutgoingLaneId = "",
+    double RelativePhysicalOffset = 0,
+    double RequiredClearance = 0);
 
 public sealed record ArchitectureV7CrossingAllocation(
     string CrossingId,
     ArchitectureV7RouteCell Cell,
     string HorizontalPhysicalLinkId,
     string VerticalPhysicalLinkId,
-    string Provenance);
+    string Provenance,
+    string HorizontalRunId = "",
+    string VerticalRunId = "",
+    string HorizontalLaneId = "",
+    string VerticalLaneId = "",
+    double RelativePhysicalOffset = 0,
+    double RequiredClearance = 0,
+    string Classification = "clean-crossing",
+    int HorizontalRouteIndex = -1,
+    int VerticalRouteIndex = -1);
 
 public sealed record ArchitectureV7AllocationDiagnostic(string Code, string Message, bool IsHardFailure, string? PhysicalLinkId = null, string? RunId = null,
     string? PhysicalNodeId = null, string? EndpointKind = null, int? RequiredWidth = null, int? AvailableWidth = null, int? LogicalSpan = null,
