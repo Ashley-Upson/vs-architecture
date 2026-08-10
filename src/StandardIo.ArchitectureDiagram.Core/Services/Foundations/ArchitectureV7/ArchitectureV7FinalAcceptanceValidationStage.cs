@@ -186,7 +186,7 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         ArchitectureV7PhysicalSceneFreeze scene, ArchitectureV7PhysicalSceneConfiguration configuration, ICollection<ArchitectureV7AcceptanceFinding> findings)
     {
         foreach (var row in scene.Rows)
-            if (row.RequiredExtent < configuration.BaseRowHeight) Add(findings, "ROW-EXTENT-UNDERFLOW", "track-sizing", "Physical row is smaller than its configured base extent.", row.LogicalIndex.ToString(), Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), Array.Empty<string>());
+            if (row.RequiredExtent < ArchitectureV7PhysicalSceneSizing.RowMinimum(row.LogicalIndex, placement, configuration)) Add(findings, "ROW-EXTENT-UNDERFLOW", "track-sizing", "Physical row is smaller than its role-specific configured minimum.", row.LogicalIndex.ToString(), Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), Array.Empty<string>());
         foreach (var column in scene.Columns)
             if (column.RequiredExtent < configuration.BaseCellWidth) Add(findings, "COLUMN-EXTENT-UNDERFLOW", "track-sizing", "Physical column is smaller than its configured base extent.", column.LogicalIndex.ToString(), Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), Array.Empty<string>());
         foreach (var node in scene.Nodes)

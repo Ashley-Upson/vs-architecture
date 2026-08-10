@@ -11,7 +11,8 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         ArchitectureV7PlacementFreeze placement,
         ArchitectureV7LogicalRouteFreeze routes,
         ArchitectureV7CollectiveAllocationFreeze allocation,
-        ArchitectureV7PhysicalSceneConfiguration configuration)
+        ArchitectureV7PhysicalSceneConfiguration configuration,
+        IReadOnlyDictionary<string, int>? preRoutingWidthRequirements = null)
     {
         if (placement is null) throw new ArgumentNullException(nameof(placement));
         if (routes is null) throw new ArgumentNullException(nameof(routes));
@@ -25,7 +26,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         var rowCount = Math.Max(placement.DiagramGrid.RowCount, placement.Nodes.Count == 0 ? 0 : placement.Nodes.Max(x => x.DiagramRow) + 1);
         var columnCount = Math.Max(placement.DiagramGrid.ColumnCount, placement.Nodes.Count == 0 ? 0 : placement.Nodes.Max(x => x.DiagramColumn + x.LogicalSpan));
         var rows = SizeRows(rowCount, placement, allocation, configuration);
-        var columns = SizeColumns(columnCount, placement, allocation, configuration);
+        var columns = SizeColumns(columnCount, placement, allocation, configuration, preRoutingWidthRequirements);
         var nodes = MaterialiseNodes(placement, rows, columns, configuration, diagnostics);
         var terminals = MaterialiseTerminals(allocation, nodes, configuration, diagnostics);
         var routesOutput = MaterialiseRoutes(routes, allocation, rows, columns, nodes, terminals, diagnostics);
@@ -37,14 +38,17 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     private static IReadOnlyList<ArchitectureV7PhysicalTrackDimension> SizeRows(int count, ArchitectureV7PlacementFreeze placement,
         ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneConfiguration configuration)
     {
-        var extents = Enumerable.Repeat(configuration.BaseRowHeight, count).ToArray();
-        foreach (var node in placement.Nodes)
-            if ((uint)node.DiagramRow < (uint)extents.Length) extents[node.DiagramRow] = Math.Max(extents[node.DiagramRow], configuration.NodeMinimumHeight + 2 * configuration.NodeClearance);
+        var extents = Enumerable.Range(0, count).Select(row => ArchitectureV7PhysicalSceneSizing.RowMinimum(row, placement, configuration)).ToArray();
+        for (var row = 0; row < extents.Length; row++)
+            if (ArchitectureV7PhysicalSceneSizing.IsRoutingRow(row, placement))
+                extents[row] = Math.Max(extents[row], ArchitectureV7PhysicalSceneSizing.NodeRoutingInterfaceCount(row, placement) * configuration.NodeClearance);
         foreach (var group in allocation.Runs.Where(x => x.Orientation == ArchitectureV7RunOrientation.Horizontal).GroupBy(x => x.Cells[0].Row))
         {
             if ((uint)group.Key >= (uint)extents.Length) continue;
             var laneCount = group.Select(x => allocation.RunAssignments.First(a => a.RunId == x.RunId).LaneOrdinal).DefaultIfEmpty(0).Max() + 1;
-            extents[group.Key] = Math.Max(extents[group.Key], 2 * configuration.RouteClearance + Math.Max(0, laneCount - 1) * configuration.ParallelLaneSpacing);
+            var laneEnvelope = ArchitectureV7PhysicalSceneSizing.LaneEnvelope(laneCount, configuration);
+            var interfaceClearance = ArchitectureV7PhysicalSceneSizing.NodeRoutingInterfaceCount(group.Key, placement) * configuration.NodeClearance;
+            extents[group.Key] = Math.Max(extents[group.Key], laneEnvelope + interfaceClearance);
         }
         var result = new List<ArchitectureV7PhysicalTrackDimension>(count);
         var cursor = 0d;
@@ -59,14 +63,18 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     }
 
     private static IReadOnlyList<ArchitectureV7PhysicalTrackDimension> SizeColumns(int count, ArchitectureV7PlacementFreeze placement,
-        ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneConfiguration configuration)
+        ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneConfiguration configuration,
+        IReadOnlyDictionary<string, int>? preRoutingWidthRequirements)
     {
         var extents = Enumerable.Repeat(configuration.BaseCellWidth, count).ToArray();
         foreach (var node in placement.Nodes)
         {
             var first = node.LogicalFootprint.Count == 0 ? node.DiagramColumn : node.LogicalFootprint.Min(x => x.Column);
             var last = node.LogicalFootprint.Count == 0 ? node.DiagramColumn + node.LogicalSpan - 1 : node.LogicalFootprint.Max(x => x.Column);
-            var required = Math.Max(configuration.NodeMinimumWidth, node.VisibleLabel.Length * configuration.LabelCharacterWidth + 2 * configuration.LabelHorizontalMargin + 2 * configuration.NodeClearance);
+            var fallbackRequired = Math.Max(configuration.NodeMinimumWidth, node.VisibleLabel.Length * configuration.LabelCharacterWidth + 2 * configuration.LabelHorizontalMargin);
+            var required = preRoutingWidthRequirements is not null && preRoutingWidthRequirements.TryGetValue(node.PhysicalNodeId, out var preRoutingRequired)
+                ? Math.Max(fallbackRequired, preRoutingRequired)
+                : fallbackRequired;
             var current = Enumerable.Range(first, Math.Max(0, last - first + 1)).Where(x => (uint)x < (uint)extents.Length).Sum(x => extents[x]);
             if (last >= first && current < required && (uint)first < (uint)extents.Length) extents[Math.Min(last, Math.Max(first, node.CentreCell))] += required - current;
         }

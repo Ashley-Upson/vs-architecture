@@ -6,9 +6,11 @@ namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV7;
 
 public sealed record ArchitectureV7PhysicalSceneConfiguration(
     double BaseCellWidth,
-    double BaseRowHeight,
+    double RoutingRowMinimum,
+    double BoundaryRowMinimum,
     double NodeMinimumWidth,
     double NodeMinimumHeight,
+    double ProjectHeaderHeight,
     double LabelCharacterWidth,
     double LabelHorizontalMargin,
     double RouteClearance,

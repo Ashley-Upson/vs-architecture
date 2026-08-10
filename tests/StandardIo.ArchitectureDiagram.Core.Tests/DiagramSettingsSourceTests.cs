@@ -55,6 +55,55 @@ public sealed class DiagramSettingsSourceTests
     }
 
     [Fact]
+    public void V7_sizing_defaults_are_explicit_repository_values()
+    {
+        var settings = DiagramSettings.CreateDefault();
+
+        Assert.Equal(3, settings.Layout.BaseCellWidth);
+        Assert.Equal(20, settings.Layout.RoutingRowMinimum);
+        Assert.Equal(20, settings.Layout.BoundaryRowMinimum);
+        Assert.Equal(10, settings.Layout.VerticalNodeClearance);
+        Assert.Equal(8, settings.Layout.LabelCharacterWidth);
+    }
+
+    [Fact]
+    public void Older_config_without_V7_sizing_properties_loads_repository_defaults()
+    {
+        var result = SettingsSerializer.Import("{ \"version\": 1, \"layout\": { \"nodeWidth\": 200 } }");
+
+        Assert.Equal(3, result.Layout.BaseCellWidth);
+        Assert.Equal(20, result.Layout.RoutingRowMinimum);
+        Assert.Equal(20, result.Layout.BoundaryRowMinimum);
+        Assert.Equal(10, result.Layout.VerticalNodeClearance);
+        Assert.Equal(8, result.Layout.LabelCharacterWidth);
+    }
+
+    [Fact]
+    public void Explicit_config_overrides_preserved_and_repository_V7_sizing_defaults()
+    {
+        using var files = new TemporarySettingsFiles();
+        var preserved = DiagramSettings.CreateDefault();
+        preserved.Layout.BaseCellWidth = 40;
+        preserved.Layout.RoutingRowMinimum = 24;
+        preserved.Layout.BoundaryRowMinimum = 18;
+        preserved.Layout.VerticalNodeClearance = 12;
+        preserved.Layout.LabelCharacterWidth = 9;
+        files.WritePreserved(SettingsSerializer.Export(preserved));
+
+        var explicitOverlay = "{ \"layout\": { \"baseCellWidth\": 50, \"routingRowMinimum\": 30, \"boundaryRowMinimum\": 22, \"verticalNodeClearance\": 14, \"labelCharacterWidth\": 10 } }";
+        files.WriteExplicit(explicitOverlay);
+
+        var result = DiagramSettingsSourceResolver.Resolve(files.ExplicitPath, files.PreservedPath);
+
+        Assert.Equal(DiagramSettingsSourceResolver.ExplicitConfigSource, result.SourceType);
+        Assert.Equal(50, result.Settings.Layout.BaseCellWidth);
+        Assert.Equal(30, result.Settings.Layout.RoutingRowMinimum);
+        Assert.Equal(22, result.Settings.Layout.BoundaryRowMinimum);
+        Assert.Equal(14, result.Settings.Layout.VerticalNodeClearance);
+        Assert.Equal(10, result.Settings.Layout.LabelCharacterWidth);
+    }
+
+    [Fact]
     public void Source_diagnostics_record_file_hash_and_schema_version()
     {
         using var files = new TemporarySettingsFiles();

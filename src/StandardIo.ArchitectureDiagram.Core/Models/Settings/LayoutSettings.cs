@@ -9,6 +9,13 @@ public sealed class LayoutSettings
 
     public int NodeWidth { get; set; } = 200;
     public int NodeHeight { get; set; } = 80;
+    // V7 sizing-policy inputs. These are explicit repository defaults until a reviewed
+    // horizontal/vertical policy selects different preserved-user values.
+    public int BaseCellWidth { get; set; } = 3;
+    public int RoutingRowMinimum { get; set; } = 20;
+    public int BoundaryRowMinimum { get; set; } = 20;
+    public int VerticalNodeClearance { get; set; } = 10;
+    public int LabelCharacterWidth { get; set; } = 8;
     public int HorizontalSpacing { get; set; } = 80;
     public int VerticalSpacing { get; set; } = 80;
     public int ContainerPadding { get; set; } = 40;

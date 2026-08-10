@@ -92,6 +92,33 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.Equal(new[] { (1, 1), (2, 1), (3, 1) }, route.Cells.Select(x => (x.Row, x.Column)));
     }
 
+    [Fact]
+    public void Physical_node_width_preserves_the_frozen_pre_routing_requirement()
+    {
+        var node = new ArchitectureV7FrozenNodePlacement("wide", "wide", "p", 1, 0, 9, 4,
+            Enumerable.Range(0, 9).Select(column => (1, column)).ToArray(), false, false, false, "tree",
+            "ContentManagementMigrationAggregationService : IContentManagementMigrationAggregationService", "wide", "test");
+        var placement = new ArchitectureV7PlacementFreeze(
+            new[] { node }, Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(3, 9, Enumerable.Range(0, 9).Select(column =>
+                new ArchitectureV7LogicalCell(1, column, ArchitectureV7CellCapability.NodeAllowed, "wide")).ToArray()),
+            Array.Empty<ArchitectureV7ProjectTransform>(), "projection", "ownership", "sizing", "reservation", "placement");
+        var routes = new ArchitectureV7LogicalRouteFreeze(Array.Empty<ArchitectureV7LogicalRoute>(), Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectiveAllocationFreeze(Array.Empty<ArchitectureV7StraightRun>(), Array.Empty<ArchitectureV7PhysicalLane>(),
+            Array.Empty<ArchitectureV7RunLaneAssignment>(), Array.Empty<ArchitectureV7TerminalSlotAssignment>(), Array.Empty<ArchitectureV7EndpointApproachReservation>(),
+            Array.Empty<ArchitectureV7EndpointHandoff>(), Array.Empty<ArchitectureV7BendAllocation>(), Array.Empty<ArchitectureV7CrossingAllocation>(),
+            Array.Empty<ArchitectureV7AllocationDiagnostic>(), "placement", "routes", "allocation");
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 12, 25, 20);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration,
+            new Dictionary<string, int> { ["wide"] = 756 });
+
+        var bounds = Assert.Single(scene.Nodes).Bounds;
+        Assert.Equal(900, bounds.Right - bounds.Left);
+        Assert.True(bounds.Right - bounds.Left >= 756);
+    }
+
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
         IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, double spacing = 4)
     {
@@ -104,7 +131,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
             new ArchitectureV7AllocationConfiguration((int)spacing, (int)spacing, 0));
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
-            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 10, 20, 1, 0, 2, 1, spacing, spacing, 0));
+            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, spacing, spacing, 0));
         return scene;
     }
 

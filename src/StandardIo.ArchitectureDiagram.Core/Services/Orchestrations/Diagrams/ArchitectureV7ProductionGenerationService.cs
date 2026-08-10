@@ -53,10 +53,12 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var routes = new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection);
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
             new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding));
-        var sceneConfiguration = new ArchitectureV7PhysicalSceneConfiguration(job.Rendering.Layout.NodeWidth / 3d, job.Rendering.Layout.NodeHeight + job.Rendering.Layout.VerticalSpacing,
-            job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, 8, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
-            Math.Max(1, job.Rendering.Layout.HorizontalSpacing / 2d), job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
-        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration);
+        var sceneConfiguration = new ArchitectureV7PhysicalSceneConfiguration(job.Rendering.Layout.BaseCellWidth, job.Rendering.Layout.RoutingRowMinimum,
+            job.Rendering.Layout.BoundaryRowMinimum, job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, job.Rendering.Layout.ProjectHeaderHeight,
+            job.Rendering.Layout.LabelCharacterWidth, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
+            job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
+            sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal));
         var acceptance = new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, reservation, placement, routes, allocation, scene, sceneConfiguration);
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
         var routingEvidence = evidenceStage.Analyze(placement, routes);
@@ -200,7 +202,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
 
     private static bool Equal(double expected, XAttribute? actual) => actual is not null && double.TryParse(actual.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && Math.Abs(expected - value) < 0.0001;
 
-    private static ArchitectureV7PrePlacementConfiguration Configuration(LayoutSettings layout) => new(3, layout.NodeWidth, 8, layout.LinkNodeWidthPadding,
+    private static ArchitectureV7PrePlacementConfiguration Configuration(LayoutSettings layout) => new(layout.BaseCellWidth, layout.NodeWidth, layout.LabelCharacterWidth, layout.LinkNodeWidthPadding,
         Math.Max(1, layout.EdgePortSpacing), Math.Max(0, layout.LinkNodeWidthPadding), (layout.ReservedLayerTypePatterns ?? new List<string>()).Select((pattern, index) => new ArchitectureV7ReservedRoleRule(pattern, pattern, index)).ToArray());
     private static DrawioPage RejectedPage() => new("Architecture (rejected)", "architecture-rejected", new XElement("mxGraphModel", new XElement("root", new XElement("mxCell", new XAttribute("id", "0")), new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")))), new[] { new DiagramDiagnostic("V7StrictRejected", "V7 acceptance failed; Draw.io renderer was not invoked.") });
 }

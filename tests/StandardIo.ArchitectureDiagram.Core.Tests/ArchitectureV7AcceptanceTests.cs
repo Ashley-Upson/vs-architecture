@@ -94,7 +94,7 @@ public sealed class ArchitectureV7AcceptanceTests
         var placement = new ArchitectureV7PlacementFreeze(nodes, Array.Empty<ArchitectureV7ProjectRegion>(), new ArchitectureV7ExternalRegion(5, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()), new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()), new ArchitectureV7CommonDiagramGrid(6, 6, grid), Array.Empty<ArchitectureV7ProjectTransform>(), "projection", "ownership", "sizing", "reservation", "placement");
         var routes = new ArchitectureV7LogicalRouteFreeze(new[] { new ArchitectureV7LogicalRoute("a", "a", "s", "t", new[] { new ArchitectureV7RouteCell(1, 1), new ArchitectureV7RouteCell(2, 1), new ArchitectureV7RouteCell(3, 1) }, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), "test") }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes, new ArchitectureV7AllocationConfiguration(4, 4, 0));
-        var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 10, 20, 1, 0, 2, 1, 4, 4, 0);
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration);
         return new Pipeline(projection, ownership, sizing, reservation, placement, routes, allocation, scene, configuration);
     }

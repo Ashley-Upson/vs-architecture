@@ -173,7 +173,22 @@ public static class Program
                         SourceType = settingsSource.SourceType,
                         SourceVersion = settingsSource.SourceVersion,
                         Version = settingsSource.Version,
-                        Sha256 = settingsSource.Sha256
+                        Sha256 = settingsSource.Sha256,
+                        V7Sizing = new
+                        {
+                            Source = settingsSource.SourceType,
+                            SourcePath = settingsSource.Path,
+                            BaseCellWidth = settings.Layout.BaseCellWidth,
+                            RoutingRowMinimum = settings.Layout.RoutingRowMinimum,
+                            BoundaryRowMinimum = settings.Layout.BoundaryRowMinimum,
+                            VerticalNodeClearance = settings.Layout.VerticalNodeClearance,
+                            LabelCharacterWidth = settings.Layout.LabelCharacterWidth,
+                            NodeHeight = settings.Layout.NodeHeight,
+                            ProjectHeaderHeight = settings.Layout.ProjectHeaderHeight,
+                            EdgePortSpacing = settings.Layout.EdgePortSpacing,
+                            ParallelLaneSpacing = settings.Layout.ParallelLaneSpacing,
+                            LinkPadding = settings.Layout.LinkPadding
+                        }
                     },
                     architecture.Manifest,
                     architecture.Eligibility,
