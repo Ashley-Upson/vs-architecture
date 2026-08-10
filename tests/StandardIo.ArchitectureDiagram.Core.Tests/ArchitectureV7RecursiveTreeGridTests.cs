@@ -97,7 +97,7 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
         var reservations = Frozen(new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 3, false), new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 5, true));
         var result = Build(diagram, reservations);
         var tree = Assert.Single(result.Trees);
-        Assert.Equal(6, Placement(tree, "physical:processing").LocalRow);
+        Assert.Equal(2, Placement(tree, "physical:processing").LocalRow);
         Assert.Equal(3, result.Reservations.Reservations.Single(item => item.Name == "Processing").NodeRow);
     }
 
@@ -107,7 +107,7 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
         var diagram = Diagram(new[] { Node("processing", "Processing"), Node("broker", "Broker"), Node("external", "ExternalApi") },
             new[] { Link("1", "processing", "broker"), Link("2", "broker", "external") });
         var tree = Assert.Single(Build(diagram).Trees);
-        Assert.Equal(new[] { 0, 2, 10 }, tree.Placements.OrderBy(item => item.LocalRow).Select(item => item.LocalRow));
+        Assert.Equal(new[] { 0, 2, 4 }, tree.Placements.OrderBy(item => item.LocalRow).Select(item => item.LocalRow));
         Assert.Equal(1, Placement(tree, "physical:broker").NodeLayer);
     }
 
@@ -143,7 +143,7 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
             new[] { Node("root", "Processing"), Node("detached", "Processing"), Node("nested", "Processing") },
             new[] { Link("one", "root", "detached"), Link("two", "detached", "nested") });
         var reservations = Frozen(
-            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 1, false),
+            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 3, false),
             new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true));
 
         var tree = Assert.Single(Build(diagram, reservations).Trees);
@@ -164,7 +164,7 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
             new[] { Node("root", "Processing"), Node("first", "Processing"), Node("first-nested", "Processing"), Node("second", "Processing") },
             new[] { Link("one", "root", "first"), Link("two", "first", "first-nested"), Link("three", "root", "second") });
         var reservations = Frozen(
-            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 1, false),
+            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 3, false),
             new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true));
 
         var tree = Assert.Single(Build(diagram, reservations).Trees);
@@ -181,7 +181,7 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
             new[] { Node("root", "Processing"), Node("detached", "Processing"), Node("nested", "Processing") },
             new[] { Link("one", "root", "detached"), Link("two", "detached", "nested") });
         var reservations = Frozen(
-            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 1, false),
+            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 3, false),
             new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true));
 
         var tree = Assert.Single(Build(diagram, reservations).Trees);

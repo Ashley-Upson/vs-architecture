@@ -51,7 +51,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
             projectCursor = checked(projectCursor + transform.Width + 1);
         }
 
-        var externalRow = checked(trees.Reservations.External.NodeRow * 2 + 3);
+        var externalRow = ArchitectureV7ReservationCoordinates.FinalCommonNodeRowFromReservedNodeRow(trees.Reservations.External.NodeRow);
         var externalPlacements = new List<ArchitectureV7FrozenNodePlacement>();
         var commonWidth = Math.Max(1, projectCursor == 0 ? 0 : projectCursor - 1);
         foreach (var node in nodes.Values.Where(node => node.IsExternal).OrderBy(node => node.PhysicalNodeId, StringComparer.Ordinal))
@@ -90,7 +90,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
                 var outer = row == 0 || row == transform.Height - 1 || column == 0 || column == transform.Width - 1;
                 var inner = row == 1 || row == transform.Height - 2 || column == 1 || column == transform.Width - 2;
                 var capability = ArchitectureV7CellCapability.None;
-                if (outer) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
+                if (outer && !inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
                 if (inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly | (row == 1 ? ArchitectureV7CellCapability.HeaderBlocked : ArchitectureV7CellCapability.None);
                 if (!outer && !inner) capability |= (row - 2) % 2 == 1
                     ? ArchitectureV7CellCapability.NodeAllowed
@@ -170,8 +170,14 @@ public sealed class ArchitectureV7ProjectCompositionStage
         foreach (var project in projects)
             foreach (var cell in project.Cells) cells[(cell.Row, cell.Column)] = cell.Capabilities;
         foreach (var placement in placements)
+        {
             foreach (var cell in placement.LogicalFootprint)
-                cells[cell] = cells.TryGetValue(cell, out var capability) ? capability | ArchitectureV7CellCapability.NodeAllowed : ArchitectureV7CellCapability.NodeAllowed;
+            {
+                var existing = cells.TryGetValue(cell, out var capability) ? capability : ArchitectureV7CellCapability.None;
+                var restricted = existing & (ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly | ArchitectureV7CellCapability.HeaderBlocked);
+                cells[cell] = restricted | ArchitectureV7CellCapability.NodeAllowed;
+            }
+        }
         return new ArchitectureV7CommonDiagramGrid(rows, columns, cells.OrderBy(item => item.Key.Row).ThenBy(item => item.Key.Column).Select(item => new ArchitectureV7LogicalCell(item.Key.Row, item.Key.Column, item.Value, placements.FirstOrDefault(node => node.LogicalFootprint.Contains(item.Key))?.PhysicalNodeId)).ToArray());
     }
 

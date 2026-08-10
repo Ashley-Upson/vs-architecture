@@ -15,6 +15,32 @@ public sealed record ArchitectureV7PrePlacementConfiguration(
 
 public sealed record ArchitectureV7ReservedRoleRule(string Name, string Pattern, int Order);
 
+/// <summary>Named conversions for the shared V7 reserved node-row coordinate domain.</summary>
+public static class ArchitectureV7ReservationCoordinates
+{
+    public const int FirstReservedNodeRow = 1;
+    public const int ProjectCommonNodeRowOffset = 2;
+
+    public static int ReservedNodeRowFromSemanticDepth(int semanticDepth)
+    {
+        if (semanticDepth < 0) throw new ArgumentOutOfRangeException(nameof(semanticDepth));
+        return checked(semanticDepth * 2 + FirstReservedNodeRow);
+    }
+
+    public static int TreeLayerFromReservedNodeRow(int reservedNodeRow)
+    {
+        if (reservedNodeRow < FirstReservedNodeRow || reservedNodeRow % 2 == 0)
+            throw new ArgumentOutOfRangeException(nameof(reservedNodeRow), "A reserved node row must be a positive odd logical row.");
+        return (reservedNodeRow - FirstReservedNodeRow) / 2;
+    }
+
+    public static int FinalCommonNodeRowFromReservedNodeRow(int reservedNodeRow)
+    {
+        _ = TreeLayerFromReservedNodeRow(reservedNodeRow);
+        return checked(reservedNodeRow + ProjectCommonNodeRowOffset);
+    }
+}
+
 public sealed record ArchitectureV7NodeSpanRequirement(
     string PhysicalNodeId,
     int LogicalSpan,

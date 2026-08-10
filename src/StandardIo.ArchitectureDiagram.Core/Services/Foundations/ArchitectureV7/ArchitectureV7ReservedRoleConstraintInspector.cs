@@ -76,8 +76,14 @@ public sealed class ArchitectureV7ReservedRoleConstraintInspector
             return new ArchitectureV7ReservedDepthConstraint("External", node.PhysicalNodeId, depth,
                 RequiredNodeRow(depth), true, "v7-reservation-inspection;external-depth=" + depth);
         }).OrderBy(constraint => constraint.PhysicalNodeId, StringComparer.Ordinal).ToArray();
+        var deepestNaturalNodeDepth = depths.Values.DefaultIfEmpty(0).Max();
+        var deepestRequiredExternalRow = externalConstraints.Length == 0
+            ? RequiredNodeRow(deepestNaturalNodeDepth + 1)
+            : externalConstraints.Max(constraint => constraint.RequiredNodeRow);
         requirements.Add(new ArchitectureV7ReservedDepthRequirement("External", "<external>", int.MaxValue,
-            externalConstraints.Length, externalConstraints.Length == 0 ? 1 : externalConstraints.Max(constraint => constraint.RequiredNodeRow), externalConstraints));
+            externalConstraints.Length,
+            deepestRequiredExternalRow,
+            externalConstraints));
 
         var orderedRequirements = requirements.OrderBy(requirement => requirement.Order).ThenBy(requirement => requirement.ReservationName, StringComparer.Ordinal).ToArray();
         return new ArchitectureV7ReservationInspectionResult(ownership,
@@ -100,7 +106,7 @@ public sealed class ArchitectureV7ReservedRoleConstraintInspector
         return null;
     }
 
-    private static int RequiredNodeRow(int depth) => checked(depth * 2 + 1);
+    private static int RequiredNodeRow(int depth) => ArchitectureV7ReservationCoordinates.ReservedNodeRowFromSemanticDepth(depth);
 
     private static string Fingerprint(string ownershipFingerprint, IReadOnlyDictionary<string, int> depths,
         IReadOnlyList<ArchitectureV7ReservedDepthRequirement> requirements)

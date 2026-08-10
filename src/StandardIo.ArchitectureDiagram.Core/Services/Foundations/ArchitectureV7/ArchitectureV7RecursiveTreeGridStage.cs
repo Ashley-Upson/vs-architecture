@@ -80,13 +80,14 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
 
         int? ReservedLayer(ArchitectureV7PhysicalNode node)
         {
-            if (node.IsExternal) return reservations.External.NodeRow;
+            if (node.IsExternal) return ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(reservations.External.NodeRow);
             foreach (var reservation in reservations.Reservations.Where(item => !item.IsExternal).OrderBy(item => item.Order))
             {
                 var suffix = reservation.Pattern.Trim();
                 if (suffix.StartsWith("*", StringComparison.Ordinal)) suffix = suffix.Substring(1);
                 if (suffix.EndsWith("$", StringComparison.Ordinal)) suffix = suffix.Substring(0, suffix.Length - 1);
-                if (suffix.Length > 0 && node.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return reservation.NodeRow;
+                if (suffix.Length > 0 && node.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    return ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(reservation.NodeRow);
             }
             return null;
         }

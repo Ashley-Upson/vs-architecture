@@ -13,6 +13,26 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class ArchitectureV7PrePlacementTests
 {
     [Theory]
+    [InlineData(0, 1)]
+    [InlineData(1, 3)]
+    [InlineData(2, 5)]
+    [InlineData(3, 7)]
+    public void Semantic_depth_maps_to_one_shared_reserved_node_row_domain(int depth, int expectedRow)
+    {
+        Assert.Equal(expectedRow, ArchitectureV7ReservationCoordinates.ReservedNodeRowFromSemanticDepth(depth));
+        Assert.Equal(depth, ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(expectedRow));
+    }
+
+    [Theory]
+    [InlineData(1, 3)]
+    [InlineData(3, 5)]
+    [InlineData(5, 7)]
+    public void Reserved_node_row_uses_one_common_grid_offset(int reservedRow, int expectedFinalRow)
+    {
+        Assert.Equal(expectedFinalRow, ArchitectureV7ReservationCoordinates.FinalCommonNodeRowFromReservedNodeRow(reservedRow));
+    }
+
+    [Theory]
     [InlineData(30, 3)]
     [InlineData(50, 5)]
     [InlineData(70, 7)]

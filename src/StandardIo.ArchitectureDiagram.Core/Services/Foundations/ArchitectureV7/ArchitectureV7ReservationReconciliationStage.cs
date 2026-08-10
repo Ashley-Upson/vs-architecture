@@ -20,7 +20,7 @@ public sealed class ArchitectureV7ReservationReconciliationStage
             .ThenBy(requirement => requirement.ReservationName, StringComparer.Ordinal)
             .ToList();
         var reservations = new List<ArchitectureV7FrozenReservation>();
-        var nextRow = 1;
+        var nextRow = ArchitectureV7ReservationCoordinates.FirstReservedNodeRow;
         foreach (var requirement in active)
         {
             var row = Math.Max(nextRow, OddAtOrAbove(requirement.RequiredNodeRow));

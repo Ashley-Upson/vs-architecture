@@ -97,7 +97,8 @@ public sealed class ArchitectureV7ProjectCompositionTests
         var project = Assert.Single(freeze.Projects);
         Assert.Equal(project.InteriorWidth + 4, project.Width);
         Assert.Equal(project.InteriorHeight + 4, project.Height);
-        Assert.All(project.Cells.Where(cell => cell.Row == project.Transform.RegionOriginRow || cell.Row == project.Transform.RegionOriginRow + project.Height - 1), cell =>
+        Assert.All(project.Cells.Where(cell => (cell.Row == project.Transform.RegionOriginRow || cell.Row == project.Transform.RegionOriginRow + project.Height - 1) &&
+            !cell.Capabilities.HasFlag(ArchitectureV7CellCapability.ProjectBoundary)), cell =>
             Assert.True(cell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting)));
         var innerTop = project.Cells.Where(cell => cell.Row == project.Transform.RegionOriginRow + 1).ToArray();
         Assert.NotEmpty(innerTop);
@@ -141,6 +142,29 @@ public sealed class ArchitectureV7ProjectCompositionTests
         var common = freeze.DiagramGrid.Cells.First(cell => !projectCells.Contains((cell.Row, cell.Column)) && cell.OccupantId is null);
         Assert.True(common.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed));
         Assert.True(common.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting));
+    }
+
+    [Fact]
+    public void Final_grid_does_not_combine_general_routing_with_restrictive_capabilities()
+    {
+        var freeze = Compose(Diagram(new[] { Node("a", "A"), Node("b", "B"), Node("standalone", "Standalone") },
+            new[] { Link("one", "a", "b") }));
+        var invalid = freeze.DiagramGrid.Cells.Where(cell => cell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting) &&
+            (cell.Capabilities.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly) ||
+             cell.Capabilities.HasFlag(ArchitectureV7CellCapability.HeaderBlocked) ||
+             cell.Capabilities.HasFlag(ArchitectureV7CellCapability.NodeAllowed))).ToArray();
+        Assert.Empty(invalid);
+    }
+
+    [Fact]
+    public void Ordinary_reserved_and_external_nodes_share_the_same_final_row_conversion()
+    {
+        var freeze = Compose(Diagram(new[] { Node("root", "Processing"), Node("broker", "Broker"), Node("external", "ExternalApi") },
+            new[] { Link("one", "root", "broker"), Link("two", "broker", "external") }));
+        Assert.Equal(ArchitectureV7ReservationCoordinates.FinalCommonNodeRowFromReservedNodeRow(1),
+            freeze.Nodes.Single(node => node.PhysicalNodeId == "physical:root").DiagramRow);
+        Assert.Equal(ArchitectureV7ReservationCoordinates.FinalCommonNodeRowFromReservedNodeRow(5), freeze.External.NodeRow);
+        Assert.Equal(freeze.External.NodeRow, freeze.External.Placements.Single().DiagramRow);
     }
 
     [Fact]
