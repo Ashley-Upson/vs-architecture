@@ -169,6 +169,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             acceptance.RouteFingerprint,
             acceptance.AllocationFingerprint,
             acceptance.SceneFingerprint,
+            acceptance.Metrics,
             FindingCodes = acceptance.Findings.Select(x => x.Code).ToArray()
         };
         var reportJson = JsonSerializer.Serialize(new

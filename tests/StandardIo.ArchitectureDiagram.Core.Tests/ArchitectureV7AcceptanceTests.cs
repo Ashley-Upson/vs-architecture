@@ -73,11 +73,11 @@ public sealed class ArchitectureV7AcceptanceTests
         Assert.Contains(report.Findings, x => x.Code == "MISSING-RELATIONSHIP-ACCOUNTING" && x.SubjectId == "missing");
     }
 
-    private static ArchitectureV7AcceptanceReport Validate(Pipeline pipeline, ArchitectureV7PhysicalSceneFreeze scene) =>
+    internal static ArchitectureV7AcceptanceReport Validate(Pipeline pipeline, ArchitectureV7PhysicalSceneFreeze scene) =>
         new ArchitectureV7FinalAcceptanceValidationStage().Validate(pipeline.Projection, pipeline.Ownership, pipeline.Sizing, pipeline.Reservation,
             pipeline.Placement, pipeline.Routes, pipeline.Allocation, scene, pipeline.Configuration);
 
-    private static Pipeline Build()
+    internal static Pipeline Build()
     {
         var projection = new ArchitectureV7PhysicalProjectionResult(
             new[] { new ArchitectureV7PhysicalNode("s", "s", "p", false, false, "s", "P.s", "Class", ArchitectureV7ProjectionMode.Canonical, null), new ArchitectureV7PhysicalNode("t", "t", "p", false, false, "t", "P.t", "Class", ArchitectureV7ProjectionMode.Canonical, null) },
@@ -101,5 +101,5 @@ public sealed class ArchitectureV7AcceptanceTests
 
     private static ArchitectureV7NodeSpanRequirement Requirement(string id) => new(id, 1, 1, 0, 0, 1, 10, 10, "test");
     private static ArchitectureV7FrozenNodePlacement Placement(string id, int row) => new(id, id, "p", row, 1, 1, 1, new[] { (row, 1) }, false, false, false, "tree", id, id, "test");
-    private sealed record Pipeline(ArchitectureV7PhysicalProjectionResult Projection, ArchitectureV7PositionalOwnershipResult Ownership, ArchitectureV7NodeSpanSizingResult Sizing, ArchitectureV7ReservationReconciliationResult Reservation, ArchitectureV7PlacementFreeze Placement, ArchitectureV7LogicalRouteFreeze Routes, ArchitectureV7CollectiveAllocationFreeze Allocation, ArchitectureV7PhysicalSceneFreeze Scene, ArchitectureV7PhysicalSceneConfiguration Configuration);
+    internal sealed record Pipeline(ArchitectureV7PhysicalProjectionResult Projection, ArchitectureV7PositionalOwnershipResult Ownership, ArchitectureV7NodeSpanSizingResult Sizing, ArchitectureV7ReservationReconciliationResult Reservation, ArchitectureV7PlacementFreeze Placement, ArchitectureV7LogicalRouteFreeze Routes, ArchitectureV7CollectiveAllocationFreeze Allocation, ArchitectureV7PhysicalSceneFreeze Scene, ArchitectureV7PhysicalSceneConfiguration Configuration);
 }

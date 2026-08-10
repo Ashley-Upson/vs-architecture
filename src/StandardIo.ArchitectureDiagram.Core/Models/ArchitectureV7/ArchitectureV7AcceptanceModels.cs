@@ -13,6 +13,17 @@ public sealed record ArchitectureV7AcceptanceFinding(
     IReadOnlyList<ArchitectureV7PhysicalPoint> PhysicalPoints,
     IReadOnlyList<string> Provenance);
 
+public sealed record ArchitectureV7AcceptanceValidationMetrics(
+    int TotalPhysicalSegments,
+    long PhysicalGeometryCandidateSegmentPairs,
+    long SegmentPairPredicateEvaluations,
+    long NodeBoundCandidates,
+    long SegmentNodePredicateEvaluations,
+    long CrossingCandidates,
+    long CrossingPredicateEvaluations,
+    long AccountingLookups,
+    int GlobalCollectionScansRemaining);
+
 public sealed class ArchitectureV7AcceptanceReport
 {
     public ArchitectureV7AcceptanceReport(
@@ -26,13 +37,15 @@ public sealed class ArchitectureV7AcceptanceReport
         string routeFingerprint,
         string allocationFingerprint,
         string sceneFingerprint,
-        bool isNormalEligible)
+        bool isNormalEligible,
+        ArchitectureV7AcceptanceValidationMetrics? metrics = null)
     {
         Findings = Array.AsReadOnly((findings ?? Array.Empty<ArchitectureV7AcceptanceFinding>()).ToArray());
         Counts = new Dictionary<string, int>((counts ?? new Dictionary<string, int>()).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal), StringComparer.Ordinal);
         ProjectionFingerprint = projectionFingerprint; OwnershipFingerprint = ownershipFingerprint; SizingFingerprint = sizingFingerprint;
         ReservationFingerprint = reservationFingerprint; PlacementFingerprint = placementFingerprint; RouteFingerprint = routeFingerprint;
         AllocationFingerprint = allocationFingerprint; SceneFingerprint = sceneFingerprint; IsNormalEligible = isNormalEligible;
+        Metrics = metrics ?? new ArchitectureV7AcceptanceValidationMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
     public IReadOnlyList<ArchitectureV7AcceptanceFinding> Findings { get; }
     public IReadOnlyDictionary<string, int> Counts { get; }
@@ -48,4 +61,5 @@ public sealed class ArchitectureV7AcceptanceReport
     public bool HasHardFailures => Findings.Count > 0;
     public bool IsStrictEligible => !HasHardFailures;
     public bool IsNormalEligible { get; }
+    public ArchitectureV7AcceptanceValidationMetrics Metrics { get; }
 }
