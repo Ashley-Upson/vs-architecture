@@ -19,10 +19,10 @@ public sealed class ArchitectureV7RoutingEvidenceTests
             PhysicalNode("target", 1, 700, 1),
             Link("failed-upward", "source", "target"));
         var route = new ArchitectureV7LogicalRelationshipRoutingStage().Route(
-            Freeze(new[] { PlacementNode("source", 5, 500, 3), PlacementNode("target", 1, 700) }, BlockedEscapeGrid(9, width, 500)), projection);
+            Freeze(new[] { PlacementNode("source", 5, 500, 3), PlacementNode("target", 1, 700) }, BlockedEscapeGrid(9, width, 501)), projection);
 
         var evidence = new ArchitectureV7RoutingEvidenceStage().Analyze(
-            Freeze(new[] { PlacementNode("source", 5, 500, 3), PlacementNode("target", 1, 700) }, BlockedEscapeGrid(9, width, 500)), route);
+            Freeze(new[] { PlacementNode("source", 5, 500, 3), PlacementNode("target", 1, 700) }, BlockedEscapeGrid(9, width, 501)), route);
         var item = Assert.Single(evidence);
         var authoritative = Assert.Single(route.Routes).AttemptEvidence.Single(attempt => attempt.Scenario == "upward-escape");
         Assert.Equal("upward-escape", item.Scenario);

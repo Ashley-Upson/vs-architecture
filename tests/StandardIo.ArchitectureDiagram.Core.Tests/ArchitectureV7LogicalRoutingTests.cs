@@ -27,12 +27,16 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
-    public void RoutingAllowed_rejects_horizontal_exit_and_bend_at_upward_escape()
+    public void Upward_route_passes_straight_boundary_before_bending_on_outer_general_routing()
     {
-        var route = Route(new[] { PlacementNode("s", 5, 2), PlacementNode("t", 1, 5) }, Link("routing-allowed-bend", "s", "t"), 9, 9,
-            Grid(9, 9, (6, 2, ArchitectureV7CellCapability.RoutingAllowed)));
-        Assert.False(route.IsComplete);
-        Assert.Contains(route.Diagnostics, item => item.IsHardFailure);
+        var boundary = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
+        var boundaryRow = Enumerable.Range(0, 11).Select(column => (6, column, boundary)).ToArray();
+        var route = Route(new[] { PlacementNode("s", 5, 2, 3), PlacementNode("t", 1, 7) }, Link("boundary-escape", "s", "t"), 9, 11,
+            Grid(9, 11, boundaryRow));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code + ":" + item.Message)));
+        Assert.Contains(route.Cells, cell => cell.Row == 6 && cell.Column == 3);
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 7 && pair.to.Row == 7);
+        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 6 && pair.to.Row == 6);
     }
 
     [Fact]

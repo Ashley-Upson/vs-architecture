@@ -69,9 +69,17 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             var currentColumn = start.Column;
             if (end.Row <= start.Row)
             {
+                if (!AdvanceToGeneralEscapeRow(path, ref currentRow, currentColumn, source, destination, cells))
+                    return Failed(path, "NoLegalUpwardEscape", "The upward route could not reach a general-routing escape row.", metrics, attemptEvidence);
                 var maxColumn = cells.Keys.Select(key => key.Column).DefaultIfEmpty(0).Max();
                 if (!TryEscape(path, ref currentColumn, currentRow, source, destination, cells, maxColumn, metrics, attemptEvidence)) return Failed(path, "NoLegalUpwardEscape", "The upward route could not escape the source footprint.", metrics, attemptEvidence);
                 currentRow -= 2;
+                while (currentRow >= start.Row)
+                {
+                    currentRow--;
+                    if (!Append(path, new ArchitectureV7RouteCell(currentRow, currentColumn), source, destination, cells))
+                        return Failed(path, "NoLegalUpwardContinuation", "The upward route could not leave the escape track toward the source-adjacent routing row.", metrics, attemptEvidence);
+                }
                 while (currentRow > end.Row - 1)
                 {
                     if (!Continue(path, ref currentRow, ref currentColumn, -1, source, destination, cells, metrics)) return Failed(path, "NoLegalUpwardContinuation", "No legal upward continuation column exists.", metrics, attemptEvidence);
@@ -88,6 +96,21 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             if (!AppendHorizontal(path, currentRow, currentColumn, end.Column, source, destination, cells) || !Append(path, end, source, destination, cells))
                 return Failed(path, "NoLegalDestinationApproach", "The destination cannot be approached and entered legally.", metrics);
             return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), attemptEvidence, metrics.Freeze()) : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.", metrics, attemptEvidence);
+        }
+
+        static bool AdvanceToGeneralEscapeRow(List<ArchitectureV7RouteCell> path, ref int currentRow, int currentColumn,
+            ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            while (true)
+            {
+                if (!cells.TryGetValue((currentRow, currentColumn), out var currentCell)) return false;
+                if (currentCell.Capabilities.HasFlag(ArchitectureV7CellCapability.GeneralRouting)) return true;
+
+                var nextRow = currentRow + 1;
+                if (!Append(path, new ArchitectureV7RouteCell(nextRow, currentColumn), source, destination, cells)) return false;
+                currentRow = nextRow;
+            }
         }
 
         static bool Continue(List<ArchitectureV7RouteCell> path, ref int currentRow, ref int currentColumn, int direction,
