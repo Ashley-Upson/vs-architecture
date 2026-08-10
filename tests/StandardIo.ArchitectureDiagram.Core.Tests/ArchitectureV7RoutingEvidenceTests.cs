@@ -24,8 +24,11 @@ public sealed class ArchitectureV7RoutingEvidenceTests
         var evidence = new ArchitectureV7RoutingEvidenceStage().Analyze(
             Freeze(new[] { PlacementNode("source", 5, 500, 3), PlacementNode("target", 1, 700) }, BlockedEscapeGrid(9, width, 500)), route);
         var item = Assert.Single(evidence);
+        var authoritative = Assert.Single(route.Routes).AttemptEvidence.Single(attempt => attempt.Scenario == "upward-escape");
         Assert.Equal("upward-escape", item.Scenario);
-        Assert.True(item.CandidateSummary.TotalCandidateCount > 100);
+        Assert.Equal(authoritative.Candidates.Count, item.CandidateSummary.TotalCandidateCount);
+        Assert.Equal(authoritative.Candidates[0].CandidateColumn, item.CandidateSummary.FirstCandidateExamined);
+        Assert.Equal(authoritative.Candidates[authoritative.Candidates.Count - 1].CandidateColumn, item.CandidateSummary.LastCandidateExamined);
         Assert.NotNull(item.CandidateSummary.FirstCandidateExamined);
         Assert.NotNull(item.CandidateSummary.LastCandidateExamined);
         Assert.NotEmpty(item.CandidateSummary.RejectionReasonHistogram);

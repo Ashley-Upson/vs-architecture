@@ -23,7 +23,7 @@ public sealed class ArchitectureV7RoutingEvidenceStage
                 var failure = attempted.Count == 0 ? null : attempted[attempted.Count - 1];
                 var scenario = Scenario(diagnostic.Code, sourceCell, targetCell);
                 var candidateSummary = scenario.StartsWith("upward", StringComparison.Ordinal) && scenario.Contains("escape", StringComparison.Ordinal)
-                    ? UpwardEscapeCandidates(failure, source, target, cells)
+                    ? AuthoritativeUpwardEscapeCandidates(route.AttemptEvidence.FirstOrDefault(x => x.Scenario == "upward-escape"))
                     : scenario.Contains("continuation", StringComparison.Ordinal)
                         ? ContinuationCandidates(failure, targetCell.Column, scenario.StartsWith("upward", StringComparison.Ordinal) ? -1 : 1, cells, source, target)
                         : EmptyCandidateSummary();
@@ -92,41 +92,40 @@ public sealed class ArchitectureV7RoutingEvidenceStage
         });
     }
 
-    private static ArchitectureV7RoutingCandidateSummary UpwardEscapeCandidates(ArchitectureV7RouteCell? failure,
-        ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement target,
-        IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+    private static ArchitectureV7RoutingCandidateSummary AuthoritativeUpwardEscapeCandidates(ArchitectureV7RouteAttemptEvidence? attempt)
     {
-        if (failure is null) return EmptyCandidateSummary();
-        var max = cells.Keys.Select(x => x.Column).DefaultIfEmpty(0).Max();
-        IEnumerable<int> CandidateColumns()
-        {
-            for (var distance = 2; distance <= max + source.LogicalSpan + 2; distance += 2)
-            {
-                yield return source.CentreCell - distance;
-                yield return source.CentreCell + distance;
-            }
-        }
+        if (attempt is null || attempt.Candidates.Count == 0) return EmptyCandidateSummary();
 
-        return SummarizeCandidates(CandidateColumns(), failure.Column, column =>
-        {
-            var traversed = new List<ArchitectureV7RouteCell>();
-            var reason = "accepted";
-            var step = column >= failure.Column ? 1 : -1;
-            for (var current = failure.Column + step; current != column + step; current += step)
-                traversed.Add(new ArchitectureV7RouteCell(failure.Row, current));
-            traversed.Add(new ArchitectureV7RouteCell(failure.Row - 1, column));
-            traversed.Add(new ArchitectureV7RouteCell(failure.Row - 2, column));
-            var outside = column < source.DiagramColumn || column >= source.DiagramColumn + source.LogicalSpan;
-            if (!outside) reason = "inside source footprint";
-            foreach (var cell in traversed)
-            {
-                if (!cells.TryGetValue((cell.Row, cell.Column), out var logical)) { reason = "grid cell absent"; break; }
-                if (logical.OccupantId is not null && logical.OccupantId != source.PhysicalNodeId && logical.OccupantId != target.PhysicalNodeId) { reason = "unrelated occupied node"; break; }
-                if (!logical.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed)) { reason = "routing capability absent"; break; }
-            }
-            return new CandidateProbe(column, Math.Abs(column - failure.Column) == 2,
-                reason == "accepted", reason, traversed);
-        });
+        var origin = attempt.CurrentContinuationColumn ?? 0;
+        var candidates = attempt.Candidates.Select(candidate => new ArchitectureV7RoutingCandidateEvidence(
+            candidate.CandidateColumn,
+            Math.Abs(candidate.CandidateColumn - origin) == 2,
+            candidate.Accepted,
+            candidate.RejectionReason,
+            candidate.TraversedCells.Count,
+            candidate.TraversedCells)).ToArray();
+        var selected = candidates.FirstOrDefault(candidate => candidate.Accepted);
+        var distances = candidates.GroupBy(candidate => Math.Abs(candidate.CandidateColumn - origin))
+            .ToDictionary(group => group.Key, group => group.Count());
+        var rejectionReasons = candidates.GroupBy(candidate => candidate.RejectionReason, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var first = candidates.Take(RepresentativeCandidateLimit).ToArray();
+        var last = candidates.Skip(Math.Max(0, candidates.Length - RepresentativeCandidateLimit)).ToArray();
+        return new ArchitectureV7RoutingCandidateSummary(
+            candidates.Length,
+            candidates[0].CandidateColumn,
+            candidates[candidates.Length - 1].CandidateColumn,
+            selected?.CandidateColumn,
+            candidates.Min(candidate => Math.Abs(candidate.CandidateColumn - origin)),
+            candidates.Max(candidate => Math.Abs(candidate.CandidateColumn - origin)),
+            rejectionReasons,
+            distances,
+            candidates.Sum(candidate => candidate.TraversedCellCount),
+            candidates.Max(candidate => candidate.TraversedCellCount),
+            selected,
+            selected is null ? candidates[candidates.Length - 1] : null,
+            first,
+            last);
     }
 
     private const int RepresentativeCandidateLimit = 4;

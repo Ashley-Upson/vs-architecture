@@ -135,9 +135,9 @@ public sealed class ArchitectureV7LogicalRoutingTests
         var grid = Grid(7, 11, (6, 1, ArchitectureV7CellCapability.RoutingAllowed));
         var route = Route(new[] { PlacementNode("s", 5, 2, 3), PlacementNode("t", 1, 7) }, Link("escape-next", "s", "t"), 7, 11, grid);
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
-        Assert.Equal(2, route.OperationMetrics.UpwardEscapeCandidatesEvaluated);
+        Assert.Equal(1, route.OperationMetrics.UpwardEscapeCandidatesEvaluated);
         Assert.DoesNotContain(route.Cells, cell => cell.Row == 6 && cell.Column == 1);
-        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == 6 && pair.b.Row == 6 && pair.b.Column == 5);
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == 6 && pair.b.Row == 6 && pair.b.Column == 7);
     }
 
     [Fact]
@@ -148,6 +148,114 @@ public sealed class ArchitectureV7LogicalRoutingTests
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
         Assert.Contains(route.Cells, cell => cell.Row == 5 && cell.Column == 3);
         Assert.DoesNotContain(route.Cells, cell => cell.Row == 5 && cell.Column == 1);
+    }
+
+    [Theory]
+    [InlineData(3, 9, 9, 11, 6)]
+    [InlineData(5, 8, 8, 12, 6)]
+    [InlineData(7, 7, 7, 13, 4)]
+    [InlineData(9, 6, 6, 14, 4)]
+    public void Upward_escape_candidates_are_derived_from_footprint_and_parity(int span, int sourceColumn,
+        int expectedFootprintLeft, int expectedFootprintRight, int expectedFirstCandidate)
+    {
+        var route = Route(new[] { PlacementNode("s", 5, sourceColumn, span), PlacementNode("t", 1, 18) },
+            Link("span-" + span, "s", "t"), 7, 25, GeneralGrid(7, 25));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
+
+        var evidence = Assert.Single(route.AttemptEvidence);
+        Assert.Equal("upward-escape", evidence.Scenario);
+        Assert.True(expectedFirstCandidate == evidence.Candidates[0].CandidateColumn,
+            string.Join(";", evidence.Candidates.Select(candidate => candidate.CandidateColumn + ":" + candidate.RejectionReason)));
+        Assert.True(evidence.Candidates[0].Accepted);
+        Assert.Equal(1, route.OperationMetrics.UpwardEscapeCandidatesEvaluated);
+
+        var footprintRight = sourceColumn + span - 1;
+        var centre = sourceColumn + (span - 1) / 2;
+        Assert.Equal(expectedFootprintLeft, sourceColumn);
+        Assert.Equal(expectedFootprintRight, footprintRight);
+        Assert.All(evidence.Candidates, candidate =>
+        {
+            Assert.Equal(0, Math.Abs(candidate.CandidateColumn - centre) % 2);
+            Assert.True(candidate.CandidateColumn < sourceColumn
+                ? sourceColumn - candidate.CandidateColumn - 1 >= 1
+                : candidate.CandidateColumn - footprintRight - 1 >= 1);
+            Assert.True(Math.Abs(candidate.CandidateColumn - centre) / 2 >= 1);
+        });
+    }
+
+    [Fact]
+    public void Upward_escape_uses_left_candidate_on_equal_valid_ordinal_distance()
+    {
+        var route = Route(new[]
+        {
+            PlacementNode("s", 5, 9, 3),
+            PlacementNode("t", 1, 18),
+            PlacementNode("obstacle", 6, 6)
+        }, Link("left-tie", "s", "t"), 7, 25, GeneralGrid(7, 25));
+
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        var evidence = Assert.Single(route.AttemptEvidence);
+        Assert.Equal(new[] { 6, 14 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
+        Assert.False(evidence.Candidates[0].Accepted);
+        Assert.True(evidence.Candidates[1].Accepted);
+        Assert.Equal(4, Math.Abs(evidence.Candidates[0].CandidateColumn - 10));
+        Assert.Equal(4, Math.Abs(evidence.Candidates[1].CandidateColumn - 10));
+    }
+
+    [Fact]
+    public void Upward_escape_candidate_evidence_is_authoritative_and_monotonic()
+    {
+        var nodes = new[] { PlacementNode("s", 5, 2, 3), PlacementNode("t", 1, 7) };
+        var grid = Grid(7, 11, (5, 7, ArchitectureV7CellCapability.HeaderBlocked));
+        var route = Route(nodes,
+            Link("evidence", "s", "t"), 7, 11, grid);
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+
+        var evidence = Assert.Single(route.AttemptEvidence);
+        Assert.Equal(new[] { 7, 9 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
+        Assert.False(evidence.Candidates[0].Accepted);
+        Assert.Equal("continuation-illegal", evidence.Candidates[0].RejectionReason);
+        Assert.True(evidence.Candidates[1].Accepted);
+        Assert.DoesNotContain(route.Cells, cell => cell.Row == 5 && cell.Column == 7);
+
+        var escapeRow = route.Cells.Where(cell => cell.Row == 6).Select(cell => cell.Column).ToArray();
+        var escapeDirection = Math.Sign(escapeRow[escapeRow.Length - 1] - escapeRow[0]);
+        Assert.NotEqual(0, escapeDirection);
+        Assert.All(escapeRow.Zip(escapeRow.Skip(1), (from, to) => to - from), delta => Assert.Equal(escapeDirection, Math.Sign(delta)));
+    }
+
+    [Fact]
+    public void Upward_escape_skips_occupied_candidate_without_retaining_probe_cells()
+    {
+        var nodes = new[]
+        {
+            PlacementNode("s", 5, 2, 3),
+            PlacementNode("t", 1, 7),
+            PlacementNode("occupied", 5, 7)
+        };
+        var route = Route(nodes, Link("occupied-candidate", "s", "t"), 7, 11, GeneralGrid(7, 11));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+
+        var evidence = Assert.Single(route.AttemptEvidence);
+        Assert.Equal(new[] { 7, 9 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
+        Assert.False(evidence.Candidates[0].Accepted);
+        Assert.Equal("continuation-illegal", evidence.Candidates[0].RejectionReason);
+        Assert.DoesNotContain(route.Cells, cell => cell.Row == 5 && cell.Column == 7);
+    }
+
+    [Theory]
+    [InlineData(0, 1, 5)]
+    [InlineData(6, 7, 3)]
+    public void Upward_escape_respects_grid_edges(int sourceColumn, int centreColumn, int expectedFirstCandidate)
+    {
+        var route = Route(new[] { PlacementNode("s", 5, sourceColumn, 3), PlacementNode("t", 1, 7) },
+            Link("edge-" + sourceColumn, "s", "t"), 7, 9, GeneralGrid(7, 9));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+
+        var evidence = Assert.Single(route.AttemptEvidence);
+        Assert.Equal(expectedFirstCandidate, evidence.Candidates[0].CandidateColumn);
+        Assert.Equal(centreColumn, route.Cells[1].Column);
+        Assert.All(route.Cells, cell => Assert.InRange(cell.Column, 0, 8));
     }
 
     [Fact]
