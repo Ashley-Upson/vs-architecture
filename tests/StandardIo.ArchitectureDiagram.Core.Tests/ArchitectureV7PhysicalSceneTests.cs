@@ -184,6 +184,20 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void F8_bend_uses_the_single_frozen_lane_intersection()
+    {
+        var route = Route("f8-bend", "s", "t", (1, 1), (2, 1), (2, 3));
+        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 2, 3)), spacing: 4);
+        var physical = Assert.Single(scene.Routes);
+        var bend = Assert.Single(physical.Points.Where(point => point.Provenance.Contains("bend-resource=", StringComparison.Ordinal)));
+
+        Assert.Equal((scene.Columns[1].Start + scene.Columns[1].End) / 2d, bend.X);
+        Assert.Equal((scene.Rows[2].Start + scene.Rows[2].End) / 2d, bend.Y);
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
+        Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+    }
+
+    [Fact]
     public void Allocated_crossing_is_materialised_at_frozen_resource_with_provenance()
     {
         var routes = new[]
@@ -195,6 +209,25 @@ public sealed class ArchitectureV7PhysicalSceneTests
 
         Assert.Contains(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
+    }
+
+    [Fact]
+    public void F8_clean_crossing_uses_the_existing_horizontal_vertical_lane_intersection()
+    {
+        var routes = new[]
+        {
+            Route("h8", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v8", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+        var crossingPoints = scene.Routes.SelectMany(route => route.Points)
+            .Where(point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal)).ToArray();
+        var expectedX = (scene.Columns[3].Start + scene.Columns[3].End) / 2d;
+        var expectedY = (scene.Rows[3].Start + scene.Rows[3].End) / 2d;
+
+        Assert.NotEmpty(crossingPoints);
+        Assert.All(crossingPoints, point => { Assert.Equal(expectedX, point.X); Assert.Equal(expectedY, point.Y); });
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
     }
 
     [Fact]
@@ -271,6 +304,36 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var bounds = Assert.Single(scene.Nodes).Bounds;
         Assert.Equal(900, bounds.Right - bounds.Left);
         Assert.True(bounds.Right - bounds.Left >= 756);
+    }
+
+    [Fact]
+    public void F8A_multi_span_endpoint_gets_a_frozen_handoff_when_shared_columns_shift_its_physical_centre()
+    {
+        var source = new ArchitectureV7FrozenNodePlacement("wide-source", "wide-source", "p", 1, 0, 3, 1,
+            new[] { (1, 0), (1, 1), (1, 2) }, false, false, false, "tree", "wide-source", "wide-source", "test");
+        var target = new ArchitectureV7FrozenNodePlacement("target", "target", "p", 3, 1, 1, 1,
+            new[] { (3, 1) }, false, false, false, "tree", "target", "target", "test");
+        var unrelated = new ArchitectureV7FrozenNodePlacement("wide-left", "wide-left", "p", 0, 0, 1, 0,
+            new[] { (0, 0) }, false, false, false, "tree", "wide-left", "wide-left", "test");
+        var placement = new ArchitectureV7PlacementFreeze(
+            new[] { source, target, unrelated }, Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(4, 4, Array.Empty<ArchitectureV7LogicalCell>()), Array.Empty<ArchitectureV7ProjectTransform>(),
+            "projection", "ownership", "sizing", "reservation", "placement");
+        var route = Route("f8a-wide", "wide-source", "target", (1, 1), (2, 1), (3, 1));
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(new[] { route }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
+            new ArchitectureV7AllocationConfiguration(4, 4, 0));
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
+            new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 4, 4, 0),
+            new Dictionary<string, int> { ["wide-source"] = 350, ["wide-left"] = 500, ["target"] = 100 });
+
+        Assert.Contains(allocation.Handoffs, handoff => handoff.PhysicalLinkId == "f8a-wide" && handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        Assert.Single(scene.Routes);
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
+        Assert.All(scene.Routes.Single().Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
     }
 
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,

@@ -27,7 +27,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var (lanes, assignments) = AllocateLanes(runs, configuration.ParallelLaneSpacing);
         var terminals = AllocateTerminals(placement, routes, runs, configuration, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
-        var handoffs = BuildHandoffs(routes, runs, assignments, terminals, configuration, diagnostics);
+        var handoffs = BuildHandoffs(placement, routes, runs, assignments, terminals, configuration, diagnostics);
         var bends = BuildBendsResources(runs, routes, assignments, configuration, diagnostics);
         var crossingResult = BuildCrossingResources(routes, runs, assignments, bends, configuration, diagnostics);
         var crossings = crossingResult.Resources;
@@ -158,7 +158,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
     }
 
     private static IReadOnlyList<ArchitectureV7EndpointHandoff> BuildHandoffs(
-        ArchitectureV7LogicalRouteFreeze routes, IReadOnlyList<ArchitectureV7StraightRun> runs,
+        ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes, IReadOnlyList<ArchitectureV7StraightRun> runs,
         IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
         ArchitectureV7AllocationConfiguration configuration, ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
     {
@@ -197,7 +197,11 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             var relativeOffset = laneOffset - terminalOffset;
             var sideEndpoint = terminal.Direction is ArchitectureV7EndpointDirection.Left or ArchitectureV7EndpointDirection.Right;
             var requiresOrthogonalSideAttachment = run.Orientation == ArchitectureV7RunOrientation.Horizontal && sideEndpoint;
-            if (Math.Abs(relativeOffset) < 0.0001 && !requiresOrthogonalSideAttachment) continue;
+            var endpointNode = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == terminal.PhysicalNodeId);
+            var endpointCell = source ? route.Cells[0] : route.Cells[route.Cells.Count - 1];
+            var multiSpanCentreAttachment = endpointNode is not null && endpointNode.LogicalSpan > 1 &&
+                endpointCell.Row == endpointNode.DiagramRow && endpointCell.Column == endpointNode.CentreCell;
+            if (Math.Abs(relativeOffset) < 0.0001 && !requiresOrthogonalSideAttachment && !multiSpanCentreAttachment) continue;
 
             var startIndex = source ? 0 : route.Cells.Count - 2;
             var endIndex = source ? 1 : route.Cells.Count - 1;
@@ -273,14 +277,16 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             for (var slot = 0; slot < ordered.Length; slot++)
             {
                 var item = ordered[slot];
-                var slotOffset = SlotOffset(slot, ordered.Length, configuration.ParallelLaneSpacing);
-                var position = new ArchitectureV7PhysicalRelativePosition(item.Position.XOffset + slotOffset, item.Position.YOffset + slotOffset);
+                // A bend is the intersection of its frozen incoming/outgoing
+                // lanes.  Resource-slot separation must not move that point
+                // off either authoritative lane.
+                var position = item.Position;
                 var incomingAssignment = assignments.First(x => x.RunId == item.Incoming.RunId);
                 var outgoingAssignment = assignments.First(x => x.RunId == item.Outgoing.RunId);
                 result.Add(new("bend:" + item.Route.PhysicalLinkId + ":" + item.Index, item.Route.PhysicalLinkId, item.Index,
                     item.Route.Cells[item.Index], item.Incoming.Orientation, item.Outgoing.Orientation, item.Incoming.RunId, item.Outgoing.RunId,
                     "allocated-bend-resource;cell-centre-relative-offset", incomingAssignment.LaneId, outgoingAssignment.LaneId,
-                    slotOffset, configuration.ResourceClearance, position));
+                    0, configuration.ResourceClearance, position));
             }
         }
         return result;
@@ -316,7 +322,6 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             if (candidates.Count == 0) continue;
             var ordered = candidates.OrderBy(x => x.HLaneId, StringComparer.Ordinal).ThenBy(x => x.VLaneId, StringComparer.Ordinal)
                 .ThenBy(x => x.HLink, StringComparer.Ordinal).ThenBy(x => x.VLink, StringComparer.Ordinal).ToArray();
-            var occupiedBends = bends.Count(x => x.Cell == cell.Key);
             var resources = ordered.GroupBy(x => new CrossingResourceGeometryKey(cell.Key, x.Classification, x.HLaneId, x.VLaneId,
                     x.Position.XOffset, x.Position.YOffset, configuration.ResourceClearance))
                 .OrderBy(x => x.Key.Classification, StringComparer.Ordinal)
@@ -329,12 +334,15 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             {
                 var group = resources[slot];
                 var item = group.First();
-                var slotOffset = SlotOffset(occupiedBends + slot, occupiedBends + resources.Length, configuration.ParallelLaneSpacing);
-                var position = new ArchitectureV7PhysicalRelativePosition(group.Key.XOffset + slotOffset, group.Key.YOffset + slotOffset);
+                // A crossing describes interaction between the already
+                // allocated horizontal and vertical lanes.  It must remain at
+                // their exact frozen intersection; it is not a bend-slot
+                // placement opportunity.
+                var position = new ArchitectureV7PhysicalRelativePosition(group.Key.XOffset, group.Key.YOffset);
                 var resourceId = CrossingResourceId(group.Key.Cell, group.Key.Classification, group.Key.HorizontalLaneId,
                     group.Key.VerticalLaneId, position, configuration.ResourceClearance);
                 result.Add(new(resourceId, cell.Key, item.HLink, item.VLink, "allocated-crossing-resource;geometry-keyed", item.HRunId, item.VRunId,
-                    item.HLaneId, item.VLaneId, slotOffset, configuration.ResourceClearance, item.Classification,
+                    item.HLaneId, item.VLaneId, 0, configuration.ResourceClearance, item.Classification,
                     item.HIndex, item.VIndex, position, group.Select(x => x.InteractionId).OrderBy(x => x, StringComparer.Ordinal).ToArray()));
                 foreach (var candidate in group)
                 {

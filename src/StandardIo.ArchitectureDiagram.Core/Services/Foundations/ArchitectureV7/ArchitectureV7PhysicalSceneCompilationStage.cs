@@ -213,7 +213,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation; compiler will not synthesize one.", true, route.PhysicalLinkId));
                 return null;
             }
-            result.Add(MaterialiseHandoffPoint(handoff, destination, route, rows, columns, last));
+            result.Add(MaterialiseHandoffPoint(handoff, destination, route, rows, columns, previous));
         }
         result.Add(last);
         return result;
@@ -225,12 +225,9 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     {
         if (handoff.LogicalCell is not { } cell || (uint)cell.Row >= (uint)rows.Count || (uint)cell.Column >= (uint)columns.Count)
             throw new InvalidOperationException("A frozen endpoint handoff has no representable logical cell.");
-        var cellX = (columns[cell.Column].Start + columns[cell.Column].End) / 2d;
-        var cellY = (rows[cell.Row].Start + rows[cell.Row].End) / 2d;
-        var relative = handoff.RelativePosition;
         var point = handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical
-            ? new ArchitectureV7PhysicalPoint(cellX + relative.XOffset, terminal.Position.Y, "frozen-" + handoff.ResourceId)
-            : new ArchitectureV7PhysicalPoint(terminal.Position.X, cellY + relative.YOffset, "frozen-" + handoff.ResourceId);
+            ? new ArchitectureV7PhysicalPoint(adjacentPoint.Point.X, terminal.Position.Y, "frozen-" + handoff.ResourceId)
+            : new ArchitectureV7PhysicalPoint(terminal.Position.X, adjacentPoint.Point.Y, "frozen-" + handoff.ResourceId);
         return new(handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? 0 : route.Cells.Count - 1,
             handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1], point,
             adjacentPoint.RunId, adjacentPoint.LaneId, "handoff-resource=" + handoff.ResourceId + ";" + handoff.Provenance);
