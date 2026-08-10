@@ -21,16 +21,27 @@ public sealed class ArchitectureV7ReservationReconciliationStage
             .ToList();
         var reservations = new List<ArchitectureV7FrozenReservation>();
         var nextRow = ArchitectureV7ReservationCoordinates.FirstReservedNodeRow;
+        var physicalNodes = inspection.Ownership.Projection.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
+        var ordinaryRows = inspection.NaturalDepthByPhysicalNodeId
+            .Where(item => !physicalNodes[item.Key].IsExternal)
+            .Select(item => ArchitectureV7ReservationCoordinates.ReservedNodeRowFromSemanticDepth(item.Value))
+            .ToArray();
+        int? deepestOrdinaryRow = ordinaryRows.Length == 0 ? null : ordinaryRows.Max();
         foreach (var requirement in active)
         {
             var row = Math.Max(nextRow, OddAtOrAbove(requirement.RequiredNodeRow));
             reservations.Add(new ArchitectureV7FrozenReservation(requirement.ReservationName, requirement.Pattern,
                 requirement.Order, requirement.MatchCount, row, false));
-            nextRow = checked(row + 2);
+            deepestOrdinaryRow = Math.Max(deepestOrdinaryRow ?? row, row);
+            nextRow = ArchitectureV7ReservationCoordinates.NextReservedNodeRow(row);
         }
 
         var external = inspection.Requirements.First(requirement => requirement.ReservationName.Equals("External", StringComparison.OrdinalIgnoreCase));
         var externalRow = Math.Max(nextRow, OddAtOrAbove(external.RequiredNodeRow));
+        if (deepestOrdinaryRow is { } ordinaryRow)
+            externalRow = Math.Max(externalRow, ArchitectureV7ReservationCoordinates.NextReservedNodeRow(ordinaryRow));
+        if (deepestOrdinaryRow is { } finalOrdinaryRow && externalRow <= finalOrdinaryRow)
+            throw new InvalidOperationException("V7 reservation reconciliation failed to place External below every ordinary node row.");
         reservations.Add(new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue,
             external.MatchCount, externalRow, true));
         var fingerprintText = inspection.FreezeFingerprint + "#" + string.Join("|", reservations.Select(item =>

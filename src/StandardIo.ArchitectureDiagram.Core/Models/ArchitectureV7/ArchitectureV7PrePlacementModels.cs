@@ -39,6 +39,12 @@ public static class ArchitectureV7ReservationCoordinates
         _ = TreeLayerFromReservedNodeRow(reservedNodeRow);
         return checked(reservedNodeRow + ProjectCommonNodeRowOffset);
     }
+
+    public static int NextReservedNodeRow(int reservedNodeRow)
+    {
+        _ = TreeLayerFromReservedNodeRow(reservedNodeRow);
+        return checked(reservedNodeRow + 2);
+    }
 }
 
 public sealed record ArchitectureV7NodeSpanRequirement(

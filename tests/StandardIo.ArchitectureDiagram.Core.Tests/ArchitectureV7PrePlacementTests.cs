@@ -150,6 +150,38 @@ public sealed class ArchitectureV7PrePlacementTests
     }
 
     [Fact]
+    public void External_is_below_a_deeper_ordinary_chain_even_when_its_own_dependency_is_shallow()
+    {
+        var diagram = Diagram(new[] { Node("root", "Root"), Node("child", "Child"), Node("grandchild", "Grandchild"), Node("external", "ExternalApi") },
+            new[] { Link("one", "root", "child"), Link("two", "child", "grandchild"), Link("three", "root", "external") });
+        var table = Reconcile(diagram, Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        Assert.Equal(7, table.External.NodeRow);
+        Assert.True(table.External.NodeRow > 5);
+    }
+
+    [Fact]
+    public void Empty_external_reservation_remains_below_a_deep_ordinary_chain()
+    {
+        var diagram = DiagramWithoutExternal(new[] { Node("root", "Root"), Node("child", "Child"), Node("grandchild", "Grandchild") },
+            new[] { Link("one", "root", "child"), Link("two", "child", "grandchild") });
+        var table = Reconcile(diagram, Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        Assert.Equal(7, table.External.NodeRow);
+    }
+
+    [Fact]
+    public void External_moves_below_an_ordinary_reserved_role_result()
+    {
+        var diagram = Diagram(new[] { Node("root", "Root"), Node("processing", "Processing"), Node("external", "ExternalApi") },
+            new[] { Link("one", "root", "processing"), Link("two", "root", "external") });
+        var table = Reconcile(diagram, new[] { new ArchitectureV7ReservedRoleRule("Processing", "*processing", 0) });
+
+        Assert.Equal(5, table.External.NodeRow);
+        Assert.True(table.External.NodeRow > table.Reservations.Single(item => item.Name == "Processing").NodeRow);
+    }
+
+    [Fact]
     public void Unreserved_broker_depth_is_preserved_without_a_broker_reservation()
     {
         var diagram = Diagram(new[] { Node("processing", "Processing"), Node("broker", "Broker"), Node("external", "ExternalApi") },
@@ -199,6 +231,9 @@ public sealed class ArchitectureV7PrePlacementTests
 
     private static ArchitectureDiagramModel Diagram(ArchitectureNode[] nodes, ArchitectureLink[] links) =>
         new(new[] { new ArchitectureProject("project", "Project", nodes.Where(node => node.Id != "external").ToArray(), "project") }, new[] { new ArchitectureExternalNode("external", "ExternalApi", "External", "external", "External.ExternalApi", "interface") }.Where(_ => nodes.Any(node => node.Id == "external")).ToArray(), links, null);
+
+    private static ArchitectureDiagramModel DiagramWithoutExternal(ArchitectureNode[] nodes, ArchitectureLink[] links) =>
+        new(new[] { new ArchitectureProject("project", "Project", nodes, "project") }, Array.Empty<ArchitectureExternalNode>(), links, null);
 
     private static ArchitectureNode Node(string id, string name) =>
         new(id, "project", name, "Project." + name, "Class", id, Array.Empty<string>());
