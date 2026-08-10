@@ -89,6 +89,10 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             {
                 while (currentRow < end.Row - 1)
                 {
+                    if (currentRow + 2 == end.Row - 1 && TryAppendDestinationFromPreviousRoutingRow(path, currentRow, currentColumn, end, source, destination, cells))
+                        return Validate(path, source, destination, cells, true)
+                            ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), attemptEvidence, metrics.Freeze())
+                            : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.", metrics, attemptEvidence);
                     if (!Continue(path, ref currentRow, ref currentColumn, 1, source, destination, cells, metrics)) return Failed(path, "NoLegalDownwardContinuation", "No legal downward continuation column exists.", metrics);
                 }
             }
@@ -111,6 +115,24 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
                 if (!Append(path, new ArchitectureV7RouteCell(nextRow, currentColumn), source, destination, cells)) return false;
                 currentRow = nextRow;
             }
+        }
+
+        static bool TryAppendDestinationFromPreviousRoutingRow(List<ArchitectureV7RouteCell> path, int currentRow, int currentColumn,
+            ArchitectureV7RouteCell end, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            var initialCount = path.Count;
+            var alignmentRow = currentRow;
+            if (!AppendHorizontal(path, alignmentRow, currentColumn, end.Column, source, destination, cells) ||
+                !Append(path, new ArchitectureV7RouteCell(alignmentRow + 1, end.Column), source, destination, cells) ||
+                !Append(path, new ArchitectureV7RouteCell(alignmentRow + 2, end.Column), source, destination, cells) ||
+                !Append(path, end, source, destination, cells))
+            {
+                while (path.Count > initialCount) path.RemoveAt(path.Count - 1);
+                return false;
+            }
+
+            return true;
         }
 
         static bool Continue(List<ArchitectureV7RouteCell> path, ref int currentRow, ref int currentColumn, int direction,
