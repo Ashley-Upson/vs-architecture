@@ -130,6 +130,17 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
+    public void Upward_escape_skips_candidate_whose_final_horizontal_segment_is_not_appendable()
+    {
+        var grid = Grid(7, 11, (6, 1, ArchitectureV7CellCapability.RoutingAllowed));
+        var route = Route(new[] { PlacementNode("s", 5, 2, 3), PlacementNode("t", 1, 7) }, Link("escape-next", "s", "t"), 7, 11, grid);
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        Assert.Equal(2, route.OperationMetrics.UpwardEscapeCandidatesEvaluated);
+        Assert.DoesNotContain(route.Cells, cell => cell.Row == 6 && cell.Column == 1);
+        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == 6 && pair.b.Row == 6 && pair.b.Column == 5);
+    }
+
+    [Fact]
     public void Blocked_upward_continuation_uses_plus_two_after_left_escape_is_blocked()
     {
         var nodes = new[] { PlacementNode("s", 7, 3), PlacementNode("t", 1, 3), PlacementNode("obstacle", 5, 1) };

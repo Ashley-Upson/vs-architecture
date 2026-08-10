@@ -131,16 +131,23 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             for (var index = 2; index < route.Cells.Count; index++)
                 if (route.Cells[index - 2].Row == route.Cells[index - 1].Row && route.Cells[index - 1].Row == route.Cells[index].Row && Math.Sign(route.Cells[index - 1].Column - route.Cells[index - 2].Column) != Math.Sign(route.Cells[index].Column - route.Cells[index - 1].Column))
                     Add(findings, "LOGICAL-HORIZONTAL-REVERSAL", "logical-route", "Route reverses horizontally without an accepted topology explanation.", route.PhysicalLinkId, route.Cells, Array.Empty<ArchitectureV7PhysicalPoint>(), Array.Empty<string>());
-            foreach (var cell in route.Cells.Skip(1).Take(Math.Max(0, route.Cells.Count - 2)))
+            for (var index = 1; index < route.Cells.Count - 1; index++)
             {
-                if (!grid.TryGetValue((cell.Row, cell.Column), out var logicalCell) || (logicalCell.Capabilities & ArchitectureV7CellCapability.RoutingAllowed) == 0)
-                    Add(findings, "ROUTE-CAPABILITY-VIOLATION", "logical-route", "Route uses a cell without routing capability.", route.PhysicalLinkId, route.Cells, Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "cell=" + cell.Row + "," + cell.Column });
+                var cell = route.Cells[index];
+                var entry = DirectionOf(route.Cells[index - 1], cell);
+                var exit = DirectionOf(cell, route.Cells[index + 1]);
+                if (!grid.TryGetValue((cell.Row, cell.Column), out var logicalCell) || !ArchitectureV7CellTraversalPolicy.Allows(logicalCell.Capabilities, entry, exit))
+                    Add(findings, "ROUTE-CAPABILITY-VIOLATION", "logical-route", "Route uses a cell without capability for its traversed entry/exit directions.", route.PhysicalLinkId, route.Cells, Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "cell=" + cell.Row + "," + cell.Column, "entry=" + entry, "exit=" + exit });
                 if (logicalCell?.OccupantId is not null && logicalCell.OccupantId != route.SourcePhysicalNodeId && logicalCell.OccupantId != route.DestinationPhysicalNodeId)
                     Add(findings, "ROUTE-CROSSES-NODE-FOOTPRINT", "logical-route", "Route crosses an unrelated frozen node footprint.", route.PhysicalLinkId, route.Cells, Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "occupant=" + logicalCell.OccupantId });
             }
         }
         _ = projection;
     }
+
+    private static ArchitectureV7TraversalDirection DirectionOf(ArchitectureV7RouteCell from, ArchitectureV7RouteCell to) =>
+        to.Row == from.Row ? (to.Column > from.Column ? ArchitectureV7TraversalDirection.Right : ArchitectureV7TraversalDirection.Left) :
+        (to.Row > from.Row ? ArchitectureV7TraversalDirection.Down : ArchitectureV7TraversalDirection.Up);
 
     private static void ValidatePhysicalGeometry(ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes,
         ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneFreeze scene, ArchitectureV7PhysicalSceneConfiguration configuration,

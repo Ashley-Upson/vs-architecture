@@ -18,7 +18,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         if (!string.Equals(routes.PlacementFingerprint, placement.PlacementFingerprint, StringComparison.Ordinal))
             throw new ArgumentException("The logical route freeze does not belong to the supplied placement freeze.", nameof(routes));
-        if (configuration.ParallelLaneSpacing < 0 || configuration.TerminalPortSpacing < 0 || configuration.TerminalInset < 0)
+        if (configuration.ParallelLaneSpacing < 0 || configuration.TerminalPortSpacing < 0 || configuration.TerminalInset < 0 || configuration.BaseCellWidth <= 0)
             throw new ArgumentOutOfRangeException(nameof(configuration));
 
         var diagnostics = new List<ArchitectureV7AllocationDiagnostic>();
@@ -109,9 +109,12 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 diagnostics.Add(new("UNKNOWN-ENDPOINT", "A route endpoint is absent from the placement freeze.", true, entries[0].Route.PhysicalLinkId));
                 continue;
             }
-            var capacity = 2 * configuration.TerminalInset + Math.Max(0, entries.Length - 1) * configuration.TerminalPortSpacing;
-            if (capacity > node.LogicalSpan)
-                diagnostics.Add(new("TERMINAL-OVERFLOW", "Terminal demand exceeds the frozen logical span; node expansion is forbidden.", true, null));
+            var capacity = entries.Length == 0 ? 0 : 2 * configuration.TerminalInset + Math.Max(0, entries.Length - 1) * configuration.TerminalPortSpacing;
+            var available = node.LogicalSpan * configuration.BaseCellWidth;
+            if (capacity > available)
+                diagnostics.Add(new("TERMINAL-OVERFLOW", "Terminal demand exceeds the frozen physical span; node expansion is forbidden.", true,
+                    entries[0].Route.PhysicalLinkId, null, node.PhysicalNodeId, group.Key.Kind.ToString(), capacity, available, node.LogicalSpan,
+                    entries.Select(x => x.Route.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray(), null));
             for (var index = 0; index < entries.Length; index++)
             {
                 var offset = (index - (entries.Length - 1) / 2.0) * configuration.TerminalPortSpacing;
@@ -189,7 +192,12 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             }
         }
         foreach (var cell in result.GroupBy(x => x.Cell).Where(x => x.Select(y => y.PhysicalLinkId).Distinct(StringComparer.Ordinal).Count() > 1))
-            diagnostics.Add(new("SHARED-BEND-CONFLICT", "Unrelated relationships require a shared bend cell; rerouting is forbidden.", true, null));
+        {
+            var bends = cell.ToArray();
+            diagnostics.Add(new("SHARED-BEND-CONFLICT", "Unrelated relationships require a shared bend cell; rerouting is forbidden.", true,
+                bends[0].PhysicalLinkId, bends[0].IncomingRunId, null, null, null, null, null,
+                bends.Select(x => x.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray(), bends.SelectMany(x => new[] { x.IncomingRunId, x.OutgoingRunId }).Distinct(StringComparer.Ordinal).ToArray()));
+        }
         return result;
     }
 
@@ -204,7 +212,11 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             var horizontal = cell.Value.Where(x => IsPass(x.route.Cells, x.index, ArchitectureV7RunOrientation.Horizontal)).Select(x => x.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
             var vertical = cell.Value.Where(x => IsPass(x.route.Cells, x.index, ArchitectureV7RunOrientation.Vertical)).Select(x => x.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
             if (cell.Value.Any(x => IsTurn(x.route.Cells, x.index)) && horizontal.Length > 0 && vertical.Length > 0)
-                diagnostics.Add(new("CROSSING-TURN-CONFLICT", "A route turns at a perpendicular crossing cell; clean crossing is impossible.", true));
+            {
+                var participants = cell.Value.Select(x => x.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray();
+                diagnostics.Add(new("CROSSING-TURN-CONFLICT", "A route turns at a perpendicular crossing cell; clean crossing is impossible.", true,
+                    participants[0], null, null, null, null, null, null, participants, null));
+            }
             foreach (var h in horizontal)
                 foreach (var v in vertical)
                     if (!string.Equals(h, v, StringComparison.Ordinal)) result.Add(new("crossing:" + cell.Key.Row + ":" + cell.Key.Column + ":" + h + ":" + v, cell.Key, h, v, "clean-perpendicular-crossing"));

@@ -216,6 +216,19 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             return true;
         }
 
+        static bool CanAppendContinuation(IReadOnlyList<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int candidate,
+            int direction, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
+            IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
+        {
+            var segment = new List<ArchitectureV7RouteCell>();
+            var horizontalStep = candidate >= currentColumn ? 1 : -1;
+            for (var column = currentColumn + horizontalStep; column != candidate + horizontalStep; column += horizontalStep)
+                segment.Add(new ArchitectureV7RouteCell(currentRow, column));
+            segment.Add(new ArchitectureV7RouteCell(currentRow + direction, candidate));
+            segment.Add(new ArchitectureV7RouteCell(currentRow + direction * 2, candidate));
+            return CanAppendSegment(path, segment, source, destination, cells);
+        }
+
         static bool CanEnterCell(int row, int column, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement destination,
             IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells) =>
             cells.TryGetValue((row, column), out var cell) &&
@@ -235,9 +248,9 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
                 {
                     evaluated = true;
                     metrics.UpwardEscapeCandidatesEvaluated++;
-                    if (CanContinueAtColumn(path, currentColumn, currentRow, left, -1, source, destination, cells))
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, left, -1, source, destination, cells) && CanAppendContinuation(path, currentColumn, currentRow, left, -1, source, destination, cells))
                     {
-                        if (!AppendContinuation(path, currentColumn, currentRow, left, -1, source, destination, cells)) return false;
+                        AppendContinuation(path, currentColumn, currentRow, left, -1, source, destination, cells);
                         currentColumn = left;
                         return true;
                     }
@@ -246,9 +259,9 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
                 {
                     evaluated = true;
                     metrics.UpwardEscapeCandidatesEvaluated++;
-                    if (CanContinueAtColumn(path, currentColumn, currentRow, right, -1, source, destination, cells))
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, right, -1, source, destination, cells) && CanAppendContinuation(path, currentColumn, currentRow, right, -1, source, destination, cells))
                     {
-                        if (!AppendContinuation(path, currentColumn, currentRow, right, -1, source, destination, cells)) return false;
+                        AppendContinuation(path, currentColumn, currentRow, right, -1, source, destination, cells);
                         currentColumn = right;
                         return true;
                     }
@@ -337,13 +350,17 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
 
         static bool Allows(ArchitectureV7CellCapability capability, Direction entry, Direction exit)
         {
-            if (capability.HasFlag(ArchitectureV7CellCapability.HeaderBlocked)) return false;
-            if (capability.HasFlag(ArchitectureV7CellCapability.GeneralRouting)) return true;
-            if (capability.HasFlag(ArchitectureV7CellCapability.RoutingAllowed) && entry == exit && entry != Direction.None) return true;
-            if (capability.HasFlag(ArchitectureV7CellCapability.NodeAllowed) && entry == exit && (entry == Direction.Up || entry == Direction.Down)) return true;
-            if (capability.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly) && entry == exit) return true;
-            return false;
+            return ArchitectureV7CellTraversalPolicy.Allows(capability, ToTraversalDirection(entry), ToTraversalDirection(exit));
         }
+
+        static ArchitectureV7TraversalDirection ToTraversalDirection(Direction direction) => direction switch
+        {
+            Direction.Up => ArchitectureV7TraversalDirection.Up,
+            Direction.Down => ArchitectureV7TraversalDirection.Down,
+            Direction.Left => ArchitectureV7TraversalDirection.Left,
+            Direction.Right => ArchitectureV7TraversalDirection.Right,
+            _ => ArchitectureV7TraversalDirection.None
+        };
 
         static Direction DirectionOf(ArchitectureV7RouteCell from, ArchitectureV7RouteCell to) =>
             to.Row == from.Row ? (to.Column > from.Column ? Direction.Right : Direction.Left) : (to.Row > from.Row ? Direction.Down : Direction.Up);

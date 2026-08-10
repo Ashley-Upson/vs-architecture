@@ -11,7 +11,8 @@ public enum ArchitectureV7EndpointDirection { Left, Down, Right, Up }
 public sealed record ArchitectureV7AllocationConfiguration(
     int ParallelLaneSpacing,
     int TerminalPortSpacing,
-    int TerminalInset);
+    int TerminalInset,
+    int BaseCellWidth = 100);
 
 public sealed class ArchitectureV7StraightRun
 {
@@ -83,7 +84,9 @@ public sealed record ArchitectureV7CrossingAllocation(
     string VerticalPhysicalLinkId,
     string Provenance);
 
-public sealed record ArchitectureV7AllocationDiagnostic(string Code, string Message, bool IsHardFailure, string? PhysicalLinkId = null, string? RunId = null);
+public sealed record ArchitectureV7AllocationDiagnostic(string Code, string Message, bool IsHardFailure, string? PhysicalLinkId = null, string? RunId = null,
+    string? PhysicalNodeId = null, string? EndpointKind = null, int? RequiredWidth = null, int? AvailableWidth = null, int? LogicalSpan = null,
+    IReadOnlyList<string>? ConflictingPhysicalLinkIds = null, IReadOnlyList<string>? ConflictingRunIds = null);
 
 public sealed class ArchitectureV7CollectiveAllocationFreeze
 {

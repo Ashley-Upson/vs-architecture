@@ -49,8 +49,12 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     public void Top_and_bottom_terminal_capacity_is_independent_and_overflow_is_hard_failure()
     {
         var routes = new[] { Route("a", "s", "t", (1, 2), (2, 2), (3, 1)), Route("b", "u", "t", (1, 4), (2, 4), (3, 1)) };
-        var result = Allocate(routes, Nodes("s", "u", "t"), spacing: 2, span: 1);
+        var result = Allocate(routes, Nodes("s", "u", "t"), spacing: 2, span: 1, baseCellWidth: 1);
         Assert.Contains(result.Diagnostics, x => x.Code == "TERMINAL-OVERFLOW" && x.IsHardFailure);
+        var overflow = Assert.Single(result.Diagnostics.Where(x => x.Code == "TERMINAL-OVERFLOW"));
+        Assert.Equal("t", overflow.PhysicalNodeId);
+        Assert.Equal(2, overflow.RequiredWidth);
+        Assert.Equal(1, overflow.AvailableWidth);
         Assert.Equal(2, result.Terminals.Count(x => x.PhysicalNodeId == "t"));
         Assert.DoesNotContain(result.Diagnostics, x => x.Code == "TOTAL-DEGREE-CAPACITY");
     }
@@ -104,7 +108,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     private static ArchitectureV7CollectiveAllocationFreeze Allocate(IReadOnlyList<ArchitectureV7LogicalRoute> routes, IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes,
-        int spacing = 1, int span = 9)
+        int spacing = 1, int span = 9, int baseCellWidth = 100)
     {
         if (span != 9) nodes = nodes.Select(node => node with { LogicalSpan = span }).ToArray();
         var placement = new ArchitectureV7PlacementFreeze(nodes, Array.Empty<ArchitectureV7ProjectRegion>(),
@@ -113,7 +117,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
             new ArchitectureV7CommonDiagramGrid(10, 10, Array.Empty<ArchitectureV7LogicalCell>()), Array.Empty<ArchitectureV7ProjectTransform>(),
             "projection", "ownership", "sizing", "reservation", "placement");
         var freeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
-        return new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, freeze, new ArchitectureV7AllocationConfiguration(spacing, spacing, 0));
+        return new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, freeze, new ArchitectureV7AllocationConfiguration(spacing, spacing, 0, baseCellWidth));
     }
 
     private static ArchitectureV7FrozenNodePlacement[] Nodes(params string[] ids) => ids.Select((id, index) =>
