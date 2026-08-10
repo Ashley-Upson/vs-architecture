@@ -293,12 +293,23 @@ public sealed class ArchitectureV7PhysicalSceneTests
             "projection", "ownership", "sizing", "reservation", "placement");
 
     private static ArchitectureV7CollectiveAllocationFreeze WithoutResources(ArchitectureV7CollectiveAllocationFreeze allocation,
-        bool handoffs = false, bool bends = false, bool crossings = false) => new(
-        allocation.Runs, allocation.Lanes, allocation.RunAssignments, allocation.Terminals, allocation.Approaches,
-        handoffs ? Array.Empty<ArchitectureV7EndpointHandoff>() : allocation.Handoffs,
-        bends ? Array.Empty<ArchitectureV7BendAllocation>() : allocation.Bends,
-        crossings ? Array.Empty<ArchitectureV7CrossingAllocation>() : allocation.Crossings,
-        allocation.Diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint, allocation.AllocationFingerprint);
+        bool handoffs = false, bool bends = false, bool crossings = false)
+    {
+        var interactionEvidence = allocation.CrossingInteractions.Count != 0
+            ? allocation.CrossingInteractions
+            : allocation.Crossings.Select(crossing => new ArchitectureV7CrossingInteraction(
+                "test-interaction-" + crossing.CrossingId, crossing.Cell, crossing.Classification,
+                crossing.HorizontalPhysicalLinkId, crossing.VerticalPhysicalLinkId, crossing.HorizontalRunId, crossing.VerticalRunId,
+                crossing.HorizontalLaneId, crossing.VerticalLaneId, crossing.HorizontalRouteIndex, crossing.VerticalRouteIndex,
+                "test-frozen-crossing-evidence", crossing.CrossingId)).ToArray();
+        return new(
+            allocation.Runs, allocation.Lanes, allocation.RunAssignments, allocation.Terminals, allocation.Approaches,
+            handoffs ? Array.Empty<ArchitectureV7EndpointHandoff>() : allocation.Handoffs,
+            bends ? Array.Empty<ArchitectureV7BendAllocation>() : allocation.Bends,
+            crossings ? Array.Empty<ArchitectureV7CrossingAllocation>() : allocation.Crossings,
+            allocation.Diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint, allocation.AllocationFingerprint,
+            interactionEvidence);
+    }
 
     private static ArchitectureV7PhysicalSceneFreeze CompileWithResourceClearance(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
         IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, int resourceClearance)
