@@ -157,9 +157,17 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 continue;
             }
             var points = new List<CompiledPoint> { new(0, route.Cells[0], source.Position, routeRuns[0].RunId, LaneFor(routeRuns[0], allocation), "source-terminal") };
-            for (var index = 1; index < route.Cells.Count - 1; index++) points.Add(PointFor(route, index, routeRuns, allocation, rows, columns));
+            var routeFailed = false;
+            for (var index = 1; index < route.Cells.Count - 1; index++)
+            {
+                var point = PointFor(route, index, routes.Routes, routeRuns, allocation, rows, columns, diagnostics);
+                if (point is null) { routeFailed = true; break; }
+                points.Add(point);
+            }
+            if (routeFailed) continue;
             points.Add(new(route.Cells.Count - 1, route.Cells[route.Cells.Count - 1], destination.Position, routeRuns[routeRuns.Length - 1].RunId, LaneFor(routeRuns[routeRuns.Length - 1], allocation), "destination-terminal"));
-            var expanded = AddAllocatedEndpointHandoffs(points, route, allocation, source, destination, diagnostics);
+            var expanded = AddAllocatedEndpointHandoffs(points, route, allocation, source, destination, rows, columns, diagnostics);
+            if (expanded is null) continue;
             var physicalPoints = expanded.Select(x => x.Point).ToArray();
             var segments = new List<ArchitectureV7PhysicalSegment>();
             for (var index = 0; index + 1 < expanded.Count; index++)
@@ -173,44 +181,123 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         return result;
     }
 
-    private static List<CompiledPoint> AddAllocatedEndpointHandoffs(List<CompiledPoint> points, ArchitectureV7LogicalRoute route,
+    private static List<CompiledPoint>? AddAllocatedEndpointHandoffs(List<CompiledPoint> points, ArchitectureV7LogicalRoute route,
         ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalTerminal source, ArchitectureV7PhysicalTerminal destination,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
         ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
     {
         var result = new List<CompiledPoint> { points[0] };
         var first = points[1];
         if (source.Position.X != first.Point.X && source.Position.Y != first.Point.Y)
         {
-            if (!allocation.Handoffs.Any(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture)) diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation.", true, route.PhysicalLinkId));
-            else result.Add(new(0, route.Cells[0], new(first.Point.X, source.Position.Y, "allocated-source-handoff"), first.RunId, first.LaneId, "allocated-orthogonal-source-handoff"));
+            var handoff = allocation.Handoffs.FirstOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+            if (handoff is null)
+            {
+                diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation; compiler will not synthesize one.", true, route.PhysicalLinkId));
+                return null;
+            }
+            result.Add(MaterialiseHandoffPoint(handoff, source, route, rows, columns, first));
         }
         result.AddRange(points.Skip(1).Take(points.Count - 2));
         var last = points[points.Count - 1]; var previous = result[result.Count - 1];
         if (previous.Point.X != destination.Position.X && previous.Point.Y != destination.Position.Y)
         {
-            if (!allocation.Handoffs.Any(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival)) diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation.", true, route.PhysicalLinkId));
-            else result.Add(new(route.Cells.Count - 1, route.Cells[route.Cells.Count - 1], new(destination.Position.X, previous.Point.Y, "allocated-destination-handoff"), last.RunId, last.LaneId, "allocated-orthogonal-destination-handoff"));
+            var handoff = allocation.Handoffs.FirstOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+            if (handoff is null)
+            {
+                diagnostics.Add(new("ENDPOINT-HANDOFF-MISSING", "Terminal/lane mismatch has no frozen handoff allocation; compiler will not synthesize one.", true, route.PhysicalLinkId));
+                return null;
+            }
+            result.Add(MaterialiseHandoffPoint(handoff, destination, route, rows, columns, last));
         }
         result.Add(last);
         return result;
     }
 
-    private static CompiledPoint PointFor(ArchitectureV7LogicalRoute route, int index, IReadOnlyList<ArchitectureV7StraightRun> runs,
-        ArchitectureV7CollectiveAllocationFreeze allocation, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns)
+    private static CompiledPoint MaterialiseHandoffPoint(ArchitectureV7EndpointHandoff handoff, ArchitectureV7PhysicalTerminal terminal,
+        ArchitectureV7LogicalRoute route, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
+        CompiledPoint adjacentPoint)
+    {
+        if (handoff.LogicalCell is not { } cell || (uint)cell.Row >= (uint)rows.Count || (uint)cell.Column >= (uint)columns.Count)
+            throw new InvalidOperationException("A frozen endpoint handoff has no representable logical cell.");
+        var cellX = (columns[cell.Column].Start + columns[cell.Column].End) / 2d;
+        var cellY = (rows[cell.Row].Start + rows[cell.Row].End) / 2d;
+        var relative = handoff.RelativePosition;
+        var point = handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical
+            ? new ArchitectureV7PhysicalPoint(cellX + relative.XOffset, terminal.Position.Y, "frozen-" + handoff.ResourceId)
+            : new ArchitectureV7PhysicalPoint(terminal.Position.X, cellY + relative.YOffset, "frozen-" + handoff.ResourceId);
+        return new(handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? 0 : route.Cells.Count - 1,
+            handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1], point,
+            adjacentPoint.RunId, adjacentPoint.LaneId, "handoff-resource=" + handoff.ResourceId + ";" + handoff.Provenance);
+    }
+
+    private static CompiledPoint? PointFor(ArchitectureV7LogicalRoute route, int index, IReadOnlyList<ArchitectureV7LogicalRoute> allRoutes,
+        IReadOnlyList<ArchitectureV7StraightRun> runs, ArchitectureV7CollectiveAllocationFreeze allocation,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
+        ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
     {
         var incoming = runs.First(x => x.StartRouteIndex <= index - 1 && x.EndRouteIndex >= index);
         var outgoing = runs.First(x => x.StartRouteIndex <= index && x.EndRouteIndex >= index + 1);
         var incomingLane = allocation.RunAssignments.First(x => x.RunId == incoming.RunId);
         var outgoingLane = allocation.RunAssignments.First(x => x.RunId == outgoing.RunId);
+        var isTurn = incoming.Orientation != outgoing.Orientation;
+        if (isTurn)
+        {
+            var bend = allocation.Bends.FirstOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.RouteIndex == index);
+            if (bend is null)
+            {
+                diagnostics.Add(new("BEND-RESOURCE-MISSING", "A frozen logical turn has no allocated bend resource; compiler will not invent one.", true, route.PhysicalLinkId));
+                return null;
+            }
+            return PointAtCell(route, index, bend.EffectiveRelativePosition,
+                outgoing.RunId, outgoingLane.LaneId, "bend-resource=" + bend.BendId + ";" + bend.Provenance, rows, columns);
+        }
+
+        var crossing = FindCrossing(route, index, allRoutes, allocation);
+        if (crossing is not null)
+            return PointAtCell(route, index, crossing.EffectiveRelativePosition,
+                incoming.RunId, incomingLane.LaneId, "crossing-resource=" + crossing.CrossingId + ";" + crossing.Provenance, rows, columns);
+        if (RequiresCrossing(route, index, allRoutes))
+        {
+            diagnostics.Add(new("CROSSING-RESOURCE-MISSING", "A frozen perpendicular pass/turn has no allocated crossing resource; compiler will not invent one.", true, route.PhysicalLinkId));
+            return null;
+        }
         var x = incoming.Orientation == ArchitectureV7RunOrientation.Horizontal ? (columns[route.Cells[index].Column].Start + columns[route.Cells[index].Column].End) / 2d : columns[route.Cells[index].Column].LaneCoordinates[incomingLane.LaneOrdinal];
         var y = incoming.Orientation == ArchitectureV7RunOrientation.Vertical ? (rows[route.Cells[index].Row].Start + rows[route.Cells[index].Row].End) / 2d : rows[route.Cells[index].Row].LaneCoordinates[incomingLane.LaneOrdinal];
-        if (incoming.Orientation != outgoing.Orientation)
-        {
-            x = outgoing.Orientation == ArchitectureV7RunOrientation.Vertical ? columns[route.Cells[index].Column].LaneCoordinates[outgoingLane.LaneOrdinal] : x;
-            y = outgoing.Orientation == ArchitectureV7RunOrientation.Horizontal ? rows[route.Cells[index].Row].LaneCoordinates[outgoingLane.LaneOrdinal] : y;
-        }
-        return new(index, route.Cells[index], new(x, y, "logical-cell;run-transition"), outgoing.RunId, outgoingLane.LaneId, incoming.RunId == outgoing.RunId ? "straight-run" : "allocated-bend-transition");
+        return new(index, route.Cells[index], new(x, y, "frozen-track-boundaries;straight-run"), incoming.RunId, incomingLane.LaneId, "straight-run;run=" + incoming.RunId + ";lane=" + incomingLane.LaneId);
     }
+
+    private static CompiledPoint PointAtCell(ArchitectureV7LogicalRoute route, int index, ArchitectureV7PhysicalRelativePosition relative,
+        string runId, string laneId, string provenance, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns)
+    {
+        var cell = route.Cells[index];
+        var x = (columns[cell.Column].Start + columns[cell.Column].End) / 2d + relative.XOffset;
+        var y = (rows[cell.Row].Start + rows[cell.Row].End) / 2d + relative.YOffset;
+        return new(index, cell, new(x, y, provenance), runId, laneId, provenance);
+    }
+
+    private static ArchitectureV7CrossingAllocation? FindCrossing(ArchitectureV7LogicalRoute route, int index,
+        IReadOnlyList<ArchitectureV7LogicalRoute> allRoutes, ArchitectureV7CollectiveAllocationFreeze allocation) =>
+        allocation.Crossings.FirstOrDefault(x => x.Cell == route.Cells[index] &&
+            ((x.HorizontalPhysicalLinkId == route.PhysicalLinkId && x.HorizontalRouteIndex == index) ||
+             (x.VerticalPhysicalLinkId == route.PhysicalLinkId && x.VerticalRouteIndex == index)));
+
+    private static bool RequiresCrossing(ArchitectureV7LogicalRoute route, int index, IReadOnlyList<ArchitectureV7LogicalRoute> allRoutes)
+    {
+        var orientation = Orientation(route.Cells[index - 1], route.Cells[index]);
+        var opposite = orientation == ArchitectureV7RunOrientation.Horizontal ? ArchitectureV7RunOrientation.Vertical : ArchitectureV7RunOrientation.Horizontal;
+        return allRoutes.Any(other => !string.Equals(other.PhysicalLinkId, route.PhysicalLinkId, StringComparison.Ordinal) &&
+            other.Cells.Select((cell, otherIndex) => (cell, otherIndex)).Any(x => x.cell == route.Cells[index] &&
+                (IsPass(other.Cells, x.otherIndex, opposite) || IsTurn(other.Cells, x.otherIndex))));
+    }
+
+    private static ArchitectureV7RunOrientation Orientation(ArchitectureV7RouteCell a, ArchitectureV7RouteCell b) => a.Row == b.Row ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical;
+    private static bool IsPass(IReadOnlyList<ArchitectureV7RouteCell> cells, int index, ArchitectureV7RunOrientation orientation)
+    {
+        if (index == 0 || index == cells.Count - 1) return false;
+        return Orientation(cells[index - 1], cells[index]) == orientation && Orientation(cells[index], cells[index + 1]) == orientation;
+    }
+    private static bool IsTurn(IReadOnlyList<ArchitectureV7RouteCell> cells, int index) => index > 0 && index + 1 < cells.Count && Orientation(cells[index - 1], cells[index]) != Orientation(cells[index], cells[index + 1]);
 
     private static string LaneFor(ArchitectureV7StraightRun run, ArchitectureV7CollectiveAllocationFreeze allocation) => allocation.RunAssignments.First(x => x.RunId == run.RunId).LaneId;
     private static int LaneCount(IEnumerable<ArchitectureV7StraightRun> runs, ArchitectureV7CollectiveAllocationFreeze allocation) => runs.Select(x => allocation.RunAssignments.First(a => a.RunId == x.RunId).LaneOrdinal).DefaultIfEmpty(-1).Max() + 1;

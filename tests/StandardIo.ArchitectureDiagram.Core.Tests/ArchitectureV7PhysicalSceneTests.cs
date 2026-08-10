@@ -43,8 +43,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 1, 3)), spacing: 2);
         var physical = Assert.Single(scene.Routes);
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-        Assert.Contains(physical.Points, point => point.Provenance.Contains("allocated-source-handoff", StringComparison.Ordinal));
-        Assert.Contains(physical.Points, point => point.Provenance.Contains("allocated-destination-handoff", StringComparison.Ordinal));
+        Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff: a:SourceDeparture".Replace(" ", ""), StringComparison.Ordinal));
+        Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
         Assert.Equal(scene.Terminals.Single(x => x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture).Position, physical.Points[0]);
         Assert.Equal(scene.Terminals.Single(x => x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival).Position, physical.Points[physical.Points.Count - 1]);
@@ -131,6 +131,81 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Allocated_bend_is_materialised_at_frozen_resource_position_with_provenance()
+    {
+        var route = Route("turn", "s", "t", (1, 1), (2, 1), (2, 3));
+        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 2, 3)), spacing: 4);
+        var physical = Assert.Single(scene.Routes);
+
+        Assert.Contains(physical.Points, point => point.Provenance.Contains("bend-resource=bend:turn:1", StringComparison.Ordinal));
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "BEND-RESOURCE-MISSING");
+        Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
+    }
+
+    [Fact]
+    public void Allocated_crossing_is_materialised_at_frozen_resource_with_provenance()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+
+        Assert.Contains(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal));
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
+    }
+
+    [Fact]
+    public void Missing_required_handoff_is_an_explicit_compiler_failure_without_synthesis()
+    {
+        var route = Route("a", "s", "t", (1, 1), (1, 2), (1, 3));
+        var placement = Placement(Nodes(("s", 1, 1), ("t", 1, 3)));
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(new[] { route }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocated = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze, new ArchitectureV7AllocationConfiguration(2, 2, 0));
+        var missing = WithoutResources(allocated, handoffs: true);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, missing,
+            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 2, 2, 0));
+
+        Assert.Contains(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
+        Assert.Empty(scene.Routes);
+    }
+
+    [Fact]
+    public void Missing_required_bend_is_an_explicit_compiler_failure_without_synthesised_turn()
+    {
+        var route = Route("turn", "s", "t", (1, 1), (2, 1), (2, 3));
+        var placement = Placement(Nodes(("s", 1, 1), ("t", 2, 3)));
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(new[] { route }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocated = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze, new ArchitectureV7AllocationConfiguration(4, 4, 0));
+        var missing = WithoutResources(allocated, bends: true);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, missing,
+            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0));
+
+        Assert.Contains(scene.Diagnostics, diagnostic => diagnostic.Code == "BEND-RESOURCE-MISSING");
+        Assert.Empty(scene.Routes);
+    }
+
+    [Fact]
+    public void Missing_required_crossing_is_an_explicit_compiler_failure_without_synthesised_intersection()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var placement = Placement(Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocated = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze, new ArchitectureV7AllocationConfiguration(4, 4, 0));
+        var missing = WithoutResources(allocated, crossings: true);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, missing,
+            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0));
+
+        Assert.Contains(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
+        Assert.Empty(scene.Routes);
+    }
+
+    [Fact]
     public void Physical_node_width_preserves_the_frozen_pre_routing_requirement()
     {
         var node = new ArchitectureV7FrozenNodePlacement("wide", "wide", "p", 1, 0, 9, 4,
@@ -160,11 +235,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
         IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, double spacing = 4)
     {
-        var placement = new ArchitectureV7PlacementFreeze(nodes, Array.Empty<ArchitectureV7ProjectRegion>(),
-            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
-            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
-            new ArchitectureV7CommonDiagramGrid(6, 6, Array.Empty<ArchitectureV7LogicalCell>()), Array.Empty<ArchitectureV7ProjectTransform>(),
-            "projection", "ownership", "sizing", "reservation", "placement");
+        var placement = Placement(nodes);
         var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
             new ArchitectureV7AllocationConfiguration((int)spacing, (int)spacing, 0));
@@ -172,6 +243,21 @@ public sealed class ArchitectureV7PhysicalSceneTests
             new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, spacing, spacing, 0));
         return scene;
     }
+
+    private static ArchitectureV7PlacementFreeze Placement(IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes) =>
+        new(nodes, Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(6, 6, Array.Empty<ArchitectureV7LogicalCell>()), Array.Empty<ArchitectureV7ProjectTransform>(),
+            "projection", "ownership", "sizing", "reservation", "placement");
+
+    private static ArchitectureV7CollectiveAllocationFreeze WithoutResources(ArchitectureV7CollectiveAllocationFreeze allocation,
+        bool handoffs = false, bool bends = false, bool crossings = false) => new(
+        allocation.Runs, allocation.Lanes, allocation.RunAssignments, allocation.Terminals, allocation.Approaches,
+        handoffs ? Array.Empty<ArchitectureV7EndpointHandoff>() : allocation.Handoffs,
+        bends ? Array.Empty<ArchitectureV7BendAllocation>() : allocation.Bends,
+        crossings ? Array.Empty<ArchitectureV7CrossingAllocation>() : allocation.Crossings,
+        allocation.Diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint, allocation.AllocationFingerprint);
 
     private static ArchitectureV7PhysicalSceneFreeze CompileWithResourceClearance(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
         IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, int resourceClearance)
