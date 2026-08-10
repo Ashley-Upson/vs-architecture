@@ -137,6 +137,67 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
     }
 
     [Fact]
+    public void Nested_detached_descendant_is_materialised_once_in_recursive_tree_result()
+    {
+        var diagram = Diagram(
+            new[] { Node("root", "Processing"), Node("detached", "Processing"), Node("nested", "Processing") },
+            new[] { Link("one", "root", "detached"), Link("two", "detached", "nested") });
+        var reservations = Frozen(
+            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 1, false),
+            new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true));
+
+        var tree = Assert.Single(Build(diagram, reservations).Trees);
+
+        Assert.Equal(3, tree.Placements.Count);
+        Assert.Equal(3, tree.Placements.Select(item => item.PhysicalNodeId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(new[] { "physical:detached", "physical:nested", "physical:root" },
+            tree.Placements.Select(item => item.PhysicalNodeId).OrderBy(item => item, StringComparer.Ordinal));
+        Assert.Single(tree.DetachedUnits);
+        Assert.Equal(new[] { "physical:detached", "physical:nested" },
+            tree.DetachedUnits[0].Placements.Select(item => item.PhysicalNodeId));
+    }
+
+    [Fact]
+    public void Nested_detached_subtree_preserves_fifo_order_after_single_materialisation()
+    {
+        var diagram = Diagram(
+            new[] { Node("root", "Processing"), Node("first", "Processing"), Node("first-nested", "Processing"), Node("second", "Processing") },
+            new[] { Link("one", "root", "first"), Link("two", "first", "first-nested"), Link("three", "root", "second") });
+        var reservations = Frozen(
+            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 1, false),
+            new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true));
+
+        var tree = Assert.Single(Build(diagram, reservations).Trees);
+
+        Assert.Equal(new[] { "physical:first", "physical:first-nested", "physical:second" },
+            tree.DetachedUnits.SelectMany(unit => unit.Placements).Select(item => item.PhysicalNodeId));
+        Assert.Equal(4, tree.Placements.Select(item => item.PhysicalNodeId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Nested_detached_subtree_preserves_tree_and_detached_provenance()
+    {
+        var diagram = Diagram(
+            new[] { Node("root", "Processing"), Node("detached", "Processing"), Node("nested", "Processing") },
+            new[] { Link("one", "root", "detached"), Link("two", "detached", "nested") });
+        var reservations = Frozen(
+            new ArchitectureV7FrozenReservation("Processing", "*processing", 0, 1, 1, false),
+            new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true));
+
+        var tree = Assert.Single(Build(diagram, reservations).Trees);
+        var detached = tree.Placements.Where(item => item.IsDetached).ToArray();
+
+        Assert.Equal(2, detached.Length);
+        Assert.All(detached, item =>
+        {
+            Assert.Contains("v7-recursive", item.Provenance, StringComparison.Ordinal);
+            Assert.True(item.IsDetached);
+        });
+        Assert.All(tree.DetachedUnits, unit => Assert.Contains("v7-recursive", unit.Provenance, StringComparison.Ordinal));
+        Assert.StartsWith("tree:physical:root", tree.TreeId, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Frozen_spans_3_5_7_are_preserved_exactly()
     {
         var nodes = new[] { Node("three", "A"), Node("five", new string('B', 41)), Node("seven", new string('C', 61)) };

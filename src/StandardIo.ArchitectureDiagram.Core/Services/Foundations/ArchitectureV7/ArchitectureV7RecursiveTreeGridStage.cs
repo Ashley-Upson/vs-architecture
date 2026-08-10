@@ -49,6 +49,23 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         if (visited.Count != nodes.Count)
             throw new InvalidOperationException("V7 tree construction left a physical node outside recursive or detached construction.");
 
+        var allTreePlacements = trees.SelectMany(tree => tree.Placements).ToArray();
+        var duplicatePlacements = allTreePlacements.GroupBy(item => item.PhysicalNodeId, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key + " => " + string.Join(" | ", group.Select(item =>
+                item.Provenance + " @ row=" + item.LocalRow + ", column=" + item.LocalColumn + ", span=" + item.LogicalSpan)))
+            .ToArray();
+        if (duplicatePlacements.Length > 0)
+            throw new InvalidOperationException("V7 recursive tree construction produced duplicate physical placements before project composition: " + string.Join("; ", duplicatePlacements));
+
+        var missingPlacements = nodes.Keys.Except(allTreePlacements.Select(item => item.PhysicalNodeId), StringComparer.Ordinal).ToArray();
+        if (missingPlacements.Length > 0)
+            throw new InvalidOperationException("V7 recursive tree construction omitted projected physical nodes before project composition: " + string.Join(", ", missingPlacements));
+
+        var unknownPlacements = allTreePlacements.Select(item => item.PhysicalNodeId).Except(nodes.Keys, StringComparer.Ordinal).ToArray();
+        if (unknownPlacements.Length > 0)
+            throw new InvalidOperationException("V7 recursive tree construction produced placements for unknown physical nodes before project composition: " + string.Join(", ", unknownPlacements));
+
         var fingerprintText = sizing.FreezeFingerprint + "#" + reservations.Fingerprint + "#" + string.Join("|", trees.Select(tree =>
             tree.TreeId + ":" + tree.Width + ":" + tree.Height + ":" + string.Join(",", tree.Placements.Select(item => item.PhysicalNodeId + "@" + item.LocalRow + ":" + item.LocalColumn))));
         using var sha = SHA256.Create();
@@ -92,8 +109,9 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
                 childUnits.Add(childTarget <= layer ? BuildDetachedUnit(childId, childTarget, true) : BuildNode(childId, layer, false));
             }
             var directChildren = childUnits.Where(unit => !unit.IsDetached).ToArray();
-            var detachedChildren = childUnits.SelectMany(unit => unit.Detached)
-                .Concat(childUnits.Where(unit => unit.IsDetached).Select(unit => unit.Complete)).ToList();
+            var detachedChildren = childUnits.SelectMany(unit => unit.IsDetached
+                ? new[] { unit.Complete }
+                : unit.Detached).ToList();
             var childWidth = 0;
             var positionedChildren = new List<ArchitectureV7TreeGridPlacementUnit>();
             foreach (var child in directChildren)
