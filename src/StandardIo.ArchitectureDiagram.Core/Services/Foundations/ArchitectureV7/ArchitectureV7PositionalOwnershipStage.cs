@@ -18,7 +18,8 @@ public sealed class ArchitectureV7PositionalOwnershipStage
             .Where(link => nodesById.ContainsKey(link.SourcePhysicalNodeId) && nodesById.ContainsKey(link.DestinationPhysicalNodeId))
             .GroupBy(link => link.DestinationPhysicalNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group
-                .OrderBy(link => link.SemanticLinkId, StringComparer.Ordinal)
+                .OrderBy(link => link.AnalyserOrdinal)
+                .ThenBy(link => link.SemanticLinkId, StringComparer.Ordinal)
                 .ThenBy(link => link.SourcePhysicalNodeId, StringComparer.Ordinal)
                 .ThenBy(link => link.PhysicalLinkId, StringComparer.Ordinal)
                 .ToArray(), StringComparer.Ordinal);

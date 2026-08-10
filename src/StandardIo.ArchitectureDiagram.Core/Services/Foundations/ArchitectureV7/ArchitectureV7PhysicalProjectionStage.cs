@@ -21,6 +21,10 @@ public sealed class ArchitectureV7PhysicalProjectionStage
 
         var semanticNodes = ReadNodes(semanticDiagram).ToArray();
         var nodesById = semanticNodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+        var inputOrdinals = semanticDiagram.Links
+            .Select((link, index) => (link.Id, Index: index))
+            .GroupBy(item => item.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Index, StringComparer.Ordinal);
         var semanticLinks = (semanticDiagram.Links ?? Array.Empty<ArchitectureLink>())
             .OrderBy(link => link.Id, StringComparer.Ordinal)
             .ThenBy(link => link.SourceId, StringComparer.Ordinal)
@@ -95,8 +99,11 @@ public sealed class ArchitectureV7PhysicalProjectionStage
             var occurrence = linkOccurrences.TryGetValue(link.Id, out var linkOccurrence) ? linkOccurrence : 0;
             linkOccurrences[link.Id] = occurrence + 1;
             var physicalLinkId = occurrence == 0 ? "physical-link:" + link.Id : $"physical-link:{link.Id}:{occurrence}";
+            var analyserOrdinal = link.AnalyserOrdinal >= 0
+                ? link.AnalyserOrdinal
+                : inputOrdinals.TryGetValue(link.Id, out var inputOrdinal) ? inputOrdinal : int.MaxValue;
             physicalLinks.Add(new ArchitectureV7PhysicalLink(physicalLinkId, link.Id, "physical:" + source.Id,
-                targetPhysicalId, source.ProjectId, target.ProjectId, link.Kind));
+                targetPhysicalId, source.ProjectId, target.ProjectId, link.Kind, analyserOrdinal));
             linkMap[link.Id].Add(physicalLinkId);
         }
 

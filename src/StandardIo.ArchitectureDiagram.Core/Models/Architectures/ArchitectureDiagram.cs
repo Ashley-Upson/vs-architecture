@@ -30,7 +30,7 @@ public sealed record ArchitectureExternalNode(
     string FullName,
     string Tag);
 
-public sealed record ArchitectureLink(string Id, string SourceId, string TargetId, string Kind);
+public sealed record ArchitectureLink(string Id, string SourceId, string TargetId, string Kind, int AnalyserOrdinal = -1);
 
 public sealed record ArchitectureRoot(
     string SemanticNodeId,

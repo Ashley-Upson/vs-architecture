@@ -255,7 +255,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchi
                 project.UniqueId)).ToArray(),
             model.ExternalDependencies.Select(node => new ArchitectureExternalNode(
                 node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
-            model.Edges.Select(edge => new ArchitectureLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind)).ToArray(),
+            model.Edges.Select((edge, index) => new ArchitectureLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, index)).ToArray(),
             selection is null ? null : new ArchitectureSelectionDiagnostic(
                 selection.ScopePolicy,
                 selection.Roots.Select(root => new ArchitectureRoot(

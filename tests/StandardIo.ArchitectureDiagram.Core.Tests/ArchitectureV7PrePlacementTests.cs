@@ -88,7 +88,7 @@ public sealed class ArchitectureV7PrePlacementTests
     public void Sizing_is_deterministic_under_shuffled_links()
     {
         var diagram = Diagram(new[] { Node("a", "A"), Node("b", "B"), Node("c", "C") },
-            new[] { Link("z", "a", "c"), Link("a", "b", "c") });
+            new[] { Link("z", "a", "c", 0), Link("a", "b", "c", 1) });
         var left = Size(diagram, Config());
         var right = Size(diagram with { Links = diagram.Links.Reverse().ToArray() }, Config());
         Assert.Equal(left.FreezeFingerprint, right.FreezeFingerprint);
@@ -238,6 +238,6 @@ public sealed class ArchitectureV7PrePlacementTests
     private static ArchitectureNode Node(string id, string name) =>
         new(id, "project", name, "Project." + name, "Class", id, Array.Empty<string>());
 
-    private static ArchitectureLink Link(string id, string source, string target) =>
-        new(id, source, target, "dependency");
+    private static ArchitectureLink Link(string id, string source, string target, int analyserOrdinal = -1) =>
+        new(id, source, target, "dependency", analyserOrdinal);
 }

@@ -113,6 +113,17 @@ Configured duplication is an explicit exception, not a general rule to duplicate
 
 A reused semantic node MAY be duplicated only according to configured duplication rules.
 
+In canonical/deduplicated projection, each semantic node MUST have exactly one
+canonical physical placement. Deduplicated multi-parent nodes MUST NOT receive
+temporary, reference, shadow, or placeholder physical placements beneath
+non-owning parents. Every non-owning semantic-parent relationship MUST route
+directly to the canonical physical placement.
+
+In configured-duplicate projection, each configured duplicate is a normal
+physical node. It MUST participate independently in positional ownership,
+placement, terminal allocation, and routing according to its projected
+physical relationships.
+
 Every physical node SHOULD retain provenance including semantic identity, physical identity, project ownership, duplication provenance where applicable, and External/standalone classification where applicable.
 
 Every selected semantic relationship MUST remain accounted for and MUST map to a resolved physical source/target relationship or to an explicit failed-route diagnostic. Deduplication may change the physical instance targeted, but MUST NOT make the semantic relationship disappear.
@@ -128,7 +139,13 @@ Rules:
 - no eligible positional parent → the node is a placement-tree root;
 - exactly one eligible parent → that parent owns placement;
 - multiple eligible parents → choose one deterministic primary positional parent;
+- multiple eligible parents → choose the first eligible parent in analyser/FIFO
+  order as the deterministic primary positional parent;
 - all other semantic parents remain routing relationships only.
+
+The analyser/FIFO rule above supersedes any historical interpretation of
+"deterministic primary" as identifier sorting: the first eligible analyser
+occurrence owns the canonical positional placement.
 
 Multiple-parent nodes MUST NOT be horizontally averaged between parents.
 
@@ -223,7 +240,17 @@ dependency-depth, root, reserved-band, or tree-solving calculations.
 
 Standalone nodes SHOULD live in a dedicated compact region rather than being mixed into dependency trees.
 
-The standalone region MUST sit below External with one routing row between External and the first standalone row. It MUST be packed approximately square, with one logical separation column between adjacent standalone nodes and one routing row between standalone rows. Normal odd-span sizing applies to standalone nodes.
+The standalone region MUST sit below External with one non-routing separator row
+between External and the first standalone row. It MUST be packed approximately
+square, with one logical separation column between adjacent standalone nodes
+and one non-routing separator row between standalone rows. Normal odd-span
+sizing applies to standalone nodes.
+
+The row between the External node row and the first standalone node row, and
+each row between successive standalone node rows, is a non-routing spacing
+separator. Separator cells MUST use an explicit non-routing separator
+capability and MUST NOT inherit `GeneralRouting` from common-grid defaults.
+They are spacing topology, not route topology.
 
 Standalone layout MUST NOT influence ordinary tree placement.
 
@@ -392,7 +419,12 @@ For each placement root:
 4. freeze internal tree geometry;
 5. return the completed temporary top-level tree grid as an atomic placement unit.
 
-Independent top-level trees MAY be constructed in parallel against the same frozen reserved-depth table. The planner MUST wait for all tree construction results, then pass them to project-grid composition in analyser/FIFO order. There is no sequential find-free-space, whole-tree translation, or place-next-tree authority in this stage; atomic project-grid composition is defined by Section 25.
+Independent top-level trees MUST be constructed in parallel against the same
+frozen reserved-depth table. The planner MUST wait for all tree construction
+results, then pass them to project-grid composition in analyser/FIFO order.
+Parallel completion order MUST NOT affect the results. There is no sequential
+find-free-space, whole-tree translation, or place-next-tree authority in this
+stage; atomic project-grid composition is defined by Section 25.
 
 Unrelated trees MUST NOT influence the local geometry of the tree currently being built.
 
@@ -466,7 +498,8 @@ Once a top-level temporary tree grid has been constructed, it is an atomic recta
 
 Completed top-level tree grids MUST be inserted into their project grid in analyser/FIFO order with exactly one routing/separation column between adjacent units. Unrelated top-level trees MUST NOT interleave, interlock by shared-layer contour, or extract individual nodes into another tree's unused space.
 
-Independent tree construction MAY execute in parallel, but composition order MUST remain analyser/FIFO order.
+Independent tree construction MUST execute in parallel, but composition order
+MUST remain analyser/FIFO order.
 
 ## 26. Grid construction from the beginning
 
@@ -1301,14 +1334,15 @@ This section SHOULD remain concise. Normative sections above are authoritative.
 - The reconciled reservation table is frozen before parallel project/tree construction and is shared by every selected project.
 - The project surround is fixed at exactly two logical tracks on every side: inner boundary/header track, then outer general-routing track.
 - Logical node spans are calculated before tree construction from a fixed configured base cell width and remain odd, symmetric and frozen.
-- Tree construction is analyser/FIFO ordered; independent trees may execute in parallel and must merge in analyser/FIFO order.
+- Tree construction is analyser/FIFO ordered; independent trees MUST execute in parallel and MUST merge in analyser/FIFO order. Completion order MUST NOT affect composition.
 - Independent tree completion order cannot affect atomic FIFO project-grid composition.
 - Parent centring uses direct-child centres; child subtree bounds determine required space but never the parent centreline.
 - Reserved-order conflicts use detached placement units, not inserted same-role sublayers.
-- External occupies the final shared reserved layer; standalone nodes occupy a separate approximately square region below External with explicit routing separation.
+- External occupies the final shared reserved layer; standalone nodes occupy a separate approximately square region below External with explicit non-routing separator rows and one logical separation column between adjacent standalone units.
+- Canonical deduplication has one physical placement per semantic node and never creates temporary/reference placeholder placements; non-owning parent relationships route to that canonical placement. Configured duplicates are ordinary independent physical nodes.
 - The common diagram grid is authoritative for both same-project and cross-project routing.
 - Route pathfinding is capability-driven. Route occupancy, project ownership and endpoint ownership are not additional pathfinding obstacles.
-- Cell capabilities are traversal-specific: node footprints and header text block; empty node rows permit vertical passthrough only; routing rows permit general traversal; boundaries and non-text headers permit straight passthrough only.
+- Cell capabilities are traversal-specific: node footprints and header text block; empty node rows permit vertical passthrough only; ordinary routing rows permit general traversal; standalone separator rows permit no routing; boundaries and non-text headers permit straight passthrough only.
 - Tree-local row parity is node/routing from local row 0, project composition applies an explicit offset, and final routing uses only common diagram-grid coordinates.
 - An immediate child on the next node row and the same centre column uses the direct three-cell vertical path through the intervening routing row.
 - General downward routes align on the routing row above the target before entering downward; upward routes depart downward, escape outside the source footprint, then ascend without immediate reversal.

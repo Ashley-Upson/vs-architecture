@@ -46,19 +46,43 @@ public sealed class ArchitectureV7ProjectionTests
     }
 
     [Fact]
-    public void Projection_does_not_assign_positional_ownership_and_ownership_freeze_selects_one_parent()
+    public void Canonical_ownership_uses_analyser_fifo_order_not_identifier_order()
     {
         var diagram = Diagram(
-            nodes: new[] { Node("a", "A"), Node("b", "B"), Node("child", "Child") },
-            links: new[] { Link("b-link", "b", "child"), Link("a-link", "a", "child") });
+            nodes: new[] { Node("z", "ParentZ"), Node("a", "ParentA"), Node("child", "Child") },
+            links: new[] { Link("z-link", "z", "child", 0), Link("a-link", "a", "child", 1) });
         var projection = new ArchitectureV7PhysicalProjectionStage().Project(diagram,
             new ArchitectureV7ProjectionPolicy(ArchitectureV7ProjectionMode.Canonical, Array.Empty<string>()));
 
         var ownership = new ArchitectureV7PositionalOwnershipStage().Resolve(projection);
         var child = Assert.Single(ownership.Decisions.Where(item => item.SemanticNodeId == "child"));
-        Assert.Equal("physical:a", child.PositionalParentPhysicalNodeId);
-        Assert.Equal(new[] { "physical:b" }, child.AdditionalSemanticParentPhysicalNodeIds);
+        Assert.Equal("physical:z", child.PositionalParentPhysicalNodeId);
+        Assert.Equal(new[] { "physical:a" }, child.AdditionalSemanticParentPhysicalNodeIds);
+        Assert.Equal(0, projection.PhysicalLinks.Single(link => link.SemanticLinkId == "z-link").AnalyserOrdinal);
+        Assert.Equal(1, projection.PhysicalLinks.Single(link => link.SemanticLinkId == "a-link").AnalyserOrdinal);
         Assert.Equal(projection.FreezeFingerprint, ownership.ProjectionFreezeFingerprint);
+    }
+
+    [Fact]
+    public void Configured_duplication_creates_independent_physical_nodes_without_reference_ownership()
+    {
+        var diagram = Diagram(
+            nodes: new[] { Node("z", "ParentZ"), Node("a", "ParentA"), Node("shared", "SharedUtility") },
+            links: new[] { Link("z-link", "z", "shared"), Link("a-link", "a", "shared") });
+        var projection = new ArchitectureV7PhysicalProjectionStage().Project(diagram,
+            new ArchitectureV7ProjectionPolicy(ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches, new[] { "*Utility" }));
+
+        var sharedPhysicalNodes = projection.PhysicalNodes.Where(node => node.SemanticNodeId == "shared").ToArray();
+        Assert.Equal(2, sharedPhysicalNodes.Length);
+        Assert.All(sharedPhysicalNodes, node => Assert.DoesNotContain("reference", node.PhysicalNodeId, StringComparison.OrdinalIgnoreCase));
+
+        var ownership = new ArchitectureV7PositionalOwnershipStage().Resolve(projection);
+        Assert.All(sharedPhysicalNodes, node =>
+        {
+            var decision = Assert.Single(ownership.Decisions.Where(item => item.PhysicalNodeId == node.PhysicalNodeId));
+            Assert.NotNull(decision.PositionalParentPhysicalNodeId);
+            Assert.Empty(decision.AdditionalSemanticParentPhysicalNodeIds);
+        });
     }
 
     [Fact]
@@ -78,6 +102,6 @@ public sealed class ArchitectureV7ProjectionTests
     private static ArchitectureNode Node(string id, string name) =>
         new(id, "project", name, "Project." + name, "Class", id, Array.Empty<string>());
 
-    private static ArchitectureLink Link(string id, string source, string target) =>
-        new(id, source, target, "dependency");
+    private static ArchitectureLink Link(string id, string source, string target, int analyserOrdinal = -1) =>
+        new(id, source, target, "dependency", analyserOrdinal);
 }

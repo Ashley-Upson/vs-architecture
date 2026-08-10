@@ -19,7 +19,7 @@ public static class LegacyArchitectureModelAdapter
                     node.Interfaces ?? Array.Empty<string>())).ToArray(), project.UniqueId)).ToArray(),
             model.ExternalDependencies.Select(node => new ArchitectureExternalNode(
                 node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
-            model.Edges.Select(link => new ArchitectureLink(link.Id, link.SourceId, link.TargetId, link.Kind)).ToArray(),
+            model.Edges.Select((link, index) => new ArchitectureLink(link.Id, link.SourceId, link.TargetId, link.Kind, index)).ToArray(),
             selection is null ? null : new ArchitectureSelectionDiagnostic(
                 selection.ScopePolicy,
                 selection.Roots.Select(root => new ArchitectureRoot(root.SemanticNodeId,

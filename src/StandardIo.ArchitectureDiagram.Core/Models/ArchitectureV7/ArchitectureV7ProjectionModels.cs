@@ -41,7 +41,8 @@ public sealed record ArchitectureV7PhysicalLink(
     string DestinationPhysicalNodeId,
     string? SourceProjectId,
     string? DestinationProjectId,
-    string Kind);
+    string Kind,
+    int AnalyserOrdinal = -1);
 
 public sealed record ArchitectureV7ProjectionDiagnostic(string Code, string Message, string? SubjectId = null);
 
