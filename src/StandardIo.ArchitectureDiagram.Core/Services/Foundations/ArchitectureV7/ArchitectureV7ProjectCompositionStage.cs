@@ -74,6 +74,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
         var columnCount = Math.Max(commonWidth, Math.Max(projects.Count == 0 ? 0 : projects.Max(project => project.Transform.RegionOriginColumn + project.Width), standalonePlacements.Count == 0 ? 0 : standalonePlacements.Max(item => item.DiagramColumn + item.LogicalSpan)));
         var grid = BuildDiagramGrid(rowCount, columnCount, projects, external, standalone, placements);
         var orderedNodes = placements.OrderBy(item => item.DiagramRow).ThenBy(item => item.DiagramColumn).ThenBy(item => item.PhysicalNodeId, StringComparer.Ordinal).ToArray();
+        ArchitectureV7PlacementAccounting.Validate(projection, orderedNodes, external, standalone);
         var fingerprint = Fingerprint(trees, transforms, orderedNodes, grid);
         return new ArchitectureV7PlacementFreeze(orderedNodes, projects, external, standalone, grid, transforms,
             projection.FreezeFingerprint, trees.Sizing.Ownership.FreezeFingerprint, trees.Sizing.FreezeFingerprint,

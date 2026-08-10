@@ -167,6 +167,71 @@ public sealed class ArchitectureV7ProjectCompositionTests
         Assert.Equal(fingerprint, freeze.PlacementFingerprint);
     }
 
+    [Fact]
+    public void Placement_freeze_rejects_duplicate_physical_ids_with_tree_provenance()
+    {
+        var treeResult = BuildTrees(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()));
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(treeResult);
+        var duplicate = freeze.Nodes.Concat(new[] { freeze.Nodes.Single() }).ToArray();
+
+        var error = Assert.Throws<ArchitectureV7PlacementAccountingException>(() =>
+            ArchitectureV7PlacementAccounting.Validate(treeResult.Sizing.Ownership.Projection, duplicate, freeze.External, freeze.Standalone));
+
+        Assert.Contains("duplicate physical node ID physical:a", error.Message, StringComparison.Ordinal);
+        Assert.Contains("tree=", error.Message, StringComparison.Ordinal);
+        Assert.Contains("provenance=", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Placement_freeze_requires_exactly_one_placement_per_projected_physical_node()
+    {
+        var treeResult = BuildTrees(Diagram(new[] { Node("a", "A"), Node("b", "B") }, Array.Empty<ArchitectureLink>()));
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(treeResult);
+        var projection = treeResult.Sizing.Ownership.Projection;
+        var missing = freeze.Nodes.Where(node => node.PhysicalNodeId != "physical:b").ToArray();
+
+        var error = Assert.Throws<ArchitectureV7PlacementAccountingException>(() =>
+            ArchitectureV7PlacementAccounting.Validate(projection, missing, freeze.External, freeze.Standalone));
+
+        Assert.Contains("missing placement for projected physical node ID physical:b", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Placement_freeze_rejects_unprojected_placement_ids()
+    {
+        var treeResult = BuildTrees(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()));
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(treeResult);
+        var ghost = freeze.Nodes.Single() with { PhysicalNodeId = "physical:ghost" };
+
+        var error = Assert.Throws<ArchitectureV7PlacementAccountingException>(() =>
+            ArchitectureV7PlacementAccounting.Validate(treeResult.Sizing.Ownership.Projection,
+                new[] { ghost }, freeze.External, freeze.Standalone));
+
+        Assert.Contains("unprojected physical node ID physical:ghost", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Configured_duplicate_branches_have_distinct_physical_ids_and_each_places_once()
+    {
+        var diagram = Diagram(new[] { Node("a", "A"), Node("b", "B"), Node("shared", "SharedUtility") },
+            new[] { Link("first", "a", "shared"), Link("second", "b", "shared") });
+        var policy = new ArchitectureV7ProjectionPolicy(ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches, new[] { "*Utility" });
+        var projection = new ArchitectureV7PhysicalProjectionStage().Project(diagram, policy);
+        var ownership = new ArchitectureV7PositionalOwnershipStage().Resolve(projection);
+        var configuration = new ArchitectureV7PrePlacementConfiguration(10, 1, 1, 0, 5, 0, Array.Empty<ArchitectureV7ReservedRoleRule>());
+        var sizing = new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, configuration);
+        var reservations = new ArchitectureV7ReservationReconciliationStage().Reconcile(
+            new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, configuration)).Table;
+        var trees = new ArchitectureV7RecursiveTreeGridStage().Build(sizing, reservations);
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(trees);
+
+        Assert.Equal(projection.PhysicalNodes.Count, freeze.Nodes.Count);
+        Assert.Equal(projection.PhysicalNodes.Count, freeze.Nodes.Select(node => node.PhysicalNodeId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(1, freeze.Nodes.Count(node => node.PhysicalNodeId.Contains(":duplicate:", StringComparison.Ordinal)));
+        Assert.Contains(freeze.Nodes, node => node.PhysicalNodeId == "physical:shared");
+        Assert.Contains(freeze.Nodes, node => node.PhysicalNodeId == "physical:shared:duplicate:1");
+    }
+
     private static ArchitectureV7PlacementFreeze Compose(ArchitectureDiagramModel diagram) => new ArchitectureV7ProjectCompositionStage().Compose(BuildTrees(diagram));
 
     private static ArchitectureV7RecursiveTreeGridResult BuildTrees(ArchitectureDiagramModel diagram)
