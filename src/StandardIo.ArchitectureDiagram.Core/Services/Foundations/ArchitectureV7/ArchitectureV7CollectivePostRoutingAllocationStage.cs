@@ -34,7 +34,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var crossingInteractions = crossingResult.Interactions;
         var fingerprint = Fingerprint(placement.PlacementFingerprint, routes.RouteFingerprint, runs, assignments, terminals, approaches, handoffs, bends, crossings, diagnostics);
         return new ArchitectureV7CollectiveAllocationFreeze(runs, lanes, assignments, terminals, approaches, handoffs, bends, crossings,
-            diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint, crossingInteractions);
+            diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint, crossingInteractions, configuration);
     }
 
     private static IReadOnlyList<ArchitectureV7StraightRun> BuildRuns(
@@ -328,9 +328,17 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 .ThenBy(x => x.Key.YOffset)
                 .ToArray();
             var occupiedBends = bends.Count(x => x.Cell == cell.Key);
-            if (!FitsResourceEnvelope(occupiedBends + resources.Length, configuration))
-                AddCapacityDiagnostic(diagnostics, "CROSSING-SLOT-CAPACITY-EXCEEDED", "Crossing and bend resources exceed the frozen logical cell physical envelope.", cell.Key,
-                    ordered.SelectMany(x => new[] { x.HLink, x.VLink }), ordered.SelectMany(x => new[] { x.HRunId, x.VRunId }));
+            var horizontalLaneCount = ordered.Select(x => x.HLaneId).Distinct(StringComparer.Ordinal).Count();
+            var verticalLaneCount = ordered.Select(x => x.VLaneId).Distinct(StringComparer.Ordinal).Count();
+            var horizontalFits = FitsResourceEnvelope(horizontalLaneCount, configuration);
+            var verticalFits = FitsResourceEnvelope(verticalLaneCount, configuration);
+            var bendFits = FitsResourceEnvelope(occupiedBends, configuration);
+            if (!horizontalFits || !verticalFits || !bendFits)
+                AddCapacityDiagnostic(diagnostics, "CROSSING-PHYSICAL-ENVELOPE-EXCEEDED",
+                    "Independent lane and bend envelopes exceed the frozen logical cell physical envelope. " +
+                    "horizontalLanes=" + horizontalLaneCount + "; verticalLanes=" + verticalLaneCount + "; bends=" + occupiedBends + "; " +
+                    "crossingInteractions=" + ordered.Length + "; crossingResources=" + resources.Length,
+                    cell.Key, ordered.SelectMany(x => new[] { x.HLink, x.VLink }), ordered.SelectMany(x => new[] { x.HRunId, x.VRunId }));
             for (var slot = 0; slot < resources.Length; slot++)
             {
                 var group = resources[slot];
@@ -343,9 +351,16 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                     item.HLaneId, item.VLaneId, slotOffset, configuration.ResourceClearance, item.Classification,
                     item.HIndex, item.VIndex, position, group.Select(x => x.InteractionId).OrderBy(x => x, StringComparer.Ordinal).ToArray()));
                 foreach (var candidate in group)
+                {
+                    var bendId = BendFor(candidate, bends);
+                    var bend = string.IsNullOrEmpty(bendId) ? null : bends.FirstOrDefault(value => value.BendId == bendId);
+                    if (bend is not null && SamePhysicalPoint(bend.EffectiveRelativePosition, candidate.Position))
+                        diagnostics.Add(new("CROSSING-TURN-PHYSICAL-CONFLICT", "A turn/pass interaction occupies the bend's allocated physical point.", true,
+                            candidate.HLink, candidate.HRunId, null, null, null, null, null, new[] { candidate.HLink, candidate.VLink }, new[] { candidate.HRunId, candidate.VRunId }));
                     interactions.Add(new(candidate.InteractionId, cell.Key, candidate.Classification, candidate.HLink, candidate.VLink,
                         candidate.HRunId, candidate.VRunId, candidate.HLaneId, candidate.VLaneId, candidate.HIndex, candidate.VIndex,
-                        "crossing-interaction;cell-and-lane-geometry", resourceId, BendFor(candidate, bends)));
+                        "crossing-interaction;cell-and-lane-geometry", resourceId, bendId));
+                }
             }
         }
         return new(result, interactions);
@@ -382,6 +397,9 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         + ":" + Number(position.XOffset) + ":" + Number(position.YOffset) + ":" + Number(clearance);
 
     private static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
+
+    private static bool SamePhysicalPoint(ArchitectureV7PhysicalRelativePosition left, ArchitectureV7PhysicalRelativePosition right) =>
+        Math.Abs(left.XOffset - right.XOffset) < 0.0001 && Math.Abs(left.YOffset - right.YOffset) < 0.0001;
 
     private static string BendFor(CrossingCandidateValue candidate, IReadOnlyList<ArchitectureV7BendAllocation> bends)
     {

@@ -233,7 +233,8 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         IReadOnlyList<ArchitectureV7CrossingAllocation> crossings,
         IReadOnlyList<ArchitectureV7AllocationDiagnostic> diagnostics,
         string placementFingerprint, string routeFingerprint, string allocationFingerprint,
-        IReadOnlyList<ArchitectureV7CrossingInteraction>? crossingInteractions = null)
+        IReadOnlyList<ArchitectureV7CrossingInteraction>? crossingInteractions = null,
+        ArchitectureV7AllocationConfiguration? allocationConfiguration = null)
     {
         Runs = Array.AsReadOnly((runs ?? Array.Empty<ArchitectureV7StraightRun>()).OrderBy(x => x.RunId, StringComparer.Ordinal).ToArray());
         Lanes = Array.AsReadOnly((lanes ?? Array.Empty<ArchitectureV7PhysicalLane>()).OrderBy(x => x.LaneId, StringComparer.Ordinal).ToArray());
@@ -256,7 +257,7 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
                     group.SelectMany(item => item.AssociatedInteractionIds).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray(),
                     "physical-crossing-resource;geometry-keyed;" + group.Key);
             }).OrderBy(resource => resource.ResourceId, StringComparer.Ordinal).ToArray());
-        TrackDemands = Array.AsReadOnly(BuildTrackDemands(Handoffs, Bends, CrossingResources));
+        TrackDemands = Array.AsReadOnly(BuildTrackDemands(Runs, RunAssignments, Lanes, Handoffs, Bends, allocationConfiguration));
         CrossingInteractionFingerprint = Fingerprint(CrossingInteractions.Select(interaction => interaction.InteractionId + ":" + interaction.Classification + ":" + interaction.ResourceId + ":" + interaction.BendResourceId));
         CrossingResourceFingerprint = Fingerprint(CrossingResources.Select(resource => resource.ResourceId + ":" + string.Join(",", resource.InteractionIds)));
         TrackDemandFingerprint = Fingerprint(TrackDemands.Select(demand => demand.LogicalRow + ":" + demand.LogicalColumn + ":" + demand.RequiredRowExtent + ":" + demand.RequiredColumnExtent + ":" + string.Join(",", demand.ResourceIds)));
@@ -284,39 +285,81 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public bool IsComplete => !Diagnostics.Any(x => x.IsHardFailure);
 
     private static ArchitectureV7PhysicalTrackDemand[] BuildTrackDemands(
+        IReadOnlyList<ArchitectureV7StraightRun> runs,
+        IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments,
+        IReadOnlyList<ArchitectureV7PhysicalLane> lanes,
         IReadOnlyList<ArchitectureV7EndpointHandoff> handoffs,
         IReadOnlyList<ArchitectureV7BendAllocation> bends,
-        IReadOnlyList<ArchitectureV7PhysicalCrossingResource> crossings)
+        ArchitectureV7AllocationConfiguration? configuration)
     {
-        var result = new List<ArchitectureV7PhysicalTrackDemand>();
+        var demands = new Dictionary<(int Row, int Column), MutableTrackDemand>();
+
+        if (configuration is not null)
+        {
+            foreach (var group in runs.GroupBy(run => (run.Orientation, FixedCoordinate(run)))
+                         .OrderBy(group => group.Key.Orientation)
+                         .ThenBy(group => group.Key.Item2))
+            {
+                var laneIds = group.Select(run => assignments.First(assignment => assignment.RunId == run.RunId).LaneId)
+                    .Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+                if (laneIds.Length == 0) continue;
+                var spacing = group.Select(run => lanes.First(lane => lane.RunIds.Contains(run.RunId, StringComparer.Ordinal)).ParallelLaneSpacing)
+                    .DefaultIfEmpty(configuration.ParallelLaneSpacing).Max();
+                var envelope = checked(2 * configuration.ResourceClearance + Math.Max(0, laneIds.Length - 1) * spacing);
+                var row = group.Key.Orientation == ArchitectureV7RunOrientation.Horizontal ? group.Key.Item2 : -1;
+                var column = group.Key.Orientation == ArchitectureV7RunOrientation.Vertical ? group.Key.Item2 : -1;
+                AddDemand(demands, row, column, group.Key.Orientation == ArchitectureV7RunOrientation.Horizontal ? envelope : 0,
+                    group.Key.Orientation == ArchitectureV7RunOrientation.Vertical ? envelope : 0, laneIds,
+                    "lane-envelope;lane-count=" + laneIds.Length);
+            }
+        }
+
         foreach (var handoff in handoffs)
         {
             if (handoff.LogicalCell is not { } cell) continue;
             var extent = Math.Max(0, 2 * handoff.RequiredClearance + 2 * Math.Abs(handoff.RelativePhysicalOffset));
-            result.Add(new(cell.Row, cell.Column,
+            AddDemand(demands, cell.Row, cell.Column,
                 handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical ? extent : 0,
                 handoff.HandoffOrientation == ArchitectureV7RunOrientation.Horizontal ? extent : 0,
-                new[] { handoff.ResourceId }, "endpoint-handoff;cell-centre-relative-offset"));
+                new[] { handoff.ResourceId }, "endpoint-handoff;cell-centre-relative-offset");
         }
         foreach (var bend in bends)
         {
             var position = bend.EffectiveRelativePosition;
             var extent = Math.Max(0, 2 * bend.RequiredClearance);
-            result.Add(new(bend.Cell.Row, bend.Cell.Column,
+            AddDemand(demands, bend.Cell.Row, bend.Cell.Column,
                 Math.Max(extent, 2 * Math.Abs(position.YOffset) + extent),
                 Math.Max(extent, 2 * Math.Abs(position.XOffset) + extent),
-                new[] { bend.BendId }, "bend-resource;cell-centre-relative-offset"));
+                new[] { bend.BendId }, "bend-envelope;cell-centre-relative-offset");
         }
-        foreach (var crossing in crossings)
+
+        return demands.OrderBy(item => item.Key.Row).ThenBy(item => item.Key.Column)
+            .Select(item => item.Value.Freeze(item.Key.Row, item.Key.Column)).ToArray();
+
+        static void AddDemand(Dictionary<(int Row, int Column), MutableTrackDemand> demands, int row, int column,
+            double rowExtent, double columnExtent, IEnumerable<string> resourceIds, string provenance)
         {
-            var position = crossing.RelativePosition;
-            var extent = Math.Max(0, 2 * crossing.RequiredClearance);
-            result.Add(new(crossing.Cell.Row, crossing.Cell.Column,
-                Math.Max(extent, 2 * Math.Abs(position.YOffset) + extent),
-                Math.Max(extent, 2 * Math.Abs(position.XOffset) + extent),
-                new[] { crossing.ResourceId }, "crossing-resource;cell-centre-relative-offset"));
+            var key = (row, column);
+            if (!demands.TryGetValue(key, out var demand)) demands[key] = demand = new();
+            demand.RowExtent = Math.Max(demand.RowExtent, rowExtent);
+            demand.ColumnExtent = Math.Max(demand.ColumnExtent, columnExtent);
+            demand.ResourceIds.UnionWith(resourceIds);
+            demand.Provenance.Add(provenance);
         }
-        return result.ToArray();
+
+        static int FixedCoordinate(ArchitectureV7StraightRun run) => run.Orientation == ArchitectureV7RunOrientation.Horizontal
+            ? run.Cells[0].Row : run.Cells[0].Column;
+    }
+
+    private sealed class MutableTrackDemand
+    {
+        public double RowExtent { get; set; }
+        public double ColumnExtent { get; set; }
+        public HashSet<string> ResourceIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> Provenance { get; } = new(StringComparer.Ordinal);
+
+        public ArchitectureV7PhysicalTrackDemand Freeze(int row, int column) => new(row, column, RowExtent, ColumnExtent,
+            ResourceIds.OrderBy(id => id, StringComparer.Ordinal).ToArray(), string.Join(";", Provenance.OrderBy(value => value, StringComparer.Ordinal)));
     }
 
     private static string Fingerprint(IEnumerable<string> values)

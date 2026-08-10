@@ -270,6 +270,56 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Clean_crossing_lattice_does_not_charge_one_capacity_slot_per_intersection()
+    {
+        var routes = new List<ArchitectureV7LogicalRoute>();
+        for (var horizontal = 0; horizontal < 3; horizontal++)
+            routes.Add(Route("h" + horizontal, "hs" + horizontal, "ht" + horizontal, (3, 0), (3, 1), (3, 2), (3, 3), (3, 4 + horizontal), (3, 5 + horizontal), (3, 6 + horizontal)));
+        for (var vertical = 0; vertical < 4; vertical++)
+            routes.Add(Route("v" + vertical, "vs" + vertical, "vt" + vertical, (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (6, 3)));
+
+        var result = Allocate(routes, Nodes(routes.SelectMany(route => new[] { route.SourcePhysicalNodeId, route.DestinationPhysicalNodeId }).ToArray()), spacing: 1);
+
+        Assert.Equal(12, result.CrossingInteractions.Count);
+        Assert.Equal(12, result.CrossingResources.Count);
+        Assert.DoesNotContain(result.TrackDemands, demand => demand.Provenance.Contains("crossing-resource", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-SLOT-CAPACITY-EXCEEDED");
+    }
+
+    [Fact]
+    public void One_bend_with_multiple_passes_has_one_bend_envelope_and_multiple_constraints()
+    {
+        var routes = new[]
+        {
+            Route("turn", "s", "t", (1, 1), (2, 1), (2, 4)),
+            Route("pass-a", "a", "b", (2, 0), (2, 1), (2, 2), (2, 3), (2, 4)),
+            Route("pass-b", "c", "d", (2, 0), (2, 1), (2, 2), (2, 3), (2, 4))
+        };
+
+        var result = Allocate(routes, Nodes("s", "t", "a", "b", "c", "d"), spacing: 1);
+
+        Assert.True(result.CrossingInteractions.Count >= 2);
+        Assert.Single(result.Bends);
+        Assert.Contains(result.TrackDemands, demand => demand.ResourceIds.Contains(result.Bends[0].BendId));
+        Assert.DoesNotContain(result.TrackDemands, demand => demand.ResourceIds.Any(id => id.StartsWith("crossing-resource:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Turn_pass_with_coincident_bend_geometry_reports_explicit_conflict()
+    {
+        var routes = new[]
+        {
+            Route("turn", "s", "t", (1, 1), (2, 1), (2, 3)),
+            Route("pass", "p", "q", (2, 0), (2, 1), (2, 2), (2, 3))
+        };
+
+        var result = Allocate(routes, Nodes("s", "t", "p", "q"), spacing: 0);
+
+        Assert.Contains(result.CrossingInteractions, interaction => interaction.Classification == "turn-pass");
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-TURN-PHYSICAL-CONFLICT");
+    }
+
+    [Fact]
     public void Incomplete_routes_fail_allocation_explicitly()
     {
         var route = new ArchitectureV7LogicalRoute("a", "a", "s", "t", new[] { new ArchitectureV7RouteCell(1, 1) }, false,
