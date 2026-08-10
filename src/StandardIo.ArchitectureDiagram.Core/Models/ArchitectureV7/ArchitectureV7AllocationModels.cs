@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV7;
 
@@ -167,10 +169,44 @@ public sealed record ArchitectureV7CrossingAllocation(
     string Classification = "clean-crossing",
     int HorizontalRouteIndex = -1,
     int VerticalRouteIndex = -1,
-    ArchitectureV7PhysicalRelativePosition? RelativePosition = null)
+    ArchitectureV7PhysicalRelativePosition? RelativePosition = null,
+    IReadOnlyList<string>? InteractionIds = null)
 {
     public ArchitectureV7PhysicalRelativePosition EffectiveRelativePosition => RelativePosition ?? new(0, 0);
+    public IReadOnlyList<string> AssociatedInteractionIds =>
+        Array.AsReadOnly((InteractionIds ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal).ToArray());
 }
+
+/// <summary>
+/// Immutable evidence that routes interact at one dense logical cell. This is
+/// deliberately separate from the physical resource allocated for that geometry.
+/// </summary>
+public sealed record ArchitectureV7CrossingInteraction(
+    string InteractionId,
+    ArchitectureV7RouteCell Cell,
+    string Classification,
+    string HorizontalPhysicalLinkId,
+    string VerticalPhysicalLinkId,
+    string HorizontalRunId,
+    string VerticalRunId,
+    string HorizontalLaneId,
+    string VerticalLaneId,
+    int HorizontalRouteIndex,
+    int VerticalRouteIndex,
+    string Provenance,
+    string ResourceId = "",
+    string BendResourceId = "");
+
+public sealed record ArchitectureV7PhysicalCrossingResource(
+    string ResourceId,
+    ArchitectureV7RouteCell Cell,
+    string Classification,
+    string HorizontalLaneId,
+    string VerticalLaneId,
+    ArchitectureV7PhysicalRelativePosition RelativePosition,
+    double RequiredClearance,
+    IReadOnlyList<string> InteractionIds,
+    string Provenance);
 
 public sealed record ArchitectureV7PhysicalTrackDemand(
     int LogicalRow,
@@ -196,7 +232,8 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         IReadOnlyList<ArchitectureV7BendAllocation> bends,
         IReadOnlyList<ArchitectureV7CrossingAllocation> crossings,
         IReadOnlyList<ArchitectureV7AllocationDiagnostic> diagnostics,
-        string placementFingerprint, string routeFingerprint, string allocationFingerprint)
+        string placementFingerprint, string routeFingerprint, string allocationFingerprint,
+        IReadOnlyList<ArchitectureV7CrossingInteraction>? crossingInteractions = null)
     {
         Runs = Array.AsReadOnly((runs ?? Array.Empty<ArchitectureV7StraightRun>()).OrderBy(x => x.RunId, StringComparer.Ordinal).ToArray());
         Lanes = Array.AsReadOnly((lanes ?? Array.Empty<ArchitectureV7PhysicalLane>()).OrderBy(x => x.LaneId, StringComparer.Ordinal).ToArray());
@@ -206,7 +243,23 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         Handoffs = Array.AsReadOnly((handoffs ?? Array.Empty<ArchitectureV7EndpointHandoff>()).OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.EndpointKind).ToArray());
         Bends = Array.AsReadOnly((bends ?? Array.Empty<ArchitectureV7BendAllocation>()).OrderBy(x => x.BendId, StringComparer.Ordinal).ToArray());
         Crossings = Array.AsReadOnly((crossings ?? Array.Empty<ArchitectureV7CrossingAllocation>()).OrderBy(x => x.CrossingId, StringComparer.Ordinal).ToArray());
-        TrackDemands = Array.AsReadOnly(BuildTrackDemands(Handoffs, Bends, Crossings));
+        CrossingInteractions = Array.AsReadOnly((crossingInteractions ?? Array.Empty<ArchitectureV7CrossingInteraction>()).OrderBy(x => x.InteractionId, StringComparer.Ordinal).ToArray());
+        CrossingResources = Array.AsReadOnly(Crossings.GroupBy(crossing => GeometryKey(crossing.Cell, crossing.Classification,
+                crossing.HorizontalLaneId, crossing.VerticalLaneId, crossing.EffectiveRelativePosition, crossing.RequiredClearance), StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var crossing = group.First();
+                return new ArchitectureV7PhysicalCrossingResource(
+                    crossing.CrossingId, crossing.Cell, crossing.Classification, crossing.HorizontalLaneId, crossing.VerticalLaneId,
+                    crossing.EffectiveRelativePosition, group.Max(item => item.RequiredClearance),
+                    group.SelectMany(item => item.AssociatedInteractionIds).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray(),
+                    "physical-crossing-resource;geometry-keyed;" + group.Key);
+            }).OrderBy(resource => resource.ResourceId, StringComparer.Ordinal).ToArray());
+        TrackDemands = Array.AsReadOnly(BuildTrackDemands(Handoffs, Bends, CrossingResources));
+        CrossingInteractionFingerprint = Fingerprint(CrossingInteractions.Select(interaction => interaction.InteractionId + ":" + interaction.Classification + ":" + interaction.ResourceId + ":" + interaction.BendResourceId));
+        CrossingResourceFingerprint = Fingerprint(CrossingResources.Select(resource => resource.ResourceId + ":" + string.Join(",", resource.InteractionIds)));
+        TrackDemandFingerprint = Fingerprint(TrackDemands.Select(demand => demand.LogicalRow + ":" + demand.LogicalColumn + ":" + demand.RequiredRowExtent + ":" + demand.RequiredColumnExtent + ":" + string.Join(",", demand.ResourceIds)));
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<ArchitectureV7AllocationDiagnostic>()).ToArray());
         PlacementFingerprint = placementFingerprint; RouteFingerprint = routeFingerprint; AllocationFingerprint = allocationFingerprint;
     }
@@ -218,7 +271,12 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public IReadOnlyList<ArchitectureV7EndpointHandoff> Handoffs { get; }
     public IReadOnlyList<ArchitectureV7BendAllocation> Bends { get; }
     public IReadOnlyList<ArchitectureV7CrossingAllocation> Crossings { get; }
+    public IReadOnlyList<ArchitectureV7CrossingInteraction> CrossingInteractions { get; }
+    public IReadOnlyList<ArchitectureV7PhysicalCrossingResource> CrossingResources { get; }
     public IReadOnlyList<ArchitectureV7PhysicalTrackDemand> TrackDemands { get; }
+    public string CrossingInteractionFingerprint { get; }
+    public string CrossingResourceFingerprint { get; }
+    public string TrackDemandFingerprint { get; }
     public IReadOnlyList<ArchitectureV7AllocationDiagnostic> Diagnostics { get; }
     public string PlacementFingerprint { get; }
     public string RouteFingerprint { get; }
@@ -228,7 +286,7 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     private static ArchitectureV7PhysicalTrackDemand[] BuildTrackDemands(
         IReadOnlyList<ArchitectureV7EndpointHandoff> handoffs,
         IReadOnlyList<ArchitectureV7BendAllocation> bends,
-        IReadOnlyList<ArchitectureV7CrossingAllocation> crossings)
+        IReadOnlyList<ArchitectureV7PhysicalCrossingResource> crossings)
     {
         var result = new List<ArchitectureV7PhysicalTrackDemand>();
         foreach (var handoff in handoffs)
@@ -251,13 +309,27 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         }
         foreach (var crossing in crossings)
         {
-            var position = crossing.EffectiveRelativePosition;
+            var position = crossing.RelativePosition;
             var extent = Math.Max(0, 2 * crossing.RequiredClearance);
             result.Add(new(crossing.Cell.Row, crossing.Cell.Column,
                 Math.Max(extent, 2 * Math.Abs(position.YOffset) + extent),
                 Math.Max(extent, 2 * Math.Abs(position.XOffset) + extent),
-                new[] { crossing.CrossingId }, "crossing-resource;cell-centre-relative-offset"));
+                new[] { crossing.ResourceId }, "crossing-resource;cell-centre-relative-offset"));
         }
         return result.ToArray();
     }
+
+    private static string Fingerprint(IEnumerable<string> values)
+    {
+        using var sha = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(string.Join("|", values));
+        return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", string.Empty);
+    }
+
+    private static string GeometryKey(ArchitectureV7RouteCell cell, string classification, string horizontalLaneId,
+        string verticalLaneId, ArchitectureV7PhysicalRelativePosition position, double clearance) =>
+        cell.Row + ":" + cell.Column + ":" + classification + ":" + horizontalLaneId + ":" + verticalLaneId + ":" +
+        position.XOffset.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + ":" +
+        position.YOffset.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + ":" +
+        clearance.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 }

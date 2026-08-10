@@ -204,7 +204,69 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         Assert.NotEmpty(crossing.HorizontalLaneId);
         Assert.NotEmpty(crossing.VerticalLaneId);
         Assert.Equal("clean-crossing", crossing.Classification);
+        var interaction = Assert.Single(result.CrossingInteractions);
+        Assert.Equal("clean-crossing", interaction.Classification);
+        Assert.Equal(crossing.CrossingId, interaction.ResourceId);
+        Assert.Empty(interaction.BendResourceId);
+        Assert.Single(result.CrossingResources);
         Assert.DoesNotContain(result.Diagnostics, x => x.Code == "CROSSING-TURN-CONFLICT");
+    }
+
+    [Fact]
+    public void Turn_pass_interaction_references_the_existing_bend_resource()
+    {
+        var routes = new[]
+        {
+            Route("turn", "s", "t", (1, 1), (2, 1), (2, 3)),
+            Route("pass", "p", "q", (2, 0), (2, 1), (2, 2), (2, 3))
+        };
+        var result = Allocate(routes, Nodes("s", "t", "p", "q"));
+        var interaction = Assert.Single(result.CrossingInteractions);
+
+        Assert.Equal("turn-pass", interaction.Classification);
+        Assert.NotEmpty(interaction.BendResourceId);
+        Assert.Contains(result.Bends, bend => bend.BendId == interaction.BendResourceId);
+        Assert.Single(result.CrossingResources);
+    }
+
+    [Fact]
+    public void Crossing_interaction_and_resource_order_is_deterministic_under_route_shuffle()
+    {
+        var routes = new[]
+        {
+            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3)),
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5))
+        };
+        var result = Allocate(routes, Nodes("h1", "h2", "v1", "v2"));
+        var reversed = Allocate(routes.AsEnumerable().Reverse().ToArray(), Nodes("h1", "h2", "v1", "v2"));
+
+        Assert.Equal(result.RouteFingerprint, reversed.RouteFingerprint);
+        Assert.Equal(result.CrossingInteractions, reversed.CrossingInteractions);
+        Assert.Equal(result.CrossingResources.Select(resource => resource.ResourceId), reversed.CrossingResources.Select(resource => resource.ResourceId));
+        Assert.Equal(result.CrossingResources.SelectMany(resource => resource.InteractionIds), reversed.CrossingResources.SelectMany(resource => resource.InteractionIds));
+        Assert.Equal(result.AllocationFingerprint, reversed.AllocationFingerprint);
+    }
+
+    [Fact]
+    public void Physical_crossing_resource_groups_interactions_by_geometry_not_relationship_identity()
+    {
+        var cell = new ArchitectureV7RouteCell(3, 3);
+        var crossings = new[]
+        {
+            new ArchitectureV7CrossingAllocation("crossing:a", cell, "h:a", "v:a", "test", "run:h:a", "run:v:a", "lane:H:3:0", "lane:V:3:0",
+                0, 0, "clean-crossing", 3, 3, new ArchitectureV7PhysicalRelativePosition(0, 0), new[] { "interaction:a" }),
+            new ArchitectureV7CrossingAllocation("crossing:b", cell, "h:b", "v:b", "test", "run:h:b", "run:v:b", "lane:H:3:0", "lane:V:3:0",
+                0, 0, "clean-crossing", 3, 3, new ArchitectureV7PhysicalRelativePosition(0, 0), new[] { "interaction:b" })
+        };
+
+        var freeze = new ArchitectureV7CollectiveAllocationFreeze(
+            Array.Empty<ArchitectureV7StraightRun>(), Array.Empty<ArchitectureV7PhysicalLane>(), Array.Empty<ArchitectureV7RunLaneAssignment>(),
+            Array.Empty<ArchitectureV7TerminalSlotAssignment>(), Array.Empty<ArchitectureV7EndpointApproachReservation>(), Array.Empty<ArchitectureV7EndpointHandoff>(),
+            Array.Empty<ArchitectureV7BendAllocation>(), crossings, Array.Empty<ArchitectureV7AllocationDiagnostic>(), "placement", "routes", "allocation",
+            Array.Empty<ArchitectureV7CrossingInteraction>());
+
+        var resource = Assert.Single(freeze.CrossingResources);
+        Assert.Equal(new[] { "interaction:a", "interaction:b" }, resource.InteractionIds);
     }
 
     [Fact]
