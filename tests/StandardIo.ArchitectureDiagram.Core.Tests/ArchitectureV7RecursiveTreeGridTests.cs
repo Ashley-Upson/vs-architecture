@@ -206,9 +206,35 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
     }
 
     [Fact]
+    public void One_node_tree_freezes_explicit_intrinsic_rows_cells_and_footprint()
+    {
+        var tree = Assert.Single(Build(Diagram(new[] { Node("root", "Root") }, Array.Empty<ArchitectureLink>())).Trees);
+        Assert.Equal(tree.Width * tree.Height, tree.Cells.Count);
+        Assert.Contains(tree.Cells, cell => cell.Row == 0 && cell.Capabilities == ArchitectureV7CellCapability.Blocked && cell.OccupantId == "physical:root");
+        Assert.All(tree.Cells.Where(cell => cell.Row % 2 == 0 && cell.OccupantId is null), cell => Assert.Equal(ArchitectureV7CellCapability.NodeAllowed, cell.Capabilities));
+        Assert.All(tree.Cells.Where(cell => cell.Row % 2 == 1), cell => Assert.Equal(ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting, cell.Capabilities));
+    }
+
+    [Fact]
+    public void Independent_top_level_trees_join_by_analyser_fifo_order()
+    {
+        var diagram = Diagram(new[] { Node("z", "RootZ"), Node("a", "RootA") }, Array.Empty<ArchitectureLink>()) with
+        {
+            Links = Array.Empty<ArchitectureLink>()
+        };
+        var trees = new ArchitectureV7RecursiveTreeGridStage().Build(
+            new ArchitectureV7PreRoutingNodeSpanSizer().Size(BuildOwnership(diagram), Config()),
+            Frozen(new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 3, true)));
+
+        Assert.Equal(new[] { "tree:physical:z", "tree:physical:a" }, trees.Trees.Select(tree => tree.TreeId));
+        Assert.All(trees.Trees, tree => Assert.NotEmpty(tree.Cells));
+    }
+
+    [Fact]
     public void Changed_recursive_completion_order_does_not_change_result()
     {
         var diagram = Diagram(new[] { Node("root", "Root"), Node("a", "A"), Node("b", "B") }, new[] { Link("z", "root", "b"), Link("a", "root", "a") });
+        diagram = diagram with { Links = new[] { Link("z", "root", "b", 0), Link("a", "root", "a", 1) } };
         var left = Build(diagram);
         var right = Build(diagram with { Links = diagram.Links.Reverse().ToArray() });
         Assert.Equal(left.FreezeFingerprint, right.FreezeFingerprint);
@@ -264,5 +290,5 @@ public sealed class ArchitectureV7RecursiveTreeGridTests
             new[] { new ArchitectureExternalNode("external", "ExternalApi", "External", "external", "External.ExternalApi", "interface") }.Where(_ => nodes.Any(node => node.Id == "external")).ToArray(), links, null);
 
     private static ArchitectureNode Node(string id, string name) => new(id, "project", name, "Project." + name, "Class", id, Array.Empty<string>());
-    private static ArchitectureLink Link(string id, string source, string target) => new(id, source, target, "dependency");
+    private static ArchitectureLink Link(string id, string source, string target, int analyserOrdinal = -1) => new(id, source, target, "dependency", analyserOrdinal);
 }

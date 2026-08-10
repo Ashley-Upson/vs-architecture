@@ -45,7 +45,8 @@ public sealed class ArchitectureV7PhysicalProjectionStage
             node.FullName,
             node.Kind,
             ArchitectureV7ProjectionMode.Canonical,
-            null)).ToArray();
+            null,
+            node.AnalyserOrdinal)).ToArray();
         var physicalNodes = canonicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         var nodeMap = semanticNodes.ToDictionary(node => node.Id,
             node => new List<string> { "physical:" + node.Id }, StringComparer.Ordinal);
@@ -91,7 +92,8 @@ public sealed class ArchitectureV7PhysicalProjectionStage
                     target.Kind,
                     ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches,
                     new ArchitectureV7DuplicationProvenance(target.Id, link.Id, "physical:" + source.Id, ordinal,
-                        "Configured duplicate pattern matched a repeated semantic target use."));
+                        "Configured duplicate pattern matched a repeated semantic target use."),
+                    target.AnalyserOrdinal);
                 nodeMap[target.Id].Add(targetPhysicalId);
             }
 
@@ -131,13 +133,14 @@ public sealed class ArchitectureV7PhysicalProjectionStage
 
     private static IEnumerable<SemanticNode> ReadNodes(ArchitectureDiagramModel diagram)
     {
-        foreach (var project in (diagram.Projects ?? Array.Empty<ArchitectureProject>()).OrderBy(item => item.Id, StringComparer.Ordinal))
-            foreach (var node in (project.Nodes ?? Array.Empty<ArchitectureNode>()).OrderBy(item => item.Id, StringComparer.Ordinal))
+        var ordinal = 0;
+        foreach (var project in diagram.Projects ?? Array.Empty<ArchitectureProject>())
+            foreach (var node in project.Nodes ?? Array.Empty<ArchitectureNode>())
                 yield return new SemanticNode(node.Id, project.Id, node.Name, node.FullName, node.Kind, false,
-                    !diagram.Links.Any(link => link.SourceId == node.Id || link.TargetId == node.Id));
-        foreach (var node in (diagram.ExternalNodes ?? Array.Empty<ArchitectureExternalNode>()).OrderBy(item => item.Id, StringComparer.Ordinal))
+                    !diagram.Links.Any(link => link.SourceId == node.Id || link.TargetId == node.Id), ordinal++);
+        foreach (var node in diagram.ExternalNodes ?? Array.Empty<ArchitectureExternalNode>())
             yield return new SemanticNode(node.Id, null, node.Name, node.FullName, "External", true,
-                !diagram.Links.Any(link => link.SourceId == node.Id || link.TargetId == node.Id));
+                !diagram.Links.Any(link => link.SourceId == node.Id || link.TargetId == node.Id), ordinal++);
     }
 
     private static string Fingerprint(
@@ -147,7 +150,7 @@ public sealed class ArchitectureV7PhysicalProjectionStage
         IReadOnlyDictionary<string, IReadOnlyList<string>> linkMap)
     {
         var text = string.Join("|", nodes.Select(node => string.Join(":", node.PhysicalNodeId, node.SemanticNodeId, node.ProjectId,
-                node.ProjectionMode, node.DuplicationProvenance?.SemanticLinkId))) + "#" +
+                node.ProjectionMode, node.DuplicationProvenance?.SemanticLinkId, node.AnalyserOrdinal))) + "#" +
             string.Join("|", links.Select(link => string.Join(":", link.PhysicalLinkId, link.SemanticLinkId, link.SourcePhysicalNodeId, link.DestinationPhysicalNodeId))) + "#" +
             string.Join("|", nodeMap.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item.Key + "=" + string.Join(",", item.Value))) + "#" +
             string.Join("|", linkMap.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item.Key + "=" + string.Join(",", item.Value)));
@@ -155,5 +158,5 @@ public sealed class ArchitectureV7PhysicalProjectionStage
         return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text))).Replace("-", string.Empty);
     }
 
-    private sealed record SemanticNode(string Id, string? ProjectId, string Name, string FullName, string Kind, bool IsExternal, bool IsStandalone);
+    private sealed record SemanticNode(string Id, string? ProjectId, string Name, string FullName, string Kind, bool IsExternal, bool IsStandalone, int AnalyserOrdinal);
 }

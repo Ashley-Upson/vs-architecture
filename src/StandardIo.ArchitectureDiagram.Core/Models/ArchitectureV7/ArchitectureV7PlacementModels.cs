@@ -13,7 +13,8 @@ public enum ArchitectureV7CellCapability
     ProjectBoundary = 4,
     StraightPassthroughOnly = 8,
     HeaderBlocked = 16,
-    GeneralRouting = 32
+    GeneralRouting = 32,
+    Blocked = 64
 }
 
 public sealed record ArchitectureV7LogicalCell(int Row, int Column, ArchitectureV7CellCapability Capabilities, string? OccupantId = null);

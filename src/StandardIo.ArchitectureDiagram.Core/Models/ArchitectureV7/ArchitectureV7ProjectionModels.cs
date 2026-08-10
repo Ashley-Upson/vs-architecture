@@ -32,7 +32,8 @@ public sealed record ArchitectureV7PhysicalNode(
     string FullName,
     string Kind,
     ArchitectureV7ProjectionMode ProjectionMode,
-    ArchitectureV7DuplicationProvenance? DuplicationProvenance);
+    ArchitectureV7DuplicationProvenance? DuplicationProvenance,
+    int AnalyserOrdinal = -1);
 
 public sealed record ArchitectureV7PhysicalLink(
     string PhysicalLinkId,

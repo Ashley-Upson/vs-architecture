@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,25 +26,22 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
 
         var children = BuildChildren(projection, decisions);
         var roots = decisions.Values.Where(decision => decision.PositionalParentPhysicalNodeId is null)
-            .OrderBy(decision => decision.PhysicalNodeId, StringComparer.Ordinal).ToArray();
+            .OrderBy(decision => nodes[decision.PhysicalNodeId].AnalyserOrdinal < 0 ? int.MaxValue : nodes[decision.PhysicalNodeId].AnalyserOrdinal)
+            .ThenBy(decision => decision.PhysicalNodeId, StringComparer.Ordinal).ToArray();
         if (roots.Length == 0) throw new InvalidOperationException("V7 tree construction found no positional tree root.");
 
+        var parallelStopwatch = Stopwatch.StartNew();
+        var treeResults = roots.AsParallel().AsUnordered().Select(BuildTree).ToArray();
+        parallelStopwatch.Stop();
+        var joinStopwatch = Stopwatch.StartNew();
+        var trees = treeResults
+            .OrderBy(tree => tree.AnalyserOrdinal < 0 ? int.MaxValue : tree.AnalyserOrdinal)
+            .ThenBy(tree => tree.TreeId, StringComparer.Ordinal).ToArray();
+        joinStopwatch.Stop();
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        var trees = new List<ArchitectureV7TopLevelTreeGrid>();
-        foreach (var root in roots)
+        foreach (var tree in trees)
         {
-            var built = BuildNode(root.PhysicalNodeId, null, false);
-            foreach (var placement in built.AllPlacements) visited.Add(placement.PhysicalNodeId);
-            var mainUnit = OffsetUnit(built.Main, 0, false);
-            var detached = built.Detached.ToList();
-            var allPlacements = new List<ArchitectureV7TreeGridNodePlacement>(mainUnit.Placements);
-            allPlacements.AddRange(detached.SelectMany(unit => unit.Placements));
-            var width = built.Complete.Width;
-            var height = allPlacements.Count == 0 ? 0 : allPlacements.Max(item => item.LocalRow) + 1;
-            trees.Add(new ArchitectureV7TopLevelTreeGrid(
-                "tree:" + root.PhysicalNodeId, root.PhysicalNodeId, mainUnit, detached, allPlacements, width, height,
-                projection.FreezeFingerprint, sizing.Ownership.FreezeFingerprint, sizing.FreezeFingerprint,
-                reservations.Fingerprint, "v7-recursive-tree-grid;root=" + root.PhysicalNodeId));
+            foreach (var placement in tree.Placements) visited.Add(placement.PhysicalNodeId);
         }
 
         if (visited.Count != nodes.Count)
@@ -67,10 +65,29 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             throw new InvalidOperationException("V7 recursive tree construction produced placements for unknown physical nodes before project composition: " + string.Join(", ", unknownPlacements));
 
         var fingerprintText = sizing.FreezeFingerprint + "#" + reservations.Fingerprint + "#" + string.Join("|", trees.Select(tree =>
-            tree.TreeId + ":" + tree.Width + ":" + tree.Height + ":" + string.Join(",", tree.Placements.Select(item => item.PhysicalNodeId + "@" + item.LocalRow + ":" + item.LocalColumn))));
+            tree.TreeId + ":" + tree.AnalyserOrdinal + ":" + tree.Width + ":" + tree.Height + ":" + string.Join(",", tree.Placements.Select(item => item.PhysicalNodeId + "@" + item.LocalRow + ":" + item.LocalColumn))));
         using var sha = SHA256.Create();
         var fingerprint = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(fingerprintText))).Replace("-", string.Empty);
-        return new ArchitectureV7RecursiveTreeGridResult(sizing, reservations, trees, fingerprint);
+        return new ArchitectureV7RecursiveTreeGridResult(sizing, reservations, trees, fingerprint,
+            roots.Length, parallelStopwatch.ElapsedMilliseconds, joinStopwatch.ElapsedMilliseconds);
+
+        ArchitectureV7TopLevelTreeGrid BuildTree(ArchitectureV7PositionalOwnershipDecision root)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var built = BuildNode(root.PhysicalNodeId, null, false);
+            var mainUnit = OffsetUnit(built.Main, 0, false);
+            var detached = built.Detached.ToList();
+            var allPlacements = new List<ArchitectureV7TreeGridNodePlacement>(mainUnit.Placements);
+            allPlacements.AddRange(detached.SelectMany(unit => unit.Placements));
+            var width = built.Complete.Width;
+            var height = allPlacements.Count == 0 ? 0 : allPlacements.Max(item => item.LocalRow) + 1;
+            stopwatch.Stop();
+            return new ArchitectureV7TopLevelTreeGrid(
+                "tree:" + root.PhysicalNodeId, root.PhysicalNodeId, mainUnit, detached, allPlacements, width, height,
+                projection.FreezeFingerprint, sizing.Ownership.FreezeFingerprint, sizing.FreezeFingerprint,
+                reservations.Fingerprint, "v7-recursive-tree-grid;root=" + root.PhysicalNodeId + ";construction-ms=" + stopwatch.ElapsedMilliseconds,
+                nodes[root.PhysicalNodeId].AnalyserOrdinal, BuildCells(allPlacements, width, height), stopwatch.ElapsedMilliseconds);
+        }
 
         int NaturalLayer(string physicalNodeId)
         {
@@ -144,7 +161,8 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             placements.AddRange(positionedChildren.SelectMany(unit => unit.Placements));
             var main = new ArchitectureV7TreeGridPlacementUnit("unit:" + physicalNodeId, physicalNodeId, placements, width,
                 placements.Max(item => item.LocalRow) + 1, parentCentre, placement.LocalRow, detached,
-                "v7-recursive-main;root=" + physicalNodeId);
+                "v7-recursive-main;root=" + physicalNodeId,
+                BuildCells(placements, width, placements.Max(item => item.LocalRow) + 1));
             var detachedUnits = new List<ArchitectureV7TreeGridPlacementUnit>();
             var detachedCursor = Math.Max(width, placements.Max(item => item.LocalColumn + item.LogicalSpan));
             foreach (var child in detachedChildren)
@@ -155,9 +173,12 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
                 detachedCursor = checked(detachedCursor + RequiredWidth(detachedUnit));
             }
             var completePlacements = placements.Concat(detachedUnits.SelectMany(unit => unit.Placements)).ToArray();
+            var completeWidth = Math.Max(detachedCursor, completePlacements.Max(item => item.LocalColumn + item.LogicalSpan));
+            var completeHeight = completePlacements.Max(item => item.LocalRow) + 1;
             var complete = new ArchitectureV7TreeGridPlacementUnit("complete:" + physicalNodeId, physicalNodeId, completePlacements,
-                Math.Max(detachedCursor, completePlacements.Max(item => item.LocalColumn + item.LogicalSpan)), completePlacements.Max(item => item.LocalRow) + 1, parentCentre, placement.LocalRow, detached,
-                "v7-recursive-complete;root=" + physicalNodeId);
+                completeWidth, completeHeight, parentCentre, placement.LocalRow, detached,
+                "v7-recursive-complete;root=" + physicalNodeId,
+                BuildCells(completePlacements, completeWidth, completeHeight));
             AssertNoOverlap(complete.Placements, "tree=" + physicalNodeId);
             return new BuiltNode(main, detachedUnits, complete, detached, completePlacements);
         }
@@ -191,11 +212,13 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         {
             if (unit.Placements.Count == 0)
                 return new ArchitectureV7TreeGridPlacementUnit(unit.UnitId, unit.RootPhysicalNodeId, unit.Placements,
-                    0, unit.Height, unit.RootCentreCell, unit.RootRow, detached, unit.Provenance);
+                    0, unit.Height, unit.RootCentreCell, unit.RootRow, detached, unit.Provenance,
+                    BuildCells(unit.Placements, 0, unit.Height));
             var minimum = unit.Placements.Min(item => item.LocalColumn);
             var reframed = OffsetUnit(unit, -minimum, detached);
             return new ArchitectureV7TreeGridPlacementUnit(reframed.UnitId, reframed.RootPhysicalNodeId, reframed.Placements,
-                RequiredWidth(reframed), reframed.Height, reframed.RootCentreCell, reframed.RootRow, detached, reframed.Provenance);
+                RequiredWidth(reframed), reframed.Height, reframed.RootCentreCell, reframed.RootRow, detached, reframed.Provenance,
+                BuildCells(reframed.Placements, RequiredWidth(reframed), reframed.Height));
         }
 
         static void AssertNoOverlap(IReadOnlyList<ArchitectureV7TreeGridNodePlacement> placements, string context)
@@ -215,7 +238,10 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         IReadOnlyDictionary<string, ArchitectureV7PositionalOwnershipDecision> decisions)
     {
         var children = decisions.Keys.ToDictionary(id => id, _ => new List<string>(), StringComparer.Ordinal);
-        foreach (var link in projection.PhysicalLinks)
+        foreach (var link in projection.PhysicalLinks
+                     .OrderBy(link => link.AnalyserOrdinal < 0 ? int.MaxValue : link.AnalyserOrdinal)
+                     .ThenBy(link => link.SemanticLinkId, StringComparer.Ordinal)
+                     .ThenBy(link => link.PhysicalLinkId, StringComparer.Ordinal))
         {
             if (!decisions.TryGetValue(link.DestinationPhysicalNodeId, out var decision) || decision.PositionalParentPhysicalNodeId != link.SourcePhysicalNodeId) continue;
             var list = children[link.SourcePhysicalNodeId];
@@ -234,7 +260,27 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             IsDetached = detached || placement.IsDetached
         }).ToArray();
         return new ArchitectureV7TreeGridPlacementUnit(unit.UnitId, unit.RootPhysicalNodeId, placements, unit.Width, unit.Height,
-            checked(unit.RootCentreCell + offset), unit.RootRow, detached, unit.Provenance);
+            checked(unit.RootCentreCell + offset), unit.RootRow, detached, unit.Provenance,
+            BuildCells(placements, unit.Width, unit.Height));
+    }
+
+    private static IReadOnlyList<ArchitectureV7TreeGridCell> BuildCells(
+        IReadOnlyList<ArchitectureV7TreeGridNodePlacement> placements, int width, int height)
+    {
+        var cells = new List<ArchitectureV7TreeGridCell>(Math.Max(0, width) * Math.Max(0, height));
+        for (var row = 0; row < height; row++)
+            for (var column = 0; column < width; column++)
+            {
+                var placement = placements.FirstOrDefault(item => item.LocalRow == row &&
+                    item.LocalColumn <= column && column < item.LocalColumn + item.LogicalSpan);
+                var capability = placement is not null
+                    ? ArchitectureV7CellCapability.Blocked
+                    : row % 2 == 0
+                        ? ArchitectureV7CellCapability.NodeAllowed
+                        : ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
+                cells.Add(new ArchitectureV7TreeGridCell(row, column, capability, placement?.PhysicalNodeId));
+            }
+        return cells;
     }
 
     private sealed record BuiltNode(ArchitectureV7TreeGridPlacementUnit Main,

@@ -16,7 +16,11 @@ public sealed class ArchitectureV7ProjectCompositionStage
         var nodes = projection.PhysicalNodes.ToDictionary(node => node.PhysicalNodeId, StringComparer.Ordinal);
         var sizing = trees.Sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
         var ownership = trees.Sizing.Ownership.Decisions.ToDictionary(item => item.PhysicalNodeId, StringComparer.Ordinal);
-        var ordinaryTrees = trees.Trees.Where(tree => tree.Placements.Any(placement => nodes[placement.PhysicalNodeId].ProjectId is not null && !nodes[placement.PhysicalNodeId].IsExternal && !nodes[placement.PhysicalNodeId].IsStandalone)).ToArray();
+        var ordinaryTrees = trees.Trees
+            .OrderBy(tree => tree.AnalyserOrdinal < 0 ? int.MaxValue : tree.AnalyserOrdinal)
+            .ThenBy(tree => tree.TreeId, StringComparer.Ordinal)
+            .Where(tree => tree.Placements.Any(placement => nodes[placement.PhysicalNodeId].ProjectId is not null && !nodes[placement.PhysicalNodeId].IsExternal && !nodes[placement.PhysicalNodeId].IsStandalone))
+            .ToArray();
         var standaloneIds = nodes.Values.Where(node => node.IsStandalone && !node.IsExternal).Select(node => node.PhysicalNodeId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
         var projectIds = nodes.Values.Where(node => node.ProjectId is not null && !node.IsExternal).Select(node => node.ProjectId!).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
 
@@ -33,7 +37,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
             var transform = new ArchitectureV7ProjectTransform(projectId, 0, projectCursor, 2, projectCursor + 2,
                 interiorWidth + 4, interiorHeight + 4);
             transforms.Add(transform);
-            var projectCells = BuildProjectCells(transform, interiorWidth, interiorHeight);
+            var projectCells = BuildProjectCells(transform, interiorWidth, interiorHeight, projectTrees);
             projects.Add(new ArchitectureV7ProjectRegion(projectId, transform, projectTrees.Select(tree => tree.TreeId).ToArray(), projectCells, interiorWidth, interiorHeight));
             var treeCursor = 0;
             foreach (var tree in projectTrees)
@@ -81,7 +85,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
             trees.Reservations.Fingerprint, fingerprint);
     }
 
-    private static IReadOnlyList<ArchitectureV7LogicalCell> BuildProjectCells(ArchitectureV7ProjectTransform transform, int interiorWidth, int interiorHeight)
+    private static IReadOnlyList<ArchitectureV7LogicalCell> BuildProjectCells(ArchitectureV7ProjectTransform transform, int interiorWidth, int interiorHeight, IReadOnlyList<ArchitectureV7TopLevelTreeGrid> projectTrees)
     {
         var cells = new List<ArchitectureV7LogicalCell>();
         for (var row = 0; row < transform.Height; row++)
@@ -97,6 +101,20 @@ public sealed class ArchitectureV7ProjectCompositionStage
                     : ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
                 cells.Add(new ArchitectureV7LogicalCell(transform.RegionOriginRow + row, transform.RegionOriginColumn + column, capability));
             }
+        var treeCursor = 0;
+        foreach (var tree in projectTrees)
+        {
+            foreach (var cell in tree.Cells)
+            {
+                if (cell.Row >= interiorHeight || cell.Column >= tree.Width) continue;
+                cells.Add(new ArchitectureV7LogicalCell(
+                    transform.InteriorOriginRow + cell.Row + 1,
+                    transform.InteriorOriginColumn + treeCursor + cell.Column,
+                    cell.Capabilities,
+                    cell.OccupantId));
+            }
+            treeCursor = checked(treeCursor + tree.Width + 1);
+        }
         return cells;
     }
 
@@ -174,6 +192,7 @@ public sealed class ArchitectureV7ProjectCompositionStage
             foreach (var cell in placement.LogicalFootprint)
             {
                 var existing = cells.TryGetValue(cell, out var capability) ? capability : ArchitectureV7CellCapability.None;
+                if ((existing & ArchitectureV7CellCapability.Blocked) != 0) continue;
                 var restricted = existing & (ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly | ArchitectureV7CellCapability.HeaderBlocked);
                 cells[cell] = restricted | ArchitectureV7CellCapability.NodeAllowed;
             }
