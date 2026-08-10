@@ -270,9 +270,6 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             var ordered = group.OrderBy(x => x.Incoming.Orientation).ThenBy(x => x.Outgoing.Orientation)
                 .ThenBy(x => LaneOrdinal(x.Incoming, assignments)).ThenBy(x => LaneOrdinal(x.Outgoing, assignments))
                 .ThenBy(x => x.Route.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.Index).ToArray();
-            if (!FitsResourceEnvelope(ordered.Length, configuration))
-                AddCapacityDiagnostic(diagnostics, "BEND-SLOT-CAPACITY-EXCEEDED", "Bend resources exceed the frozen logical cell physical envelope.", group.Key,
-                    ordered.Select(x => x.Route.PhysicalLinkId), ordered.SelectMany(x => new[] { x.Incoming.RunId, x.Outgoing.RunId }));
             for (var slot = 0; slot < ordered.Length; slot++)
             {
                 var item = ordered[slot];
@@ -319,6 +316,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             if (candidates.Count == 0) continue;
             var ordered = candidates.OrderBy(x => x.HLaneId, StringComparer.Ordinal).ThenBy(x => x.VLaneId, StringComparer.Ordinal)
                 .ThenBy(x => x.HLink, StringComparer.Ordinal).ThenBy(x => x.VLink, StringComparer.Ordinal).ToArray();
+            var occupiedBends = bends.Count(x => x.Cell == cell.Key);
             var resources = ordered.GroupBy(x => new CrossingResourceGeometryKey(cell.Key, x.Classification, x.HLaneId, x.VLaneId,
                     x.Position.XOffset, x.Position.YOffset, configuration.ResourceClearance))
                 .OrderBy(x => x.Key.Classification, StringComparer.Ordinal)
@@ -327,18 +325,6 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 .ThenBy(x => x.Key.XOffset)
                 .ThenBy(x => x.Key.YOffset)
                 .ToArray();
-            var occupiedBends = bends.Count(x => x.Cell == cell.Key);
-            var horizontalLaneCount = ordered.Select(x => x.HLaneId).Distinct(StringComparer.Ordinal).Count();
-            var verticalLaneCount = ordered.Select(x => x.VLaneId).Distinct(StringComparer.Ordinal).Count();
-            var horizontalFits = FitsResourceEnvelope(horizontalLaneCount, configuration);
-            var verticalFits = FitsResourceEnvelope(verticalLaneCount, configuration);
-            var bendFits = FitsResourceEnvelope(occupiedBends, configuration);
-            if (!horizontalFits || !verticalFits || !bendFits)
-                AddCapacityDiagnostic(diagnostics, "CROSSING-PHYSICAL-ENVELOPE-EXCEEDED",
-                    "Independent lane and bend envelopes exceed the frozen logical cell physical envelope. " +
-                    "horizontalLanes=" + horizontalLaneCount + "; verticalLanes=" + verticalLaneCount + "; bends=" + occupiedBends + "; " +
-                    "crossingInteractions=" + ordered.Length + "; crossingResources=" + resources.Length,
-                    cell.Key, ordered.SelectMany(x => new[] { x.HLink, x.VLink }), ordered.SelectMany(x => new[] { x.HRunId, x.VRunId }));
             for (var slot = 0; slot < resources.Length; slot++)
             {
                 var group = resources[slot];
@@ -422,16 +408,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
     }
 
     private static double SlotOffset(int slot, int count, int spacing) => (slot - (count - 1) / 2d) * spacing;
-    private static bool FitsResourceEnvelope(int count, ArchitectureV7AllocationConfiguration configuration) =>
-        count <= 0 || 2 * configuration.ResourceClearance + Math.Max(0, count - 1) * configuration.ParallelLaneSpacing <= Math.Max(0, configuration.BaseCellWidth - 2 * configuration.TerminalInset);
     private static int LaneOrdinal(ArchitectureV7StraightRun run, IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments) => assignments.First(x => x.RunId == run.RunId).LaneOrdinal;
-    private static void AddCapacityDiagnostic(ICollection<ArchitectureV7AllocationDiagnostic> diagnostics, string code, string message, ArchitectureV7RouteCell cell,
-        IEnumerable<string> links, IEnumerable<string> runs)
-    {
-        var linkArray = links.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        diagnostics.Add(new(code, message + " cell=" + cell.Row + ":" + cell.Column, true, linkArray.FirstOrDefault(), null, null, null, null, null, null,
-            linkArray, runs.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray()));
-    }
 
     private static string Fingerprint(string placementFingerprint, string routeFingerprint, IEnumerable<ArchitectureV7StraightRun> runs, IEnumerable<ArchitectureV7RunLaneAssignment> assignments,
         IEnumerable<ArchitectureV7TerminalSlotAssignment> terminals, IEnumerable<ArchitectureV7EndpointApproachReservation> approaches,

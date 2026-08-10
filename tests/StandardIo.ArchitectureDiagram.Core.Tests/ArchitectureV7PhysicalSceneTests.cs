@@ -121,6 +121,47 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Dense_lane_demand_expands_independent_row_and_column_tracks_without_allocation_failure()
+    {
+        var routes = new List<ArchitectureV7LogicalRoute>();
+        var nodeSpecs = new List<(string Id, int Row, int Column)>();
+        for (var horizontal = 0; horizontal < 15; horizontal++)
+        {
+            routes.Add(Route("h" + horizontal, "hs" + horizontal, "ht" + horizontal,
+                (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6)));
+            nodeSpecs.Add(("hs" + horizontal, 3, 0));
+            nodeSpecs.Add(("ht" + horizontal, 3, 6));
+        }
+        for (var vertical = 0; vertical < 27; vertical++)
+        {
+            routes.Add(Route("v" + vertical, "vs" + vertical, "vt" + vertical,
+                (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (6, 3)));
+            nodeSpecs.Add(("vs" + vertical, 0, 3));
+            nodeSpecs.Add(("vt" + vertical, 6, 3));
+        }
+
+        var placement = new ArchitectureV7PlacementFreeze(
+            Nodes(nodeSpecs.ToArray()), Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(7, 7, Array.Empty<ArchitectureV7LogicalCell>()), Array.Empty<ArchitectureV7ProjectTransform>(),
+            "placement", "ownership", "sizing", "reservation", "placement");
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
+            new ArchitectureV7AllocationConfiguration(12, 25, 20, 100, 10));
+
+        Assert.DoesNotContain(allocation.Diagnostics, diagnostic => diagnostic.IsHardFailure);
+        Assert.Contains(allocation.TrackDemands, demand => demand.LogicalRow == 3 && demand.RequiredRowExtent >= 188);
+        Assert.Contains(allocation.TrackDemands, demand => demand.LogicalColumn == 3 && demand.RequiredColumnExtent >= 332);
+
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
+            new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 10, 20, 34, 1, 20, 10, 10, 12, 25, 20));
+
+        Assert.True(scene.Rows[3].RequiredExtent >= 188);
+        Assert.True(scene.Columns[3].RequiredExtent >= 332);
+    }
+
+    [Fact]
     public void Endpoint_handoff_resource_demand_expands_its_authoritative_track()
     {
         var route = Route("a", "s", "t", (1, 1), (1, 2), (1, 3));

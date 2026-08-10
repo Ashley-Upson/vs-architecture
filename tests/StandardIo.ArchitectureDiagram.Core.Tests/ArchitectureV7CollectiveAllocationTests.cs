@@ -171,7 +171,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
-    public void Bend_slot_capacity_failure_retains_all_relationship_and_run_provenance()
+    public void Bend_envelope_demand_is_frozen_without_rejecting_for_provisional_cell_width()
     {
         var routes = new[]
         {
@@ -179,11 +179,8 @@ public sealed class ArchitectureV7CollectiveAllocationTests
             Route("b", "b1", "b2", (2, 0), (2, 1), (3, 1))
         };
         var result = Allocate(routes, Nodes("a1", "a2", "b1", "b2"), spacing: 10, baseCellWidth: 1);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x => x.Code == "BEND-SLOT-CAPACITY-EXCEEDED"));
-
-        Assert.Contains("a", diagnostic.ConflictingPhysicalLinkIds!);
-        Assert.Contains("b", diagnostic.ConflictingPhysicalLinkIds!);
-        Assert.NotEmpty(diagnostic.ConflictingRunIds!);
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "BEND-SLOT-CAPACITY-EXCEEDED");
+        Assert.Contains(result.TrackDemands, demand => demand.ResourceIds.Any(id => id.StartsWith("bend:", StringComparison.Ordinal)));
     }
 
     [Fact]
