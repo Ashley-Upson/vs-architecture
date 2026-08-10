@@ -93,6 +93,44 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Bend_resource_demand_expands_only_affected_physical_tracks()
+    {
+        var route = Route("turn", "s", "t", (1, 1), (2, 1), (2, 3));
+        var scene = CompileWithResourceClearance(new[] { route }, Nodes(("s", 1, 1), ("t", 2, 3)), resourceClearance: 30);
+
+        Assert.True(scene.Rows[2].RequiredExtent >= 60);
+        Assert.True(scene.Columns[1].RequiredExtent >= 60);
+        Assert.Equal(new[] { (1, 1), (2, 1), (2, 3) }, route.Cells.Select(x => (x.Row, x.Column)));
+        Assert.Equal("placement", scene.PlacementFingerprint);
+        Assert.Equal("routes", scene.RouteFingerprint);
+    }
+
+    [Fact]
+    public void Crossing_resource_demand_expands_only_affected_physical_tracks()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var scene = CompileWithResourceClearance(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)), resourceClearance: 30);
+
+        Assert.True(scene.Rows[3].RequiredExtent >= 60);
+        Assert.True(scene.Columns[3].RequiredExtent >= 60);
+        Assert.Equal(new[] { "h", "v" }, routes.Select(x => x.PhysicalLinkId).ToArray());
+    }
+
+    [Fact]
+    public void Endpoint_handoff_resource_demand_expands_its_authoritative_track()
+    {
+        var route = Route("a", "s", "t", (1, 1), (1, 2), (1, 3));
+        var scene = CompileWithResourceClearance(new[] { route }, Nodes(("s", 1, 1), ("t", 1, 3)), resourceClearance: 30);
+
+        Assert.True(scene.Rows[1].RequiredExtent >= 60);
+        Assert.Equal("routes", scene.RouteFingerprint);
+    }
+
+    [Fact]
     public void Physical_node_width_preserves_the_frozen_pre_routing_requirement()
     {
         var node = new ArchitectureV7FrozenNodePlacement("wide", "wide", "p", 1, 0, 9, 4,
@@ -133,6 +171,21 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
             new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, spacing, spacing, 0));
         return scene;
+    }
+
+    private static ArchitectureV7PhysicalSceneFreeze CompileWithResourceClearance(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
+        IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, int resourceClearance)
+    {
+        var placement = new ArchitectureV7PlacementFreeze(nodes, Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(6, 6, Array.Empty<ArchitectureV7LogicalCell>()), Array.Empty<ArchitectureV7ProjectTransform>(),
+            "projection", "ownership", "sizing", "reservation", "placement");
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
+            new ArchitectureV7AllocationConfiguration(4, 4, 0, 100, resourceClearance));
+        return new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
+            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0));
     }
 
     private static ArchitectureV7FrozenNodePlacement[] Nodes(params (string Id, int Row, int Column)[] nodes) => nodes.Select(node =>

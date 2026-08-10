@@ -50,6 +50,9 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             var interfaceClearance = ArchitectureV7PhysicalSceneSizing.NodeRoutingInterfaceCount(group.Key, placement) * configuration.NodeClearance;
             extents[group.Key] = Math.Max(extents[group.Key], laneEnvelope + interfaceClearance);
         }
+        foreach (var demand in allocation.TrackDemands)
+            if ((uint)demand.LogicalRow < (uint)extents.Length)
+                extents[demand.LogicalRow] = Math.Max(extents[demand.LogicalRow], demand.RequiredRowExtent);
         var result = new List<ArchitectureV7PhysicalTrackDimension>(count);
         var cursor = 0d;
         for (var index = 0; index < count; index++)
@@ -84,6 +87,9 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             var laneCount = group.Select(x => allocation.RunAssignments.First(a => a.RunId == x.RunId).LaneOrdinal).DefaultIfEmpty(0).Max() + 1;
             extents[group.Key] = Math.Max(extents[group.Key], 2 * configuration.RouteClearance + Math.Max(0, laneCount - 1) * configuration.ParallelLaneSpacing);
         }
+        foreach (var demand in allocation.TrackDemands)
+            if ((uint)demand.LogicalColumn < (uint)extents.Length)
+                extents[demand.LogicalColumn] = Math.Max(extents[demand.LogicalColumn], demand.RequiredColumnExtent);
         var result = new List<ArchitectureV7PhysicalTrackDimension>(count);
         var cursor = 0d;
         for (var index = 0; index < count; index++)

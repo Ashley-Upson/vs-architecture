@@ -27,8 +27,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var terminals = AllocateTerminals(placement, routes, runs, configuration, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
         var handoffs = BuildHandoffs(routes, runs, assignments, terminals, configuration, diagnostics);
-        var bends = BuildBends(runs, routes, diagnostics);
-        var crossings = BuildCrossings(routes, diagnostics);
+        var bends = BuildBendsResources(runs, routes, assignments, configuration, diagnostics);
+        var crossings = BuildCrossingResources(routes, runs, assignments, bends, configuration, diagnostics);
         var fingerprint = Fingerprint(placement.PlacementFingerprint, routes.RouteFingerprint, runs, assignments, terminals, approaches, handoffs, bends, crossings, diagnostics);
         return new ArchitectureV7CollectiveAllocationFreeze(runs, lanes, assignments, terminals, approaches, handoffs, bends, crossings,
             diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint);
@@ -218,7 +218,10 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 terminalOffset,
                 laneOffset,
                 relativeOffset,
-                Math.Abs(relativeOffset)));
+                Math.Max(Math.Abs(relativeOffset), configuration.ResourceClearance),
+                run.Orientation == ArchitectureV7RunOrientation.Vertical
+                    ? new ArchitectureV7PhysicalRelativePosition(relativeOffset, 0)
+                    : new ArchitectureV7PhysicalRelativePosition(0, relativeOffset)));
         }
         return result;
     }
@@ -235,59 +238,146 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         return (ordinalIndex - (domain.Length - 1) / 2d) * spacing;
     }
 
-    private static IReadOnlyList<ArchitectureV7BendAllocation> BuildBends(
+    private static IReadOnlyList<ArchitectureV7BendAllocation> BuildBendsResources(
         IReadOnlyList<ArchitectureV7StraightRun> runs, ArchitectureV7LogicalRouteFreeze routes,
+        IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, ArchitectureV7AllocationConfiguration configuration,
         ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
     {
-        var result = new List<ArchitectureV7BendAllocation>();
+        var candidates = new List<(ArchitectureV7LogicalRoute Route, int Index, ArchitectureV7StraightRun Incoming, ArchitectureV7StraightRun Outgoing, ArchitectureV7PhysicalRelativePosition Position)>();
         foreach (var route in routes.Routes.Where(x => x.IsComplete))
         {
             var routeRuns = runs.Where(x => x.PhysicalLinkId == route.PhysicalLinkId).OrderBy(x => x.StartRouteIndex).ToArray();
             for (var index = 1; index < route.Cells.Count - 1; index++)
             {
-                var incoming = routeRuns.First(x => x.StartRouteIndex <= index - 1 && x.EndRouteIndex >= index);
-                var outgoing = routeRuns.First(x => x.StartRouteIndex <= index && x.EndRouteIndex >= index + 1);
+                var incoming = routeRuns.FirstOrDefault(x => x.StartRouteIndex <= index - 1 && x.EndRouteIndex >= index);
+                var outgoing = routeRuns.FirstOrDefault(x => x.StartRouteIndex <= index && x.EndRouteIndex >= index + 1);
+                if (incoming is null || outgoing is null)
+                {
+                    diagnostics.Add(new("BEND-RESOURCE-MISSING", "A frozen turn has no complete incoming or outgoing run allocation.", true, route.PhysicalLinkId));
+                    continue;
+                }
                 if (incoming.Orientation == outgoing.Orientation) continue;
-                result.Add(new("bend:" + route.PhysicalLinkId + ":" + index, route.PhysicalLinkId, index, route.Cells[index], incoming.Orientation, outgoing.Orientation, incoming.RunId, outgoing.RunId, "transition-between-frozen-runs"));
+                candidates.Add((route, index, incoming, outgoing, BendPosition(incoming, outgoing, assignments, runs, configuration.ParallelLaneSpacing)));
             }
         }
-        foreach (var cell in result.GroupBy(x => x.Cell).Where(x => x.Select(y => y.PhysicalLinkId).Distinct(StringComparer.Ordinal).Count() > 1))
+
+        var result = new List<ArchitectureV7BendAllocation>();
+        foreach (var group in candidates.GroupBy(x => x.Route.Cells[x.Index]).OrderBy(x => x.Key.Row).ThenBy(x => x.Key.Column))
         {
-            var bends = cell.ToArray();
-            diagnostics.Add(new("SHARED-BEND-CONFLICT", "Unrelated relationships require a shared bend cell; rerouting is forbidden.", true,
-                bends[0].PhysicalLinkId, bends[0].IncomingRunId, null, null, null, null, null,
-                bends.Select(x => x.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray(), bends.SelectMany(x => new[] { x.IncomingRunId, x.OutgoingRunId }).Distinct(StringComparer.Ordinal).ToArray()));
+            var ordered = group.OrderBy(x => x.Incoming.Orientation).ThenBy(x => x.Outgoing.Orientation)
+                .ThenBy(x => LaneOrdinal(x.Incoming, assignments)).ThenBy(x => LaneOrdinal(x.Outgoing, assignments))
+                .ThenBy(x => x.Route.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.Index).ToArray();
+            if (!FitsResourceEnvelope(ordered.Length, configuration))
+                AddCapacityDiagnostic(diagnostics, "BEND-SLOT-CAPACITY-EXCEEDED", "Bend resources exceed the frozen logical cell physical envelope.", group.Key,
+                    ordered.Select(x => x.Route.PhysicalLinkId), ordered.SelectMany(x => new[] { x.Incoming.RunId, x.Outgoing.RunId }));
+            for (var slot = 0; slot < ordered.Length; slot++)
+            {
+                var item = ordered[slot];
+                var slotOffset = SlotOffset(slot, ordered.Length, configuration.ParallelLaneSpacing);
+                var position = new ArchitectureV7PhysicalRelativePosition(item.Position.XOffset + slotOffset, item.Position.YOffset + slotOffset);
+                var incomingAssignment = assignments.First(x => x.RunId == item.Incoming.RunId);
+                var outgoingAssignment = assignments.First(x => x.RunId == item.Outgoing.RunId);
+                result.Add(new("bend:" + item.Route.PhysicalLinkId + ":" + item.Index, item.Route.PhysicalLinkId, item.Index,
+                    item.Route.Cells[item.Index], item.Incoming.Orientation, item.Outgoing.Orientation, item.Incoming.RunId, item.Outgoing.RunId,
+                    "allocated-bend-resource;cell-centre-relative-offset", incomingAssignment.LaneId, outgoingAssignment.LaneId,
+                    slotOffset, configuration.ResourceClearance, position));
+            }
         }
         return result;
     }
 
-    private static IReadOnlyList<ArchitectureV7CrossingAllocation> BuildCrossings(
-        ArchitectureV7LogicalRouteFreeze routes, ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
+    private static IReadOnlyList<ArchitectureV7CrossingAllocation> BuildCrossingResources(
+        ArchitectureV7LogicalRouteFreeze routes, IReadOnlyList<ArchitectureV7StraightRun> runs,
+        IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, IReadOnlyList<ArchitectureV7BendAllocation> bends,
+        ArchitectureV7AllocationConfiguration configuration, ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
     {
-        var orientations = routes.Routes.Where(x => x.IsComplete).SelectMany(route => route.Cells.Select((cell, index) => (route, cell, index)))
-            .GroupBy(x => x.cell).ToDictionary(x => x.Key, x => x.ToArray());
+        var cells = routes.Routes.Where(x => x.IsComplete).SelectMany(route => route.Cells.Select((cell, index) => (route, cell, index)))
+            .GroupBy(x => x.cell).OrderBy(x => x.Key.Row).ThenBy(x => x.Key.Column);
         var result = new List<ArchitectureV7CrossingAllocation>();
-        foreach (var cell in orientations.OrderBy(x => x.Key.Row).ThenBy(x => x.Key.Column))
+        foreach (var cell in cells)
         {
-            var horizontal = cell.Value.Where(x => IsPass(x.route.Cells, x.index, ArchitectureV7RunOrientation.Horizontal)).Select(x => x.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-            var vertical = cell.Value.Where(x => IsPass(x.route.Cells, x.index, ArchitectureV7RunOrientation.Vertical)).Select(x => x.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-            if (cell.Value.Any(x => IsTurn(x.route.Cells, x.index)) && horizontal.Length > 0 && vertical.Length > 0)
+            var entries = cell.ToArray();
+            var horizontalPasses = entries.Where(x => IsPass(x.route.Cells, x.index, ArchitectureV7RunOrientation.Horizontal)).ToArray();
+            var verticalPasses = entries.Where(x => IsPass(x.route.Cells, x.index, ArchitectureV7RunOrientation.Vertical)).ToArray();
+            var turns = entries.Where(x => IsTurn(x.route.Cells, x.index)).ToArray();
+            var candidates = new List<CrossingCandidateValue>();
+            foreach (var h in horizontalPasses)
+                foreach (var v in verticalPasses)
+                    if (!string.Equals(h.route.PhysicalLinkId, v.route.PhysicalLinkId, StringComparison.Ordinal))
+                        candidates.Add(CreateCrossingCandidate(h.route, h.index, v.route, v.index, runs, assignments, configuration, "clean-crossing"));
+            foreach (var turn in turns)
             {
-                var participants = cell.Value.Select(x => x.route.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray();
-                diagnostics.Add(new("CROSSING-TURN-CONFLICT", "A route turns at a perpendicular crossing cell; clean crossing is impossible.", true,
-                    participants[0], null, null, null, null, null, null, participants, null));
+                foreach (var h in horizontalPasses.Where(x => x.route.PhysicalLinkId != turn.route.PhysicalLinkId))
+                    candidates.Add(CreateCrossingCandidate(h.route, h.index, turn.route, turn.index, runs, assignments, configuration, "turn-pass"));
+                foreach (var v in verticalPasses.Where(x => x.route.PhysicalLinkId != turn.route.PhysicalLinkId))
+                    candidates.Add(CreateCrossingCandidate(turn.route, turn.index, v.route, v.index, runs, assignments, configuration, "turn-pass"));
             }
-            foreach (var h in horizontal)
-                foreach (var v in vertical)
-                    if (!string.Equals(h, v, StringComparison.Ordinal)) result.Add(new("crossing:" + cell.Key.Row + ":" + cell.Key.Column + ":" + h + ":" + v, cell.Key, h, v, "clean-perpendicular-crossing"));
+            if (candidates.Count == 0) continue;
+            var ordered = candidates.OrderBy(x => x.HLaneId, StringComparer.Ordinal).ThenBy(x => x.VLaneId, StringComparer.Ordinal)
+                .ThenBy(x => x.HLink, StringComparer.Ordinal).ThenBy(x => x.VLink, StringComparer.Ordinal).ToArray();
+            var occupiedBends = bends.Count(x => x.Cell == cell.Key);
+            if (!FitsResourceEnvelope(occupiedBends + ordered.Length, configuration))
+                AddCapacityDiagnostic(diagnostics, "CROSSING-SLOT-CAPACITY-EXCEEDED", "Crossing and bend resources exceed the frozen logical cell physical envelope.", cell.Key,
+                    ordered.SelectMany(x => new[] { x.HLink, x.VLink }), ordered.SelectMany(x => new[] { x.HRunId, x.VRunId }));
+            for (var slot = 0; slot < ordered.Length; slot++)
+            {
+                var item = ordered[slot];
+                var slotOffset = SlotOffset(occupiedBends + slot, occupiedBends + ordered.Length, configuration.ParallelLaneSpacing);
+                var position = new ArchitectureV7PhysicalRelativePosition(item.Position.XOffset + slotOffset, item.Position.YOffset + slotOffset);
+                result.Add(new("crossing:" + cell.Key.Row + ":" + cell.Key.Column + ":" + item.HLink + ":" + item.VLink,
+                    cell.Key, item.HLink, item.VLink, "allocated-crossing-resource;cell-centre-relative-offset", item.HRunId, item.VRunId,
+                    item.HLaneId, item.VLaneId, slotOffset, configuration.ResourceClearance, item.Classification,
+                    item.HIndex, item.VIndex, position));
+            }
         }
         return result;
+    }
+
+    private sealed record CrossingCandidateValue(string HLink, string VLink, int HIndex, int VIndex, string HRunId, string VRunId,
+        string HLaneId, string VLaneId, ArchitectureV7PhysicalRelativePosition Position, string Classification);
+
+    private static CrossingCandidateValue CreateCrossingCandidate(ArchitectureV7LogicalRoute hRoute, int hIndex,
+        ArchitectureV7LogicalRoute vRoute, int vIndex, IReadOnlyList<ArchitectureV7StraightRun> runs,
+        IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, ArchitectureV7AllocationConfiguration configuration, string classification)
+    {
+        var hRun = RunAt(hRoute.PhysicalLinkId, hIndex, ArchitectureV7RunOrientation.Horizontal, runs);
+        var vRun = RunAt(vRoute.PhysicalLinkId, vIndex, ArchitectureV7RunOrientation.Vertical, runs);
+        if (hRun is null || vRun is null) throw new InvalidOperationException("A crossing candidate requires both perpendicular run allocations.");
+        var hAssignment = assignments.First(x => x.RunId == hRun.RunId);
+        var vAssignment = assignments.First(x => x.RunId == vRun.RunId);
+        return new(hRoute.PhysicalLinkId, vRoute.PhysicalLinkId, hIndex, vIndex, hRun.RunId, vRun.RunId, hAssignment.LaneId, vAssignment.LaneId,
+            new ArchitectureV7PhysicalRelativePosition(LaneAxisOffset(vRun, vAssignment, runs, assignments, configuration.ParallelLaneSpacing),
+                LaneAxisOffset(hRun, hAssignment, runs, assignments, configuration.ParallelLaneSpacing)), classification);
+    }
+
+    private static ArchitectureV7StraightRun? RunAt(string physicalLinkId, int index, ArchitectureV7RunOrientation orientation, IReadOnlyList<ArchitectureV7StraightRun> runs) =>
+        runs.FirstOrDefault(x => x.PhysicalLinkId == physicalLinkId && x.Orientation == orientation && x.StartRouteIndex <= index && x.EndRouteIndex >= index);
+
+    private static ArchitectureV7PhysicalRelativePosition BendPosition(ArchitectureV7StraightRun incoming, ArchitectureV7StraightRun outgoing,
+        IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, IReadOnlyList<ArchitectureV7StraightRun> runs, int spacing)
+    {
+        var horizontal = incoming.Orientation == ArchitectureV7RunOrientation.Horizontal ? incoming : outgoing;
+        var vertical = incoming.Orientation == ArchitectureV7RunOrientation.Vertical ? incoming : outgoing;
+        return new(LaneAxisOffset(vertical, assignments.First(x => x.RunId == vertical.RunId), runs, assignments, spacing),
+            LaneAxisOffset(horizontal, assignments.First(x => x.RunId == horizontal.RunId), runs, assignments, spacing));
+    }
+
+    private static double SlotOffset(int slot, int count, int spacing) => (slot - (count - 1) / 2d) * spacing;
+    private static bool FitsResourceEnvelope(int count, ArchitectureV7AllocationConfiguration configuration) =>
+        count <= 0 || 2 * configuration.ResourceClearance + Math.Max(0, count - 1) * configuration.ParallelLaneSpacing <= Math.Max(0, configuration.BaseCellWidth - 2 * configuration.TerminalInset);
+    private static int LaneOrdinal(ArchitectureV7StraightRun run, IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments) => assignments.First(x => x.RunId == run.RunId).LaneOrdinal;
+    private static void AddCapacityDiagnostic(ICollection<ArchitectureV7AllocationDiagnostic> diagnostics, string code, string message, ArchitectureV7RouteCell cell,
+        IEnumerable<string> links, IEnumerable<string> runs)
+    {
+        var linkArray = links.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        diagnostics.Add(new(code, message + " cell=" + cell.Row + ":" + cell.Column, true, linkArray.FirstOrDefault(), null, null, null, null, null, null,
+            linkArray, runs.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray()));
     }
 
     private static string Fingerprint(string placementFingerprint, string routeFingerprint, IEnumerable<ArchitectureV7StraightRun> runs, IEnumerable<ArchitectureV7RunLaneAssignment> assignments,
         IEnumerable<ArchitectureV7TerminalSlotAssignment> terminals, IEnumerable<ArchitectureV7EndpointApproachReservation> approaches,
         IEnumerable<ArchitectureV7EndpointHandoff> handoffs, IEnumerable<ArchitectureV7BendAllocation> bends, IEnumerable<ArchitectureV7CrossingAllocation> crossings,
-        IEnumerable<ArchitectureV7AllocationDiagnostic> diagnostics) => placementFingerprint + "|" + routeFingerprint + "|" + string.Join(";", runs.Select(x => x.RunId + ":" + string.Join(",", x.Cells.Select(c => c.Row + "/" + c.Column))).Concat(assignments.Select(x => x.RunId + "=" + x.LaneId)).Concat(terminals.Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal)).Concat(approaches.Select(x => x.PhysicalLinkId + ":a" + x.TerminalSlotOrdinal)).Concat(handoffs.Select(x => x.PhysicalLinkId + ":h" + x.TerminalSlotOrdinal)).Concat(bends.Select(x => x.BendId)).Concat(crossings.Select(x => x.CrossingId)).Concat(diagnostics.Select(x => x.Code)));
+        IEnumerable<ArchitectureV7AllocationDiagnostic> diagnostics) => placementFingerprint + "|" + routeFingerprint + "|" + string.Join(";", runs.Select(x => x.RunId + ":" + string.Join(",", x.Cells.Select(c => c.Row + "/" + c.Column))).Concat(assignments.Select(x => x.RunId + "=" + x.LaneId)).Concat(terminals.Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal)).Concat(approaches.Select(x => x.PhysicalLinkId + ":a" + x.TerminalSlotOrdinal)).Concat(handoffs.Select(x => x.ResourceId + ":h" + x.RelativePhysicalOffset + ":" + x.RequiredClearance)).Concat(bends.Select(x => x.BendId + ":b" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset)).Concat(crossings.Select(x => x.CrossingId + ":c" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset + ":" + x.Classification)).Concat(diagnostics.Select(x => x.Code)));
 
     private static ArchitectureV7RunOrientation Orientation(ArchitectureV7RouteCell a, ArchitectureV7RouteCell b) => a.Row == b.Row ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical;
     private static int FixedCoordinate(ArchitectureV7StraightRun run) => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? run.Cells[0].Row : run.Cells[0].Column;

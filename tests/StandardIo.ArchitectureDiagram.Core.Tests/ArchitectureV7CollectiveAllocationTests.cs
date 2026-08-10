@@ -135,7 +135,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
-    public void Shared_bend_and_crossing_turn_is_rejected_without_rerouting()
+    public void Shared_bend_and_crossing_turn_get_distinct_post_route_resources_without_rerouting()
     {
         var routes = new[]
         {
@@ -145,9 +145,66 @@ public sealed class ArchitectureV7CollectiveAllocationTests
             Route("v", "v1", "v2", (1, 2), (2, 2), (3, 2))
         };
         var result = Allocate(routes, Nodes("a1", "a2", "b1", "b2", "h1", "h2", "v1", "v2"));
-        Assert.Contains(result.Diagnostics, x => x.Code == "SHARED-BEND-CONFLICT");
-        Assert.Contains(result.Diagnostics, x => x.Code == "CROSSING-TURN-CONFLICT");
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "SHARED-BEND-CONFLICT");
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "CROSSING-TURN-CONFLICT");
+        Assert.NotEmpty(result.Bends);
+        Assert.NotEmpty(result.Crossings);
+        Assert.Equal(result.Bends.Count, result.Bends.Select(x => x.BendId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(result.Crossings.Count, result.Crossings.Select(x => x.CrossingId).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("routes", result.RouteFingerprint);
+    }
+
+    [Fact]
+    public void Single_turn_allocates_frozen_incoming_and_outgoing_lane_resource()
+    {
+        var result = Allocate(new[] { Route("turn", "s", "t", (1, 1), (2, 1), (2, 3)) }, Nodes("s", "t"));
+        var bend = Assert.Single(result.Bends);
+
+        Assert.Equal("turn", bend.PhysicalLinkId);
+        Assert.NotEmpty(bend.IncomingRunId);
+        Assert.NotEmpty(bend.OutgoingRunId);
+        Assert.NotEmpty(bend.IncomingLaneId);
+        Assert.NotEmpty(bend.OutgoingLaneId);
+        Assert.Equal(new ArchitectureV7RouteCell(2, 1), bend.Cell);
+        Assert.NotNull(bend.EffectiveRelativePosition);
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "BEND-RESOURCE-MISSING");
+    }
+
+    [Fact]
+    public void Bend_slot_capacity_failure_retains_all_relationship_and_run_provenance()
+    {
+        var routes = new[]
+        {
+            Route("a", "a1", "a2", (1, 1), (2, 1), (2, 2)),
+            Route("b", "b1", "b2", (2, 0), (2, 1), (3, 1))
+        };
+        var result = Allocate(routes, Nodes("a1", "a2", "b1", "b2"), spacing: 10, baseCellWidth: 1);
+        var diagnostic = Assert.Single(result.Diagnostics.Where(x => x.Code == "BEND-SLOT-CAPACITY-EXCEEDED"));
+
+        Assert.Contains("a", diagnostic.ConflictingPhysicalLinkIds!);
+        Assert.Contains("b", diagnostic.ConflictingPhysicalLinkIds!);
+        Assert.NotEmpty(diagnostic.ConflictingRunIds!);
+    }
+
+    [Fact]
+    public void Clean_crossing_allocates_horizontal_and_vertical_run_lane_resource()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var result = Allocate(routes, Nodes("h1", "h2", "v1", "v2"));
+        var crossing = Assert.Single(result.Crossings);
+
+        Assert.Equal("h", crossing.HorizontalPhysicalLinkId);
+        Assert.Equal("v", crossing.VerticalPhysicalLinkId);
+        Assert.NotEmpty(crossing.HorizontalRunId);
+        Assert.NotEmpty(crossing.VerticalRunId);
+        Assert.NotEmpty(crossing.HorizontalLaneId);
+        Assert.NotEmpty(crossing.VerticalLaneId);
+        Assert.Equal("clean-crossing", crossing.Classification);
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "CROSSING-TURN-CONFLICT");
     }
 
     [Fact]
