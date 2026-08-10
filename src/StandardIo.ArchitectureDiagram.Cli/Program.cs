@@ -158,6 +158,16 @@ public static class Program
                 ? $"{targetName}.data-model.drawio"
                 : options.DiagramTypes.Count == 1 ? $"{targetName}.architecture.drawio" : $"{targetName}.diagrams.drawio")
             : Path.GetFullPath(options.OutputPath);
+        DrawioDiagnosticExportResult? architectureDiagnostics = null;
+        long architectureDiagnosticsElapsedMilliseconds = 0;
+        if (architecture is not null)
+        {
+            var diagnosticsStopwatch = Stopwatch.StartNew();
+            architectureDiagnostics = architecture.Diagnostics;
+            diagnosticsStopwatch.Stop();
+            architectureDiagnosticsElapsedMilliseconds = diagnosticsStopwatch.ElapsedMilliseconds;
+            Console.WriteLine($"V7 evidence export materialization: {architectureDiagnosticsElapsedMilliseconds} ms");
+        }
         if (architecture is not null && !string.IsNullOrWhiteSpace(options.ArchitectureAnalysisOutputDirectory))
         {
             var directory = Path.GetFullPath(options.ArchitectureAnalysisOutputDirectory);
@@ -194,10 +204,17 @@ public static class Program
                     architecture.Eligibility,
                     architecture.Findings,
                     architecture.PlanningMetrics,
-                    Diagnostics = architecture.Diagnostics.ReportJson
-                 }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
-            foreach (var focusedOutput in architecture.Diagnostics.FocusedOutputs)
-                await broker.WriteTextAsync(Path.Combine(directory, focusedOutput.Key), focusedOutput.Value).ConfigureAwait(false);
+                     Diagnostics = architectureDiagnostics!.ReportJson,
+                     EvidenceExportElapsedMilliseconds = architectureDiagnosticsElapsedMilliseconds
+                  }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
+             foreach (var focusedOutput in architectureDiagnostics.FocusedOutputs)
+                 await broker.WriteTextAsync(Path.Combine(directory, focusedOutput.Key), focusedOutput.Value).ConfigureAwait(false);
+             await broker.WriteTextAsync(Path.Combine(directory, "v7-evidence-export-timing.json"), JsonSerializer.Serialize(new
+             {
+                 EvidenceExportElapsedMilliseconds = architectureDiagnosticsElapsedMilliseconds,
+                 ReportCharacters = architectureDiagnostics.ReportJson.Length,
+                 FocusedOutputCharacters = architectureDiagnostics.FocusedOutputs.Sum(item => item.Value.Length)
+             }, new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
             Console.WriteLine($"Architecture analysis: {directory}");
         }
 
@@ -207,7 +224,7 @@ public static class Program
         {
             var diagnosticsPath = Path.GetFullPath(options.DiagnosticsOutputPath);
             await provider.GetRequiredService<IDiagramFileBroker>()
-                .WriteTextAsync(diagnosticsPath, architecture.Diagnostics.ReportJson).ConfigureAwait(false);
+                 .WriteTextAsync(diagnosticsPath, architectureDiagnostics!.ReportJson).ConfigureAwait(false);
             Console.WriteLine($"Diagnostics: {diagnosticsPath}");
         }
         if (options.StrictValidation && architecture is { StrictValidationPassed: false })

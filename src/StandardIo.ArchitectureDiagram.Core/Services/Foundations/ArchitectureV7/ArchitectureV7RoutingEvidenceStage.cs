@@ -22,15 +22,15 @@ public sealed class ArchitectureV7RoutingEvidenceStage
                 var attempted = diagnostic.AttemptedCells;
                 var failure = attempted.Count == 0 ? null : attempted[attempted.Count - 1];
                 var scenario = Scenario(diagnostic.Code, sourceCell, targetCell);
-                var candidates = scenario.StartsWith("upward", StringComparison.Ordinal) && scenario.Contains("escape", StringComparison.Ordinal)
+                var candidateSummary = scenario.StartsWith("upward", StringComparison.Ordinal) && scenario.Contains("escape", StringComparison.Ordinal)
                     ? UpwardEscapeCandidates(failure, source, target, cells)
                     : scenario.Contains("continuation", StringComparison.Ordinal)
                         ? ContinuationCandidates(failure, targetCell.Column, scenario.StartsWith("upward", StringComparison.Ordinal) ? -1 : 1, cells, source, target)
-                        : Array.Empty<ArchitectureV7RoutingCandidateEvidence>();
+                        : EmptyCandidateSummary();
                 result.Add(new ArchitectureV7RelationshipRoutingEvidence(route.SemanticLinkId, route.PhysicalLinkId, route.SourcePhysicalNodeId, route.DestinationPhysicalNodeId,
                     sourceCell, targetCell, scenario, attempted, failure, Direction(attempted, -1), Direction(attempted, 0),
                     failure is not null && cells.TryGetValue((failure.Row, failure.Column), out var failureLogical) ? failureLogical.Capabilities : null,
-                    diagnostic.Message, failure?.Column, targetCell.Column, candidates, EndpointClasses(attempted, source, target, cells),
+                    diagnostic.Message, failure?.Column, targetCell.Column, candidateSummary, EndpointClasses(attempted, source, target, cells),
                     "project=" + (source.ProjectId ?? "<none>") + ";source-tree=" + source.TreeId + ";target-tree=" + target.TreeId + ";grid=" + placement.PlacementFingerprint,
                     route.Diagnostics.Select(x => x.Code).Distinct(StringComparer.Ordinal).ToArray()));
             }
@@ -65,16 +65,16 @@ public sealed class ArchitectureV7RoutingEvidenceStage
         _ => "upward-route"
     };
 
-    private static IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> ContinuationCandidates(ArchitectureV7RouteCell? failure, int intended, int direction,
+    private static ArchitectureV7RoutingCandidateSummary ContinuationCandidates(ArchitectureV7RouteCell? failure, int intended, int direction,
         IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells, ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement target)
     {
-        if (failure is null) return Array.Empty<ArchitectureV7RoutingCandidateEvidence>();
+        if (failure is null) return EmptyCandidateSummary();
         var max = cells.Keys.Select(x => x.Column).DefaultIfEmpty(0).Max();
         var columns = new List<int> { failure.Column };
         if (failure.Column - 2 >= 0) columns.Add(failure.Column - 2);
         if (failure.Column + 2 <= max) columns.Add(failure.Column + 2);
         if (intended >= 0 && intended <= max && !columns.Contains(intended)) columns.Add(intended);
-        return columns.Select(column =>
+        return SummarizeCandidates(columns, failure.Column, column =>
         {
             var traversed = new List<ArchitectureV7RouteCell>();
             var reason = "accepted";
@@ -88,24 +88,26 @@ public sealed class ArchitectureV7RoutingEvidenceStage
                 if (logical.OccupantId is not null && logical.OccupantId != source.PhysicalNodeId && logical.OccupantId != target.PhysicalNodeId) { reason = "unrelated occupied node"; break; }
                 if (!logical.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed)) { reason = "routing capability absent"; break; }
             }
-            return new ArchitectureV7RoutingCandidateEvidence(column, Math.Abs(column - failure.Column) == 2, reason == "accepted", reason, traversed);
-        }).ToArray();
+            return new CandidateProbe(column, Math.Abs(column - failure.Column) == 2, reason == "accepted", reason, traversed);
+        });
     }
 
-    private static IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> UpwardEscapeCandidates(ArchitectureV7RouteCell? failure,
+    private static ArchitectureV7RoutingCandidateSummary UpwardEscapeCandidates(ArchitectureV7RouteCell? failure,
         ArchitectureV7FrozenNodePlacement source, ArchitectureV7FrozenNodePlacement target,
         IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells)
     {
-        if (failure is null) return Array.Empty<ArchitectureV7RoutingCandidateEvidence>();
+        if (failure is null) return EmptyCandidateSummary();
         var max = cells.Keys.Select(x => x.Column).DefaultIfEmpty(0).Max();
-        var candidates = new List<int>();
-        for (var distance = 2; distance <= max + source.LogicalSpan + 2; distance += 2)
+        IEnumerable<int> CandidateColumns()
         {
-            candidates.Add(source.CentreCell - distance);
-            candidates.Add(source.CentreCell + distance);
+            for (var distance = 2; distance <= max + source.LogicalSpan + 2; distance += 2)
+            {
+                yield return source.CentreCell - distance;
+                yield return source.CentreCell + distance;
+            }
         }
 
-        return candidates.Select(column =>
+        return SummarizeCandidates(CandidateColumns(), failure.Column, column =>
         {
             var traversed = new List<ArchitectureV7RouteCell>();
             var reason = "accepted";
@@ -122,10 +124,68 @@ public sealed class ArchitectureV7RoutingEvidenceStage
                 if (logical.OccupantId is not null && logical.OccupantId != source.PhysicalNodeId && logical.OccupantId != target.PhysicalNodeId) { reason = "unrelated occupied node"; break; }
                 if (!logical.Capabilities.HasFlag(ArchitectureV7CellCapability.RoutingAllowed)) { reason = "routing capability absent"; break; }
             }
-            return new ArchitectureV7RoutingCandidateEvidence(column, Math.Abs(column - failure.Column) == 2,
+            return new CandidateProbe(column, Math.Abs(column - failure.Column) == 2,
                 reason == "accepted", reason, traversed);
-        }).ToArray();
+        });
     }
+
+    private const int RepresentativeCandidateLimit = 4;
+
+    private sealed record CandidateProbe(int Column, bool IsPlusOrMinusTwo, bool Accepted, string RejectionReason,
+        IReadOnlyList<ArchitectureV7RouteCell> TraversedCells);
+
+    private static ArchitectureV7RoutingCandidateSummary SummarizeCandidates(IEnumerable<int> columns, int origin,
+        Func<int, CandidateProbe> probeFactory)
+    {
+        var first = new List<ArchitectureV7RoutingCandidateEvidence>(RepresentativeCandidateLimit);
+        var last = new Queue<ArchitectureV7RoutingCandidateEvidence>(RepresentativeCandidateLimit);
+        var rejectionReasons = new Dictionary<string, int>(StringComparer.Ordinal);
+        var distances = new Dictionary<int, int>();
+        // Probe evidence observes candidate legality; it does not own the
+        // router's continuation selection. Never promote a probe that merely
+        // looks acceptable to an authoritative selected candidate.
+        ArchitectureV7RoutingCandidateEvidence? lastProbe = null;
+        var total = 0;
+        var totalTraversed = 0;
+        var maximumTraversed = 0;
+        var nearest = int.MaxValue;
+        var farthest = 0;
+        int? firstColumn = null;
+        int? lastColumn = null;
+
+        foreach (var column in columns)
+        {
+            var probe = probeFactory(column);
+            var distance = Math.Abs(column - origin);
+            var traversedCount = probe.TraversedCells.Count;
+            var detailed = new ArchitectureV7RoutingCandidateEvidence(probe.Column, probe.IsPlusOrMinusTwo, probe.Accepted,
+                probe.RejectionReason, traversedCount, probe.TraversedCells);
+
+            total++;
+            firstColumn ??= column;
+            lastColumn = column;
+            totalTraversed += traversedCount;
+            maximumTraversed = Math.Max(maximumTraversed, traversedCount);
+            nearest = Math.Min(nearest, distance);
+            farthest = Math.Max(farthest, distance);
+            rejectionReasons[probe.RejectionReason] = rejectionReasons.TryGetValue(probe.RejectionReason, out var reasonCount) ? reasonCount + 1 : 1;
+            distances[distance] = distances.TryGetValue(distance, out var distanceCount) ? distanceCount + 1 : 1;
+
+            if (first.Count < RepresentativeCandidateLimit) first.Add(detailed);
+            last.Enqueue(detailed);
+            if (last.Count > RepresentativeCandidateLimit) last.Dequeue();
+            lastProbe = detailed;
+        }
+
+        return new ArchitectureV7RoutingCandidateSummary(total, firstColumn, lastColumn, null,
+            total == 0 ? null : nearest, total == 0 ? null : farthest,
+            rejectionReasons, distances, totalTraversed, maximumTraversed, null,
+            lastProbe, first.ToArray(), last.ToArray());
+    }
+
+    private static ArchitectureV7RoutingCandidateSummary EmptyCandidateSummary() => new(0, null, null, null, null, null,
+        new Dictionary<string, int>(StringComparer.Ordinal), new Dictionary<int, int>(), 0, 0, null, null,
+        Array.Empty<ArchitectureV7RoutingCandidateEvidence>(), Array.Empty<ArchitectureV7RoutingCandidateEvidence>());
 
     private static string? Direction(IReadOnlyList<ArchitectureV7RouteCell> cells, int offset)
     {

@@ -7,7 +7,24 @@ public sealed record ArchitectureV7RoutingCandidateEvidence(
     bool IsPlusOrMinusTwo,
     bool Accepted,
     string RejectionReason,
+    int TraversedCellCount,
     IReadOnlyList<ArchitectureV7RouteCell> TraversedCells);
+
+public sealed record ArchitectureV7RoutingCandidateSummary(
+    int TotalCandidateCount,
+    int? FirstCandidateExamined,
+    int? LastCandidateExamined,
+    int? SelectedCandidate,
+    int? NearestCandidateDistance,
+    int? FarthestCandidateDistanceExamined,
+    IReadOnlyDictionary<string, int> RejectionReasonHistogram,
+    IReadOnlyDictionary<int, int> CandidateDistanceHistogram,
+    int TotalTraversedCellCount,
+    int MaximumTraversedCellCount,
+    ArchitectureV7RoutingCandidateEvidence? SelectedCandidateEvidence,
+    ArchitectureV7RoutingCandidateEvidence? FinalFailedCandidateEvidence,
+    IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> RepresentativeFirstCandidates,
+    IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> RepresentativeLastCandidates);
 
 public sealed record ArchitectureV7RelationshipRoutingEvidence(
     string SemanticRelationshipId,
@@ -25,7 +42,7 @@ public sealed record ArchitectureV7RelationshipRoutingEvidence(
     string? RejectionReason,
     int? CurrentContinuationColumn,
     int? IntendedDestinationColumn,
-    IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> Candidates,
+    ArchitectureV7RoutingCandidateSummary CandidateSummary,
     IReadOnlyList<string> EndpointClassifications,
     string ProjectCommonGridProvenance,
     IReadOnlyList<string> DiagnosticCodes);

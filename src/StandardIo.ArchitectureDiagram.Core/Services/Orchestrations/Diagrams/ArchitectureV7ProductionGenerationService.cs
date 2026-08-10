@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
@@ -40,26 +41,32 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         ArchitectureRenderingMode mode = ArchitectureRenderingMode.Production, int serializationRepeatCount = 0, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var stageTimings = new Dictionary<string, long>(StringComparer.Ordinal);
+        T Measure<T>(string name, Func<T> action)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try { return action(); }
+            finally { stageTimings[name] = stopwatch.ElapsedMilliseconds; }
+        }
         var pre = Configuration(job.Rendering.Layout);
-        var projection = new ArchitectureV7PhysicalProjectionStage().Project(diagram, new ArchitectureV7ProjectionPolicy(
+        var projection = Measure("projection", () => new ArchitectureV7PhysicalProjectionStage().Project(diagram, new ArchitectureV7ProjectionPolicy(
             job.Rendering.NodeDuplication.AllowDuplicateNodes ? ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches : ArchitectureV7ProjectionMode.Canonical,
-            (job.Rendering.NodeDuplication.DuplicationExceptionPatterns ?? new List<string>()).Concat(job.Rendering.Layout.DuplicateHighNoiseNodePatterns ?? new List<string>()).Distinct(StringComparer.Ordinal).ToArray()));
-        var ownership = new ArchitectureV7PositionalOwnershipStage().Resolve(projection);
-        var sizing = new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, pre);
-        var inspection = new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, pre);
-        var reservation = new ArchitectureV7ReservationReconciliationStage().Reconcile(inspection);
-        var trees = new ArchitectureV7RecursiveTreeGridStage().Build(sizing, reservation.Table);
-        var placement = new ArchitectureV7ProjectCompositionStage().Compose(trees);
-        var routes = new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection);
-        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
-            new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding));
+            (job.Rendering.NodeDuplication.DuplicationExceptionPatterns ?? new List<string>()).Concat(job.Rendering.Layout.DuplicateHighNoiseNodePatterns ?? new List<string>()).Distinct(StringComparer.Ordinal).ToArray())));
+        var ownership = Measure("ownership", () => new ArchitectureV7PositionalOwnershipStage().Resolve(projection));
+        var sizing = Measure("sizing", () => new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, pre));
+        var reservation = Measure("reservation", () => new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, pre)));
+        var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, reservation.Table));
+        var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees));
+        var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
+        var allocation = Measure("collective-allocation", () => new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
+            new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding)));
         var sceneConfiguration = new ArchitectureV7PhysicalSceneConfiguration(job.Rendering.Layout.BaseCellWidth, job.Rendering.Layout.RoutingRowMinimum,
             job.Rendering.Layout.BoundaryRowMinimum, job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, job.Rendering.Layout.ProjectHeaderHeight,
             job.Rendering.Layout.LabelCharacterWidth, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
-        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
-            sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal));
-        var acceptance = new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, reservation, placement, routes, allocation, scene, sceneConfiguration);
+        var scene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
+            sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal)));
+        var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, reservation, placement, routes, allocation, scene, sceneConfiguration));
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
         var routingEvidence = evidenceStage.Analyze(placement, routes);
         var placementEvidence = evidenceStage.Placement(placement).Select(item => new
@@ -96,11 +103,10 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var strict = mode == ArchitectureRenderingMode.StrictValidation;
         var findings = acceptance.Findings.Select(finding => new ValidationFinding(finding.Code, finding.SubjectId ?? finding.Stage, finding.SubjectId, null, 1, finding.Message, true)).ToArray();
         DrawioPage page;
-        if (strict && !acceptance.IsStrictEligible)
-            page = RejectedPage();
-        else
-            page = new ArchitectureV7MechanicalDrawioRenderer().Render(diagram, projection, placement, scene, job.Rendering);
-        var rendererFindings = ValidateRendererFidelity(page, projection, scene);
+        page = Measure("rendering", () => strict && !acceptance.IsStrictEligible
+            ? RejectedPage()
+            : new ArchitectureV7MechanicalDrawioRenderer().Render(diagram, projection, placement, scene, job.Rendering));
+        var rendererFindings = Measure("renderer-fidelity", () => ValidateRendererFidelity(page, projection, scene));
         page = page with { Diagnostics = page.Diagnostics.Concat(rendererFindings).ToArray() };
         if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() };
         var rendererFidelity = new
@@ -150,6 +156,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     TotalUpwardEscapeCandidatesEvaluated = routes.Routes.Sum(x => x.OperationMetrics.UpwardEscapeCandidatesEvaluated),
                     Fingerprint = routes.RouteFingerprint
                 },
+                stageTimings,
                 allocation = new { AssignmentCount = allocation.RunAssignments.Count, Fingerprint = allocation.AllocationFingerprint },
                 scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint }
             }
