@@ -346,6 +346,38 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Node_row_owns_clearance_and_routing_row_does_not_inherit_generic_clearance()
+    {
+        var node = new ArchitectureV7FrozenNodePlacement("node", "node", "p", 1, 0, 1, 1,
+            new[] { (1, 0) }, false, false, false, "tree", "node", "node", "test");
+        var placement = new ArchitectureV7PlacementFreeze(
+            new[] { node }, Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(3, 1, new[]
+            {
+                new ArchitectureV7LogicalCell(0, 0, ArchitectureV7CellCapability.GeneralRouting, null),
+                new ArchitectureV7LogicalCell(1, 0, ArchitectureV7CellCapability.NodeAllowed, "node"),
+                new ArchitectureV7LogicalCell(2, 0, ArchitectureV7CellCapability.GeneralRouting, null)
+            }), Array.Empty<ArchitectureV7ProjectTransform>(), "projection", "ownership", "sizing", "reservation", "placement");
+        var routes = new ArchitectureV7LogicalRouteFreeze(Array.Empty<ArchitectureV7LogicalRoute>(), Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectiveAllocationFreeze(Array.Empty<ArchitectureV7StraightRun>(), Array.Empty<ArchitectureV7PhysicalLane>(),
+            Array.Empty<ArchitectureV7RunLaneAssignment>(), Array.Empty<ArchitectureV7TerminalSlotAssignment>(), Array.Empty<ArchitectureV7EndpointApproachReservation>(),
+            Array.Empty<ArchitectureV7EndpointHandoff>(), Array.Empty<ArchitectureV7BendAllocation>(), Array.Empty<ArchitectureV7CrossingAllocation>(),
+            Array.Empty<ArchitectureV7AllocationDiagnostic>(), "placement", "routes", "allocation");
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation,
+            new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 12, 25, 20));
+
+        Assert.Equal(20, scene.Rows[0].RequiredExtent);
+        Assert.Equal(100, scene.Rows[1].RequiredExtent);
+        Assert.Equal(20, scene.Rows[2].RequiredExtent);
+        var bounds = Assert.Single(scene.Nodes).Bounds;
+        Assert.Equal(80, bounds.Bottom - bounds.Top);
+        Assert.Equal(10, bounds.Top - scene.Rows[1].Start);
+        Assert.Equal(10, scene.Rows[1].End - bounds.Bottom);
+    }
+
+    [Fact]
     public void F8A_multi_span_endpoint_gets_a_frozen_handoff_when_shared_columns_shift_its_physical_centre()
     {
         var source = new ArchitectureV7FrozenNodePlacement("wide-source", "wide-source", "p", 1, 0, 3, 1,

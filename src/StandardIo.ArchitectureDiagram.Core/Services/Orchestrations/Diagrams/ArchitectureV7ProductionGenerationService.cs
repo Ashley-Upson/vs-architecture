@@ -175,6 +175,22 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var reportJson = JsonSerializer.Serialize(new
         {
             pipeline = "V7",
+            input = new
+            {
+                selectedProjectInput = job.ProjectSelectionInput ?? "<unspecified>",
+                selectedProjects = diagram.Projects.Select(project => project.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray(),
+                settingsPath = job.SettingsSourcePath ?? "<unspecified>",
+                settingsSha256 = job.SettingsSourceHash ?? "<unspecified>",
+                renderer = job.Rendering.OutputRenderer
+            },
+            rendererStyleEvidence = new
+            {
+                projectContainer = job.Rendering.ProjectContainerStyle,
+                externalDependency = job.Rendering.ExternalDependencyStyle,
+                connector = job.Rendering.Connector,
+                resolvedNodeStyleSamples = projection.PhysicalNodes.OrderBy(node => node.PhysicalNodeId, StringComparer.Ordinal).Take(5)
+                    .Select(node => new { node.PhysicalNodeId, node.Name, style = ArchitectureV7MechanicalDrawioRenderer.StyleEvidence(node, job.Rendering) }).ToArray()
+            },
             acceptance = acceptanceSummary,
             rendererFidelity,
             stages = new
@@ -263,26 +279,45 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
         foreach (var project in placement.Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal))
         {
             var transform = project.Transform; var id = Id("project", project.ProjectId);
-            root.Add(Vertex(id, project.ProjectId, "shape=swimlane;html=1;whiteSpace=wrap;fillColor=#323a40;strokeColor=#263238;fontColor=#ffffff;", "1", transform.InteriorOriginColumn, transform.InteriorOriginRow, transform.Width, transform.Height));
+            if (settings.ShowProjectContainers)
+                root.Add(Vertex(id, project.ProjectId, Style(settings.ProjectContainerStyle), "1", transform.InteriorOriginColumn, transform.InteriorOriginRow, transform.Width, transform.Height));
         }
         foreach (var node in scene.Nodes.OrderBy(x => x.PhysicalNodeId, StringComparer.Ordinal))
         {
             var source = projection.PhysicalNodes.FirstOrDefault(x => x.PhysicalNodeId == node.PhysicalNodeId); if (source is null) continue;
             var id = Id("node", node.PhysicalNodeId); nodes[node.PhysicalNodeId] = id;
             var parent = source.ProjectId is not null && placement.Projects.Any(x => x.ProjectId == source.ProjectId) ? Id("project", source.ProjectId) : "1";
-            root.Add(Vertex(id, source.Name, Style(source, settings), parent, node.Bounds.Left, node.Bounds.Top, node.Bounds.Right - node.Bounds.Left, node.Bounds.Bottom - node.Bounds.Top));
+            root.Add(Vertex(id, source.Name, source.IsExternal ? Style(settings.ExternalDependencyStyle) : Style(ResolveNodeStyle(source, settings)), parent, node.Bounds.Left, node.Bounds.Top, node.Bounds.Right - node.Bounds.Left, node.Bounds.Bottom - node.Bounds.Top));
         }
         foreach (var link in projection.PhysicalLinks.OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal))
         {
             var route = scene.Routes.FirstOrDefault(x => x.PhysicalLinkId == link.PhysicalLinkId); if (route is null || !nodes.ContainsKey(link.SourcePhysicalNodeId) || !nodes.ContainsKey(link.DestinationPhysicalNodeId)) continue;
             var points = route.Points.Skip(1).Take(Math.Max(0, route.Points.Count - 2)).Select(point => new XElement("mxPoint", new XAttribute("x", point.X.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", point.Y.ToString(CultureInfo.InvariantCulture))));
-            root.Add(new XElement("mxCell", new XAttribute("id", Id("edge", link.PhysicalLinkId)), new XAttribute("parent", "1"), new XAttribute("edge", "1"), new XAttribute("source", nodes[link.SourcePhysicalNodeId]), new XAttribute("target", nodes[link.DestinationPhysicalNodeId]), new XAttribute("physicalLinkId", link.PhysicalLinkId), new XAttribute("semanticLinkId", link.SemanticLinkId), new XAttribute("style", "edgeStyle=none;orthogonal=0;curved=0;rounded=0;labelPosition=none;"), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), points))));
+            root.Add(new XElement("mxCell", new XAttribute("id", Id("edge", link.PhysicalLinkId)), new XAttribute("parent", "1"), new XAttribute("edge", "1"), new XAttribute("source", nodes[link.SourcePhysicalNodeId]), new XAttribute("target", nodes[link.DestinationPhysicalNodeId]), new XAttribute("physicalLinkId", link.PhysicalLinkId), new XAttribute("semanticLinkId", link.SemanticLinkId), new XAttribute("style", ConnectorStyle(settings.Connector)), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), points))));
         }
         var graph = new XElement("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "0"), new XAttribute("background", settings.Canvas.BackgroundColor), root);
         return new DrawioPage("Architecture", "architecture", graph, Array.Empty<DiagramDiagnostic>());
     }
     private static XElement Vertex(string id, string value, string style, string parent, double x, double y, double width, double height) => new("mxCell", new XAttribute("id", id), new XAttribute("value", value), new XAttribute("style", style), new XAttribute("vertex", "1"), new XAttribute("parent", parent), new XElement("mxGeometry", new XAttribute("x", x.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", y.ToString(CultureInfo.InvariantCulture)), new XAttribute("width", width.ToString(CultureInfo.InvariantCulture)), new XAttribute("height", height.ToString(CultureInfo.InvariantCulture)), new XAttribute("as", "geometry")));
-    private static string Style(ArchitectureV7PhysicalNode node, ArchitectureRenderSettings settings) => node.IsExternal ? "shape=rhombus;html=1;fillColor=#f36c21;strokeColor=#a43b08;fontColor=#111111;" : "rounded=1;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#111111;";
+    internal static object StyleEvidence(ArchitectureV7PhysicalNode node, ArchitectureRenderSettings settings) => new
+    {
+        source = node.IsExternal ? "external-dependency-style" : ResolveNodeStyleSource(node, settings),
+        style = node.IsExternal ? settings.ExternalDependencyStyle : ResolveNodeStyle(node, settings)
+    };
+    private static string ResolveNodeStyleSource(ArchitectureV7PhysicalNode node, ArchitectureRenderSettings settings) =>
+        settings.Overrides.Any(item => string.Equals(item.FullName, node.FullName, StringComparison.Ordinal)) ? "exact-override" :
+        settings.StyleRules.FirstOrDefault(rule => GlobMatcher.IsMatch(node.Name, rule.Match) || GlobMatcher.IsMatch(node.FullName, rule.Match))?.Match ?? "default-node-style";
+    private static NodeStyle ResolveNodeStyle(ArchitectureV7PhysicalNode node, ArchitectureRenderSettings settings) =>
+        settings.Overrides.FirstOrDefault(item => string.Equals(item.FullName, node.FullName, StringComparison.Ordinal))?.Style ??
+        settings.StyleRules.FirstOrDefault(rule => GlobMatcher.IsMatch(node.Name, rule.Match) || GlobMatcher.IsMatch(node.FullName, rule.Match))?.Style ?? new NodeStyle();
+    private static string Style(NodeStyle style) => string.Join(";", new[]
+    {
+        $"shape={style.Shape}", "html=1", "whiteSpace=wrap", $"fillColor={style.FillColor}", $"strokeColor={style.StrokeColor}", $"fontColor={style.FontColor}", $"shadow={(style.Shadow ? 1 : 0)}", style.ExtraStyle
+    }.Where(value => !string.IsNullOrWhiteSpace(value))) + ";";
+    private static string ConnectorStyle(ConnectorStyle style) => string.Join(";", new[]
+    {
+        "edgeStyle=none", "orthogonal=0", "curved=0", $"rounded={(style.Rounded ? 1 : 0)}", $"strokeColor={style.StrokeColor}", $"strokeWidth={style.StrokeWidth}", $"opacity={style.Opacity}", $"startArrow={style.StartArrow}", $"endArrow={style.EndArrow}", $"startFill={(style.StartFill ? 1 : 0)}", $"endFill={(style.EndFill ? 1 : 0)}", $"fontColor={style.FontColor}", "labelPosition=none", style.ExtraStyle
+    }.Where(value => !string.IsNullOrWhiteSpace(value))) + ";";
     internal static string IdFor(string kind, string value) { using var sha = SHA256.Create(); return "v7_" + kind + "_" + string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(value)).Take(8).Select(x => x.ToString("x2", CultureInfo.InvariantCulture))); }
     private static string Id(string kind, string value) => IdFor(kind, value);
 }

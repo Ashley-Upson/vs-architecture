@@ -25,7 +25,10 @@ public abstract record DiagramGenerationJob(DiagramType DiagramType, string? Pag
 public sealed record ArchitectureGenerationJob(
     ArchitectureAnalysisSettings Analysis,
     ArchitectureRenderSettings Rendering,
-    string? PageNameHint = null)
+    string? PageNameHint = null,
+    string? SettingsSourcePath = null,
+    string? SettingsSourceHash = null,
+    string? ProjectSelectionInput = null)
     : DiagramGenerationJob(DiagramType.Architecture, PageNameHint);
 
 public sealed record DataModelGenerationJob(

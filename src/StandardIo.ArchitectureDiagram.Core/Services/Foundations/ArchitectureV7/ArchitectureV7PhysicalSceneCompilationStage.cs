@@ -41,16 +41,12 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         ArchitectureV7CollectiveAllocationFreeze allocation, CompilationIndexes indexes, ArchitectureV7PhysicalSceneConfiguration configuration)
     {
         var extents = Enumerable.Range(0, count).Select(row => ArchitectureV7PhysicalSceneSizing.RowMinimum(row, placement, configuration)).ToArray();
-        for (var row = 0; row < extents.Length; row++)
-            if (ArchitectureV7PhysicalSceneSizing.IsRoutingRow(row, placement))
-                extents[row] = Math.Max(extents[row], ArchitectureV7PhysicalSceneSizing.NodeRoutingInterfaceCount(row, placement) * configuration.NodeClearance);
         foreach (var group in allocation.Runs.Where(x => x.Orientation == ArchitectureV7RunOrientation.Horizontal).GroupBy(x => x.Cells[0].Row))
         {
             if ((uint)group.Key >= (uint)extents.Length) continue;
             var laneCount = group.Select(x => indexes.AssignmentsByRunId[x.RunId].LaneOrdinal).DefaultIfEmpty(0).Max() + 1;
             var laneEnvelope = ArchitectureV7PhysicalSceneSizing.LaneEnvelope(laneCount, configuration);
-            var interfaceClearance = ArchitectureV7PhysicalSceneSizing.NodeRoutingInterfaceCount(group.Key, placement) * configuration.NodeClearance;
-            extents[group.Key] = Math.Max(extents[group.Key], laneEnvelope + interfaceClearance);
+            extents[group.Key] = Math.Max(extents[group.Key], laneEnvelope);
         }
         foreach (var demand in allocation.TrackDemands)
             if ((uint)demand.LogicalRow < (uint)extents.Length)
@@ -117,7 +113,14 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 diagnostics.Add(new("NODE-FOOTPRINT-OUT-OF-RANGE", "A frozen node footprint cannot be represented by the physical track table.", true));
                 continue;
             }
-            result.Add(new(node.PhysicalNodeId, new(columns[minColumn].Start, rows[minRow].Start, columns[maxColumn].End, rows[maxRow].End), "frozen-logical-footprint;physical-track-boundaries"));
+            var rowTop = rows[minRow].Start;
+            var rowBottom = rows[maxRow].End;
+            if (minRow == maxRow && ArchitectureV7PhysicalSceneSizing.IsNodeBearingRow(minRow, placement))
+            {
+                rowTop += configuration.NodeClearance;
+                rowBottom -= configuration.NodeClearance;
+            }
+            result.Add(new(node.PhysicalNodeId, new(columns[minColumn].Start, rowTop, columns[maxColumn].End, rowBottom), "frozen-logical-footprint;node-row-clearance-envelope;physical-track-boundaries"));
         }
         return result;
     }

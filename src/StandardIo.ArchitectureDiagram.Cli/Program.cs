@@ -112,7 +112,10 @@ public static class Program
                 case DiagramType.Architecture:
                     var architectureJob = new ArchitectureGenerationJob(
                         LegacyDiagramSettingsAdapter.ToArchitectureAnalysis(settings),
-                        LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings));
+                        LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings),
+                        SettingsSourcePath: settingsSource.Path,
+                        SettingsSourceHash: settingsSource.Sha256,
+                        ProjectSelectionInput: options.ProjectFilter ?? "<all workspace projects>");
                     var mode = options.StrictValidation
                         ? ArchitectureRenderingMode.StrictValidation
                         : string.IsNullOrWhiteSpace(options.ProjectRegionDirectory)

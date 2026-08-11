@@ -11,7 +11,7 @@ public sealed class LayoutSettings
     public int NodeHeight { get; set; } = 80;
     // V7 sizing-policy inputs. These are explicit repository defaults until a reviewed
     // horizontal/vertical policy selects different preserved-user values.
-    public int BaseCellWidth { get; set; } = 3;
+    public int BaseCellWidth { get; set; } = 100;
     public int RoutingRowMinimum { get; set; } = 20;
     public int BoundaryRowMinimum { get; set; } = 20;
     public int VerticalNodeClearance { get; set; } = 10;

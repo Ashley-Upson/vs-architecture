@@ -59,7 +59,7 @@ public sealed class DiagramSettingsSourceTests
     {
         var settings = DiagramSettings.CreateDefault();
 
-        Assert.Equal(3, settings.Layout.BaseCellWidth);
+        Assert.Equal(100, settings.Layout.BaseCellWidth);
         Assert.Equal(20, settings.Layout.RoutingRowMinimum);
         Assert.Equal(20, settings.Layout.BoundaryRowMinimum);
         Assert.Equal(10, settings.Layout.VerticalNodeClearance);
@@ -71,7 +71,7 @@ public sealed class DiagramSettingsSourceTests
     {
         var result = SettingsSerializer.Import("{ \"version\": 1, \"layout\": { \"nodeWidth\": 200 } }");
 
-        Assert.Equal(3, result.Layout.BaseCellWidth);
+        Assert.Equal(100, result.Layout.BaseCellWidth);
         Assert.Equal(20, result.Layout.RoutingRowMinimum);
         Assert.Equal(20, result.Layout.BoundaryRowMinimum);
         Assert.Equal(10, result.Layout.VerticalNodeClearance);
