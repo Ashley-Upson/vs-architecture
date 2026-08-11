@@ -58,6 +58,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var ordinarySchedule = Measure("ordinary-layer-scheduling", () => new ArchitectureV7OrdinaryLayerSchedulingStage().Schedule(ownership, reservation));
         var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, ordinarySchedule));
         var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees, pre));
+        var corridorDiscovery = Measure("corridor-discovery", () => new ArchitectureV7CapabilityCorridorDiscoveryStage().Discover(placement));
         var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
         var allocation = Measure("collective-allocation", () => new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
             new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.BaseCellWidth,
@@ -213,6 +214,16 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint },
                 ordinaryLayerSchedule = new { Fingerprint = ordinarySchedule.Fingerprint, Diagnostics = ordinarySchedule.Diagnostics, AssignedNodeCount = ordinarySchedule.LayerByPhysicalNodeId.Count },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
+                corridorDiscovery = new
+                {
+                    HorizontalCount = corridorDiscovery.Horizontal.Count,
+                    VerticalCount = corridorDiscovery.Vertical.Count,
+                    HorizontalLengths = new { Minimum = corridorDiscovery.Horizontal.Count == 0 ? 0 : corridorDiscovery.Horizontal.Min(item => item.CellCount), Maximum = corridorDiscovery.Horizontal.Count == 0 ? 0 : corridorDiscovery.Horizontal.Max(item => item.CellCount), Average = corridorDiscovery.Horizontal.Count == 0 ? 0 : corridorDiscovery.Horizontal.Average(item => item.CellCount) },
+                    VerticalLengths = new { Minimum = corridorDiscovery.Vertical.Count == 0 ? 0 : corridorDiscovery.Vertical.Min(item => item.CellCount), Maximum = corridorDiscovery.Vertical.Count == 0 ? 0 : corridorDiscovery.Vertical.Max(item => item.CellCount), Average = corridorDiscovery.Vertical.Count == 0 ? 0 : corridorDiscovery.Vertical.Average(item => item.CellCount) },
+                    VerticalNodePassthroughCount = corridorDiscovery.Vertical.Count(item => item.CapabilityClasses.Any(capability => capability.HasFlag(ArchitectureV7CellCapability.NodeAllowed))),
+                    StraightOnlyCount = corridorDiscovery.All.Count(item => item.CapabilityClasses.Any(capability => capability.HasFlag(ArchitectureV7CellCapability.StraightPassthroughOnly))),
+                    Fingerprint = corridorDiscovery.Fingerprint
+                },
                 routing = new
                 {
                     RouteCount = routes.Routes.Count,
