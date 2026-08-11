@@ -255,16 +255,9 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 outgoing.RunId, outgoingLane.LaneId, "bend-resource=" + bend.BendId + ";" + bend.Provenance, rows, columns);
         }
 
-        var crossing = indexes.CrossingsByLinkAndRouteIndex.TryGetValue((route.PhysicalLinkId, index), out var indexedCrossing)
-            ? indexedCrossing : null;
-        if (crossing is not null)
-            return PointAtCell(route, index, crossing.EffectiveRelativePosition,
-                incoming.RunId, incomingLane.LaneId, "crossing-resource=" + crossing.CrossingId + ";" + crossing.Provenance, rows, columns);
-        if (indexes.CrossingInteractionsByLinkAndRouteIndex.ContainsKey((route.PhysicalLinkId, index)))
-        {
-            diagnostics.Add(new("CROSSING-RESOURCE-MISSING", "A frozen perpendicular pass/turn has no allocated crossing resource; compiler will not invent one.", true, route.PhysicalLinkId));
-            return null;
-        }
+        // Straight traversal is owned by the maximal run lane. Crossing
+        // resources describe interactions at the frozen intersection; they
+        // must not displace the straight run or become a compiler authority.
         var x = incoming.Orientation == ArchitectureV7RunOrientation.Horizontal ? (columns[route.Cells[index].Column].Start + columns[route.Cells[index].Column].End) / 2d : columns[route.Cells[index].Column].LaneCoordinates[incomingLane.LaneOrdinal];
         var y = incoming.Orientation == ArchitectureV7RunOrientation.Vertical ? (rows[route.Cells[index].Row].Start + rows[route.Cells[index].Row].End) / 2d : rows[route.Cells[index].Row].LaneCoordinates[incomingLane.LaneOrdinal];
         return new(index, route.Cells[index], new(x, y, "frozen-track-boundaries;straight-run"), incoming.RunId, incomingLane.LaneId, "straight-run;run=" + incoming.RunId + ";lane=" + incomingLane.LaneId);

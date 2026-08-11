@@ -207,7 +207,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         };
         var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
 
-        Assert.Contains(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal));
+        Assert.Contains(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("frozen-track-boundaries;straight-run", StringComparison.Ordinal));
+        Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
     }
 
@@ -220,14 +221,52 @@ public sealed class ArchitectureV7PhysicalSceneTests
             Route("v8", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
         };
         var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
-        var crossingPoints = scene.Routes.SelectMany(route => route.Points)
-            .Where(point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal)).ToArray();
-        var expectedX = (scene.Columns[3].Start + scene.Columns[3].End) / 2d;
-        var expectedY = (scene.Rows[3].Start + scene.Rows[3].End) / 2d;
-
-        Assert.NotEmpty(crossingPoints);
-        Assert.All(crossingPoints, point => { Assert.Equal(expectedX, point.X); Assert.Equal(expectedY, point.Y); });
+        var crossingPoints = scene.Routes.Select(route => route.Points[2]).ToArray();
+        Assert.Equal(2, crossingPoints.Length);
+        Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
+    }
+
+    [Fact]
+    public void Straight_runs_ignore_multiple_crossing_resources_and_keep_authoritative_lane_geometry()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v1", "v1a", "v1b", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3)),
+            Route("v2", "v2a", "v2b", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1a", 1, 3), ("v1b", 5, 3), ("v2a", 1, 3), ("v2b", 5, 3)));
+
+        var densePoints = scene.Routes.Select(route => route.Points[2]).ToArray();
+        Assert.Equal(3, densePoints.Length);
+        Assert.All(densePoints, point => Assert.Contains("frozen-track-boundaries;straight-run", point.Provenance, StringComparison.Ordinal));
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
+    }
+
+    [Fact]
+    public void Straight_geometry_is_invariant_when_crossing_resources_are_reordered()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var placement = Placement(Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
+            new ArchitectureV7AllocationConfiguration(4, 4, 0));
+        var reordered = new ArchitectureV7CollectiveAllocationFreeze(allocation.Runs, allocation.Lanes, allocation.RunAssignments,
+            allocation.Terminals, allocation.Approaches, allocation.Handoffs, allocation.Bends, allocation.Crossings.Reverse().ToArray(),
+            allocation.Diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint, allocation.AllocationFingerprint,
+            allocation.CrossingInteractions);
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
+        var compiler = new ArchitectureV7PhysicalSceneCompilationStage();
+        var normal = compiler.Compile(placement, routeFreeze, allocation, configuration);
+        var shuffled = compiler.Compile(placement, routeFreeze, reordered, configuration);
+
+        Assert.Equal(normal.Routes.SelectMany(route => route.Points).Select(point => (point.X, point.Y, point.Provenance)),
+            shuffled.Routes.SelectMany(route => route.Points).Select(point => (point.X, point.Y, point.Provenance)));
     }
 
     [Fact]
@@ -261,7 +300,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
-    public void Missing_required_crossing_is_an_explicit_compiler_failure_without_synthesised_intersection()
+    public void Missing_crossing_resource_does_not_replace_authoritative_straight_run_geometry()
     {
         var routes = new[]
         {
@@ -275,8 +314,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, missing,
             new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0));
 
-        Assert.Contains(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
-        Assert.Empty(scene.Routes);
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
+        Assert.Equal(2, scene.Routes.Count);
     }
 
     [Fact]
