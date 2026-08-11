@@ -209,7 +209,8 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     Entries = layerSchedule.Entries,
                     Preferences = layerSchedule.SoftPreferences,
                     Diagnostics = layerSchedule.Diagnostics,
-                    InsertedNodeLayers = layerSchedule.Entries.Where(item => !item.IsHardReservation).Select(item => item.NodeLayer).ToArray(),
+                    InsertedNodeLayers = layerSchedule.Entries.Where(item => !item.IsHardReservation && item.TokenSuffix is not null).Select(item => item.NodeLayer).ToArray(),
+                    ReusedOrdinaryLayers = layerSchedule.Entries.Where(item => !item.IsHardReservation && item.Name.StartsWith("ordinary:", StringComparison.Ordinal)).Select(item => item.NodeLayer).ToArray(),
                     ShiftedHardReservations = scheduledReservation.Table.Reservations.Select(item => new { item.Name, item.NodeRow }).ToArray()
                 },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
