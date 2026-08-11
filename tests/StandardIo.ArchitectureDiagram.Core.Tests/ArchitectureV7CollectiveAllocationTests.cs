@@ -160,6 +160,30 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Endpoint_allocation_preserves_frozen_node_and_relationship_identity_sets()
+    {
+        var routes = new[]
+        {
+            Route("relationship-a", "s", "t", (1, 3), (2, 3), (3, 3)),
+            Route("relationship-b", "u", "t", (1, 5), (2, 5), (3, 5))
+        };
+        var nodes = Nodes("s", "t", "u");
+        var inputRelationshipIds = routes.Select(route => route.PhysicalLinkId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var inputNodeIds = nodes.Select(node => node.PhysicalNodeId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+
+        var result = Allocate(routes, nodes, spacing: 4);
+
+        Assert.Equal(inputRelationshipIds, result.Runs.Select(run => run.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.Equal(inputRelationshipIds, result.Terminals.Select(terminal => terminal.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.All(result.Terminals, terminal => Assert.Contains(terminal.PhysicalNodeId, inputNodeIds));
+        Assert.All(result.Handoffs, handoff =>
+        {
+            Assert.Contains(handoff.PhysicalLinkId, inputRelationshipIds);
+            Assert.Contains(handoff.PhysicalNodeId, inputNodeIds);
+        });
+    }
+
+    [Fact]
     public void Allocation_preserves_frozen_placement_and_route_fingerprints()
     {
         var routes = new[] { Route("a", "s", "t", (1, 1), (2, 1), (3, 1)) };
