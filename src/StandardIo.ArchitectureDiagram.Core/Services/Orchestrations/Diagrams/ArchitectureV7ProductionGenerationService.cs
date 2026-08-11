@@ -53,6 +53,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.NodeDuplication.AllowDuplicateNodes ? ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches : ArchitectureV7ProjectionMode.Canonical,
             (job.Rendering.NodeDuplication.DuplicationExceptionPatterns ?? new List<string>()).Concat(job.Rendering.Layout.DuplicateHighNoiseNodePatterns ?? new List<string>()).Distinct(StringComparer.Ordinal).ToArray())));
         var ownership = Measure("ownership", () => new ArchitectureV7PositionalOwnershipStage().Resolve(projection));
+        var softCohorts = Measure("soft-cohort-analysis", () => new ArchitectureV7SoftCohortAnalyzer().Analyze(ownership, pre));
         var sizing = Measure("sizing", () => new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, pre));
         var reservation = Measure("reservation", () => new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, pre)));
         var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, reservation.Table));
@@ -197,6 +198,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             {
                 projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
+                softCohorts = new { CohortCount = softCohorts.Cohorts.Count, MinimumSize = softCohorts.MinimumSize, Fingerprint = softCohorts.Fingerprint },
                 sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
                 reservation = new { ReservationCount = reservation.Table.Reservations.Count, Fingerprint = reservation.Table.Fingerprint },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
@@ -265,7 +267,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
     private static bool Equal(double expected, XAttribute? actual) => actual is not null && double.TryParse(actual.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && Math.Abs(expected - value) < 0.0001;
 
     private static ArchitectureV7PrePlacementConfiguration Configuration(LayoutSettings layout) => new(layout.BaseCellWidth, layout.NodeWidth, layout.LabelCharacterWidth, layout.LinkNodeWidthPadding,
-        Math.Max(1, layout.EdgePortSpacing), Math.Max(0, layout.LinkNodeWidthPadding), (layout.ReservedLayerTypePatterns ?? new List<string>()).Select((pattern, index) => new ArchitectureV7ReservedRoleRule(pattern, pattern, index)).ToArray());
+        Math.Max(1, layout.EdgePortSpacing), Math.Max(0, layout.LinkNodeWidthPadding), (layout.ReservedLayerTypePatterns ?? new List<string>()).Select((pattern, index) => new ArchitectureV7ReservedRoleRule(pattern, pattern, index)).ToArray(), layout.SoftCohortMinimumSize);
     private static DrawioPage RejectedPage() => new("Architecture (rejected)", "architecture-rejected", new XElement("mxGraphModel", new XElement("root", new XElement("mxCell", new XAttribute("id", "0")), new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")))), new[] { new DiagramDiagnostic("V7StrictRejected", "V7 acceptance failed; Draw.io renderer was not invoked.") });
 }
 

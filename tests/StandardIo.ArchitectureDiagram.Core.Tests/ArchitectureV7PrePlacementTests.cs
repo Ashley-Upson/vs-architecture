@@ -121,6 +121,61 @@ public sealed class ArchitectureV7PrePlacementTests
     }
 
     [Fact]
+    public void Soft_cohort_specificity_only_consumes_a_candidate_after_it_meets_the_threshold()
+    {
+        var nodes = Enumerable.Range(0, 3).Select(index => Node("processing" + index, "Foo" + index + "ProcessingService"))
+            .Concat(Enumerable.Range(0, 4).Select(index => Node("service" + index, "Bar" + index + "Service"))).ToArray();
+        var links = nodes.Skip(1).Select((node, index) => Link("link" + index, "processing0", node.Id)).ToArray();
+        var result = new ArchitectureV7SoftCohortAnalyzer().Analyze(Ownership(Diagram(nodes, links)), Config());
+
+        var cohort = Assert.Single(result.Cohorts);
+        Assert.Equal("Service", cohort.TokenSuffix);
+        Assert.Equal(7, cohort.MemberPhysicalNodeIds.Count);
+    }
+
+    [Fact]
+    public void Soft_cohort_specificity_wins_only_among_viable_candidates()
+    {
+        var nodes = Enumerable.Range(0, 5).Select(index => Node("processing" + index, "Foo" + index + "ProcessingService"))
+            .Concat(Enumerable.Range(0, 2).Select(index => Node("service" + index, "Bar" + index + "Service"))).ToArray();
+        var links = nodes.Skip(1).Select((node, index) => Link("link" + index, "processing0", node.Id)).ToArray();
+        var result = new ArchitectureV7SoftCohortAnalyzer().Analyze(Ownership(Diagram(nodes, links)), Config());
+
+        var cohort = Assert.Single(result.Cohorts);
+        Assert.Equal("ProcessingService", cohort.TokenSuffix);
+        Assert.Equal(5, cohort.MemberPhysicalNodeIds.Count);
+    }
+
+    [Fact]
+    public void Soft_cohorts_exclude_hard_reserved_external_and_standalone_nodes()
+    {
+        var nodes = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker"))
+            .Concat(new[] { Node("hard", "HardWorker"), Node("standalone", "SoloWorker"), Node("external", "ExternalApi") }).ToArray();
+        var links = Enumerable.Range(1, 4).Select(index => Link("link" + index, "worker0", "worker" + index))
+            .Concat(new[] { Link("hard-link", "worker0", "hard"), Link("external-link", "worker0", "external") }).ToArray();
+        var result = new ArchitectureV7SoftCohortAnalyzer().Analyze(Ownership(Diagram(nodes, links)), Config(patterns: new[] { new ArchitectureV7ReservedRoleRule("Hard", "*HardWorker", 0) }));
+
+        var cohort = Assert.Single(result.Cohorts);
+        Assert.Equal("Worker", cohort.TokenSuffix);
+        Assert.DoesNotContain("physical:hard", cohort.MemberPhysicalNodeIds);
+        Assert.DoesNotContain("physical:external", cohort.MemberPhysicalNodeIds);
+        Assert.DoesNotContain("physical:standalone", cohort.MemberPhysicalNodeIds);
+    }
+
+    [Fact]
+    public void Soft_cohort_analysis_is_deterministic_under_shuffled_input()
+    {
+        var nodes = Enumerable.Range(0, 5).Select(index => Node("node" + index, "Gamma" + index + "Handler")).ToArray();
+        var links = nodes.Skip(1).Select((node, index) => Link("link" + index, "node0", node.Id)).ToArray();
+        var left = new ArchitectureV7SoftCohortAnalyzer().Analyze(Ownership(Diagram(nodes, links)), Config());
+        var rightDiagram = Diagram(nodes.AsEnumerable().Reverse().ToArray(), links.AsEnumerable().Reverse().ToArray());
+        var right = new ArchitectureV7SoftCohortAnalyzer().Analyze(Ownership(rightDiagram), Config());
+
+        Assert.Equal(left.Cohorts.Select(cohort => cohort.TokenSuffix), right.Cohorts.Select(cohort => cohort.TokenSuffix));
+        Assert.Equal(left.Cohorts.SelectMany(cohort => cohort.MemberPhysicalNodeIds), right.Cohorts.SelectMany(cohort => cohort.MemberPhysicalNodeIds));
+    }
+
+    [Fact]
     public void One_reconciled_table_is_shared_by_all_projects()
     {
         var diagram = new ArchitectureDiagramModel(

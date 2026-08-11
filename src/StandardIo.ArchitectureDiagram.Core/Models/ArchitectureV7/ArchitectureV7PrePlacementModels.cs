@@ -11,9 +11,37 @@ public sealed record ArchitectureV7PrePlacementConfiguration(
     int LabelHorizontalMargin,
     int TerminalPortSpacing,
     int TerminalInset,
-    IReadOnlyList<ArchitectureV7ReservedRoleRule> ReservedLayerTypePatterns);
+    IReadOnlyList<ArchitectureV7ReservedRoleRule> ReservedLayerTypePatterns,
+    int SoftCohortMinimumSize = 5);
 
 public sealed record ArchitectureV7ReservedRoleRule(string Name, string Pattern, int Order);
+
+public sealed record ArchitectureV7SoftCohort(
+    string TokenSuffix,
+    IReadOnlyList<string> MemberPhysicalNodeIds,
+    int? PreferredDependencyAnchorNaturalDepth,
+    IReadOnlyDictionary<int, int> DependencyAnchorCounts,
+    string Provenance);
+
+public sealed class ArchitectureV7SoftCohortAnalysisResult
+{
+    public ArchitectureV7SoftCohortAnalysisResult(
+        ArchitectureV7PositionalOwnershipResult ownership,
+        IReadOnlyList<ArchitectureV7SoftCohort> cohorts,
+        int minimumSize,
+        string fingerprint)
+    {
+        Ownership = ownership ?? throw new ArgumentNullException(nameof(ownership));
+        Cohorts = Array.AsReadOnly((cohorts ?? Array.Empty<ArchitectureV7SoftCohort>()).ToArray());
+        MinimumSize = minimumSize;
+        Fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
+    }
+
+    public ArchitectureV7PositionalOwnershipResult Ownership { get; }
+    public IReadOnlyList<ArchitectureV7SoftCohort> Cohorts { get; }
+    public int MinimumSize { get; }
+    public string Fingerprint { get; }
+}
 
 /// <summary>Named conversions for the shared V7 reserved node-row coordinate domain.</summary>
 public static class ArchitectureV7ReservationCoordinates
