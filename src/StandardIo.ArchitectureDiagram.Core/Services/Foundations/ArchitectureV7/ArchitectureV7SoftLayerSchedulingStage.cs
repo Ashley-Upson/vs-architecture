@@ -112,7 +112,7 @@ public sealed class ArchitectureV7SoftLayerSchedulingStage
         var shiftedTable = new ArchitectureV7FrozenReservationTable(shiftedReservations, Fingerprint(reservation.Table.Fingerprint, shiftedReservations));
         var preSoft = reservation.Table.Fingerprint;
         var fingerprint = Fingerprint(preSoft + "#" + softAnalysis.Fingerprint, entries, softPreferenceList, diagnostics);
-        return new ArchitectureV7FrozenLayerSchedule(shiftedTable, entries, softPreferenceList, preferredByNode, diagnostics, preSoft, fingerprint);
+        return new ArchitectureV7FrozenLayerSchedule(shiftedTable, entries, softPreferenceList, preferredByNode, diagnostics, preSoft, fingerprint, reservation.Table.Reservations);
 
         bool NeedsInsertion((ArchitectureV7SoftCohort Cohort, string Anchor, int AnchorLayer, int PreferredLayer, Dictionary<string, int> Counts) item) =>
             !ordinaryLayers.Contains(item.PreferredLayer) || hardBase.Values.Contains(item.PreferredLayer);

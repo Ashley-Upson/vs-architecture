@@ -206,7 +206,8 @@ public sealed class ArchitectureV7FrozenLayerSchedule
         IReadOnlyDictionary<string, int> preferredLayerByPhysicalNodeId,
         IReadOnlyList<string> diagnostics,
         string preSoftFingerprint,
-        string fingerprint)
+        string fingerprint,
+        IReadOnlyList<ArchitectureV7FrozenReservation>? preSoftReservations = null)
     {
         Reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
         Entries = Array.AsReadOnly((entries ?? Array.Empty<ArchitectureV7LayerScheduleEntry>()).OrderBy(item => item.NodeLayer).ThenBy(item => item.Name, StringComparer.Ordinal).ToArray());
@@ -215,6 +216,7 @@ public sealed class ArchitectureV7FrozenLayerSchedule
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<string>()).OrderBy(item => item, StringComparer.Ordinal).ToArray());
         PreSoftFingerprint = preSoftFingerprint ?? throw new ArgumentNullException(nameof(preSoftFingerprint));
         Fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
+        PreSoftReservations = Array.AsReadOnly((preSoftReservations ?? Array.Empty<ArchitectureV7FrozenReservation>()).ToArray());
     }
 
     public ArchitectureV7FrozenReservationTable Reservations { get; }
@@ -224,4 +226,5 @@ public sealed class ArchitectureV7FrozenLayerSchedule
     public IReadOnlyList<string> Diagnostics { get; }
     public string PreSoftFingerprint { get; }
     public string Fingerprint { get; }
+    public IReadOnlyList<ArchitectureV7FrozenReservation> PreSoftReservations { get; }
 }
