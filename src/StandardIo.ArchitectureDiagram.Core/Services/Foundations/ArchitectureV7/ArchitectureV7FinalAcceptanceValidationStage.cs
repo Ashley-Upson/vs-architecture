@@ -166,9 +166,12 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             if (frozen is null || source is null || destination is null) continue;
             if (route.Points.Count == 0 || route.Points[0] != source.Position) Add(findings, "PHYSICAL-SOURCE-TERMINAL-MISMATCH", "physical-geometry", "Physical route does not begin at its allocated source terminal.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "terminal=" + source.SlotOrdinal });
             if (route.Points.Count == 0 || route.Points[route.Points.Count - 1] != destination.Position) Add(findings, "PHYSICAL-DESTINATION-TERMINAL-MISMATCH", "physical-geometry", "Physical route does not end at its allocated destination terminal.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "terminal=" + destination.SlotOrdinal });
+            if (HasCollinearReversal(route.Points)) Add(findings, "PHYSICAL-COLLINEAR-REVERSAL", "physical-geometry", "Endpoint-inclusive physical geometry reverses direction along one straight axis.", route.PhysicalLinkId, frozen.Cells, route.Points, route.Points.Select(point => point.Provenance).ToArray());
+            if (HasOvershootReturn(route.Points)) Add(findings, "PHYSICAL-OVERSHOOT-RETURN", "physical-geometry", "Endpoint-inclusive physical geometry overshoots a straight-run boundary and returns across it.", route.PhysicalLinkId, frozen.Cells, route.Points, route.Points.Select(point => point.Provenance).ToArray());
             foreach (var segment in route.Segments)
             {
                 if (segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y) Add(findings, "PHYSICAL-DIAGONAL", "physical-geometry", "Physical scene contains a diagonal segment.", route.PhysicalLinkId, segment.LogicalCells, new[] { segment.Start, segment.End }, new[] { segment.RunId, segment.LaneId });
+                ValidatePhysicalResourceProvenance(route, frozen, allocation, segment, findings);
                 foreach (var node in indexes.NodesForSegment(segment))
                 {
                     indexes.MetricsBuilder.SegmentNodePredicateEvaluations++;
@@ -198,6 +201,76 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                 Add(findings, "INSUFFICIENT-PARALLEL-SPACING", "physical-geometry", "Parallel routes are closer than configured spacing.", left.Left.RouteId + "/" + left.Right.RouteId, a.LogicalCells, new[] { a.Start, b.Start }, new[] { a.LaneId, b.LaneId });
         }
         _ = placement; _ = routes; _ = allocation;
+    }
+
+    private static void ValidatePhysicalResourceProvenance(ArchitectureV7PhysicalRoute route, ArchitectureV7LogicalRoute frozen,
+        ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSegment segment, ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        var run = allocation.Runs.FirstOrDefault(item => item.RunId == segment.RunId);
+        var assignment = allocation.RunAssignments.FirstOrDefault(item => item.RunId == segment.RunId);
+        var validIndexes = segment.RouteCellIndices.Count > 0 && segment.RouteCellIndices.All(index => index >= 0 && index < frozen.Cells.Count);
+        var expectedCells = validIndexes
+            ? segment.RouteCellIndices.Distinct().Select(index => frozen.Cells[index]).ToArray()
+            : Array.Empty<ArchitectureV7RouteCell>();
+        var cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells) && expectedCells.All(cell => run?.Cells.Contains(cell) == true);
+        var endpointResource = segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal);
+        if (endpointResource)
+            cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells);
+        var laneMatches = assignment is not null && string.Equals(assignment.LaneId, segment.LaneId, StringComparison.Ordinal);
+        var orientationMatches = run is not null && ((segment.Start.Y == segment.End.Y && run.Orientation == ArchitectureV7RunOrientation.Horizontal) ||
+            (segment.Start.X == segment.End.X && run.Orientation == ArchitectureV7RunOrientation.Vertical));
+        var provenanceNamesResource = segment.AllocationProvenance.Contains("run=" + segment.RunId, StringComparison.Ordinal) &&
+            segment.AllocationProvenance.Contains("lane=" + segment.LaneId, StringComparison.Ordinal);
+        if (endpointResource)
+            provenanceNamesResource = segment.AllocationProvenance.Contains("resource=" + segment.RunId, StringComparison.Ordinal)
+                && segment.AllocationProvenance.Contains("lane=" + segment.LaneId, StringComparison.Ordinal);
+        if ((!endpointResource && (run is null || assignment is null || !laneMatches || !orientationMatches)) || !cellsMatch || !provenanceNamesResource)
+            Add(findings, "PHYSICAL-RESOURCE-PROVENANCE-MISMATCH", "physical-geometry", "Physical segment provenance does not identify the allocation run, lane and authoritative route cells that produced it.", route.PhysicalLinkId,
+                segment.LogicalCells, new[] { segment.Start, segment.End }, new[] { segment.RunId, segment.LaneId, segment.AllocationProvenance });
+    }
+
+    private static bool HasCollinearReversal(IReadOnlyList<ArchitectureV7PhysicalPoint> points)
+    {
+        for (var index = 2; index < points.Count; index++)
+        {
+            var first = points[index - 2];
+            var middle = points[index - 1];
+            var last = points[index];
+            if (first.Y == middle.Y && middle.Y == last.Y && Math.Sign(middle.X - first.X) != 0 && Math.Sign(middle.X - first.X) != Math.Sign(last.X - middle.X)) return true;
+            if (first.X == middle.X && middle.X == last.X && Math.Sign(middle.Y - first.Y) != 0 && Math.Sign(middle.Y - first.Y) != Math.Sign(last.Y - middle.Y)) return true;
+        }
+        return false;
+    }
+
+    private static bool HasOvershootReturn(IReadOnlyList<ArchitectureV7PhysicalPoint> points)
+    {
+        var start = 0;
+        while (start < points.Count - 1)
+        {
+            var first = points[start];
+            var second = points[start + 1];
+            if (first.X == second.X && first.Y == second.Y) { start++; continue; }
+            var horizontal = first.Y == second.Y;
+            var end = start + 1;
+            while (end < points.Count - 1)
+            {
+                var current = points[end];
+                var next = points[end + 1];
+                if ((horizontal && current.Y != next.Y) || (!horizontal && current.X != next.X)) break;
+                end++;
+            }
+            var initial = horizontal ? first.X : first.Y;
+            var final = horizontal ? points[end].X : points[end].Y;
+            var lower = Math.Min(initial, final);
+            var upper = Math.Max(initial, final);
+            for (var index = start + 1; index < end; index++)
+            {
+                var coordinate = horizontal ? points[index].X : points[index].Y;
+                if (coordinate < lower || coordinate > upper) return true;
+            }
+            start = end;
+        }
+        return false;
     }
 
     private static void ValidateCrossings(ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneFreeze scene,

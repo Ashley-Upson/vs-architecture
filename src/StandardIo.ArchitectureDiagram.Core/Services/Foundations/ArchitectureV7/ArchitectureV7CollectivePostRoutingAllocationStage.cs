@@ -25,7 +25,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var diagnostics = new List<ArchitectureV7AllocationDiagnostic>();
         var runs = BuildRuns(routes, diagnostics);
         var (lanes, assignments) = AllocateLanes(runs, configuration.ParallelLaneSpacing);
-        var terminals = AllocateTerminals(placement, routes, runs, configuration, diagnostics);
+        var terminals = AllocateTerminals(placement, routes, runs, assignments, configuration, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
         var handoffs = BuildHandoffs(placement, routes, runs, assignments, terminals, configuration, diagnostics);
         var bends = BuildBendsResources(runs, routes, assignments, configuration, diagnostics);
@@ -93,10 +93,11 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
 
     private static IReadOnlyList<ArchitectureV7TerminalSlotAssignment> AllocateTerminals(
         ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes,
-        IReadOnlyList<ArchitectureV7StraightRun> runs, ArchitectureV7AllocationConfiguration configuration,
+        IReadOnlyList<ArchitectureV7StraightRun> runs, IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments,
+        ArchitectureV7AllocationConfiguration configuration,
         ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
     {
-        var groups = new Dictionary<(string Node, ArchitectureV7EndpointKind Kind, ArchitectureV7EndpointDirection Direction), List<(ArchitectureV7LogicalRoute Route, int Anchor)>>();
+        var groups = new Dictionary<(string Node, ArchitectureV7EndpointKind Kind, ArchitectureV7EndpointDirection Direction), List<(ArchitectureV7LogicalRoute Route, int Anchor, ArchitectureV7StraightRun? AdjacentRun, double LaneOffset)>>();
         foreach (var route in routes.Routes.Where(x => x.IsComplete && x.Cells.Count >= 2))
         {
             Add(route, ArchitectureV7EndpointKind.SourceDeparture, route.SourcePhysicalNodeId, route.Cells[1], route.Cells[0], true);
@@ -105,7 +106,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var result = new List<ArchitectureV7TerminalSlotAssignment>();
         foreach (var group in groups.OrderBy(x => x.Key.Node, StringComparer.Ordinal).ThenBy(x => x.Key.Kind).ThenBy(x => DirectionOrder(x.Key.Direction)))
         {
-            var entries = group.Value.OrderBy(x => x.Anchor).ThenBy(x => x.Route.PhysicalLinkId, StringComparer.Ordinal).ToArray();
+            var entries = group.Value.OrderBy(x => x.AdjacentRun is null ? int.MaxValue : FixedCoordinate(x.AdjacentRun))
+                .ThenBy(x => x.LaneOffset).ThenBy(x => x.Anchor).ThenBy(x => x.Route.PhysicalLinkId, StringComparer.Ordinal).ToArray();
             var node = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == group.Key.Node);
             if (node is null)
             {
@@ -118,10 +120,20 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 diagnostics.Add(new("TERMINAL-OVERFLOW", "Terminal demand exceeds the frozen physical span; node expansion is forbidden.", true,
                     entries[0].Route.PhysicalLinkId, null, node.PhysicalNodeId, group.Key.Kind.ToString(), capacity, available, node.LogicalSpan,
                     entries.Select(x => x.Route.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray(), null));
+            var usableHalfExtent = available / 2d - configuration.TerminalInset;
+            var desiredOffsets = entries.Select(x => x.AdjacentRun is { } run
+                ? TerminalLaneOffset(node, x.Route, group.Key.Kind, run, assignments, runs, configuration)
+                : 0).ToArray();
+            var laneAligned = desiredOffsets.All(offset => Math.Abs(offset) <= usableHalfExtent + 0.0001)
+                && desiredOffsets.Zip(desiredOffsets.Skip(1), (left, right) => right - left)
+                    .All(delta => delta >= configuration.TerminalPortSpacing - 0.0001);
             for (var index = 0; index < entries.Length; index++)
             {
-                var offset = (index - (entries.Length - 1) / 2.0) * configuration.TerminalPortSpacing;
-                result.Add(new(entries[index].Route.PhysicalLinkId, node.PhysicalNodeId, group.Key.Kind, group.Key.Direction, index, offset, capacity, "terminal-order=direction,position,relationship"));
+                var offset = laneAligned
+                    ? desiredOffsets[index]
+                    : (index - (entries.Length - 1) / 2.0) * configuration.TerminalPortSpacing;
+                result.Add(new(entries[index].Route.PhysicalLinkId, node.PhysicalNodeId, group.Key.Kind, group.Key.Direction, index, offset, capacity,
+                    laneAligned ? "terminal-order=adjacent-run-lane;exact-lane-alignment" : "terminal-order=adjacent-run-lane;capacity-constrained"));
             }
         }
         return result;
@@ -129,10 +141,16 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         void Add(ArchitectureV7LogicalRoute route, ArchitectureV7EndpointKind kind, string nodeId, ArchitectureV7RouteCell near, ArchitectureV7RouteCell endpoint, bool source)
         {
             var direction = Direction(near, endpoint, source);
-            var anchor = source ? near.Column : near.Column;
+            var adjacentRun = source
+                ? runs.FirstOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.StartRouteIndex == 0)
+                : runs.LastOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndRouteIndex == route.Cells.Count - 1);
+            var laneOffset = adjacentRun is not null
+                ? LaneAxisOffset(adjacentRun, assignments.First(x => x.RunId == adjacentRun.RunId), runs, assignments, configuration.ParallelLaneSpacing)
+                : 0;
+            var anchor = near.Column;
             var key = (nodeId, kind, direction);
             if (!groups.TryGetValue(key, out var list)) groups[key] = list = new();
-            list.Add((route, anchor));
+            list.Add((route, anchor, adjacentRun, laneOffset));
         }
     }
 
@@ -192,12 +210,14 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 continue;
             }
 
-            var laneOffset = LaneAxisOffset(run, assignment, runs, assignments, configuration.ParallelLaneSpacing);
+            var endpointNode = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == terminal.PhysicalNodeId);
+            var laneOffset = endpointNode is null
+                ? LaneAxisOffset(run, assignment, runs, assignments, configuration.ParallelLaneSpacing)
+                : TerminalLaneOffset(endpointNode, route, terminal.EndpointKind, run, assignments, runs, configuration);
             var terminalOffset = terminal.RelativeOffset;
             var relativeOffset = laneOffset - terminalOffset;
             var sideEndpoint = terminal.Direction is ArchitectureV7EndpointDirection.Left or ArchitectureV7EndpointDirection.Right;
             var requiresOrthogonalSideAttachment = run.Orientation == ArchitectureV7RunOrientation.Horizontal && sideEndpoint;
-            var endpointNode = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == terminal.PhysicalNodeId);
             var endpointCell = source ? route.Cells[0] : route.Cells[route.Cells.Count - 1];
             var multiSpanCentreAttachment = endpointNode is not null && endpointNode.LogicalSpan > 1 &&
                 endpointCell.Row == endpointNode.DiagramRow && endpointCell.Column == endpointNode.CentreCell;
@@ -243,6 +263,20 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             .ToArray();
         var ordinalIndex = Array.IndexOf(domain, assignment.LaneOrdinal);
         return (ordinalIndex - (domain.Length - 1) / 2d) * spacing;
+    }
+
+    private static double TerminalLaneOffset(ArchitectureV7FrozenNodePlacement node, ArchitectureV7LogicalRoute route,
+        ArchitectureV7EndpointKind endpointKind, ArchitectureV7StraightRun run,
+        IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, IReadOnlyList<ArchitectureV7StraightRun> runs,
+        ArchitectureV7AllocationConfiguration configuration)
+    {
+        var assignment = assignments.First(x => x.RunId == run.RunId);
+        var offset = LaneAxisOffset(run, assignment, runs, assignments, configuration.ParallelLaneSpacing);
+        var endpoint = endpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1];
+        if (run.Orientation == ArchitectureV7RunOrientation.Vertical && endpoint.Column != node.CentreCell
+            && node.LogicalFootprint.Any(cell => cell.Row == endpoint.Row && cell.Column == endpoint.Column))
+            offset += (endpoint.Column - node.CentreCell) * configuration.BaseCellWidth;
+        return offset;
     }
 
     private static IReadOnlyList<ArchitectureV7BendAllocation> BuildBendsResources(

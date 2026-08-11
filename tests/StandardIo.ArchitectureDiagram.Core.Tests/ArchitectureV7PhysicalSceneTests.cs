@@ -17,6 +17,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
 
         Assert.Equal("#123456", (string?)graph.Attribute("background"));
         Assert.Equal("1", (string?)graph.Attribute("page"));
+        Assert.Equal("none", (string?)graph.Attribute("adaptiveColors"));
     }
 
     [Fact]
@@ -42,7 +43,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
         };
         var scene = Compile(routes, Nodes(("s1", 3, 1), ("t1", 3, 5), ("s2", 3, 1), ("t2", 3, 5)), spacing: 6);
         Assert.True(scene.Rows[3].RequiredExtent >= 6);
-        Assert.Equal(2, scene.Routes.SelectMany(x => x.Segments).Select(x => x.LaneId).Distinct().Count());
+        Assert.Equal(2, scene.Routes.SelectMany(x => x.Segments).Where(x => x.LaneId.StartsWith("lane:", StringComparison.Ordinal)).Select(x => x.LaneId).Distinct().Count());
         Assert.True(scene.Routes[0].Points.Any(point => scene.Routes[1].Points.Any(other => other.Y != point.Y)));
     }
 
@@ -55,9 +56,34 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
         Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff: a:SourceDeparture".Replace(" ", ""), StringComparison.Ordinal));
         Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
+        Assert.All(physical.Segments.Where(segment => segment.AllocationProvenance.Contains("frozen-handoff:", StringComparison.Ordinal)),
+            segment => Assert.StartsWith("handoff:", segment.LaneId, StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
         Assert.Equal(scene.Terminals.Single(x => x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture).Position, physical.Points[0]);
         Assert.Equal(scene.Terminals.Single(x => x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival).Position, physical.Points[physical.Points.Count - 1]);
+    }
+
+    [Fact]
+    public void Horizontal_endpoint_handoffs_do_not_reverse_across_the_same_straight_section()
+    {
+        var routeCells = new[] { (1, 1), (1, 2), (1, 3) };
+        var routes = new[]
+        {
+            Route("left", "s", "t", routeCells),
+            Route("right", "s", "t", routeCells)
+        };
+        var scene = Compile(routes, Nodes(("s", 1, 1), ("t", 1, 3)), spacing: 2);
+
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-OVERFLOW");
+
+        foreach (var route in scene.Routes)
+        {
+            var horizontalDirections = route.Points.Zip(route.Points.Skip(1), (from, to) => (from, to))
+                .Where(pair => pair.from.Y == pair.to.Y && pair.from.X != pair.to.X)
+                .Select(pair => Math.Sign(pair.to.X - pair.from.X))
+                .ToArray();
+            Assert.DoesNotContain(horizontalDirections.Zip(horizontalDirections.Skip(1), (first, second) => (first, second)), pair => pair.first != pair.second);
+        }
     }
 
     [Fact]
@@ -72,6 +98,25 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.DoesNotContain(scene.Diagnostics, x => x.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(scene.Routes, route => Assert.DoesNotContain(route.Points.Zip(route.Points.Skip(1), (a, b) => (a, b)), pair => pair.Item1.X != pair.Item2.X && pair.Item1.Y != pair.Item2.Y));
         Assert.Contains(scene.Routes.SelectMany(x => x.Points), point => point.X == scene.Routes[0].Points[2].X && point.Y == scene.Routes[1].Points[2].Y);
+    }
+
+    [Fact]
+    public void Vertical_straight_section_keeps_one_lane_x_when_crossing_resources_are_present()
+    {
+        var routes = new[]
+        {
+            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("v1", "v1a", "v1b", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3)),
+            Route("v2", "v2a", "v2b", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+        };
+        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1a", 1, 3), ("v1b", 5, 3), ("v2a", 1, 3), ("v2b", 5, 3)));
+
+        foreach (var route in scene.Routes.Where(route => route.PhysicalLinkId.StartsWith("v", StringComparison.Ordinal)))
+        {
+            var straightPoints = route.Points.Where(point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
+            Assert.NotEmpty(straightPoints);
+            Assert.All(straightPoints, point => Assert.Equal(straightPoints[0].X, point.X));
+        }
     }
 
     [Fact]

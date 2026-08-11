@@ -162,7 +162,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 diagnostics.Add(new("ROUTE-COMPILATION-FAILED", "A frozen route cannot be mechanically compiled without repair.", true, route.PhysicalLinkId));
                 continue;
             }
-            var points = new List<CompiledPoint> { new(0, route.Cells[0], source.Position, routeRuns[0].RunId, LaneFor(routeRuns[0], indexes), "source-terminal") };
+            var points = new List<CompiledPoint> { new(0, route.Cells[0], source.Position, TerminalResourceId(source), TerminalResourceId(source), "source-terminal") };
             var routeFailed = false;
             for (var index = 1; index < route.Cells.Count - 1; index++)
             {
@@ -171,7 +171,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 points.Add(point);
             }
             if (routeFailed) continue;
-            points.Add(new(route.Cells.Count - 1, route.Cells[route.Cells.Count - 1], destination.Position, routeRuns[routeRuns.Count - 1].RunId, LaneFor(routeRuns[routeRuns.Count - 1], indexes), "destination-terminal"));
+            points.Add(new(route.Cells.Count - 1, route.Cells[route.Cells.Count - 1], destination.Position, TerminalResourceId(destination), TerminalResourceId(destination), "destination-terminal"));
             var expanded = AddAllocatedEndpointHandoffs(points, route, indexes, source, destination, rows, columns, diagnostics);
             if (expanded is null) continue;
             var physicalPoints = expanded.Select(x => x.Point).ToArray();
@@ -186,7 +186,12 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             {
                 var a = expanded[index]; var b = expanded[index + 1];
                 if (a.Point.X != b.Point.X && a.Point.Y != b.Point.Y) { diagnostics.Add(new("DIAGONAL-COMPILER-OUTPUT", "Mechanical compilation produced a diagonal; no repair is permitted.", true, route.PhysicalLinkId)); continue; }
-                segments.Add(new(route.PhysicalLinkId, a.Point, b.Point, new[] { a.RouteIndex, b.RouteIndex }.Distinct().ToArray(), new[] { route.Cells[a.RouteIndex], route.Cells[b.RouteIndex] }.Distinct().ToArray(), a.RunId, a.LaneId, a.Provenance + ";" + b.Provenance));
+                var resourceOwner = a.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal) ? a : b.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal) ? b : a;
+                var ownershipProvenance = resourceOwner.RunId.StartsWith("handoff:", StringComparison.Ordinal) || resourceOwner.RunId.StartsWith("terminal:", StringComparison.Ordinal)
+                    ? "resource=" + resourceOwner.RunId + ";lane=" + resourceOwner.LaneId
+                    : "run=" + resourceOwner.RunId + ";lane=" + resourceOwner.LaneId;
+                segments.Add(new(route.PhysicalLinkId, a.Point, b.Point, new[] { a.RouteIndex, b.RouteIndex }.Distinct().ToArray(), new[] { route.Cells[a.RouteIndex], route.Cells[b.RouteIndex] }.Distinct().ToArray(), resourceOwner.RunId, resourceOwner.LaneId,
+                    ownershipProvenance + ";start=" + a.Provenance + ";end=" + b.Provenance));
             }
             result.Add(new(route.PhysicalLinkId, physicalPoints, segments, "exact-frozen-route-cell-sequence;unsimplified"));
         }
@@ -239,7 +244,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             : new ArchitectureV7PhysicalPoint(terminal.Position.X, adjacentPoint.Point.Y, "frozen-" + handoff.ResourceId);
         return new(handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? 0 : route.Cells.Count - 1,
             handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1], point,
-            adjacentPoint.RunId, adjacentPoint.LaneId, "handoff-resource=" + handoff.ResourceId + ";" + handoff.Provenance);
+            handoff.ResourceId, handoff.ResourceId, "frozen-handoff:" + handoff.ResourceId + ";" + handoff.Provenance);
     }
 
     private static CompiledPoint? PointFor(ArchitectureV7LogicalRoute route, int index, CompilationIndexes indexes,
@@ -282,6 +287,8 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     }
 
     private static string LaneFor(ArchitectureV7StraightRun run, CompilationIndexes indexes) => indexes.AssignmentsByRunId[run.RunId].LaneId;
+    private static string TerminalResourceId(ArchitectureV7PhysicalTerminal terminal) =>
+        $"terminal:{terminal.PhysicalLinkId}:{terminal.EndpointKind}:{terminal.SlotOrdinal}";
     private static int LaneCount(IEnumerable<ArchitectureV7StraightRun> runs, CompilationIndexes indexes) => runs.Select(x => indexes.AssignmentsByRunId[x.RunId].LaneOrdinal).DefaultIfEmpty(-1).Max() + 1;
     private static IReadOnlyList<double> LaneCoordinates(double start, double extent, int count, double spacing)
     {

@@ -42,7 +42,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         Assert.Equal(-1, source[0].RelativeOffset);
         Assert.Equal(1, source[1].RelativeOffset);
         Assert.Equal(4, result.Approaches.Count);
-        Assert.Equal(2, result.Handoffs.Count);
+        Assert.Empty(result.Handoffs);
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
             Assert.NotNull(handoff.LogicalCell);
             Assert.Equal(2, handoff.AuthoritativeCells.Count);
             Assert.Equal(Math.Abs(handoff.RelativePhysicalOffset), handoff.RequiredClearance);
-            Assert.NotEqual(handoff.TerminalAxisOffset, handoff.LaneAxisOffset);
+            Assert.Contains("explicit-orthogonal-handoff", handoff.Provenance, StringComparison.Ordinal);
             Assert.True(handoff.StartRouteIndex >= 0);
             Assert.True(handoff.EndRouteIndex > handoff.StartRouteIndex);
         });
@@ -108,6 +108,55 @@ public sealed class ArchitectureV7CollectiveAllocationTests
 
         Assert.Equal(result.AllocationFingerprint, reversed.AllocationFingerprint);
         Assert.Equal(result.Handoffs.Select(x => x.ResourceId), reversed.Handoffs.Select(x => x.ResourceId));
+    }
+
+    [Fact]
+    public void Terminal_order_follows_adjacent_run_coordinate_before_relationship_id()
+    {
+        var routes = new[]
+        {
+            Route("a", "s1", "t", (1, 5), (2, 5), (3, 5)),
+            Route("b", "s2", "t", (1, 3), (2, 3), (3, 3))
+        };
+        var target = new ArchitectureV7FrozenNodePlacement("t", "t", "p", 3, 4, 9, 4,
+            new[] { (3, 3), (3, 4), (3, 5) }, false, false, false, "tree", "t", "t", "test");
+        var result = Allocate(routes, Nodes("s1", "s2").Append(target).ToArray(), spacing: 100);
+        var terminals = result.Terminals.Where(x => x.PhysicalNodeId == "t").OrderBy(x => x.SlotOrdinal).ToArray();
+
+        Assert.Equal(new[] { "b", "a" }, terminals.Select(x => x.PhysicalLinkId));
+        Assert.Equal(new[] { -100d, 100d }, terminals.Select(x => x.RelativeOffset));
+        Assert.DoesNotContain(result.Handoffs, x => x.PhysicalNodeId == "t");
+    }
+
+    [Fact]
+    public void Capacity_constrained_terminal_alignment_retains_spacing_and_emits_handoff()
+    {
+        var routes = new[]
+        {
+            Route("a", "s1", "t", (1, 5), (2, 5), (3, 5)),
+            Route("b", "s2", "t", (1, 3), (2, 3), (3, 3))
+        };
+        var target = new ArchitectureV7FrozenNodePlacement("t", "t", "p", 3, 4, 1, 4,
+            new[] { (3, 4) }, false, false, false, "tree", "t", "t", "test");
+        var result = Allocate(routes, Nodes("s1", "s2").Append(target).ToArray(), spacing: 100, span: 1, baseCellWidth: 100);
+        var terminals = result.Terminals.Where(x => x.PhysicalNodeId == "t").OrderBy(x => x.SlotOrdinal).ToArray();
+
+        Assert.Equal(new[] { -50d, 50d }, terminals.Select(x => x.RelativeOffset));
+        Assert.Contains(result.Handoffs, x => x.PhysicalNodeId == "t");
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "TERMINAL-OVERFLOW");
+    }
+
+    [Fact]
+    public void Logical_run_lane_assignments_are_unchanged_by_endpoint_alignment()
+    {
+        var routes = new[] { Route("a", "s", "t", (1, 3), (2, 3), (3, 3)) };
+        var result = Allocate(routes, Nodes("s", "t"));
+
+        var run = Assert.Single(result.Runs);
+        var assignment = Assert.Single(result.RunAssignments);
+        Assert.Equal(run.RunId, assignment.RunId);
+        Assert.StartsWith("lane:", assignment.LaneId, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Diagnostics, x => x.Code == "RUN-LANE-SUBSTITUTED");
     }
 
     [Fact]
