@@ -56,7 +56,9 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var softCohorts = Measure("soft-cohort-analysis", () => new ArchitectureV7SoftCohortAnalyzer().Analyze(ownership, pre));
         var sizing = Measure("sizing", () => new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, pre));
         var reservation = Measure("reservation", () => new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, pre)));
-        var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, reservation.Table));
+        var layerSchedule = Measure("soft-layer-scheduling", () => new ArchitectureV7SoftLayerSchedulingStage().Schedule(ownership, reservation, softCohorts));
+        var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, layerSchedule.Reservations);
+        var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, layerSchedule));
         var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees, pre));
         var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
         var allocation = Measure("collective-allocation", () => new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
@@ -68,7 +70,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
         var scene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
             sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal)));
-        var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, reservation, placement, routes, allocation, scene, sceneConfiguration));
+        var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, scheduledReservation, placement, routes, allocation, scene, sceneConfiguration));
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
         var routingEvidence = evidenceStage.Analyze(placement, routes);
         var placementEvidence = evidenceStage.Placement(placement).Select(item => new
@@ -200,7 +202,16 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
                 softCohorts = new { CohortCount = softCohorts.Cohorts.Count, MinimumSize = softCohorts.MinimumSize, Fingerprint = softCohorts.Fingerprint },
                 sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
-                reservation = new { ReservationCount = reservation.Table.Reservations.Count, Fingerprint = reservation.Table.Fingerprint },
+                reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint, PreSoftFingerprint = layerSchedule.PreSoftFingerprint },
+                softLayerSchedule = new
+                {
+                    Fingerprint = layerSchedule.Fingerprint,
+                    Entries = layerSchedule.Entries,
+                    Preferences = layerSchedule.SoftPreferences,
+                    Diagnostics = layerSchedule.Diagnostics,
+                    InsertedNodeLayers = layerSchedule.Entries.Where(item => !item.IsHardReservation).Select(item => item.NodeLayer).ToArray(),
+                    ShiftedHardReservations = scheduledReservation.Table.Reservations.Select(item => new { item.Name, item.NodeRow }).ToArray()
+                },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
                 routing = new
                 {

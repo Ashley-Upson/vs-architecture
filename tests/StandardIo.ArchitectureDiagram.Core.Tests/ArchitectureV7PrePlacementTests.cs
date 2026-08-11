@@ -261,6 +261,123 @@ public sealed class ArchitectureV7PrePlacementTests
     }
 
     [Fact]
+    public void Soft_cohort_is_scheduled_immediately_above_external_and_external_remains_final()
+    {
+        var nodes = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker"))
+            .Concat(new[] { Node("external", "ExternalApi") }).ToArray();
+        var links = Enumerable.Range(0, 5).Select(index => Link("link" + index, "worker" + index, "external")).ToArray();
+        var schedule = Schedule(Diagram(nodes, links), Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        var preference = Assert.Single(schedule.SoftPreferences);
+        Assert.Equal("External", preference.PreferredAnchor);
+        Assert.True(schedule.Entries.Single(entry => entry.IsExternal).NodeLayer > schedule.PreferredLayerByPhysicalNodeId[preference.MemberPhysicalNodeIds[0]]);
+    }
+
+    [Fact]
+    public void Soft_layer_insertion_shifts_hard_reservations_without_changing_order()
+    {
+        var nodes = new[] { Node("processing", "MainProcessing") }
+            .Concat(Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker")))
+            .Concat(new[] { Node("external", "ExternalApi") }).ToArray();
+        var links = Enumerable.Range(0, 5).Select(index => Link("soft" + index, "processing", "worker" + index))
+            .Concat(new[] { Link("external-link", "worker0", "external") }).ToArray();
+        var schedule = Schedule(Diagram(nodes, links), new[] { new ArchitectureV7ReservedRoleRule("Processing", "*Processing", 0) });
+
+        var hard = schedule.Entries.Where(entry => entry.IsHardReservation).OrderBy(entry => entry.NodeLayer).ToArray();
+        Assert.Equal(new[] { "Processing", "External" }, hard.Select(entry => entry.Name));
+        Assert.True(hard[1].NodeLayer > hard[0].NodeLayer);
+        Assert.Contains(schedule.Entries, entry => !entry.IsHardReservation && entry.TokenSuffix == "Worker");
+    }
+
+    [Fact]
+    public void Soft_row_can_reuse_an_existing_ordinary_layer_without_becoming_exclusive()
+    {
+        var cohort = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker")).ToArray();
+        var ordinary = Node("ordinary", "Unrelated");
+        var nodes = cohort.Concat(new[] { ordinary }).ToArray();
+        var links = cohort.Select((node, index) => Link("link" + index, "ordinary", node.Id)).ToArray();
+        var schedule = Schedule(DiagramWithoutExternal(nodes, links), Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        var preference = Assert.Single(schedule.SoftPreferences);
+        Assert.DoesNotContain(schedule.Entries, entry => entry.TokenSuffix == preference.TokenSuffix);
+        Assert.Contains(schedule.Entries, entry => entry.NodeLayer == preference.PreferredNodeLayer && entry.Name.StartsWith("ordinary:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Soft_to_soft_anchor_cycles_are_diagnosed_deterministically()
+    {
+        var left = Enumerable.Range(0, 5).Select(index => Node("left" + index, "Alpha" + index + "LeftType")).ToArray();
+        var right = Enumerable.Range(0, 5).Select(index => Node("right" + index, "Beta" + index + "RightType")).ToArray();
+        var nodes = left.Concat(right).ToArray();
+        var links = left.Select((node, index) => Link("left-link" + index, node.Id, right[0].Id))
+            .Concat(right.Select((node, index) => Link("right-link" + index, node.Id, left[0].Id))).ToArray();
+        var schedule = Schedule(DiagramWithoutExternal(nodes, links), Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        Assert.Equal(2, schedule.SoftPreferences.Count);
+        Assert.Contains(schedule.Diagnostics, diagnostic => diagnostic.StartsWith("v7-soft-layer-cycle:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Modal_dependency_anchor_tie_selects_the_deeper_layer()
+    {
+        var workers = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker")).ToArray();
+        var nodes = workers.Concat(new[] { Node("root", "Root"), Node("child", "Child") }).ToArray();
+        var links = new[] { Link("first", "root", "child"), Link("worker-root", "worker0", "root"), Link("worker-child", "worker1", "child") }
+            .Concat(workers.Skip(2).Select((node, index) => Link("worker-extra" + index, node.Id, "root"))).ToArray();
+        var schedule = Schedule(DiagramWithoutExternal(nodes, links), Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        var preference = Assert.Single(schedule.SoftPreferences);
+        Assert.Equal("ordinary:1", preference.PreferredAnchor);
+    }
+
+    [Fact]
+    public void Soft_members_with_deeper_natural_depths_report_exceptions_but_legal_members_align()
+    {
+        var workers = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker")).ToArray();
+        var nodes = workers.Concat(new[] { Node("root", "Root") }).ToArray();
+        var links = new[] { Link("one", "root", "worker0"), Link("two", "worker0", "worker1"), Link("three", "worker1", "worker2") }
+            .Concat(new[] { Link("four", "worker3", "root"), Link("five", "worker4", "root") }).ToArray();
+        var schedule = Schedule(DiagramWithoutExternal(nodes, links), Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        var preference = Assert.Single(schedule.SoftPreferences);
+        Assert.NotEmpty(preference.AlignmentExceptions);
+        Assert.Contains("physical:worker3", schedule.PreferredLayerByPhysicalNodeId.Keys);
+        Assert.Contains("physical:worker4", schedule.PreferredLayerByPhysicalNodeId.Keys);
+    }
+
+    [Fact]
+    public void Soft_schedule_is_deterministic_under_shuffled_input_and_standalone_nodes_remain_excluded()
+    {
+        var workers = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker")).ToArray();
+        var nodes = workers.Concat(new[] { Node("root", "Root"), Node("standalone", "SoloWorker") }).ToArray();
+        var links = workers.Select((node, index) => Link("link" + index, node.Id, "root")).ToArray();
+        var left = Schedule(DiagramWithoutExternal(nodes, links), Array.Empty<ArchitectureV7ReservedRoleRule>());
+        var right = Schedule(DiagramWithoutExternal(nodes.AsEnumerable().Reverse().ToArray(), links.AsEnumerable().Reverse().ToArray()), Array.Empty<ArchitectureV7ReservedRoleRule>());
+
+        Assert.Equal(left.Entries.Select(item => (item.Name, item.NodeLayer, item.IsHardReservation)), right.Entries.Select(item => (item.Name, item.NodeLayer, item.IsHardReservation)));
+        Assert.Equal(left.SoftPreferences.Select(item => item.TokenSuffix), right.SoftPreferences.Select(item => item.TokenSuffix));
+        Assert.DoesNotContain(left.SoftPreferences.SelectMany(item => item.MemberPhysicalNodeIds), id => id == "physical:standalone");
+    }
+
+    [Fact]
+    public void Tree_construction_consumes_the_frozen_soft_schedule_without_mutating_it()
+    {
+        var workers = Enumerable.Range(0, 5).Select(index => Node("worker" + index, "Alpha" + index + "Worker")).ToArray();
+        var diagram = DiagramWithoutExternal(workers, Array.Empty<ArchitectureLink>());
+        var ownership = Ownership(diagram);
+        var configuration = Config(patterns: Array.Empty<ArchitectureV7ReservedRoleRule>());
+        var reservation = new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, configuration));
+        var soft = new ArchitectureV7SoftLayerSchedulingStage().Schedule(ownership, reservation, new ArchitectureV7SoftCohortAnalyzer().Analyze(ownership, configuration));
+        var sizing = Size(diagram, configuration);
+        var before = soft.Fingerprint;
+        var trees = new ArchitectureV7RecursiveTreeGridStage().Build(sizing, soft);
+
+        Assert.Equal(before, soft.Fingerprint);
+        Assert.Equal(5, trees.Trees.Count);
+        Assert.All(trees.Trees.SelectMany(tree => tree.Placements), placement => Assert.True(placement.LocalRow >= 0));
+    }
+
+    [Fact]
     public void Preplacement_products_do_not_expose_coordinates_or_tree_composition()
     {
         var sizingNames = typeof(ArchitectureV7NodeSpanSizingResult).GetProperties().Select(property => property.Name).Concat(typeof(ArchitectureV7NodeSpanRequirement).GetProperties().Select(property => property.Name));
@@ -274,6 +391,15 @@ public sealed class ArchitectureV7PrePlacementTests
 
     private static ArchitectureV7FrozenReservationTable Reconcile(ArchitectureDiagramModel diagram, IReadOnlyList<ArchitectureV7ReservedRoleRule> patterns) =>
         new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(Ownership(diagram), Config(patterns: patterns))).Table;
+
+    private static ArchitectureV7FrozenLayerSchedule Schedule(ArchitectureDiagramModel diagram, IReadOnlyList<ArchitectureV7ReservedRoleRule> patterns)
+    {
+        var ownership = Ownership(diagram);
+        var configuration = Config(patterns: patterns);
+        var reservation = new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, configuration));
+        var soft = new ArchitectureV7SoftCohortAnalyzer().Analyze(ownership, configuration);
+        return new ArchitectureV7SoftLayerSchedulingStage().Schedule(ownership, reservation, soft);
+    }
 
     private static ArchitectureV7PositionalOwnershipResult Ownership(ArchitectureDiagramModel diagram)
     {

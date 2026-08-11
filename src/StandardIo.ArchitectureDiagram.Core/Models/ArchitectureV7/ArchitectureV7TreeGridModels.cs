@@ -121,7 +121,8 @@ public sealed class ArchitectureV7RecursiveTreeGridResult
         string freezeFingerprint,
         int parallelWorkerCount = 0,
         long parallelConstructionElapsedMilliseconds = 0,
-        long deterministicJoinElapsedMilliseconds = 0)
+        long deterministicJoinElapsedMilliseconds = 0,
+        ArchitectureV7FrozenLayerSchedule? layerSchedule = null)
     {
         Sizing = sizing ?? throw new ArgumentNullException(nameof(sizing));
         Reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
@@ -130,6 +131,7 @@ public sealed class ArchitectureV7RecursiveTreeGridResult
         ParallelWorkerCount = parallelWorkerCount;
         ParallelConstructionElapsedMilliseconds = parallelConstructionElapsedMilliseconds;
         DeterministicJoinElapsedMilliseconds = deterministicJoinElapsedMilliseconds;
+        LayerSchedule = layerSchedule;
     }
 
     public ArchitectureV7NodeSpanSizingResult Sizing { get; }
@@ -139,4 +141,5 @@ public sealed class ArchitectureV7RecursiveTreeGridResult
     public int ParallelWorkerCount { get; }
     public long ParallelConstructionElapsedMilliseconds { get; }
     public long DeterministicJoinElapsedMilliseconds { get; }
+    public ArchitectureV7FrozenLayerSchedule? LayerSchedule { get; }
 }

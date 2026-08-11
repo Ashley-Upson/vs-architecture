@@ -13,6 +13,20 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
     public ArchitectureV7RecursiveTreeGridResult Build(
         ArchitectureV7NodeSpanSizingResult sizing,
         ArchitectureV7FrozenReservationTable reservations)
+        => BuildCore(sizing, reservations, null);
+
+    public ArchitectureV7RecursiveTreeGridResult Build(
+        ArchitectureV7NodeSpanSizingResult sizing,
+        ArchitectureV7FrozenLayerSchedule schedule)
+    {
+        if (schedule is null) throw new ArgumentNullException(nameof(schedule));
+        return BuildCore(sizing, schedule.Reservations, schedule);
+    }
+
+    private ArchitectureV7RecursiveTreeGridResult BuildCore(
+        ArchitectureV7NodeSpanSizingResult sizing,
+        ArchitectureV7FrozenReservationTable reservations,
+        ArchitectureV7FrozenLayerSchedule? schedule)
     {
         if (sizing is null) throw new ArgumentNullException(nameof(sizing));
         if (reservations is null) throw new ArgumentNullException(nameof(reservations));
@@ -69,7 +83,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         using var sha = SHA256.Create();
         var fingerprint = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(fingerprintText))).Replace("-", string.Empty);
         return new ArchitectureV7RecursiveTreeGridResult(sizing, reservations, trees, fingerprint,
-            roots.Length, parallelStopwatch.ElapsedMilliseconds, joinStopwatch.ElapsedMilliseconds);
+            roots.Length, parallelStopwatch.ElapsedMilliseconds, joinStopwatch.ElapsedMilliseconds, schedule);
 
         ArchitectureV7TopLevelTreeGrid BuildTree(ArchitectureV7PositionalOwnershipDecision root)
         {
@@ -109,22 +123,36 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             return null;
         }
 
+        int? SoftLayer(string physicalNodeId) => schedule?.PreferredLayerByPhysicalNodeId.TryGetValue(physicalNodeId, out var layer) == true ? layer : null;
+
+        (int Natural, int? Reserved, int? Soft, int Target) Layers(ArchitectureV7PhysicalNode node)
+        {
+            var natural = NaturalLayer(node.PhysicalNodeId);
+            var reserved = ReservedLayer(node);
+            var soft = SoftLayer(node.PhysicalNodeId);
+            return (natural, reserved, soft, Math.Max(natural, Math.Max(reserved ?? 0, soft ?? 0)));
+        }
+
         BuiltNode BuildNode(string physicalNodeId, int? parentLayer, bool detached)
         {
             var node = nodes[physicalNodeId];
             var span = spans[physicalNodeId];
-            var naturalLayer = NaturalLayer(physicalNodeId);
-            var reservedLayer = ReservedLayer(node);
-            var targetLayer = Math.Max(naturalLayer, reservedLayer ?? 0);
-            if (parentLayer.HasValue && targetLayer <= parentLayer.Value)
+            var layerInfo = Layers(node);
+            var naturalLayer = layerInfo.Natural;
+            var reservedLayer = layerInfo.Reserved;
+            var softLayer = layerInfo.Soft;
+            var targetLayer = layerInfo.Target;
+            if (parentLayer.HasValue && reservedLayer.HasValue && targetLayer <= parentLayer.Value)
                 return BuildDetachedUnit(physicalNodeId, targetLayer, detached);
 
             var layer = parentLayer.HasValue ? Math.Max(targetLayer, parentLayer.Value + 1) : targetLayer;
             var childUnits = new List<BuiltNode>();
             foreach (var childId in children.TryGetValue(physicalNodeId, out var childIds) ? childIds : Array.Empty<string>())
             {
-                var childTarget = Math.Max(NaturalLayer(childId), ReservedLayer(nodes[childId]) ?? 0);
-                childUnits.Add(childTarget <= layer ? BuildDetachedUnit(childId, childTarget, true) : BuildNode(childId, layer, false));
+                var childLayers = Layers(nodes[childId]);
+                childUnits.Add(childLayers.Reserved.HasValue && childLayers.Target <= layer
+                    ? BuildDetachedUnit(childId, childLayers.Target, true)
+                    : BuildNode(childId, layer, false));
             }
             var directChildren = childUnits.Where(unit => !unit.IsDetached).ToArray();
             var detachedChildren = childUnits.SelectMany(unit => unit.IsDetached
@@ -156,7 +184,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             var width = Math.Max(Math.Max(span.LogicalSpan, childWidth), parentCentre + (span.LogicalSpan - 1) / 2 + 1);
             var placement = new ArchitectureV7TreeGridNodePlacement(physicalNodeId, node.SemanticNodeId, checked(layer * 2),
                 checked(parentCentre - (span.LogicalSpan - 1) / 2), span.LogicalSpan, parentCentre, layer, detached,
-                "v7-recursive;natural-layer=" + naturalLayer + ";reserved-layer=" + (reservedLayer?.ToString() ?? "none"));
+                "v7-recursive;natural-layer=" + naturalLayer + ";reserved-layer=" + (reservedLayer?.ToString() ?? "none") + ";soft-layer=" + (softLayer?.ToString() ?? "none"));
             var placements = new List<ArchitectureV7TreeGridNodePlacement> { placement };
             placements.AddRange(positionedChildren.SelectMany(unit => unit.Placements));
             var main = new ArchitectureV7TreeGridPlacementUnit("unit:" + physicalNodeId, physicalNodeId, placements, width,

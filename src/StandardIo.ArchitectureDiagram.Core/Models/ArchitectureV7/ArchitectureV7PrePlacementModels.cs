@@ -179,3 +179,49 @@ public sealed class ArchitectureV7ReservationReconciliationResult
     public ArchitectureV7ReservationInspectionResult Inspection { get; }
     public ArchitectureV7FrozenReservationTable Table { get; }
 }
+
+public sealed record ArchitectureV7SoftLayerPreference(
+    string TokenSuffix,
+    IReadOnlyList<string> MemberPhysicalNodeIds,
+    string PreferredAnchor,
+    int PreferredNodeLayer,
+    int? AnchorNodeLayer,
+    IReadOnlyDictionary<string, int> AnchorCounts,
+    IReadOnlyList<string> AlignmentExceptions,
+    string Provenance);
+
+public sealed record ArchitectureV7LayerScheduleEntry(
+    string Name,
+    int NodeLayer,
+    bool IsHardReservation,
+    bool IsExternal,
+    string? TokenSuffix);
+
+public sealed class ArchitectureV7FrozenLayerSchedule
+{
+    public ArchitectureV7FrozenLayerSchedule(
+        ArchitectureV7FrozenReservationTable reservations,
+        IReadOnlyList<ArchitectureV7LayerScheduleEntry> entries,
+        IReadOnlyList<ArchitectureV7SoftLayerPreference> softPreferences,
+        IReadOnlyDictionary<string, int> preferredLayerByPhysicalNodeId,
+        IReadOnlyList<string> diagnostics,
+        string preSoftFingerprint,
+        string fingerprint)
+    {
+        Reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
+        Entries = Array.AsReadOnly((entries ?? Array.Empty<ArchitectureV7LayerScheduleEntry>()).OrderBy(item => item.NodeLayer).ThenBy(item => item.Name, StringComparer.Ordinal).ToArray());
+        SoftPreferences = Array.AsReadOnly((softPreferences ?? Array.Empty<ArchitectureV7SoftLayerPreference>()).OrderBy(item => item.TokenSuffix, StringComparer.OrdinalIgnoreCase).ThenBy(item => item.TokenSuffix, StringComparer.Ordinal).ToArray());
+        PreferredLayerByPhysicalNodeId = (preferredLayerByPhysicalNodeId ?? new Dictionary<string, int>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<string>()).OrderBy(item => item, StringComparer.Ordinal).ToArray());
+        PreSoftFingerprint = preSoftFingerprint ?? throw new ArgumentNullException(nameof(preSoftFingerprint));
+        Fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
+    }
+
+    public ArchitectureV7FrozenReservationTable Reservations { get; }
+    public IReadOnlyList<ArchitectureV7LayerScheduleEntry> Entries { get; }
+    public IReadOnlyList<ArchitectureV7SoftLayerPreference> SoftPreferences { get; }
+    public IReadOnlyDictionary<string, int> PreferredLayerByPhysicalNodeId { get; }
+    public IReadOnlyList<string> Diagnostics { get; }
+    public string PreSoftFingerprint { get; }
+    public string Fingerprint { get; }
+}
