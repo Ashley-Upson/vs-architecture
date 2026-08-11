@@ -53,12 +53,10 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.NodeDuplication.AllowDuplicateNodes ? ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches : ArchitectureV7ProjectionMode.Canonical,
             (job.Rendering.NodeDuplication.DuplicationExceptionPatterns ?? new List<string>()).Concat(job.Rendering.Layout.DuplicateHighNoiseNodePatterns ?? new List<string>()).Distinct(StringComparer.Ordinal).ToArray())));
         var ownership = Measure("ownership", () => new ArchitectureV7PositionalOwnershipStage().Resolve(projection));
-        var softCohorts = Measure("soft-cohort-analysis", () => new ArchitectureV7SoftCohortAnalyzer().Analyze(ownership, pre));
         var sizing = Measure("sizing", () => new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, pre));
         var reservation = Measure("reservation", () => new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, pre)));
-        var layerSchedule = Measure("soft-layer-scheduling", () => new ArchitectureV7SoftLayerSchedulingStage().Schedule(ownership, reservation, softCohorts));
-        var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, layerSchedule.Reservations);
-        var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, layerSchedule));
+        var ordinarySchedule = Measure("ordinary-layer-scheduling", () => new ArchitectureV7OrdinaryLayerSchedulingStage().Schedule(ownership, reservation));
+        var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, ordinarySchedule));
         var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees, pre));
         var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
         var allocation = Measure("collective-allocation", () => new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
@@ -70,6 +68,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
         var scene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
             sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal)));
+        var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, ordinarySchedule.Reservations);
         var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, scheduledReservation, placement, routes, allocation, scene, sceneConfiguration));
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
         var routingEvidence = evidenceStage.Analyze(placement, routes);
@@ -156,7 +155,17 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             EmittedContainerCount = page.GraphModel.Descendants("mxCell").Count(x => (string?)x.Attribute("vertex") == "1" && ((string?)x.Attribute("id"))?.StartsWith("v7_project_", StringComparison.Ordinal) == true),
             EmittedVertexCellCount = page.GraphModel.Descendants("mxCell").Count(x => (string?)x.Attribute("vertex") == "1"),
             RouteCount = scene.Routes.Count,
-            EmittedRouteCount = page.GraphModel.Descendants("mxCell").Count(x => (string?)x.Attribute("edge") == "1")
+            EmittedRouteCount = page.GraphModel.Descendants("mxCell").Count(x => (string?)x.Attribute("edge") == "1"),
+            PhysicalPointCount = scene.Routes.Sum(route => route.Points.Count),
+            PhysicalSegmentCount = scene.Routes.Sum(route => route.Segments.Count),
+            PhysicalDiagonalSegmentCount = scene.Routes.SelectMany(route => route.Points.Zip(route.Points.Skip(1), (a, b) => (a, b)))
+                .Count(pair => pair.a.X != pair.b.X && pair.a.Y != pair.b.Y),
+            RendererWaypointCount = RendererWaypointRuns(page).Sum(run => run.Count),
+            RendererWaypointDiagonalCount = RendererWaypointRuns(page).Sum(run => run.Zip(run.Skip(1), (a, b) => (a, b))
+                .Count(pair => pair.a.X != pair.b.X && pair.a.Y != pair.b.Y)),
+            ConfiguredBackground = job.Rendering.Canvas.BackgroundColor,
+            EmittedBackground = (string?)page.GraphModel.Attribute("background"),
+            EmittedPage = (string?)page.GraphModel.Attribute("page")
         };
         var acceptanceSummary = new
         {
@@ -200,20 +209,9 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             {
                 projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
-                softCohorts = new { CohortCount = softCohorts.Cohorts.Count, MinimumSize = softCohorts.MinimumSize, Fingerprint = softCohorts.Fingerprint },
                 sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
-                reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint, PreSoftFingerprint = layerSchedule.PreSoftFingerprint },
-                softLayerSchedule = new
-                {
-                    Fingerprint = layerSchedule.Fingerprint,
-                    Entries = layerSchedule.Entries,
-                    Preferences = layerSchedule.SoftPreferences,
-                    Diagnostics = layerSchedule.Diagnostics,
-                    PreSoftReservations = layerSchedule.PreSoftReservations.Select(item => new { item.Name, item.NodeRow }).ToArray(),
-                    InsertedNodeLayers = layerSchedule.Entries.Where(item => !item.IsHardReservation && item.TokenSuffix is not null).Select(item => item.NodeLayer).ToArray(),
-                    ReusedOrdinaryLayers = layerSchedule.Entries.Where(item => !item.IsHardReservation && item.Name.StartsWith("ordinary:", StringComparison.Ordinal)).Select(item => item.NodeLayer).ToArray(),
-                    ShiftedHardReservations = scheduledReservation.Table.Reservations.Select(item => new { item.Name, item.NodeRow }).ToArray()
-                },
+                reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint },
+                ordinaryLayerSchedule = new { Fingerprint = ordinarySchedule.Fingerprint, Diagnostics = ordinarySchedule.Diagnostics, AssignedNodeCount = ordinarySchedule.LayerByPhysicalNodeId.Count },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
                 routing = new
                 {
@@ -278,9 +276,14 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
     }
 
     private static bool Equal(double expected, XAttribute? actual) => actual is not null && double.TryParse(actual.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && Math.Abs(expected - value) < 0.0001;
+    private static IEnumerable<IReadOnlyList<(double X, double Y)>> RendererWaypointRuns(DrawioPage page) => page.GraphModel.Descendants("mxCell")
+        .Where(cell => (string?)cell.Attribute("edge") == "1")
+        .Select(cell => (IReadOnlyList<(double X, double Y)>)cell.Descendants("Array").Where(array => (string?)array.Attribute("as") == "points").Elements("mxPoint")
+            .Select(point => (double.Parse((string)point.Attribute("x")!, CultureInfo.InvariantCulture), double.Parse((string)point.Attribute("y")!, CultureInfo.InvariantCulture)))
+            .ToArray());
 
     private static ArchitectureV7PrePlacementConfiguration Configuration(LayoutSettings layout) => new(layout.BaseCellWidth, layout.NodeWidth, layout.LabelCharacterWidth, layout.LinkNodeWidthPadding,
-        Math.Max(1, layout.EdgePortSpacing), Math.Max(0, layout.LinkNodeWidthPadding), (layout.ReservedLayerTypePatterns ?? new List<string>()).Select((pattern, index) => new ArchitectureV7ReservedRoleRule(pattern, pattern, index)).ToArray(), layout.SoftCohortMinimumSize);
+        Math.Max(1, layout.EdgePortSpacing), Math.Max(0, layout.LinkNodeWidthPadding), (layout.ReservedLayerTypePatterns ?? new List<string>()).Select((pattern, index) => new ArchitectureV7ReservedRoleRule(pattern, pattern, index)).ToArray());
     private static DrawioPage RejectedPage() => new("Architecture (rejected)", "architecture-rejected", new XElement("mxGraphModel", new XElement("root", new XElement("mxCell", new XAttribute("id", "0")), new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")))), new[] { new DiagramDiagnostic("V7StrictRejected", "V7 acceptance failed; Draw.io renderer was not invoked.") });
 }
 
@@ -308,11 +311,17 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
         {
             var route = scene.Routes.FirstOrDefault(x => x.PhysicalLinkId == link.PhysicalLinkId); if (route is null || !nodes.ContainsKey(link.SourcePhysicalNodeId) || !nodes.ContainsKey(link.DestinationPhysicalNodeId)) continue;
             var points = route.Points.Skip(1).Take(Math.Max(0, route.Points.Count - 2)).Select(point => new XElement("mxPoint", new XAttribute("x", point.X.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", point.Y.ToString(CultureInfo.InvariantCulture))));
-            root.Add(new XElement("mxCell", new XAttribute("id", Id("edge", link.PhysicalLinkId)), new XAttribute("parent", "1"), new XAttribute("edge", "1"), new XAttribute("source", nodes[link.SourcePhysicalNodeId]), new XAttribute("target", nodes[link.DestinationPhysicalNodeId]), new XAttribute("physicalLinkId", link.PhysicalLinkId), new XAttribute("semanticLinkId", link.SemanticLinkId), new XAttribute("style", ConnectorStyle(settings.Connector)), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), points))));
+            var sourceTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+            var targetTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+            var sourceNode = scene.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.SourcePhysicalNodeId);
+            var targetNode = scene.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
+            root.Add(new XElement("mxCell", new XAttribute("id", Id("edge", link.PhysicalLinkId)), new XAttribute("parent", "1"), new XAttribute("edge", "1"), new XAttribute("source", nodes[link.SourcePhysicalNodeId]), new XAttribute("target", nodes[link.DestinationPhysicalNodeId]), new XAttribute("physicalLinkId", link.PhysicalLinkId), new XAttribute("semanticLinkId", link.SemanticLinkId), new XAttribute("style", ConnectorStyle(settings.Connector, sourceTerminal?.Position, sourceNode?.Bounds, targetTerminal?.Position, targetNode?.Bounds)), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), points))));
         }
-        var graph = new XElement("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "0"), new XAttribute("background", settings.Canvas.BackgroundColor), root);
+        var graph = GraphModel(root, settings.Canvas.BackgroundColor);
         return new DrawioPage("Architecture", "architecture", graph, Array.Empty<DiagramDiagnostic>());
     }
+    internal static XElement GraphModelForTest(string background) => GraphModel(new XElement("root"), background);
+    private static XElement GraphModel(XElement root, string background) => new("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "1"), new XAttribute("background", background), root);
     private static XElement Vertex(string id, string value, string style, string parent, double x, double y, double width, double height) => new("mxCell", new XAttribute("id", id), new XAttribute("value", value), new XAttribute("style", style), new XAttribute("vertex", "1"), new XAttribute("parent", parent), new XElement("mxGeometry", new XAttribute("x", x.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", y.ToString(CultureInfo.InvariantCulture)), new XAttribute("width", width.ToString(CultureInfo.InvariantCulture)), new XAttribute("height", height.ToString(CultureInfo.InvariantCulture)), new XAttribute("as", "geometry")));
     internal static object StyleEvidence(ArchitectureV7PhysicalNode node, ArchitectureRenderSettings settings) => new
     {
@@ -329,10 +338,19 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
     {
         $"shape={style.Shape}", "html=1", "whiteSpace=wrap", $"fillColor={style.FillColor}", $"strokeColor={style.StrokeColor}", $"fontColor={style.FontColor}", $"shadow={(style.Shadow ? 1 : 0)}", style.ExtraStyle
     }.Where(value => !string.IsNullOrWhiteSpace(value))) + ";";
-    private static string ConnectorStyle(ConnectorStyle style) => string.Join(";", new[]
+    private static string ConnectorStyle(ConnectorStyle style, ArchitectureV7PhysicalPoint? source, ArchitectureV7PhysicalBounds? sourceBounds,
+        ArchitectureV7PhysicalPoint? target, ArchitectureV7PhysicalBounds? targetBounds) => string.Join(";", new[]
     {
         "edgeStyle=none", "orthogonal=0", "curved=0", $"rounded={(style.Rounded ? 1 : 0)}", $"strokeColor={style.StrokeColor}", $"strokeWidth={style.StrokeWidth}", $"opacity={style.Opacity}", $"startArrow={style.StartArrow}", $"endArrow={style.EndArrow}", $"startFill={(style.StartFill ? 1 : 0)}", $"endFill={(style.EndFill ? 1 : 0)}", $"fontColor={style.FontColor}", "labelPosition=none", style.ExtraStyle
+        , ConnectionPoint("exit", source, sourceBounds), ConnectionPoint("entry", target, targetBounds)
     }.Where(value => !string.IsNullOrWhiteSpace(value))) + ";";
+    private static string? ConnectionPoint(string prefix, ArchitectureV7PhysicalPoint? point, ArchitectureV7PhysicalBounds? bounds)
+    {
+        if (point is null || bounds is null || bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return null;
+        var x = Math.Min(1d, Math.Max(0d, (point.X - bounds.Left) / (bounds.Right - bounds.Left)));
+        var y = Math.Min(1d, Math.Max(0d, (point.Y - bounds.Top) / (bounds.Bottom - bounds.Top)));
+        return prefix + "X=" + x.ToString("0.######", CultureInfo.InvariantCulture) + ";" + prefix + "Y=" + y.ToString("0.######", CultureInfo.InvariantCulture);
+    }
     internal static string IdFor(string kind, string value) { using var sha = SHA256.Create(); return "v7_" + kind + "_" + string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(value)).Take(8).Select(x => x.ToString("x2", CultureInfo.InvariantCulture))); }
     private static string Id(string kind, string value) => IdFor(kind, value);
 }

@@ -40,6 +40,12 @@ public static class ArchitectureV7PlacementAccounting
 
         var externalIds = new HashSet<string>(external.Placements.Select(node => node.PhysicalNodeId), StringComparer.Ordinal);
         var standaloneIds = new HashSet<string>(standalone.Placements.Select(node => node.PhysicalNodeId), StringComparer.Ordinal);
+        foreach (var node in external.Placements.Where(node => node.DiagramRow != external.NodeRow))
+            errors.Add("External node is not on the frozen External row: " + Describe(node));
+        foreach (var node in placements.Where(node => node.DiagramRow == external.NodeRow && !node.IsExternal))
+            errors.Add("non-External node occupies the frozen External row: " + Describe(node));
+        if (external.Placements.Any(node => node.DiagramRow == external.NodeRow) == false && external.Placements.Count > 0)
+            errors.Add("External region has no placement on its frozen External row.");
         foreach (var node in placements)
         {
             var memberships = (node.IsExternal ? 1 : 0) + (node.IsStandalone ? 1 : 0) +

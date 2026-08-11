@@ -50,7 +50,6 @@ public sealed class LayoutSettings
     public int DataModelComponentRowWidth { get; set; } = 4200;
     public string BaselineAlignmentPattern { get; set; } = DefaultBaselineAlignmentPattern;
     public List<string> ReservedLayerTypePatterns { get; set; } = CreateDefaultReservedLayerTypePatterns();
-    public int SoftCohortMinimumSize { get; set; } = 5;
     public List<string> DuplicateHighNoiseNodePatterns { get; set; } = new()
     {
         "*DbContext",

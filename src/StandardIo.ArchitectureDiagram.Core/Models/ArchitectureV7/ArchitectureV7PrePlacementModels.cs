@@ -11,37 +11,9 @@ public sealed record ArchitectureV7PrePlacementConfiguration(
     int LabelHorizontalMargin,
     int TerminalPortSpacing,
     int TerminalInset,
-    IReadOnlyList<ArchitectureV7ReservedRoleRule> ReservedLayerTypePatterns,
-    int SoftCohortMinimumSize = 5);
+    IReadOnlyList<ArchitectureV7ReservedRoleRule> ReservedLayerTypePatterns);
 
 public sealed record ArchitectureV7ReservedRoleRule(string Name, string Pattern, int Order);
-
-public sealed record ArchitectureV7SoftCohort(
-    string TokenSuffix,
-    IReadOnlyList<string> MemberPhysicalNodeIds,
-    int? PreferredDependencyAnchorNaturalDepth,
-    IReadOnlyDictionary<int, int> DependencyAnchorCounts,
-    string Provenance);
-
-public sealed class ArchitectureV7SoftCohortAnalysisResult
-{
-    public ArchitectureV7SoftCohortAnalysisResult(
-        ArchitectureV7PositionalOwnershipResult ownership,
-        IReadOnlyList<ArchitectureV7SoftCohort> cohorts,
-        int minimumSize,
-        string fingerprint)
-    {
-        Ownership = ownership ?? throw new ArgumentNullException(nameof(ownership));
-        Cohorts = Array.AsReadOnly((cohorts ?? Array.Empty<ArchitectureV7SoftCohort>()).ToArray());
-        MinimumSize = minimumSize;
-        Fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
-    }
-
-    public ArchitectureV7PositionalOwnershipResult Ownership { get; }
-    public IReadOnlyList<ArchitectureV7SoftCohort> Cohorts { get; }
-    public int MinimumSize { get; }
-    public string Fingerprint { get; }
-}
 
 /// <summary>Named conversions for the shared V7 reserved node-row coordinate domain.</summary>
 public static class ArchitectureV7ReservationCoordinates
@@ -180,51 +152,24 @@ public sealed class ArchitectureV7ReservationReconciliationResult
     public ArchitectureV7FrozenReservationTable Table { get; }
 }
 
-public sealed record ArchitectureV7SoftLayerPreference(
-    string TokenSuffix,
-    IReadOnlyList<string> MemberPhysicalNodeIds,
-    string PreferredAnchor,
-    int PreferredNodeLayer,
-    int? AnchorNodeLayer,
-    IReadOnlyDictionary<string, int> AnchorCounts,
-    IReadOnlyList<string> AlignmentExceptions,
-    string Provenance);
-
-public sealed record ArchitectureV7LayerScheduleEntry(
-    string Name,
-    int NodeLayer,
-    bool IsHardReservation,
-    bool IsExternal,
-    string? TokenSuffix);
-
-public sealed class ArchitectureV7FrozenLayerSchedule
+/// <summary>Frozen ordinary-node layer assignment consumed by recursive tree construction.</summary>
+public sealed class ArchitectureV7FrozenOrdinaryLayerSchedule
 {
-    public ArchitectureV7FrozenLayerSchedule(
+    public ArchitectureV7FrozenOrdinaryLayerSchedule(
         ArchitectureV7FrozenReservationTable reservations,
-        IReadOnlyList<ArchitectureV7LayerScheduleEntry> entries,
-        IReadOnlyList<ArchitectureV7SoftLayerPreference> softPreferences,
-        IReadOnlyDictionary<string, int> preferredLayerByPhysicalNodeId,
+        IReadOnlyDictionary<string, int> layerByPhysicalNodeId,
         IReadOnlyList<string> diagnostics,
-        string preSoftFingerprint,
-        string fingerprint,
-        IReadOnlyList<ArchitectureV7FrozenReservation>? preSoftReservations = null)
+        string fingerprint)
     {
         Reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
-        Entries = Array.AsReadOnly((entries ?? Array.Empty<ArchitectureV7LayerScheduleEntry>()).OrderBy(item => item.NodeLayer).ThenBy(item => item.Name, StringComparer.Ordinal).ToArray());
-        SoftPreferences = Array.AsReadOnly((softPreferences ?? Array.Empty<ArchitectureV7SoftLayerPreference>()).OrderBy(item => item.TokenSuffix, StringComparer.OrdinalIgnoreCase).ThenBy(item => item.TokenSuffix, StringComparer.Ordinal).ToArray());
-        PreferredLayerByPhysicalNodeId = (preferredLayerByPhysicalNodeId ?? new Dictionary<string, int>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        LayerByPhysicalNodeId = (layerByPhysicalNodeId ?? new Dictionary<string, int>())
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<string>()).OrderBy(item => item, StringComparer.Ordinal).ToArray());
-        PreSoftFingerprint = preSoftFingerprint ?? throw new ArgumentNullException(nameof(preSoftFingerprint));
         Fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
-        PreSoftReservations = Array.AsReadOnly((preSoftReservations ?? Array.Empty<ArchitectureV7FrozenReservation>()).ToArray());
     }
 
     public ArchitectureV7FrozenReservationTable Reservations { get; }
-    public IReadOnlyList<ArchitectureV7LayerScheduleEntry> Entries { get; }
-    public IReadOnlyList<ArchitectureV7SoftLayerPreference> SoftPreferences { get; }
-    public IReadOnlyDictionary<string, int> PreferredLayerByPhysicalNodeId { get; }
+    public IReadOnlyDictionary<string, int> LayerByPhysicalNodeId { get; }
     public IReadOnlyList<string> Diagnostics { get; }
-    public string PreSoftFingerprint { get; }
     public string Fingerprint { get; }
-    public IReadOnlyList<ArchitectureV7FrozenReservation> PreSoftReservations { get; }
 }

@@ -175,6 +175,12 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             var expanded = AddAllocatedEndpointHandoffs(points, route, indexes, source, destination, rows, columns, diagnostics);
             if (expanded is null) continue;
             var physicalPoints = expanded.Select(x => x.Point).ToArray();
+            if (physicalPoints.Zip(physicalPoints.Skip(1), (a, b) => (a, b))
+                .Any(pair => pair.a.X != pair.b.X && pair.a.Y != pair.b.Y))
+            {
+                diagnostics.Add(new("DIAGONAL-PHYSICAL-SEGMENT", "The frozen physical polyline contains a non-orthogonal consecutive point pair.", true, route.PhysicalLinkId));
+                continue;
+            }
             var segments = new List<ArchitectureV7PhysicalSegment>();
             for (var index = 0; index + 1 < expanded.Count; index++)
             {

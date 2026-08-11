@@ -17,7 +17,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
 
     public ArchitectureV7RecursiveTreeGridResult Build(
         ArchitectureV7NodeSpanSizingResult sizing,
-        ArchitectureV7FrozenLayerSchedule schedule)
+        ArchitectureV7FrozenOrdinaryLayerSchedule schedule)
     {
         if (schedule is null) throw new ArgumentNullException(nameof(schedule));
         return BuildCore(sizing, schedule.Reservations, schedule);
@@ -26,7 +26,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
     private ArchitectureV7RecursiveTreeGridResult BuildCore(
         ArchitectureV7NodeSpanSizingResult sizing,
         ArchitectureV7FrozenReservationTable reservations,
-        ArchitectureV7FrozenLayerSchedule? schedule)
+        ArchitectureV7FrozenOrdinaryLayerSchedule? schedule)
     {
         if (sizing is null) throw new ArgumentNullException(nameof(sizing));
         if (reservations is null) throw new ArgumentNullException(nameof(reservations));
@@ -83,7 +83,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         using var sha = SHA256.Create();
         var fingerprint = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(fingerprintText))).Replace("-", string.Empty);
         return new ArchitectureV7RecursiveTreeGridResult(sizing, reservations, trees, fingerprint,
-            roots.Length, parallelStopwatch.ElapsedMilliseconds, joinStopwatch.ElapsedMilliseconds, schedule);
+            roots.Length, parallelStopwatch.ElapsedMilliseconds, joinStopwatch.ElapsedMilliseconds);
 
         ArchitectureV7TopLevelTreeGrid BuildTree(ArchitectureV7PositionalOwnershipDecision root)
         {
@@ -123,14 +123,14 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             return null;
         }
 
-        int? SoftLayer(string physicalNodeId) => schedule?.PreferredLayerByPhysicalNodeId.TryGetValue(physicalNodeId, out var layer) == true ? layer : null;
-
-        (int Natural, int? Reserved, int? Soft, int Target) Layers(ArchitectureV7PhysicalNode node)
+        (int Natural, int? Reserved, int Target) Layers(ArchitectureV7PhysicalNode node)
         {
             var natural = NaturalLayer(node.PhysicalNodeId);
             var reserved = ReservedLayer(node);
-            var soft = SoftLayer(node.PhysicalNodeId);
-            return (natural, reserved, soft, Math.Max(natural, Math.Max(reserved ?? 0, soft ?? 0)));
+            var target = schedule?.LayerByPhysicalNodeId.TryGetValue(node.PhysicalNodeId, out var frozen) == true
+                ? frozen
+                : Math.Max(natural, reserved ?? 0);
+            return (natural, reserved, target);
         }
 
         BuiltNode BuildNode(string physicalNodeId, int? parentLayer, bool detached)
@@ -140,12 +140,13 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             var layerInfo = Layers(node);
             var naturalLayer = layerInfo.Natural;
             var reservedLayer = layerInfo.Reserved;
-            var softLayer = layerInfo.Soft;
             var targetLayer = layerInfo.Target;
             if (parentLayer.HasValue && reservedLayer.HasValue && targetLayer <= parentLayer.Value)
                 return BuildDetachedUnit(physicalNodeId, targetLayer, detached);
 
-            var layer = parentLayer.HasValue ? Math.Max(targetLayer, parentLayer.Value + 1) : targetLayer;
+            // The frozen ordinary schedule is authoritative. Recursive construction
+            // must not invent a deeper row to repair a constraint after the freeze.
+            var layer = targetLayer;
             var childUnits = new List<BuiltNode>();
             foreach (var childId in children.TryGetValue(physicalNodeId, out var childIds) ? childIds : Array.Empty<string>())
             {
@@ -184,7 +185,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             var width = Math.Max(Math.Max(span.LogicalSpan, childWidth), parentCentre + (span.LogicalSpan - 1) / 2 + 1);
             var placement = new ArchitectureV7TreeGridNodePlacement(physicalNodeId, node.SemanticNodeId, checked(layer * 2),
                 checked(parentCentre - (span.LogicalSpan - 1) / 2), span.LogicalSpan, parentCentre, layer, detached,
-                "v7-recursive;natural-layer=" + naturalLayer + ";reserved-layer=" + (reservedLayer?.ToString() ?? "none") + ";soft-layer=" + (softLayer?.ToString() ?? "none"));
+                 "v7-recursive;natural-layer=" + naturalLayer + ";reserved-layer=" + (reservedLayer?.ToString() ?? "none"));
             var placements = new List<ArchitectureV7TreeGridNodePlacement> { placement };
             placements.AddRange(positionedChildren.SelectMany(unit => unit.Placements));
             var main = new ArchitectureV7TreeGridPlacementUnit("unit:" + physicalNodeId, physicalNodeId, placements, width,

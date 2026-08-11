@@ -3,12 +3,22 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV7;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV7;
+using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
 
 public sealed class ArchitectureV7PhysicalSceneTests
 {
+    [Fact]
+    public void Mechanical_renderer_preserves_configured_background_on_a_paged_graph_model()
+    {
+        var graph = ArchitectureV7MechanicalDrawioRenderer.GraphModelForTest("#123456");
+
+        Assert.Equal("#123456", (string?)graph.Attribute("background"));
+        Assert.Equal("1", (string?)graph.Attribute("page"));
+    }
+
     [Fact]
     public void Vertical_route_uses_constant_x_and_exact_node_edges()
     {
