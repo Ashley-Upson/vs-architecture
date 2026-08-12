@@ -540,6 +540,35 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.All(scene.Routes.Single().Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
     }
 
+    [Fact]
+    public void Every_top_or_bottom_terminal_uses_the_adjacent_vertical_lane_coordinate()
+    {
+        var routes = new[]
+        {
+            Route("lane-a", "source", "target", (1, 2), (2, 2), (3, 2), (4, 2)),
+            Route("lane-b", "source", "target", (1, 2), (2, 2), (3, 2), (4, 2))
+        };
+        var scene = Compile(routes, new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("source", "source", "p", 1, 1, 3, 1,
+                new[] { (1, 1), (1, 2), (1, 3) }, false, false, false, "tree", "source", "source", "test"),
+            new ArchitectureV7FrozenNodePlacement("target", "target", "p", 4, 2, 1, 2,
+                new[] { (4, 2) }, false, false, false, "tree", "target", "target", "test")
+        }, spacing: 4);
+
+        foreach (var route in scene.Routes)
+        {
+            var terminal = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == route.PhysicalLinkId &&
+                item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+            var adjacentVertical = route.Points.Where(point =>
+                point.Provenance.Contains("straight-run;run=", StringComparison.Ordinal) &&
+                point.Provenance.Contains("lane:V", StringComparison.Ordinal)).ToArray();
+            Assert.NotEmpty(adjacentVertical);
+            Assert.All(adjacentVertical, point => Assert.Equal(point.X, terminal.Position.X));
+            Assert.Equal(terminal.Position.X, route.Points[1].X);
+        }
+    }
+
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
         IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, double spacing = 4)
     {
