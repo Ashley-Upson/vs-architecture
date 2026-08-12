@@ -96,7 +96,7 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
                 {
                     if (currentRow + 2 == end.Row - 1 && TryAppendDestinationFromPreviousRoutingRow(path, currentRow, currentColumn, end, source, destination, cells))
                         return Validate(path, source, destination, cells, true)
-                            ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), attemptEvidence, metrics.Freeze())
+                            ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), attemptEvidence.Concat(metrics.ContinuationSelections).ToArray(), metrics.Freeze())
                             : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.", metrics, attemptEvidence);
                     if (!Continue(path, ref currentRow, ref currentColumn, 1, source, destination, cells, metrics)) return Failed(path, "NoLegalDownwardContinuation", "No legal downward continuation column exists.", metrics);
                 }
@@ -104,7 +104,7 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
 
             if (!AppendHorizontal(path, currentRow, currentColumn, end.Column, source, destination, cells) || !Append(path, end, source, destination, cells))
                 return Failed(path, "NoLegalDestinationApproach", "The destination cannot be approached and entered legally.", metrics);
-            return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), attemptEvidence, metrics.Freeze()) : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.", metrics, attemptEvidence);
+            return Validate(path, source, destination, cells, true) ? new RouteAttempt(path, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), attemptEvidence.Concat(metrics.ContinuationSelections).ToArray(), metrics.Freeze()) : Failed(path, "IllegalRoute", "The constructed route failed frozen-cell legality evaluation.", metrics, attemptEvidence.Concat(metrics.ContinuationSelections).ToArray());
         }
 
         static bool AdvanceToGeneralEscapeRow(List<ArchitectureV7RouteCell> path, ref int currentRow, int currentColumn,
@@ -171,7 +171,8 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             IReadOnlyDictionary<(int Row, int Column), ArchitectureV7LogicalCell> cells, int maxColumn, RouteOperationMetrics metrics, out int candidate)
         {
             metrics.ContinuationCandidatesEvaluated++;
-            if (CanContinueAtColumn(path, currentColumn, currentRow, currentColumn, direction, source, destination, cells))
+            if (CanContinueAtColumn(path, currentColumn, currentRow, currentColumn, direction, source, destination, cells) &&
+                CanAppendContinuation(path, currentColumn, currentRow, currentColumn, direction, source, destination, cells))
             {
                 candidate = currentColumn;
                 return true;
@@ -184,30 +185,46 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
                 var evaluated = false;
                 if (left >= 0)
                 {
-                    evaluated = true;
                     metrics.ContinuationCandidatesEvaluated++;
-                    if (CanContinueAtColumn(path, currentColumn, currentRow, left, direction, source, destination, cells))
+                    evaluated = true;
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, left, direction, source, destination, cells) &&
+                        CanAppendContinuation(path, currentColumn, currentRow, left, direction, source, destination, cells))
                     {
                         candidate = left;
+                        AddContinuationSelectionEvidence(path, currentColumn, candidate, currentRow, direction, destination, metrics);
                         return true;
                     }
                 }
                 if (right <= maxColumn)
                 {
-                    evaluated = true;
                     metrics.ContinuationCandidatesEvaluated++;
-                    if (CanContinueAtColumn(path, currentColumn, currentRow, right, direction, source, destination, cells))
+                    evaluated = true;
+                    if (CanContinueAtColumn(path, currentColumn, currentRow, right, direction, source, destination, cells) &&
+                        CanAppendContinuation(path, currentColumn, currentRow, right, direction, source, destination, cells))
                     {
                         candidate = right;
+                        AddContinuationSelectionEvidence(path, currentColumn, candidate, currentRow, direction, destination, metrics);
                         return true;
                     }
                 }
-                if (!evaluated)
-                {
-                    candidate = currentColumn;
-                    return false;
-                }
+                if (!evaluated) break;
             }
+            candidate = currentColumn;
+            return false;
+        }
+
+        static void AddContinuationSelectionEvidence(IReadOnlyList<ArchitectureV7RouteCell> path, int currentColumn, int candidate,
+            int currentRow, int direction, ArchitectureV7FrozenNodePlacement destination, RouteOperationMetrics metrics)
+        {
+            var nextRow = currentRow + direction * 2;
+            var cost = Math.Abs(candidate - destination.CentreCell) + Math.Abs(nextRow - destination.DiagramRow);
+            metrics.ContinuationSelections.Add(new ArchitectureV7RouteAttemptEvidence(
+                "continuation-selection", path.ToArray(), null, null, DirectionFor(direction).ToString(), null, null,
+                currentColumn, destination.CentreCell,
+                new[] { new ArchitectureV7RouteCandidateEvidence(candidate, true, "legal;cost=" + cost,
+                    ContinuationSegment(currentColumn, currentRow, candidate, direction)) },
+                new[] { direction > 0 ? "DownwardContinuation" : "UpwardContinuation" },
+                "v7-common-diagram-router;nearest-legal-continuation;selected=" + candidate + ";cost=" + cost));
         }
 
         static bool CanContinueAtColumn(IReadOnlyList<ArchitectureV7RouteCell> path, int currentColumn, int currentRow, int candidate,
@@ -452,6 +469,7 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
     {
         public int ContinuationCandidatesEvaluated { get; set; }
         public int UpwardEscapeCandidatesEvaluated { get; set; }
+        public List<ArchitectureV7RouteAttemptEvidence> ContinuationSelections { get; } = new();
         public ArchitectureV7RoutingOperationMetrics Freeze() => new(ContinuationCandidatesEvaluated, UpwardEscapeCandidatesEvaluated);
     }
 

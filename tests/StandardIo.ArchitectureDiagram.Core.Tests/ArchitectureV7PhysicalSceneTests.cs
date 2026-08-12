@@ -373,7 +373,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
-    public void Physical_node_width_preserves_the_frozen_pre_routing_requirement()
+    public void Physical_node_width_uses_frozen_cell_occupancy_without_pixel_overallocation()
     {
         var node = new ArchitectureV7FrozenNodePlacement("wide", "wide", "p", 1, 0, 9, 4,
             Enumerable.Range(0, 9).Select(column => (1, column)).ToArray(), false, false, false, "tree",
@@ -391,12 +391,11 @@ public sealed class ArchitectureV7PhysicalSceneTests
             Array.Empty<ArchitectureV7EndpointHandoff>(), Array.Empty<ArchitectureV7BendAllocation>(), Array.Empty<ArchitectureV7CrossingAllocation>(),
             Array.Empty<ArchitectureV7AllocationDiagnostic>(), "placement", "routes", "allocation");
         var configuration = new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 12, 25, 20);
-        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration,
-            new Dictionary<string, int> { ["wide"] = 756 });
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration);
 
         var bounds = Assert.Single(scene.Nodes).Bounds;
         Assert.Equal(900, bounds.Right - bounds.Left);
-        Assert.True(bounds.Right - bounds.Left >= 756);
+        Assert.Equal(9 * configuration.BaseCellWidth, bounds.Right - bounds.Left);
     }
 
     [Fact]
@@ -451,8 +450,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
             new ArchitectureV7AllocationConfiguration(4, 4, 0));
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
-            new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 4, 4, 0),
-            new Dictionary<string, int> { ["wide-source"] = 350, ["wide-left"] = 500, ["target"] = 100 });
+            new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 4, 4, 0));
 
         Assert.Single(scene.Routes);
         var sourceTerminal = Assert.Single(scene.Terminals.Where(x => x.PhysicalLinkId == "f8a-wide" && x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture));

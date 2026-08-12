@@ -78,6 +78,48 @@ public sealed class ArchitectureV7PrePlacementTests
     }
 
     [Fact]
+    public void Span_requirement_retains_independent_minimum_capacity_evidence()
+    {
+        var nodes = Enumerable.Range(0, 4).Select(index => Node("n" + index, "N" + index)).ToArray();
+        var result = Size(Diagram(nodes, new[] { Link("a", "n0", "n1"), Link("b", "n0", "n2"), Link("c", "n0", "n3") }),
+            Config(minimumWidth: 1, baseCellWidth: 10, portSpacing: 10, inset: 5));
+        var requirement = result.Requirements.Single(item => item.PhysicalNodeId == "physical:n0");
+        Assert.Equal(3, requirement.OutgoingTerminalCount);
+        Assert.Equal(0, requirement.IncomingTerminalCount);
+        Assert.Equal(30, requirement.RequiredPhysicalEdgeExtent);
+        Assert.Equal(requirement.MinimumLegalSpan, requirement.LogicalSpan);
+        Assert.Equal(requirement.LogicalSpan * requirement.ConfiguredBaseCellWidth, requirement.AvailablePhysicalEdgeExtent);
+    }
+
+    [Fact]
+    public void Twenty_three_terminals_at_thirty_pixel_spacing_require_only_their_occupied_edge_span()
+    {
+        var nodes = new[] { Node("source", "Source") }
+            .Concat(Enumerable.Range(0, 23).Select(index => Node("target" + index, "T" + index))).ToArray();
+        var links = Enumerable.Range(0, 23).Select(index => Link("link" + index, "source", "target" + index)).ToArray();
+        var requirement = Size(Diagram(nodes, links), Config(minimumWidth: 200, baseCellWidth: 100, labelWidth: 8, portSpacing: 30, inset: 15))
+            .Requirements.Single(item => item.PhysicalNodeId == "physical:source");
+
+        Assert.Equal(23, requirement.OutgoingTerminalCount);
+        Assert.Equal(690, requirement.OutgoingTerminalRequirement);
+        Assert.Equal(690, requirement.RequiredWidth);
+        Assert.Equal(7, requirement.LogicalSpan);
+    }
+
+    [Theory]
+    [InlineData(1, 3)]
+    [InlineData(31, 5)]
+    [InlineData(51, 7)]
+    public void Capacity_expands_to_the_smallest_odd_span_only(int minimumWidth, int expectedSpan)
+    {
+        var result = Size(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()),
+            Config(minimumWidth: minimumWidth, baseCellWidth: 10));
+        var requirement = Assert.Single(result.Requirements);
+        Assert.Equal(expectedSpan, requirement.LogicalSpan);
+        Assert.Equal(expectedSpan, requirement.MinimumLegalSpan);
+    }
+
+    [Fact]
     public void Non_default_base_cell_width_is_used_directly()
     {
         var result = Size(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()), Config(minimumWidth: 24, baseCellWidth: 5));

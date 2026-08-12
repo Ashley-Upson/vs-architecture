@@ -26,9 +26,12 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         ValidateFingerprints(projection, ownership, sizing, reservation, placement, routes, allocation, scene, findings);
         ValidateAccounting(projection, routes, scene, indexes, findings);
         ValidatePlacement(projection, ownership, reservation, placement, findings);
+        ValidateNodeSpanJustification(sizing, placement, findings);
         ValidateLogicalRoutes(projection, placement, routes, findings);
         ValidatePhysicalGeometry(placement, routes, allocation, scene, configuration, indexes, findings);
         ValidateEndpointLaneOrdering(allocation, scene, indexes, findings);
+        ValidateDirectCentreAuthority(allocation, scene, placement, indexes, findings);
+        ValidateTerminalFinalLaneAuthority(allocation, scene, indexes, findings);
         ValidateEndpointRegion(allocation, scene, configuration, indexes, findings);
         ValidateCrossings(allocation, scene, indexes, findings);
         ValidateTrackSizing(placement, allocation, scene, configuration, findings);
@@ -38,6 +41,26 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         var metrics = indexes.Metrics;
         return new ArchitectureV7AcceptanceReport(findings, counts, projection.FreezeFingerprint, ownership.FreezeFingerprint, sizing.FreezeFingerprint,
             reservation.Table.Fingerprint, placement.PlacementFingerprint, routes.RouteFingerprint, allocation.AllocationFingerprint, scene.PhysicalSceneFingerprint, normalEligible, metrics);
+    }
+
+    private static void ValidateNodeSpanJustification(ArchitectureV7NodeSpanSizingResult sizing,
+        ArchitectureV7PlacementFreeze placement, ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        foreach (var requirement in sizing.Requirements)
+        {
+            var chosen = placement.Nodes.FirstOrDefault(node => node.PhysicalNodeId == requirement.PhysicalNodeId)?.LogicalSpan ?? requirement.LogicalSpan;
+            if (chosen <= requirement.MinimumLegalSpan) continue;
+            Add(findings, "UNJUSTIFIED-NODE-SPAN", "pre-routing-sizing", "The frozen node span exceeds the minimum legal capacity-driven odd span.",
+                requirement.PhysicalNodeId, Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), new[]
+                {
+                    "chosen-span=" + chosen,
+                    "minimum-required-span=" + requirement.MinimumLegalSpan,
+                    "incoming-terminal-count=" + requirement.IncomingTerminalCount,
+                    "outgoing-terminal-count=" + requirement.OutgoingTerminalCount,
+                    "required-edge-extent=" + requirement.RequiredPhysicalEdgeExtent,
+                    "available-edge-extent=" + requirement.AvailablePhysicalEdgeExtent
+                });
+        }
     }
 
     private static void ValidateFingerprints(ArchitectureV7PhysicalProjectionResult projection, ArchitectureV7PositionalOwnershipResult ownership,
@@ -236,7 +259,7 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         foreach (var terminal in allocation.Terminals)
         {
             if (!indexes.RouteById.TryGetValue(terminal.PhysicalLinkId, out var route) || route.Points.Count < 2) continue;
-            var adjacent = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Points[1] : route.Points[route.Points.Count - 2];
+            var adjacent = FinalApproach(route, terminal.EndpointKind).End;
             var axisIsX = Math.Abs(adjacent.Y - (scene.Terminals.First(item => item.PhysicalLinkId == terminal.PhysicalLinkId && item.EndpointKind == terminal.EndpointKind).Position.Y)) > 0.001;
             var group = axisIsX
                 ? terminal.Direction is ArchitectureV7EndpointDirection.Up or ArchitectureV7EndpointDirection.Down ? 1 : terminal.Direction == ArchitectureV7EndpointDirection.Left ? 0 : 2
@@ -272,6 +295,71 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                             "direction-group=" + group.Key.DirectionGroup
                         });
             }
+        }
+    }
+
+    private static void ValidateDirectCentreAuthority(ArchitectureV7CollectiveAllocationFreeze allocation,
+        ArchitectureV7PhysicalSceneFreeze scene, ArchitectureV7PlacementFreeze placement, ValidationIndexes indexes,
+        ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        var directGroups = new Dictionary<(string Node, ArchitectureV7EndpointKind Kind), List<(string Link, ArchitectureV7LogicalRoute Frozen, ArchitectureV7PhysicalTerminal Terminal, (ArchitectureV7PhysicalPoint Start, ArchitectureV7PhysicalPoint End) Approach, double CentreX)>>();
+        foreach (var terminal in allocation.Terminals)
+        {
+            if (!indexes.LogicalRouteById.TryGetValue(terminal.PhysicalLinkId, out var frozen) ||
+                !indexes.RouteById.TryGetValue(terminal.PhysicalLinkId, out var route) ||
+                !indexes.NodeById.TryGetValue(terminal.PhysicalNodeId, out var node) ||
+                placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == terminal.PhysicalNodeId) is not { } logicalNode) continue;
+            var endpointCell = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? frozen.Cells.FirstOrDefault()
+                : frozen.Cells.LastOrDefault();
+            var adjacentRun = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? allocation.Runs.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId && x.StartRouteIndex == 0)
+                : allocation.Runs.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId && x.EndRouteIndex == frozen.Cells.Count - 1);
+            if (endpointCell is null || adjacentRun?.Orientation != ArchitectureV7RunOrientation.Vertical || endpointCell.Column != logicalNode.CentreCell ||
+                !terminal.Direction.Equals(ArchitectureV7EndpointDirection.Up) && !terminal.Direction.Equals(ArchitectureV7EndpointDirection.Down)) continue;
+            var physicalTerminal = scene.Terminals.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId && x.EndpointKind == terminal.EndpointKind);
+            var physicalRoute = scene.Routes.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId);
+            if (physicalTerminal is null || physicalRoute is null) continue;
+            var approach = FinalApproach(physicalRoute, terminal.EndpointKind);
+            var centreX = (node.Bounds.Left + node.Bounds.Right) / 2d;
+            var key = (terminal.PhysicalNodeId, terminal.EndpointKind);
+            if (!directGroups.TryGetValue(key, out var group)) directGroups[key] = group = new();
+            group.Add((terminal.PhysicalLinkId, frozen, physicalTerminal, approach, centreX));
+        }
+        foreach (var group in directGroups)
+        {
+            var ordered = group.Value.OrderBy(x => x.Terminal.Position.X).ToArray();
+            for (var index = 0; index < ordered.Length; index++)
+            {
+                var leftOffset = ordered[index].Terminal.Position.X - ordered[index].CentreX;
+                var mirrorOffset = ordered[ordered.Length - index - 1].Terminal.Position.X - ordered[index].CentreX;
+                if (Math.Abs(leftOffset + mirrorOffset) <= .001 &&
+                    Math.Abs(ordered[index].Approach.Start.X - ordered[index].Terminal.Position.X) <= .001 &&
+                    Math.Abs(ordered[index].Approach.End.X - ordered[index].Terminal.Position.X) <= .001) continue;
+                Add(findings, "DIRECT-CENTRE-VIOLATION", "endpoint-allocation", "The direct vertical endpoint group is not centred symmetrically through the node and its final approaches.",
+                    ordered[index].Link, ordered[index].Frozen.Cells, new[] { ordered[index].Terminal.Position, ordered[index].Approach.Start, ordered[index].Approach.End },
+                    new[] { "node=" + group.Key.Node, "node-centre-x=" + ordered[index].CentreX, "terminal-x=" + ordered[index].Terminal.Position.X, "approach-x=" + ordered[index].Approach.Start.X });
+            }
+        }
+    }
+
+    private static void ValidateTerminalFinalLaneAuthority(ArchitectureV7CollectiveAllocationFreeze allocation,
+        ArchitectureV7PhysicalSceneFreeze scene, ValidationIndexes indexes, ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        foreach (var terminal in allocation.Terminals)
+        {
+            var physicalRoute = scene.Routes.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId);
+            var physicalTerminal = scene.Terminals.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId && x.EndpointKind == terminal.EndpointKind);
+            if (physicalRoute is null || physicalTerminal is null || !indexes.NodeById.TryGetValue(terminal.PhysicalNodeId, out var node)) continue;
+            var approach = FinalApproach(physicalRoute, terminal.EndpointKind);
+            var topBottom = Math.Abs(physicalTerminal.Position.Y - node.Bounds.Top) < .001 || Math.Abs(physicalTerminal.Position.Y - node.Bounds.Bottom) < .001;
+            var aligned = topBottom
+                ? approach.Start.X == approach.End.X && Math.Abs(approach.Start.X - physicalTerminal.Position.X) < .001
+                : approach.Start.Y == approach.End.Y && Math.Abs(approach.Start.Y - physicalTerminal.Position.Y) < .001;
+            if (!aligned)
+                Add(findings, "TERMINAL-FINAL-LANE-AUTHORITY-VIOLATION", "endpoint-allocation", "The complete final perpendicular approach does not use the terminal coordinate.",
+                    terminal.PhysicalLinkId, Array.Empty<ArchitectureV7RouteCell>(), new[] { physicalTerminal.Position, approach.Start, approach.End },
+                    new[] { "terminal=" + physicalTerminal.Position, "approach-start=" + approach.Start, "approach-end=" + approach.End });
         }
     }
 
@@ -311,7 +399,7 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                 var physical = scene.Routes.FirstOrDefault(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId);
                 var terminal = scene.Terminals.FirstOrDefault(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId && x.EndpointKind == item.Allocation.EndpointKind);
                 if (physical is null || terminal is null || physical.Points.Count < 2) continue;
-                var adjacent = item.Allocation.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? physical.Points[1] : physical.Points[physical.Points.Count - 2];
+                var adjacent = FinalApproach(physical, item.Allocation.EndpointKind).End;
                 var node = indexes.NodeById[item.Allocation.PhysicalNodeId];
                 var horizontal = Math.Abs(terminal.Position.Y - node.Bounds.Top) < .001 || Math.Abs(terminal.Position.Y - node.Bounds.Bottom) < .001;
                 var terminalAxis = horizontal ? terminal.Position.X : terminal.Position.Y;
@@ -319,14 +407,15 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                 if (Math.Abs(terminalAxis - dropAxis) > .001)
                     Add(findings, "ENDPOINT-DROP-COORDINATE-MISMATCH", "endpoint-allocation", "Final perpendicular drop does not use the authoritative terminal coordinate.", item.Allocation.PhysicalLinkId,
                         item.Frozen!.Cells, new[] { terminal.Position, adjacent }, new[] { "terminal-axis=" + terminalAxis, "drop-axis=" + dropAxis });
+
             }
 
             var approaches = compiled.Select(item =>
             {
                 var route = scene.Routes.First(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId);
                 var terminal = scene.Terminals.First(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId && x.EndpointKind == item.Allocation.EndpointKind);
-                var adjacent = item.Allocation.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Points[1] : route.Points[route.Points.Count - 2];
-                return (item, terminal, start: terminal.Position, end: adjacent);
+                var approach = FinalApproach(route, item.Allocation.EndpointKind);
+                return (item, terminal, start: approach.Start, end: approach.End);
             }).ToArray();
             for (var i = 0; i < approaches.Length; i++)
                 for (var j = i + 1; j < approaches.Length; j++)
@@ -337,10 +426,10 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                         var overlap = IntervalsOverlap(a.start.Y, a.end.Y, b.start.Y, b.end.Y);
                         var distance = Math.Abs(a.start.X - b.start.X);
                         if (overlap && distance < configuration.ParallelLaneSpacing)
-                            Add(findings, "ENDPOINT-APPROACH-SPACING", "endpoint-allocation", "Parallel endpoint drops are closer than configured lane spacing.", group.Key.PhysicalNodeId,
+                            Add(findings, "ENDPOINT-FINAL-LANE-OVERLAP", "endpoint-allocation", "Final vertical endpoint approach lanes are closer than configured spacing.", group.Key.PhysicalNodeId,
                                 Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, b.start }, new[] { "required=" + configuration.ParallelLaneSpacing, "actual=" + distance });
                         if (overlap && distance < .001)
-                            Add(findings, "ENDPOINT-APPROACH-OVERLAP", "endpoint-allocation", "Endpoint drops share the same physical interval.", group.Key.PhysicalNodeId,
+                            Add(findings, "ENDPOINT-FINAL-LANE-OVERLAP", "endpoint-allocation", "Final vertical endpoint approach lanes overlap.", group.Key.PhysicalNodeId,
                                 Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, a.end, b.start, b.end }, new[] { a.item.Allocation.PhysicalLinkId, b.item.Allocation.PhysicalLinkId });
                     }
                     else if (a.start.Y == a.end.Y && b.start.Y == b.end.Y)
@@ -348,10 +437,10 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                         var overlap = IntervalsOverlap(a.start.X, a.end.X, b.start.X, b.end.X);
                         var distance = Math.Abs(a.start.Y - b.start.Y);
                         if (overlap && distance < configuration.ParallelLaneSpacing)
-                            Add(findings, "ENDPOINT-APPROACH-SPACING", "endpoint-allocation", "Parallel endpoint approaches are closer than configured lane spacing.", group.Key.PhysicalNodeId,
+                            Add(findings, "ENDPOINT-FINAL-LANE-OVERLAP", "endpoint-allocation", "Final horizontal endpoint approach lanes are closer than configured spacing.", group.Key.PhysicalNodeId,
                                 Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, b.start }, new[] { "required=" + configuration.ParallelLaneSpacing, "actual=" + distance });
                         if (overlap && distance < .001)
-                            Add(findings, "ENDPOINT-APPROACH-OVERLAP", "endpoint-allocation", "Endpoint approaches share the same physical interval.", group.Key.PhysicalNodeId,
+                            Add(findings, "ENDPOINT-FINAL-LANE-OVERLAP", "endpoint-allocation", "Final horizontal endpoint approach lanes overlap.", group.Key.PhysicalNodeId,
                                 Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, a.end, b.start, b.end }, new[] { a.item.Allocation.PhysicalLinkId, b.item.Allocation.PhysicalLinkId });
                     }
                     else if (Intersects(a.start, a.end, b.start, b.end))
@@ -363,6 +452,29 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
 
     private static bool IntervalsOverlap(double aStart, double aEnd, double bStart, double bEnd) =>
         Math.Max(Math.Min(aStart, aEnd), Math.Min(bStart, bEnd)) < Math.Min(Math.Max(aStart, aEnd), Math.Max(bStart, bEnd)) - .001;
+
+    private static (ArchitectureV7PhysicalPoint Start, ArchitectureV7PhysicalPoint End) FinalApproach(
+        ArchitectureV7PhysicalRoute route, ArchitectureV7EndpointKind endpointKind)
+    {
+        var points = route.Points;
+        if (points.Count < 2) return (points[0], points[points.Count - 1]);
+        if (endpointKind == ArchitectureV7EndpointKind.SourceDeparture)
+        {
+            var start = 0;
+            var horizontal = points[0].Y == points[1].Y;
+            var index = 1;
+            while (index + 1 < points.Count &&
+                   (horizontal ? points[index].Y == points[index + 1].Y : points[index].X == points[index + 1].X)) index++;
+            return (points[start], points[index]);
+        }
+
+        var end = points.Count - 1;
+        var reverseHorizontal = points[points.Count - 1].Y == points[points.Count - 2].Y;
+        var reverseIndex = points.Count - 2;
+        while (reverseIndex - 1 >= 0 &&
+               (reverseHorizontal ? points[reverseIndex].Y == points[reverseIndex - 1].Y : points[reverseIndex].X == points[reverseIndex - 1].X)) reverseIndex--;
+        return (points[reverseIndex], points[end]);
+    }
 
     private static bool Intersects(ArchitectureV7PhysicalPoint a, ArchitectureV7PhysicalPoint b, ArchitectureV7PhysicalPoint c, ArchitectureV7PhysicalPoint d)
     {
@@ -517,6 +629,31 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         foreach (var route in routes.Routes) foreach (var diagnostic in route.Diagnostics) if (diagnostic.IsHardFailure) Add(findings, diagnostic.Code, "logical-route", diagnostic.Message, route.PhysicalLinkId, diagnostic.AttemptedCells, Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { route.Provenance });
         foreach (var diagnostic in allocation.Diagnostics) if (diagnostic.IsHardFailure) Add(findings, diagnostic.Code, "allocation", diagnostic.Message, diagnostic.PhysicalLinkId, Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { diagnostic.RunId ?? "allocation" });
         foreach (var diagnostic in scene.Diagnostics) if (diagnostic.IsHardFailure) Add(findings, diagnostic.Code, "scene", diagnostic.Message, diagnostic.PhysicalLinkId, Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "scene=" + scene.PhysicalSceneFingerprint });
+        foreach (var route in routes.Routes)
+        {
+            foreach (var selection in route.AttemptEvidence.Where(item => item.Scenario == "continuation-selection"))
+            {
+                var selectedCost = ParseCost(selection.Provenance, "cost=");
+                var smaller = selection.Candidates
+                    .Where(candidate => candidate.Accepted)
+                    .Select(candidate => ParseCost(candidate.RejectionReason, "cost="))
+                    .Where(cost => cost.HasValue)
+                    .Any(cost => selectedCost.HasValue && cost.Value < selectedCost.Value);
+                if (smaller)
+                    Add(findings, "SELECTED-NONMINIMAL-CONTINUATION", "logical-route", "Continuation selection did not choose the minimum finite candidate cost.", route.PhysicalLinkId,
+                        selection.AttemptedCells, Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { selection.Provenance });
+            }
+        }
+    }
+
+    private static int? ParseCost(string value, string marker)
+    {
+        var start = value.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += marker.Length;
+        var end = start;
+        while (end < value.Length && char.IsDigit(value[end])) end++;
+        return int.TryParse(value.Substring(start, end - start), out var cost) ? cost : null;
     }
 
     private static bool StrictlyCrossesNode(ArchitectureV7PhysicalSegment segment, ArchitectureV7PhysicalBounds bounds)

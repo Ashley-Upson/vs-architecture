@@ -56,7 +56,12 @@ public sealed record ArchitectureV7NodeSpanRequirement(
     int ConfiguredMinimumRequirement,
     int RequiredWidth,
     int ConfiguredBaseCellWidth,
-    string Provenance);
+    string Provenance,
+    int IncomingTerminalCount = 0,
+    int OutgoingTerminalCount = 0,
+    int MinimumLegalSpan = 3,
+    int RequiredPhysicalEdgeExtent = 0,
+    int AvailablePhysicalEdgeExtent = 0);
 
 public sealed class ArchitectureV7NodeSpanSizingResult
 {

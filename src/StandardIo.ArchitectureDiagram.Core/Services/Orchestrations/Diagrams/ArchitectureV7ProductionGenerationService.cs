@@ -71,8 +71,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.Layout.BoundaryRowMinimum, job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, job.Rendering.Layout.ProjectHeaderHeight,
             job.Rendering.Layout.LabelCharacterWidth, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
-        var unsimplifiedScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
-            sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal)));
+        var unsimplifiedScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration));
         var simplification = Measure("allocated-route-simplification", () => new ArchitectureV7AllocatedRouteSimplificationStage().Simplify(unsimplifiedScene));
         var scene = simplification.Scene;
         var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, ordinarySchedule.Reservations);
@@ -174,6 +173,23 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     Terminals = terminals
                 };
             }).OrderByDescending(item => item.TerminalCount).ThenBy(item => item.NodeName, StringComparer.Ordinal).ToArray();
+        var nodeSpanEvidence = sizing.Requirements.Select(requirement => new
+        {
+            requirement.PhysicalNodeId,
+            NodeName = projection.PhysicalNodes.FirstOrDefault(node => node.PhysicalNodeId == requirement.PhysicalNodeId)?.Name,
+            ChosenSpan = placement.Nodes.FirstOrDefault(node => node.PhysicalNodeId == requirement.PhysicalNodeId)?.LogicalSpan ?? requirement.LogicalSpan,
+            requirement.MinimumLegalSpan,
+            requirement.IncomingTerminalCount,
+            requirement.OutgoingTerminalCount,
+            requirement.RequiredPhysicalEdgeExtent,
+            requirement.AvailablePhysicalEdgeExtent,
+            requirement.VisibleLabelRequirement,
+            requirement.IncomingTerminalRequirement,
+            requirement.OutgoingTerminalRequirement,
+            requirement.ConfiguredMinimumRequirement,
+            requirement.RequiredWidth,
+            Reason = requirement.Provenance
+        }).OrderByDescending(item => item.ChosenSpan).ThenBy(item => item.NodeName, StringComparer.Ordinal).ToArray();
         var strict = mode == ArchitectureRenderingMode.StrictValidation;
         var findings = acceptance.Findings.Select(finding => new ValidationFinding(finding.Code, finding.SubjectId ?? finding.Stage, finding.SubjectId, null, 1, finding.Message, true)).ToArray();
         DrawioPage page;
@@ -220,7 +236,8 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             acceptance.AllocationFingerprint,
             acceptance.SceneFingerprint,
             acceptance.Metrics,
-            FindingCodes = acceptance.Findings.Select(x => x.Code).ToArray()
+            FindingCodes = acceptance.Findings.Select(x => x.Code).ToArray(),
+            Findings = acceptance.Findings
         };
         var reportJson = JsonSerializer.Serialize(new
         {
@@ -250,7 +267,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 analyserInput = analyserInputEvidence,
                     projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
-                sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
+                sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint, UnjustifiedSpanCount = nodeSpanEvidence.Count(item => item.ChosenSpan > item.MinimumLegalSpan) },
                 reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint },
                 ordinaryLayerSchedule = new { Fingerprint = ordinarySchedule.Fingerprint, Diagnostics = ordinarySchedule.Diagnostics, AssignedNodeCount = ordinarySchedule.LayerByPhysicalNodeId.Count },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
@@ -315,6 +332,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     ["renderer-fidelity-report.json"] = JsonSerializer.Serialize(rendererFidelity, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-routing-placement-evidence.json"] = JsonSerializer.Serialize(new { routingEvidence, placementEvidence, representative, allocationSceneEvidence }, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-endpoint-region-evidence.json"] = JsonSerializer.Serialize(endpointEvidence, new JsonSerializerOptions { WriteIndented = true })
+                    , ["v7-node-span-evidence.json"] = JsonSerializer.Serialize(nodeSpanEvidence, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-corridor-usage-evidence.json"] = JsonSerializer.Serialize(corridorProjection, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-simplification-evidence.json"] = JsonSerializer.Serialize(new
                     {

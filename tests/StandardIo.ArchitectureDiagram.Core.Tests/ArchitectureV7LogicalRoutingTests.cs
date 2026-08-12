@@ -163,17 +163,31 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
-    public void Continuation_selection_does_not_prefer_the_destination_column_over_nearest_left_candidate()
+    public void Continuation_selection_prefers_nearest_legal_column_and_left_on_tie()
     {
         var nodes = new[] { PlacementNode("s", 1, 3), PlacementNode("t", 7, 7), PlacementNode("obstacle", 3, 3) };
         var route = Route(nodes, Link("nearest-not-destination", "s", "t"), 9, 11, GeneralGrid(9, 11));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
         Assert.Equal(new[] { 3, 2, 1 }, route.Cells.Where(cell => cell.Row == 2).Select(cell => cell.Column));
-        Assert.DoesNotContain(route.Cells, cell => cell.Row == 2 && cell.Column == 7);
+        var selection = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "continuation-selection"));
+        Assert.Contains("selected=1", selection.Provenance);
+        Assert.All(selection.Candidates, candidate => Assert.True(candidate.Accepted));
     }
 
     [Fact]
-    public void Wide_grid_continuation_evaluates_only_candidates_until_first_legal_column()
+    public void Continuation_selection_records_only_final_monotonic_horizontal_cells()
+    {
+        var nodes = new[] { PlacementNode("s", 1, 3), PlacementNode("t", 7, 7), PlacementNode("obstacle", 3, 3) };
+        var route = Route(nodes, Link("final-run", "s", "t"), 9, 11, GeneralGrid(9, 11));
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
+        var row = route.Cells.Where(cell => cell.Row == 2).Select(cell => cell.Column).ToArray();
+        Assert.True(row.SequenceEqual(row.OrderBy(column => column)) || row.SequenceEqual(row.OrderByDescending(column => column)));
+        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row &&
+            pair.a.Row == 2 && Math.Sign(pair.b.Column - pair.a.Column) != Math.Sign(row[^1] - row[0]));
+    }
+
+    [Fact]
+    public void Wide_grid_continuation_evaluates_the_finite_parity_candidate_domain()
     {
         const int width = 201;
         var nodes = new[] { PlacementNode("s", 1, 100), PlacementNode("t", 7, 150), PlacementNode("obstacle", 3, 100) };
@@ -226,7 +240,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
             Link("span-" + span, "s", "t"), 7, 25, GeneralGrid(7, 25));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
 
-        var evidence = Assert.Single(route.AttemptEvidence);
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "upward-escape"));
         Assert.Equal("upward-escape", evidence.Scenario);
         Assert.True(expectedFirstCandidate == evidence.Candidates[0].CandidateColumn,
             string.Join(";", evidence.Candidates.Select(candidate => candidate.CandidateColumn + ":" + candidate.RejectionReason)));
@@ -258,7 +272,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
         }, Link("left-tie", "s", "t"), 7, 25, GeneralGrid(7, 25));
 
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
-        var evidence = Assert.Single(route.AttemptEvidence);
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "upward-escape"));
         Assert.Equal(new[] { 6, 14 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
         Assert.False(evidence.Candidates[0].Accepted);
         Assert.True(evidence.Candidates[1].Accepted);
@@ -275,7 +289,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
             Link("evidence", "s", "t"), 7, 11, grid);
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
 
-        var evidence = Assert.Single(route.AttemptEvidence);
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "upward-escape"));
         Assert.Equal(new[] { 7, 9 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
         Assert.False(evidence.Candidates[0].Accepted);
         Assert.Equal("continuation-illegal", evidence.Candidates[0].RejectionReason);
@@ -300,7 +314,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
         var route = Route(nodes, Link("occupied-candidate", "s", "t"), 7, 11, GeneralGrid(7, 11));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
 
-        var evidence = Assert.Single(route.AttemptEvidence);
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "upward-escape"));
         Assert.Equal(new[] { 7, 9 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
         Assert.False(evidence.Candidates[0].Accepted);
         Assert.Equal("continuation-illegal", evidence.Candidates[0].RejectionReason);
@@ -316,7 +330,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
             Link("edge-" + sourceColumn, "s", "t"), 7, 9, GeneralGrid(7, 9));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code)));
 
-        var evidence = Assert.Single(route.AttemptEvidence);
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "upward-escape"));
         Assert.Equal(expectedFirstCandidate, evidence.Candidates[0].CandidateColumn);
         Assert.Equal(centreColumn, route.Cells[1].Column);
         Assert.All(route.Cells, cell => Assert.InRange(cell.Column, 0, 8));

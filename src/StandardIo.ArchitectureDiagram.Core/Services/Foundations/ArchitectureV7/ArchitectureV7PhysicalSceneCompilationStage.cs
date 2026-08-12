@@ -12,8 +12,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         ArchitectureV7PlacementFreeze placement,
         ArchitectureV7LogicalRouteFreeze routes,
         ArchitectureV7CollectiveAllocationFreeze allocation,
-        ArchitectureV7PhysicalSceneConfiguration configuration,
-        IReadOnlyDictionary<string, int>? preRoutingWidthRequirements = null)
+        ArchitectureV7PhysicalSceneConfiguration configuration)
     {
         if (placement is null) throw new ArgumentNullException(nameof(placement));
         if (routes is null) throw new ArgumentNullException(nameof(routes));
@@ -28,7 +27,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         var rowCount = Math.Max(placement.DiagramGrid.RowCount, placement.Nodes.Count == 0 ? 0 : placement.Nodes.Max(x => x.DiagramRow) + 1);
         var columnCount = Math.Max(placement.DiagramGrid.ColumnCount, placement.Nodes.Count == 0 ? 0 : placement.Nodes.Max(x => x.DiagramColumn + x.LogicalSpan));
         var rows = SizeRows(rowCount, placement, allocation, indexes, configuration);
-        var columns = SizeColumns(columnCount, placement, allocation, indexes, configuration, preRoutingWidthRequirements);
+        var columns = SizeColumns(columnCount, placement, allocation, indexes, configuration);
         var nodes = MaterialiseNodes(placement, rows, columns, configuration, diagnostics);
         var terminals = MaterialiseTerminals(allocation, nodes, configuration, diagnostics);
         var routesOutput = MaterialiseRoutes(routes, allocation, indexes, rows, columns, nodes, terminals, diagnostics);
@@ -64,21 +63,12 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     }
 
     private static IReadOnlyList<ArchitectureV7PhysicalTrackDimension> SizeColumns(int count, ArchitectureV7PlacementFreeze placement,
-        ArchitectureV7CollectiveAllocationFreeze allocation, CompilationIndexes indexes, ArchitectureV7PhysicalSceneConfiguration configuration,
-        IReadOnlyDictionary<string, int>? preRoutingWidthRequirements)
+        ArchitectureV7CollectiveAllocationFreeze allocation, CompilationIndexes indexes, ArchitectureV7PhysicalSceneConfiguration configuration)
     {
         var extents = Enumerable.Repeat(configuration.BaseCellWidth, count).ToArray();
-        foreach (var node in placement.Nodes)
-        {
-            var first = node.LogicalFootprint.Count == 0 ? node.DiagramColumn : node.LogicalFootprint.Min(x => x.Column);
-            var last = node.LogicalFootprint.Count == 0 ? node.DiagramColumn + node.LogicalSpan - 1 : node.LogicalFootprint.Max(x => x.Column);
-            var fallbackRequired = Math.Max(configuration.NodeMinimumWidth, node.VisibleLabel.Length * configuration.LabelCharacterWidth + 2 * configuration.LabelHorizontalMargin);
-            var required = preRoutingWidthRequirements is not null && preRoutingWidthRequirements.TryGetValue(node.PhysicalNodeId, out var preRoutingRequired)
-                ? Math.Max(fallbackRequired, preRoutingRequired)
-                : fallbackRequired;
-            var current = Enumerable.Range(first, Math.Max(0, last - first + 1)).Where(x => (uint)x < (uint)extents.Length).Sum(x => extents[x]);
-            if (last >= first && current < required && (uint)first < (uint)extents.Length) extents[Math.Min(last, Math.Max(first, node.CentreCell))] += required - current;
-        }
+        // Node capacity is decided before routing by logical cell span. Do not
+        // widen one physical track here to satisfy a pixel requirement; that
+        // creates cell over-allocation after the span freeze.
         foreach (var group in allocation.Runs.Where(x => x.Orientation == ArchitectureV7RunOrientation.Vertical).GroupBy(x => x.Cells[0].Column))
         {
             if ((uint)group.Key >= (uint)extents.Length) continue;
@@ -120,7 +110,15 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 rowTop += configuration.NodeClearance;
                 rowBottom -= configuration.NodeClearance;
             }
-            result.Add(new(node.PhysicalNodeId, new(columns[minColumn].Start, rowTop, columns[maxColumn].End, rowBottom), "frozen-logical-footprint;node-row-clearance-envelope;physical-track-boundaries"));
+            var reservedLeft = columns[minColumn].Start;
+            var reservedRight = columns[maxColumn].End;
+            var occupiedCellCount = maxColumn - minColumn + 1;
+            var occupiedWidth = occupiedCellCount * configuration.BaseCellWidth;
+            var centre = (reservedLeft + reservedRight) / 2d;
+            var visibleLeft = centre - occupiedWidth / 2d;
+            var visibleRight = centre + occupiedWidth / 2d;
+            result.Add(new(node.PhysicalNodeId, new(visibleLeft, rowTop, visibleRight, rowBottom),
+                "frozen-logical-footprint;node-row-clearance-envelope;logical-cell-occupancy-width;centred-in-physical-footprint"));
         }
         return result;
     }
@@ -184,6 +182,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             }
             if (routeFailed) continue;
             points.Add(new(route.Cells.Count - 1, route.Cells[route.Cells.Count - 1], destination.Position, TerminalResourceId(destination), TerminalResourceId(destination), "destination-terminal"));
+            points = AlignEndpointApproachRuns(points, route, indexes, source, destination, nodes);
             var expanded = AddAllocatedEndpointHandoffs(points, route, indexes, source, destination, rows, columns, diagnostics);
             if (expanded is null) continue;
             var physicalPoints = expanded.Select(x => x.Point).ToArray();
@@ -208,6 +207,54 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             result.Add(new(route.PhysicalLinkId, physicalPoints, segments, "exact-frozen-route-cell-sequence;unsimplified"));
         }
         return result;
+    }
+
+    private static List<CompiledPoint> AlignEndpointApproachRuns(List<CompiledPoint> points, ArchitectureV7LogicalRoute route,
+        CompilationIndexes indexes, ArchitectureV7PhysicalTerminal source, ArchitectureV7PhysicalTerminal destination,
+        IReadOnlyList<ArchitectureV7PhysicalSceneNode> nodes)
+    {
+        var result = points.ToList();
+        if (indexes.RunsByPhysicalLinkId.TryGetValue(route.PhysicalLinkId, out var runs) && runs.Count > 0)
+        {
+            var first = runs.OrderBy(item => item.StartRouteIndex).First();
+            var last = runs.OrderBy(item => item.StartRouteIndex).Last();
+            if (!string.Equals(first.RunId, last.RunId, StringComparison.Ordinal))
+            {
+                result = Align(result, first.StartRouteIndex + 1, first.EndRouteIndex, first.Orientation, source.Position,
+                    source.PhysicalNodeId, route.DestinationPhysicalNodeId, nodes,
+                    "terminal-final-approach-authority;endpoint=source");
+                result = Align(result, last.StartRouteIndex, last.EndRouteIndex - 1, last.Orientation, destination.Position,
+                    destination.PhysicalNodeId, route.SourcePhysicalNodeId, nodes,
+                    "terminal-final-approach-authority;endpoint=destination");
+            }
+        }
+        return result;
+
+        static List<CompiledPoint> Align(List<CompiledPoint> current, int start, int end, ArchitectureV7RunOrientation orientation,
+            ArchitectureV7PhysicalPoint terminal, string endpointNodeId, string otherEndpointNodeId,
+            IReadOnlyList<ArchitectureV7PhysicalSceneNode> nodes, string provenance)
+        {
+            if (start > end) return current;
+            var terminalApproachEnd = current[Math.Min(end, current.Count - 1)].Point;
+            var left = Math.Min(terminal.X, terminalApproachEnd.X);
+            var right = Math.Max(terminal.X, terminalApproachEnd.X);
+            var top = Math.Min(terminal.Y, terminalApproachEnd.Y);
+            var bottom = Math.Max(terminal.Y, terminalApproachEnd.Y);
+            if (nodes.Any(node => !string.Equals(node.PhysicalNodeId, endpointNodeId, StringComparison.Ordinal) &&
+                                  !string.Equals(node.PhysicalNodeId, otherEndpointNodeId, StringComparison.Ordinal) &&
+                                  left <= node.Bounds.Right && right >= node.Bounds.Left &&
+                                  top <= node.Bounds.Bottom && bottom >= node.Bounds.Top))
+                return current;
+            for (var index = Math.Max(0, start); index <= Math.Min(end, current.Count - 1); index++)
+            {
+                var point = current[index];
+                var aligned = orientation == ArchitectureV7RunOrientation.Vertical
+                    ? new ArchitectureV7PhysicalPoint(terminal.X, point.Point.Y, point.Point.Provenance + ";" + provenance)
+                    : new ArchitectureV7PhysicalPoint(point.Point.X, terminal.Y, point.Point.Provenance + ";" + provenance);
+                current[index] = point with { Point = aligned };
+            }
+            return current;
+        }
     }
 
     private static List<CompiledPoint>? AddAllocatedEndpointHandoffs(List<CompiledPoint> points, ArchitectureV7LogicalRoute route,
