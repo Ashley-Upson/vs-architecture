@@ -419,6 +419,12 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         Assert.DoesNotContain(result.Diagnostics, x => x.Code == "CROSSING-TURN-CONFLICT");
         Assert.NotEmpty(result.Bends);
         Assert.NotEmpty(result.Crossings);
+        var sharedCellBends = result.Bends.Where(x => x.Cell == new ArchitectureV7RouteCell(2, 2)).ToArray();
+        Assert.True(sharedCellBends.Length >= 2);
+        Assert.True(sharedCellBends
+            .Select(x => (x.EffectiveRelativePosition.XOffset, x.EffectiveRelativePosition.YOffset))
+            .Distinct()
+            .Count() > 1);
         Assert.Equal(result.Bends.Count, result.Bends.Select(x => x.BendId).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(result.Crossings.Count, result.Crossings.Select(x => x.CrossingId).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("routes", result.RouteFingerprint);

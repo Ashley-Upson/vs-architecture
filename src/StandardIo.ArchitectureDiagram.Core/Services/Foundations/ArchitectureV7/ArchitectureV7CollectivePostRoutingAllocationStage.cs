@@ -417,7 +417,9 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             .OrderBy(x => x)
             .ToArray();
         var ordinalIndex = Array.IndexOf(domain, assignment.LaneOrdinal);
-        return (ordinalIndex - (domain.Length - 1) / 2d) * spacing;
+        // Ordinal zero is the shared centred anchor. Keep all bend, handoff,
+        // and straight-run coordinates in this same anchored lane frame.
+        return ordinalIndex * spacing;
     }
 
     private static double TerminalLaneOffset(ArchitectureV7FrozenNodePlacement node, ArchitectureV7LogicalRoute route,

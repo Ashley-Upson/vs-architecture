@@ -102,6 +102,49 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Endpoint_alignment_does_not_collapse_distinct_vertical_lanes_into_a_shared_interval()
+    {
+        var routes = new[]
+        {
+            Route("a", "a-source", "a-target", (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (4, 1), (4, 0)),
+            Route("b", "b-source", "b-target", (0, 4), (1, 4), (2, 4), (2, 3), (2, 2), (1, 2), (1, 1), (1, 0))
+        };
+        var scene = Compile(routes, Nodes(("a-source", 0, 2), ("a-target", 4, 0), ("b-source", 0, 4), ("b-target", 1, 0)), spacing: 6);
+
+        Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Points),
+            point => point.Provenance.Contains("terminal-final-approach-authority", StringComparison.Ordinal));
+
+        var anchoredRoute = scene.Routes.Single(route => route.PhysicalLinkId == "a");
+        var anchoredTerminal = scene.Terminals.Single(terminal => terminal.PhysicalLinkId == "a" &&
+            terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        var competingRoute = scene.Routes.Single(route => route.PhysicalLinkId == "b");
+        var anchoredLanePoints = anchoredRoute.Points
+            .Where(point => point.Provenance.Contains("lane:V:2:0", StringComparison.Ordinal))
+            .ToArray();
+        var competingLanePoints = competingRoute.Points
+            .Where(point => point.Provenance.Contains("vertical-lane=lane:V:2:1", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(anchoredLanePoints);
+        Assert.NotEmpty(competingLanePoints);
+        Assert.All(anchoredLanePoints, point => Assert.Equal(anchoredTerminal.Position.X, point.X));
+        Assert.All(competingLanePoints, point => Assert.NotEqual(anchoredTerminal.Position.X, point.X));
+
+        var segments = scene.Routes.SelectMany(route => route.Segments.Select(segment => (route.PhysicalLinkId, segment)))
+            .Where(x => x.segment.Start.X == x.segment.End.X && x.segment.Start.Y != x.segment.End.Y)
+            .ToArray();
+        for (var left = 0; left < segments.Length; left++)
+        for (var right = left + 1; right < segments.Length; right++)
+        {
+            if (segments[left].PhysicalLinkId == segments[right].PhysicalLinkId || segments[left].segment.Start.X != segments[right].segment.Start.X) continue;
+            var leftTop = Math.Min(segments[left].segment.Start.Y, segments[left].segment.End.Y);
+            var leftBottom = Math.Max(segments[left].segment.Start.Y, segments[left].segment.End.Y);
+            var rightTop = Math.Min(segments[right].segment.Start.Y, segments[right].segment.End.Y);
+            var rightBottom = Math.Max(segments[right].segment.Start.Y, segments[right].segment.End.Y);
+            Assert.False(Math.Max(leftTop, rightTop) < Math.Min(leftBottom, rightBottom));
+        }
+    }
+
+    [Fact]
     public void Vertical_straight_section_keeps_one_lane_x_when_crossing_resources_are_present()
     {
         var routes = new[]
