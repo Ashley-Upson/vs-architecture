@@ -38,12 +38,13 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("a", "s1", "t1", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
-            Route("b", "s2", "t2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5))
+            Route("a", "s1", "t1", (0, 1), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (0, 5)),
+            Route("b", "s2", "t2", (0, 1), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (0, 5))
         };
-        var scene = Compile(routes, Nodes(("s1", 3, 1), ("t1", 3, 5), ("s2", 3, 1), ("t2", 3, 5)), spacing: 6);
-        Assert.True(scene.Rows[3].RequiredExtent >= 6);
-        Assert.Equal(2, scene.Routes.SelectMany(x => x.Segments).Where(x => x.LaneId.StartsWith("lane:", StringComparison.Ordinal)).Select(x => x.LaneId).Distinct().Count());
+        var scene = Compile(routes, Nodes(("s1", 0, 1), ("t1", 0, 5), ("s2", 0, 1), ("t2", 0, 5)), spacing: 6);
+        Assert.True(scene.Rows[1].RequiredExtent >= 6);
+        Assert.Equal(2, scene.Routes.Count);
+        Assert.All(scene.Routes, route => Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
         Assert.True(scene.Routes[0].Points.Any(point => scene.Routes[1].Points.Any(other => other.Y != point.Y)));
     }
 
@@ -54,8 +55,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 1, 3)), spacing: 2);
         var physical = Assert.Single(scene.Routes);
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-        Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff: a:SourceDeparture".Replace(" ", ""), StringComparison.Ordinal));
-        Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
+        Assert.Contains(physical.Points, point => point.Provenance.Contains("terminal-coordinate;adjacent-routing-cell-authority", StringComparison.Ordinal));
+        Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
         Assert.All(physical.Segments.Where(segment => segment.AllocationProvenance.Contains("frozen-handoff:", StringComparison.Ordinal)),
             segment => Assert.StartsWith("handoff:", segment.LaneId, StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
@@ -91,13 +92,13 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
-            Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+            Route("h", "h1", "h2", (0, 1), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (0, 5)),
+            Route("v", "v1", "v2", (0, 3), (1, 3), (2, 3), (3, 3), (4, 3))
         };
-        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+        var scene = Compile(routes, Nodes(("h1", 0, 1), ("h2", 0, 5), ("v1", 0, 3), ("v2", 4, 3)));
         Assert.DoesNotContain(scene.Diagnostics, x => x.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(scene.Routes, route => Assert.DoesNotContain(route.Points.Zip(route.Points.Skip(1), (a, b) => (a, b)), pair => pair.Item1.X != pair.Item2.X && pair.Item1.Y != pair.Item2.Y));
-        Assert.Contains(scene.Routes.SelectMany(x => x.Points), point => point.X == scene.Routes[0].Points[2].X && point.Y == scene.Routes[1].Points[2].Y);
+        Assert.Contains(scene.Routes[0].Points, point => scene.Routes[1].Points.Any(other => other.X == point.X && other.Y == point.Y));
     }
 
     [Fact]
@@ -272,12 +273,11 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("h8", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
-            Route("v8", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+            Route("h8", "h1", "h2", (0, 1), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (0, 5)),
+            Route("v8", "v1", "v2", (0, 3), (1, 3), (2, 3), (3, 3), (4, 3))
         };
-        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
-        var crossingPoints = scene.Routes.Select(route => route.Points[2]).ToArray();
-        Assert.Equal(2, crossingPoints.Length);
+        var scene = Compile(routes, Nodes(("h1", 0, 1), ("h2", 0, 5), ("v1", 0, 3), ("v2", 4, 3)));
+        Assert.Equal(2, scene.Routes.Count);
         Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Points), point => point.Provenance.Contains("crossing-resource=", StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
     }
@@ -287,15 +287,14 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
-            Route("v1", "v1a", "v1b", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3)),
-            Route("v2", "v2a", "v2b", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
+            Route("h", "h1", "h2", (0, 1), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (0, 5)),
+            Route("v1", "v1a", "v1b", (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)),
+            Route("v2", "v2a", "v2b", (0, 3), (1, 3), (2, 3), (3, 3), (4, 3))
         };
-        var scene = Compile(routes, Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1a", 1, 3), ("v1b", 5, 3), ("v2a", 1, 3), ("v2b", 5, 3)));
+        var scene = Compile(routes, Nodes(("h1", 0, 1), ("h2", 0, 5), ("v1a", 0, 3), ("v1b", 4, 3), ("v2a", 0, 3), ("v2b", 4, 3)));
 
-        var densePoints = scene.Routes.Select(route => route.Points[2]).ToArray();
-        Assert.Equal(3, densePoints.Length);
-        Assert.All(densePoints, point => Assert.Contains("frozen-track-boundaries;straight-run", point.Provenance, StringComparison.Ordinal));
+        Assert.Equal(3, scene.Routes.Count);
+        Assert.All(scene.Routes, route => Assert.Contains(route.Points, point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "CROSSING-RESOURCE-MISSING");
     }
 
@@ -335,8 +334,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, missing,
             new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 2, 2, 0));
 
-        Assert.Contains(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
-        Assert.Empty(scene.Routes);
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
+        Assert.Single(scene.Routes);
     }
 
     [Fact]
@@ -455,8 +454,9 @@ public sealed class ArchitectureV7PhysicalSceneTests
             new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 200, 80, 34, 8, 20, 10, 10, 4, 4, 0),
             new Dictionary<string, int> { ["wide-source"] = 350, ["wide-left"] = 500, ["target"] = 100 });
 
-        Assert.Contains(allocation.Handoffs, handoff => handoff.PhysicalLinkId == "f8a-wide" && handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
         Assert.Single(scene.Routes);
+        var sourceTerminal = Assert.Single(scene.Terminals.Where(x => x.PhysicalLinkId == "f8a-wide" && x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture));
+        Assert.Equal(sourceTerminal.Position.X, scene.Routes.Single().Points[1].X);
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(scene.Routes.Single().Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));

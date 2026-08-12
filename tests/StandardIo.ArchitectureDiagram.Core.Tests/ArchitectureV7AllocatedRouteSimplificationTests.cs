@@ -88,6 +88,21 @@ public sealed class ArchitectureV7AllocatedRouteSimplificationTests
         Assert.Contains("handoff:destination", simplified.Segments[0].AllocationProvenance);
     }
 
+    [Fact]
+    public void One_hundred_redundant_same_axis_points_compile_to_the_canonical_route_shape()
+    {
+        var points = Enumerable.Range(0, 100).Select(index => (X: (double)index, Y: 0d)).ToArray();
+        var result = Simplify(Route(points));
+        var simplified = Assert.Single(result.Scene.Routes);
+
+        Assert.Equal(new[] { (0d, 0d), (99d, 0d) },
+            simplified.Points.Select(point => (point.X, point.Y)));
+        Assert.Single(simplified.Segments);
+        Assert.Equal(100, Assert.Single(result.Evidence).PointsBefore);
+        Assert.Equal(2, Assert.Single(result.Evidence).PointsAfter);
+        Assert.True(Assert.Single(result.Evidence).Simplified);
+    }
+
     private static ArchitectureV7PhysicalSceneFreeze Scene(ArchitectureV7PhysicalRoute route) =>
         new(Array.Empty<ArchitectureV7PhysicalTrackDimension>(), Array.Empty<ArchitectureV7PhysicalTrackDimension>(),
             Array.Empty<ArchitectureV7PhysicalSceneNode>(), Array.Empty<ArchitectureV7PhysicalTerminal>(), new[] { route },

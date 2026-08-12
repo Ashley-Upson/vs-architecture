@@ -134,11 +134,18 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         {
             var node = nodes.FirstOrDefault(x => x.PhysicalNodeId == slot.PhysicalNodeId);
             if (node is null) { diagnostics.Add(new("TERMINAL-NODE-MISSING", "A frozen terminal has no materialised node bounds.", true, slot.PhysicalLinkId)); continue; }
-            var x = (node.Bounds.Left + node.Bounds.Right) / 2d + slot.RelativeOffset;
-            var y = slot.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? node.Bounds.Bottom : node.Bounds.Top;
-            if (x < node.Bounds.Left + configuration.TerminalInset || x > node.Bounds.Right - configuration.TerminalInset)
+            var direction = slot.Direction;
+            var horizontalEdge = direction is ArchitectureV7EndpointDirection.Up or ArchitectureV7EndpointDirection.Down;
+            var x = horizontalEdge
+                ? Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + slot.RelativeOffset, MidpointRounding.AwayFromZero)
+                : Math.Round(direction == ArchitectureV7EndpointDirection.Left ? node.Bounds.Left : node.Bounds.Right, MidpointRounding.AwayFromZero);
+            var y = horizontalEdge
+                ? Math.Round(direction == ArchitectureV7EndpointDirection.Down ? node.Bounds.Bottom : node.Bounds.Top, MidpointRounding.AwayFromZero)
+                : Math.Round((node.Bounds.Top + node.Bounds.Bottom) / 2d + slot.RelativeOffset, MidpointRounding.AwayFromZero);
+            if ((horizontalEdge && (x < node.Bounds.Left + configuration.TerminalInset || x > node.Bounds.Right - configuration.TerminalInset)) ||
+                (!horizontalEdge && (y < node.Bounds.Top + configuration.TerminalInset || y > node.Bounds.Bottom - configuration.TerminalInset)))
                 diagnostics.Add(new("TERMINAL-OUT-OF-BOUNDS", "A frozen terminal slot does not fit; terminal clamping is forbidden.", true, slot.PhysicalLinkId));
-            result.Add(new(slot.PhysicalLinkId, slot.PhysicalNodeId, slot.EndpointKind, slot.SlotOrdinal, new(x, y, "terminal-edge+frozen-slot"), "node-edge;frozen-slot-ordinal;configured-spacing-inset"));
+            result.Add(new(slot.PhysicalLinkId, slot.PhysicalNodeId, slot.EndpointKind, slot.SlotOrdinal, new(x, y, "terminal-edge+frozen-slot"), "node-edge;frozen-slot-ordinal;configured-spacing-inset;direction=" + direction));
         }
         return result;
     }
@@ -167,6 +174,11 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             for (var index = 1; index < route.Cells.Count - 1; index++)
             {
                 var point = PointFor(route, index, indexes, rows, columns, diagnostics);
+                if (point is not null && (index == 1 || index == route.Cells.Count - 2))
+                {
+                    var endpoint = index == 1 ? source : destination;
+                    point = AlignEndpointAdjacentPoint(route, index, point, endpoint, indexes, rows, columns);
+                }
                 if (point is null) { routeFailed = true; break; }
                 points.Add(point);
             }
@@ -277,12 +289,22 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         return new(index, route.Cells[index], new(x, y, "frozen-track-boundaries;straight-run"), incoming.RunId, incomingLane.LaneId, "straight-run;run=" + incoming.RunId + ";lane=" + incomingLane.LaneId);
     }
 
+    private static CompiledPoint AlignEndpointAdjacentPoint(ArchitectureV7LogicalRoute route, int index, CompiledPoint point,
+        ArchitectureV7PhysicalTerminal terminal, CompilationIndexes indexes, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns)
+    {
+        if (!indexes.IncomingRunsByLinkAndRouteIndex.TryGetValue((route.PhysicalLinkId, index), out var run) ||
+            !indexes.AssignmentsByRunId.TryGetValue(run.RunId, out var assignment)) return point;
+        var provenance = point.Provenance + ";terminal-coordinate;adjacent-routing-cell-authority;run=" + run.RunId + ";lane=" + assignment.LaneId;
+        return new(index, point.Cell, new(point.Point.X, point.Point.Y, provenance), run.RunId, assignment.LaneId, provenance);
+    }
+
     private static CompiledPoint PointAtCell(ArchitectureV7LogicalRoute route, int index, ArchitectureV7PhysicalRelativePosition relative,
         string runId, string laneId, string provenance, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns)
     {
         var cell = route.Cells[index];
-        var x = (columns[cell.Column].Start + columns[cell.Column].End) / 2d + relative.XOffset;
-        var y = (rows[cell.Row].Start + rows[cell.Row].End) / 2d + relative.YOffset;
+        var x = Math.Round((columns[cell.Column].Start + columns[cell.Column].End) / 2d + relative.XOffset, MidpointRounding.AwayFromZero);
+        var y = Math.Round((rows[cell.Row].Start + rows[cell.Row].End) / 2d + relative.YOffset, MidpointRounding.AwayFromZero);
         return new(index, cell, new(x, y, provenance), runId, laneId, provenance);
     }
 
@@ -294,7 +316,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     {
         if (count <= 0) return Array.Empty<double>();
         var centre = start + extent / 2d;
-        return Enumerable.Range(0, count).Select(index => centre + (index - (count - 1) / 2d) * spacing).ToArray();
+        return Enumerable.Range(0, count).Select(index => Math.Round(centre + (index - (count - 1) / 2d) * spacing, MidpointRounding.AwayFromZero)).ToArray();
     }
     private static string Fingerprint(IEnumerable<ArchitectureV7PhysicalTrackDimension> rows, IEnumerable<ArchitectureV7PhysicalTrackDimension> columns,
         IEnumerable<ArchitectureV7PhysicalSceneNode> nodes, IEnumerable<ArchitectureV7PhysicalTerminal> terminals, IEnumerable<ArchitectureV7PhysicalRoute> routes,

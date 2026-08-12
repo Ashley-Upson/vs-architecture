@@ -179,6 +179,49 @@ public sealed class ArchitectureV7ProjectCompositionTests
     }
 
     [Fact]
+    public void Standalone_region_starts_below_the_deepest_multi_project_region()
+    {
+        var diagram = new ArchitectureDiagramModel(
+            new[]
+            {
+                new ArchitectureProject("deep", "Deep", new[]
+                {
+                    Node("r", "Root"), Node("a", "A"), Node("b", "B"), Node("c", "C"), Node("d", "D")
+                }, "deep"),
+                new ArchitectureProject("other", "Other", new[] { Node("standalone", "Standalone") }, "other")
+            },
+            Array.Empty<ArchitectureExternalNode>(),
+            new[] { Link("1", "r", "a"), Link("2", "a", "b"), Link("3", "b", "c"), Link("4", "c", "d") }, null);
+
+        var freeze = Compose(diagram);
+        var deepestProjectEnd = freeze.Projects.Max(project => project.Transform.RegionOriginRow + project.Height);
+
+        Assert.True(freeze.Standalone.FirstNodeRow > deepestProjectEnd);
+    }
+
+    [Fact]
+    public void Multi_project_standalone_footprints_are_disjoint_from_projects_and_each_other()
+    {
+        var diagram = new ArchitectureDiagramModel(
+            new[]
+            {
+                new ArchitectureProject("p1", "P1", new[] { Node("a", "A"), Node("a2", "A2") }, "p1"),
+                new ArchitectureProject("p2", "P2", new[] { Node("b", "B"), Node("b2", "B2") }, "p2"),
+                new ArchitectureProject("p3", "P3", new[] { Node("s1", "S1"), Node("s2", "S2") }, "p3")
+            },
+            Array.Empty<ArchitectureExternalNode>(),
+            new[] { Link("a-link", "a", "a2"), Link("b-link", "b", "b2") }, null);
+
+        var freeze = Compose(diagram);
+        var occupied = new Dictionary<(int Row, int Column), string>();
+        foreach (var node in freeze.Nodes)
+            foreach (var cell in node.LogicalFootprint)
+                Assert.True(occupied.TryAdd(cell, node.PhysicalNodeId), $"{node.PhysicalNodeId} overlaps {occupied.GetValueOrDefault(cell)} at {cell}");
+        Assert.All(freeze.Standalone.Placements, standalone =>
+            Assert.DoesNotContain(freeze.Projects.SelectMany(project => project.Cells), cell => cell.Row == standalone.DiagramRow && cell.Column >= standalone.DiagramColumn && cell.Column < standalone.DiagramColumn + standalone.LogicalSpan));
+    }
+
+    [Fact]
     public void Project_header_text_is_blocked_but_remaining_header_cells_are_straight_only()
     {
         var trees = BuildTrees(Diagram(new[] { Node("a", "A") }, Array.Empty<ArchitectureLink>()));

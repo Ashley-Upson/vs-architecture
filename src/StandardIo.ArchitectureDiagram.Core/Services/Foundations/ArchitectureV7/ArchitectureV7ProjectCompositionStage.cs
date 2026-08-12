@@ -74,7 +74,9 @@ public sealed class ArchitectureV7ProjectCompositionStage
         }
         var external = new ArchitectureV7ExternalRegion(externalRow, externalPlacements.Select(item => item.PhysicalNodeId).ToArray(), externalPlacements);
 
-        var standalonePlacements = PlaceStandalone(nodes, sizing, standaloneIds, externalRow, occupied, ref commonWidth);
+        var deepestProjectRow = projects.Count == 0 ? externalRow : projects.Max(project => project.Transform.RegionOriginRow + project.Height);
+        var standaloneOriginRow = Math.Max(externalRow + 2, deepestProjectRow + 1);
+        var standalonePlacements = PlaceStandalone(nodes, sizing, standaloneIds, standaloneOriginRow, occupied, ref commonWidth);
         placements.AddRange(standalonePlacements);
         var standalone = BuildStandaloneRegion(standalonePlacements, externalRow);
         var rowCount = Math.Max(externalRow + 1, Math.Max(projects.Count == 0 ? 0 : projects.Max(project => project.Transform.RegionOriginRow + project.Height), standalonePlacements.Count == 0 ? 0 : standalonePlacements.Max(item => item.DiagramRow) + 1));
@@ -163,13 +165,13 @@ public sealed class ArchitectureV7ProjectCompositionStage
         IReadOnlyDictionary<string, ArchitectureV7PhysicalNode> nodes,
         IReadOnlyDictionary<string, ArchitectureV7NodeSpanRequirement> sizing,
         IReadOnlyList<string> standaloneIds,
-        int externalRow,
+        int standaloneOriginRow,
         HashSet<(int Row, int Column)> occupied,
         ref int width)
     {
         if (standaloneIds.Count == 0) return Array.Empty<ArchitectureV7FrozenNodePlacement>();
         var targetWidth = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(standaloneIds.Sum(id => sizing[id].LogicalSpan + 1))));
-        var row = externalRow + 2;
+        var row = standaloneOriginRow;
         var column = 0;
         var result = new List<ArchitectureV7FrozenNodePlacement>();
         foreach (var id in standaloneIds)

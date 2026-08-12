@@ -69,7 +69,12 @@ public sealed class ArchitectureV7AllocatedRouteSimplificationStage
             {
                 if (pair.left.Axis == Axis.None || pair.left.Axis != pair.right.Axis ||
                     string.Equals(pair.left.LaneId, pair.right.LaneId, StringComparison.Ordinal)) return false;
-                if (IsEndpointResource(pair.left.Segment) || IsEndpointResource(pair.right.Segment)) return false;
+                // A compiled bend owns the transition point, so its resource
+                // provenance can carry the incoming lane while the following
+                // interval is already on the outgoing run. That is not a
+                // same-axis straight-run conflict.
+                if (IsEndpointResource(pair.left.Segment) || IsEndpointResource(pair.right.Segment) ||
+                    IsBendResource(pair.left.Segment) || IsBendResource(pair.right.Segment)) return false;
                 diagnostics.Add(new("SIMPLIFIER-SAME-AXIS-LANE-MISMATCH", "A same-axis allocated group uses more than one lane; simplification was refused.", true, route.PhysicalLinkId));
                 return true;
             });
@@ -147,6 +152,9 @@ public sealed class ArchitectureV7AllocatedRouteSimplificationStage
         }
         simplifiedPoints = canonicalPoints.ToArray();
         simplifiedSegments = canonicalSegments;
+        var collapsed = CollapseCollinearReversals(simplifiedPoints, simplifiedSegments);
+        simplifiedPoints = collapsed.Points.ToArray();
+        simplifiedSegments = collapsed.Segments.ToList();
         var simplifiedRoute = new ArchitectureV7PhysicalRoute(route.PhysicalLinkId, simplifiedPoints, simplifiedSegments,
             "allocated-route-canonicalisation;source=" + route.Provenance);
         return (simplifiedRoute, new(route.PhysicalLinkId, points.Count, simplifiedPoints.Length,
@@ -162,6 +170,42 @@ public sealed class ArchitectureV7AllocatedRouteSimplificationStage
 
     private static bool IsEndpointResource(ArchitectureV7PhysicalSegment segment) =>
         segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal);
+
+    private static bool IsBendResource(ArchitectureV7PhysicalSegment segment) =>
+        segment.AllocationProvenance.Contains("bend-resource=", StringComparison.Ordinal);
+
+    private static (IReadOnlyList<ArchitectureV7PhysicalPoint> Points, IReadOnlyList<ArchitectureV7PhysicalSegment> Segments)
+        CollapseCollinearReversals(IReadOnlyList<ArchitectureV7PhysicalPoint> points,
+            IReadOnlyList<ArchitectureV7PhysicalSegment> segments)
+    {
+        var outputPoints = points.ToList();
+        var outputSegments = segments.ToList();
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (var index = 1; index + 1 < outputPoints.Count; index++)
+            {
+                var before = outputPoints[index - 1];
+                var middle = outputPoints[index];
+                var after = outputPoints[index + 1];
+                var horizontal = before.Y == middle.Y && middle.Y == after.Y;
+                var vertical = before.X == middle.X && middle.X == after.X;
+                if (!horizontal && !vertical) continue;
+                var firstDirection = horizontal ? Math.Sign(middle.X - before.X) : Math.Sign(middle.Y - before.Y);
+                var secondDirection = horizontal ? Math.Sign(after.X - middle.X) : Math.Sign(after.Y - middle.Y);
+                if (firstDirection == 0 || secondDirection == 0 || firstDirection == secondDirection) continue;
+
+                var merged = MergeSegments(outputSegments[index - 1], outputSegments[index], after);
+                outputPoints.RemoveAt(index);
+                outputSegments[index - 1] = merged;
+                outputSegments.RemoveAt(index);
+                changed = true;
+                break;
+            }
+        }
+        return (outputPoints, outputSegments);
+    }
 
     private static bool CanJoin(Interval left, Interval right) =>
         string.Equals(left.LaneId, right.LaneId, StringComparison.Ordinal) ||

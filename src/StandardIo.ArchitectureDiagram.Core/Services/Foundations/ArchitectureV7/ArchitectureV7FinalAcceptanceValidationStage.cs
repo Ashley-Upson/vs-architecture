@@ -28,6 +28,8 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         ValidatePlacement(projection, ownership, reservation, placement, findings);
         ValidateLogicalRoutes(projection, placement, routes, findings);
         ValidatePhysicalGeometry(placement, routes, allocation, scene, configuration, indexes, findings);
+        ValidateEndpointLaneOrdering(allocation, scene, indexes, findings);
+        ValidateEndpointRegion(allocation, scene, configuration, indexes, findings);
         ValidateCrossings(allocation, scene, indexes, findings);
         ValidateTrackSizing(placement, allocation, scene, configuration, findings);
         ValidateRetainedDiagnostics(routes, allocation, scene, findings);
@@ -175,7 +177,31 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                 foreach (var node in indexes.NodesForSegment(segment))
                 {
                     indexes.MetricsBuilder.SegmentNodePredicateEvaluations++;
-                    if (node.Key != route.PhysicalLinkId && StrictlyCrossesNode(segment, node.Value.Bounds)) Add(findings, "PHYSICAL-NODE-BODY-CROSSING", "physical-geometry", "Physical route crosses an unrelated node body.", route.PhysicalLinkId, segment.LogicalCells, new[] { segment.Start, segment.End }, new[] { node.Key });
+                    var sourceNodeId = source.PhysicalNodeId;
+                    var destinationNodeId = destination.PhysicalNodeId;
+                    var isEndpointNode = node.Key == sourceNodeId || node.Key == destinationNodeId;
+                    var crosses = isEndpointNode
+                        ? StrictlyCrossesNode(segment, node.Value.Bounds)
+                        : IntersectsNodeBoundaryOrInterior(segment, node.Value.Bounds);
+                    if (crosses)
+                    {
+                        var message = isEndpointNode
+                            ? "Physical route traverses the interior of its source or target node beyond the allocated terminal."
+                            : "Physical route intersects the boundary or interior of an unrelated node.";
+                        Add(findings, "ROUTE-THROUGH-NODE", "physical-geometry", message, route.PhysicalLinkId,
+                            segment.LogicalCells, new[] { segment.Start, segment.End }, new[]
+                            {
+                                "source=" + sourceNodeId,
+                                "target=" + destinationNodeId,
+                                "intersected-node=" + node.Key,
+                                "segment=" + Bounds(segment.Start, segment.End),
+                                "node-rectangle=" + Bounds(node.Value.Bounds),
+                                "route-provenance=" + route.Provenance,
+                                "resource-provenance=" + segment.AllocationProvenance
+                            });
+                        if (!isEndpointNode)
+                            Add(findings, "PHYSICAL-NODE-BODY-CROSSING", "physical-geometry", "Physical route crosses an unrelated node body.", route.PhysicalLinkId, segment.LogicalCells, new[] { segment.Start, segment.End }, new[] { node.Key });
+                    }
                 }
                 if (segment.AllocationProvenance is null || segment.RunId.Length == 0 || segment.LaneId.Length == 0) Add(findings, "MISSING-PHYSICAL-PROVENANCE", "physical-geometry", "Physical segment lacks run/lane provenance.", route.PhysicalLinkId, segment.LogicalCells, new[] { segment.Start, segment.End }, Array.Empty<string>());
             }
@@ -184,8 +210,8 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             var handoffs = indexes.HandoffsByRoute.TryGetValue(route.PhysicalLinkId, out var routeHandoffs) ? routeHandoffs.Count : 0;
             if (bends > allocatedBends + handoffs) Add(findings, "UNALLOCATED-Z-GEOMETRY", "physical-geometry", "Physical polyline contains more bends than frozen bend/handoff allocation.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "allocated-bends=" + allocatedBends });
             var nodes = indexes.NodeById;
-            if (source.Position.Y != nodes[source.PhysicalNodeId].Bounds.Bottom) Add(findings, "SOURCE-NOT-BOTTOM-EDGE", "physical-geometry", "Source terminal is not on the node bottom edge.", route.PhysicalLinkId, frozen.Cells, new[] { source.Position }, Array.Empty<string>());
-            if (destination.Position.Y != nodes[destination.PhysicalNodeId].Bounds.Top) Add(findings, "DESTINATION-NOT-TOP-EDGE", "physical-geometry", "Destination terminal is not on the node top edge.", route.PhysicalLinkId, frozen.Cells, new[] { destination.Position }, Array.Empty<string>());
+            ValidateTerminalEdge(source, nodes[source.PhysicalNodeId].Bounds, "SOURCE-NOT-EDGE", route, frozen, findings);
+            ValidateTerminalEdge(destination, nodes[destination.PhysicalNodeId].Bounds, "DESTINATION-NOT-EDGE", route, frozen, findings);
         }
         foreach (var left in indexes.PhysicalGeometryPairs())
         {
@@ -201,6 +227,170 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
                 Add(findings, "INSUFFICIENT-PARALLEL-SPACING", "physical-geometry", "Parallel routes are closer than configured spacing.", left.Left.RouteId + "/" + left.Right.RouteId, a.LogicalCells, new[] { a.Start, b.Start }, new[] { a.LaneId, b.LaneId });
         }
         _ = placement; _ = routes; _ = allocation;
+    }
+
+    private static void ValidateEndpointLaneOrdering(ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneFreeze scene,
+        ValidationIndexes indexes, ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        var endpointGroups = new Dictionary<(string Node, ArchitectureV7EndpointKind Kind, int DirectionGroup), List<(ArchitectureV7TerminalSlotAssignment Terminal, ArchitectureV7PhysicalPoint Adjacent)>>();
+        foreach (var terminal in allocation.Terminals)
+        {
+            if (!indexes.RouteById.TryGetValue(terminal.PhysicalLinkId, out var route) || route.Points.Count < 2) continue;
+            var adjacent = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Points[1] : route.Points[route.Points.Count - 2];
+            var axisIsX = Math.Abs(adjacent.Y - (scene.Terminals.First(item => item.PhysicalLinkId == terminal.PhysicalLinkId && item.EndpointKind == terminal.EndpointKind).Position.Y)) > 0.001;
+            var group = axisIsX
+                ? terminal.Direction is ArchitectureV7EndpointDirection.Up or ArchitectureV7EndpointDirection.Down ? 1 : terminal.Direction == ArchitectureV7EndpointDirection.Left ? 0 : 2
+                : terminal.Direction is ArchitectureV7EndpointDirection.Left or ArchitectureV7EndpointDirection.Right ? 1 : terminal.Direction == ArchitectureV7EndpointDirection.Up ? 0 : 2;
+            var key = (terminal.PhysicalNodeId, terminal.EndpointKind, group);
+            if (!endpointGroups.TryGetValue(key, out var entries)) endpointGroups[key] = entries = new();
+            entries.Add((terminal, adjacent));
+        }
+
+        foreach (var group in endpointGroups)
+        {
+            var physicalTerminals = group.Value.Select(item =>
+            {
+                var terminal = scene.Terminals.First(item2 => item2.PhysicalLinkId == item.Terminal.PhysicalLinkId && item2.EndpointKind == item.Terminal.EndpointKind);
+                var axis = Math.Abs(item.Adjacent.Y - terminal.Position.Y) > 0.001 ? terminal.Position.X : terminal.Position.Y;
+                var adjacentAxis = Math.Abs(item.Adjacent.Y - terminal.Position.Y) > 0.001 ? item.Adjacent.X : item.Adjacent.Y;
+                return (item.Terminal, terminal, adjacentAxis, axis);
+            }).OrderBy(item => item.adjacentAxis).ThenBy(item => item.Terminal.PhysicalLinkId, StringComparer.Ordinal).ToArray();
+            for (var index = 1; index < physicalTerminals.Length; index++)
+            {
+                var previous = physicalTerminals[index - 1];
+                var current = physicalTerminals[index];
+                if (previous.axis > current.axis)
+                    Add(findings, "ENDPOINT-LANE-ORDER-INVERSION", "endpoint-allocation", "Physical adjacent lane order is inverted at the node terminal edge.", group.Key.Node,
+                        Array.Empty<ArchitectureV7RouteCell>(), new[] { previous.terminal.Position, current.terminal.Position }, new[]
+                        {
+                            "node=" + group.Key.Node,
+                            "edge=" + group.Key.Kind,
+                            "relationship-a=" + previous.Terminal.PhysicalLinkId,
+                            "relationship-b=" + current.Terminal.PhysicalLinkId,
+                            "adjacent-axis=" + previous.adjacentAxis + "," + current.adjacentAxis,
+                            "terminal-axis=" + previous.axis + "," + current.axis,
+                            "direction-group=" + group.Key.DirectionGroup
+                        });
+            }
+        }
+    }
+
+    private static void ValidateEndpointRegion(ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7PhysicalSceneFreeze scene,
+        ArchitectureV7PhysicalSceneConfiguration configuration, ValidationIndexes indexes, ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        foreach (var group in scene.Terminals.GroupBy(x => (x.PhysicalNodeId, x.EndpointKind)))
+        {
+            var node = indexes.NodeById[group.Key.PhysicalNodeId];
+            var horizontal = group.All(x => Math.Abs(x.Position.Y - node.Bounds.Top) < .001 || Math.Abs(x.Position.Y - node.Bounds.Bottom) < .001);
+            var terminals = group.OrderBy(x => horizontal ? x.Position.X : x.Position.Y).ToArray();
+            for (var i = 1; i < terminals.Length; i++)
+            {
+                var distance = horizontal ? terminals[i].Position.X - terminals[i - 1].Position.X : terminals[i].Position.Y - terminals[i - 1].Position.Y;
+                if (distance + .001 < configuration.TerminalPortSpacing)
+                    Add(findings, "ENDPOINT-TERMINAL-SPACING", "endpoint-allocation", "Adjacent terminals on one node edge are closer than configured spacing.", group.Key.PhysicalNodeId,
+                        Array.Empty<ArchitectureV7RouteCell>(), new[] { terminals[i - 1].Position, terminals[i].Position }, new[] { "required=" + configuration.TerminalPortSpacing, "actual=" + distance });
+            }
+
+            var capacityDemand = allocation.Terminals.Where(x => x.PhysicalNodeId == group.Key.PhysicalNodeId && x.EndpointKind == group.Key.EndpointKind)
+                .Select(x => x.TerminalCapacityRequirement).DefaultIfEmpty(0).Max();
+            var expanded = capacityDemand > configuration.BaseCellWidth &&
+                (horizontal ? node.Bounds.Right - node.Bounds.Left : node.Bounds.Bottom - node.Bounds.Top) > configuration.BaseCellWidth;
+            var occupied = horizontal ? terminals[terminals.Length - 1].Position.X - terminals[0].Position.X : terminals[terminals.Length - 1].Position.Y - terminals[0].Position.Y;
+            if (expanded && terminals.Length >= 3 && occupied <= configuration.BaseCellWidth)
+                Add(findings, "ENDPOINT-EDGE-UTILISATION", "endpoint-allocation", "Expanded node edge is not being used by a busy terminal population.", group.Key.PhysicalNodeId,
+                    Array.Empty<ArchitectureV7RouteCell>(), terminals.Select(x => x.Position).ToArray(), new[] { "occupied=" + occupied, "edge=" + (horizontal ? node.Bounds.Right - node.Bounds.Left : node.Bounds.Bottom - node.Bounds.Top) });
+        }
+
+        foreach (var group in allocation.Terminals.GroupBy(x => (x.PhysicalNodeId, x.EndpointKind)))
+        {
+            var compiled = group.Select(item => (Allocation: item, Route: indexes.RouteById.TryGetValue(item.PhysicalLinkId, out var route) ? route : null,
+                Frozen: indexes.LogicalRouteById.TryGetValue(item.PhysicalLinkId, out var frozen) ? frozen : null))
+                .Where(x => x.Route is not null && x.Route.Points.Count >= 2 && x.Frozen is not null).ToArray();
+            foreach (var item in compiled)
+            {
+                var physical = scene.Routes.FirstOrDefault(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId);
+                var terminal = scene.Terminals.FirstOrDefault(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId && x.EndpointKind == item.Allocation.EndpointKind);
+                if (physical is null || terminal is null || physical.Points.Count < 2) continue;
+                var adjacent = item.Allocation.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? physical.Points[1] : physical.Points[physical.Points.Count - 2];
+                var node = indexes.NodeById[item.Allocation.PhysicalNodeId];
+                var horizontal = Math.Abs(terminal.Position.Y - node.Bounds.Top) < .001 || Math.Abs(terminal.Position.Y - node.Bounds.Bottom) < .001;
+                var terminalAxis = horizontal ? terminal.Position.X : terminal.Position.Y;
+                var dropAxis = horizontal ? adjacent.X : adjacent.Y;
+                if (Math.Abs(terminalAxis - dropAxis) > .001)
+                    Add(findings, "ENDPOINT-DROP-COORDINATE-MISMATCH", "endpoint-allocation", "Final perpendicular drop does not use the authoritative terminal coordinate.", item.Allocation.PhysicalLinkId,
+                        item.Frozen!.Cells, new[] { terminal.Position, adjacent }, new[] { "terminal-axis=" + terminalAxis, "drop-axis=" + dropAxis });
+            }
+
+            var approaches = compiled.Select(item =>
+            {
+                var route = scene.Routes.First(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId);
+                var terminal = scene.Terminals.First(x => x.PhysicalLinkId == item.Allocation.PhysicalLinkId && x.EndpointKind == item.Allocation.EndpointKind);
+                var adjacent = item.Allocation.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Points[1] : route.Points[route.Points.Count - 2];
+                return (item, terminal, start: terminal.Position, end: adjacent);
+            }).ToArray();
+            for (var i = 0; i < approaches.Length; i++)
+                for (var j = i + 1; j < approaches.Length; j++)
+                {
+                    var a = approaches[i]; var b = approaches[j];
+                    if (a.start.X == a.end.X && b.start.X == b.end.X)
+                    {
+                        var overlap = IntervalsOverlap(a.start.Y, a.end.Y, b.start.Y, b.end.Y);
+                        var distance = Math.Abs(a.start.X - b.start.X);
+                        if (overlap && distance < configuration.ParallelLaneSpacing)
+                            Add(findings, "ENDPOINT-APPROACH-SPACING", "endpoint-allocation", "Parallel endpoint drops are closer than configured lane spacing.", group.Key.PhysicalNodeId,
+                                Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, b.start }, new[] { "required=" + configuration.ParallelLaneSpacing, "actual=" + distance });
+                        if (overlap && distance < .001)
+                            Add(findings, "ENDPOINT-APPROACH-OVERLAP", "endpoint-allocation", "Endpoint drops share the same physical interval.", group.Key.PhysicalNodeId,
+                                Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, a.end, b.start, b.end }, new[] { a.item.Allocation.PhysicalLinkId, b.item.Allocation.PhysicalLinkId });
+                    }
+                    else if (a.start.Y == a.end.Y && b.start.Y == b.end.Y)
+                    {
+                        var overlap = IntervalsOverlap(a.start.X, a.end.X, b.start.X, b.end.X);
+                        var distance = Math.Abs(a.start.Y - b.start.Y);
+                        if (overlap && distance < configuration.ParallelLaneSpacing)
+                            Add(findings, "ENDPOINT-APPROACH-SPACING", "endpoint-allocation", "Parallel endpoint approaches are closer than configured lane spacing.", group.Key.PhysicalNodeId,
+                                Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, b.start }, new[] { "required=" + configuration.ParallelLaneSpacing, "actual=" + distance });
+                        if (overlap && distance < .001)
+                            Add(findings, "ENDPOINT-APPROACH-OVERLAP", "endpoint-allocation", "Endpoint approaches share the same physical interval.", group.Key.PhysicalNodeId,
+                                Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, a.end, b.start, b.end }, new[] { a.item.Allocation.PhysicalLinkId, b.item.Allocation.PhysicalLinkId });
+                    }
+                    else if (Intersects(a.start, a.end, b.start, b.end))
+                        Add(findings, "ENDPOINT-APPROACH-CROSSING", "endpoint-allocation", "Endpoint approach segments cross within one node edge approach region.", group.Key.PhysicalNodeId,
+                            Array.Empty<ArchitectureV7RouteCell>(), new[] { a.start, a.end, b.start, b.end }, new[] { a.item.Allocation.PhysicalLinkId, b.item.Allocation.PhysicalLinkId });
+                }
+        }
+    }
+
+    private static bool IntervalsOverlap(double aStart, double aEnd, double bStart, double bEnd) =>
+        Math.Max(Math.Min(aStart, aEnd), Math.Min(bStart, bEnd)) < Math.Min(Math.Max(aStart, aEnd), Math.Max(bStart, bEnd)) - .001;
+
+    private static bool Intersects(ArchitectureV7PhysicalPoint a, ArchitectureV7PhysicalPoint b, ArchitectureV7PhysicalPoint c, ArchitectureV7PhysicalPoint d)
+    {
+        if (a.X == b.X && c.Y == d.Y) return c.X > Math.Min(a.X, b.X) && c.X < Math.Max(a.X, b.X) && a.Y > Math.Min(c.Y, d.Y) && a.Y < Math.Max(c.Y, d.Y);
+        if (a.Y == b.Y && c.X == d.X) return a.X > Math.Min(c.X, d.X) && a.X < Math.Max(c.X, d.X) && c.Y > Math.Min(a.Y, b.Y) && c.Y < Math.Max(a.Y, b.Y);
+        return false;
+    }
+
+    private static void ValidateTerminalEdge(ArchitectureV7PhysicalTerminal terminal, ArchitectureV7PhysicalBounds bounds, string code,
+        ArchitectureV7PhysicalRoute route, ArchitectureV7LogicalRoute frozen, ICollection<ArchitectureV7AcceptanceFinding> findings)
+    {
+        var onEdge = terminal.Position.X == bounds.Left || terminal.Position.X == bounds.Right || terminal.Position.Y == bounds.Top || terminal.Position.Y == bounds.Bottom;
+        if (!onEdge) Add(findings, code, "physical-geometry", "Terminal is not on any edge of its node.", route.PhysicalLinkId, frozen.Cells, new[] { terminal.Position }, Array.Empty<string>());
+    }
+
+    private static string Bounds(ArchitectureV7PhysicalPoint start, ArchitectureV7PhysicalPoint end) =>
+        $"[{start.X},{start.Y}]-[{end.X},{end.Y}]";
+
+    private static string Bounds(ArchitectureV7PhysicalBounds bounds) =>
+        $"[{bounds.Left},{bounds.Top}]-[{bounds.Right},{bounds.Bottom}]";
+
+    private static bool IntersectsNodeBoundaryOrInterior(ArchitectureV7PhysicalSegment segment, ArchitectureV7PhysicalBounds bounds)
+    {
+        var left = Math.Min(segment.Start.X, segment.End.X);
+        var right = Math.Max(segment.Start.X, segment.End.X);
+        var top = Math.Min(segment.Start.Y, segment.End.Y);
+        var bottom = Math.Max(segment.Start.Y, segment.End.Y);
+        return left <= bounds.Right && right >= bounds.Left && top <= bounds.Bottom && bottom >= bounds.Top;
     }
 
     private static void ValidatePhysicalResourceProvenance(ArchitectureV7PhysicalRoute route, ArchitectureV7LogicalRoute frozen,

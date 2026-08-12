@@ -63,6 +63,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees, pre));
         var corridorDiscovery = Measure("corridor-discovery", () => new ArchitectureV7CapabilityCorridorDiscoveryStage().Discover(placement));
         var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
+        var corridorProjection = Measure("route-corridor-projection", () => new ArchitectureV7RouteCorridorProjectionStage().Project(placement, routes, corridorDiscovery));
         var allocation = Measure("collective-allocation", () => new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
             new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.BaseCellWidth,
                 job.Rendering.Layout.LinkPadding)));
@@ -143,6 +144,36 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             }).ToArray(),
             SceneSamples = scene.Diagnostics.Take(128).ToArray()
         };
+        var endpointEvidence = allocation.Terminals.GroupBy(item => (item.PhysicalNodeId, item.EndpointKind))
+            .Select(group =>
+            {
+                var node = scene.Nodes.FirstOrDefault(item => item.PhysicalNodeId == group.Key.PhysicalNodeId);
+                var projectionNode = projection.PhysicalNodes.FirstOrDefault(item => item.PhysicalNodeId == group.Key.PhysicalNodeId);
+                var terminals = group.Select(item =>
+                {
+                    var physicalTerminal = scene.Terminals.FirstOrDefault(candidate => candidate.PhysicalLinkId == item.PhysicalLinkId && candidate.EndpointKind == item.EndpointKind);
+                    var route = scene.Routes.FirstOrDefault(candidate => candidate.PhysicalLinkId == item.PhysicalLinkId);
+                    var drop = route is null || route.Points.Count < 2 ? null : (ArchitectureV7PhysicalPoint?)(item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Points[1] : route.Points[route.Points.Count - 2]);
+                    return new { item.PhysicalLinkId, item.Direction, item.SlotOrdinal, Terminal = physicalTerminal?.Position, Drop = drop };
+                }).OrderBy(item => item.SlotOrdinal).ToArray();
+                var horizontal = node is null || terminals.Length == 0 || terminals.All(item => item.Terminal is not null && (item.Terminal.Y == node.Bounds.Top || item.Terminal.Y == node.Bounds.Bottom));
+                var axis = terminals.Where(item => item.Terminal is not null).Select(item => horizontal ? item.Terminal!.X : item.Terminal!.Y).ToArray();
+                var orderedAxis = axis.OrderBy(value => value).ToArray();
+                return new
+                {
+                    group.Key.PhysicalNodeId,
+                    NodeName = projectionNode?.Name,
+                    group.Key.EndpointKind,
+                    NodeBounds = node?.Bounds,
+                    LogicalSpan = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == group.Key.PhysicalNodeId)?.LogicalSpan,
+                    TerminalCount = terminals.Length,
+                    DirectionalGroups = group.GroupBy(item => item.Direction.ToString()).ToDictionary(item => item.Key, item => item.Count(), StringComparer.Ordinal),
+                    TerminalOccupiedSpan = axis.Length == 0 ? 0 : axis.Max() - axis.Min(),
+                    MinimumTerminalSpacing = orderedAxis.Length < 2 ? 0 : orderedAxis.Zip(orderedAxis.Skip(1), (a, b) => b - a).Min(),
+                    TerminalDropMismatches = terminals.Count(item => item.Terminal is not null && item.Drop is not null && (horizontal ? Math.Abs(item.Terminal.X - item.Drop.X) > .001 : Math.Abs(item.Terminal.Y - item.Drop.Y) > .001)),
+                    Terminals = terminals
+                };
+            }).OrderByDescending(item => item.TerminalCount).ThenBy(item => item.NodeName, StringComparer.Ordinal).ToArray();
         var strict = mode == ArchitectureRenderingMode.StrictValidation;
         var findings = acceptance.Findings.Select(finding => new ValidationFinding(finding.Code, finding.SubjectId ?? finding.Stage, finding.SubjectId, null, 1, finding.Message, true)).ToArray();
         DrawioPage page;
@@ -169,6 +200,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             RendererWaypointCount = RendererWaypointRuns(page).Sum(run => run.Count),
             RendererWaypointDiagonalCount = RendererWaypointRuns(page).Sum(run => run.Zip(run.Skip(1), (a, b) => (a, b))
                 .Count(pair => pair.a.X != pair.b.X && pair.a.Y != pair.b.Y)),
+            RendererEndpointDiagonalCount = RendererEndpointDiagonalCount(page, scene),
             ConfiguredBackground = job.Rendering.Canvas.BackgroundColor,
             EmittedBackground = (string?)page.GraphModel.Attribute("background"),
             EmittedPage = (string?)page.GraphModel.Attribute("page")
@@ -216,7 +248,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             {
                 semantic = semanticEvidence,
                 analyserInput = analyserInputEvidence,
-                projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
+                    projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
                 sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
                 reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint },
@@ -241,6 +273,13 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     TotalContinuationCandidatesEvaluated = routes.Routes.Sum(x => x.OperationMetrics.ContinuationCandidatesEvaluated),
                     TotalUpwardEscapeCandidatesEvaluated = routes.Routes.Sum(x => x.OperationMetrics.UpwardEscapeCandidatesEvaluated),
                     Fingerprint = routes.RouteFingerprint
+                },
+                corridorProjection = new
+                {
+                    UsageCount = corridorProjection.Usages.Count,
+                    UnprojectedRunCount = corridorProjection.UnprojectedRuns.Count,
+                    UsageIds = corridorProjection.Usages.Select(item => item.UsageId).ToArray(),
+                    Fingerprint = corridorProjection.Fingerprint
                 },
                 stageTimings,
                 allocation = new { AssignmentCount = allocation.RunAssignments.Count, Fingerprint = allocation.AllocationFingerprint },
@@ -275,6 +314,8 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     ["final-v7-acceptance-report.json"] = JsonSerializer.Serialize(acceptanceSummary, new JsonSerializerOptions { WriteIndented = true }),
                     ["renderer-fidelity-report.json"] = JsonSerializer.Serialize(rendererFidelity, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-routing-placement-evidence.json"] = JsonSerializer.Serialize(new { routingEvidence, placementEvidence, representative, allocationSceneEvidence }, new JsonSerializerOptions { WriteIndented = true })
+                    , ["v7-endpoint-region-evidence.json"] = JsonSerializer.Serialize(endpointEvidence, new JsonSerializerOptions { WriteIndented = true })
+                    , ["v7-route-corridor-usage-evidence.json"] = JsonSerializer.Serialize(corridorProjection, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-simplification-evidence.json"] = JsonSerializer.Serialize(new
                     {
                         simplification.Evidence,
@@ -307,17 +348,21 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         };
 
     }
+
     private static object AnalyserInputEvidence(ArchitectureGenerationJob job)
     {
         var inputPath = job.InputPath;
         if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath) ||
             !string.Equals(Path.GetExtension(inputPath), ".csproj", StringComparison.OrdinalIgnoreCase))
+        {
             return new { Resolved = false, TargetProjectPath = inputPath ?? "<unspecified>" };
+        }
 
         var projectPath = Path.GetFullPath(inputPath);
         var projectDirectory = Path.GetDirectoryName(projectPath)!;
         var sourceFiles = Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildPath(path)).Select(Path.GetFullPath)
+            .Where(path => !IsBuildPath(path))
+            .Select(Path.GetFullPath)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
         var projectReferences = XDocument.Load(projectPath).Descendants()
             .Where(element => string.Equals(element.Name.LocalName, "ProjectReference", StringComparison.Ordinal))
@@ -350,25 +395,34 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var canonical = JsonSerializer.Serialize(manifest);
         using var sha = SHA256.Create();
         var fingerprint = string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(canonical)).Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
-        return new { Resolved = true, AnalyserInputFingerprint = fingerprint, SourceFileCount = sourceFiles.Length, ProjectReferenceCount = projectReferences.Length, manifest };
+        return new
+        {
+            Resolved = true,
+            AnalyserInputFingerprint = fingerprint,
+            SourceFileCount = sourceFiles.Length,
+            ProjectReferenceCount = projectReferences.Length,
+            manifest
+        };
 
         static bool IsBuildPath(string path) => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             .Any(part => string.Equals(part, "bin", StringComparison.OrdinalIgnoreCase) || string.Equals(part, "obj", StringComparison.OrdinalIgnoreCase));
     }
+
     private static DiagramDiagnostic[] ValidateRendererFidelity(DrawioPage page, ArchitectureV7PhysicalProjectionResult projection, ArchitectureV7PhysicalSceneFreeze scene)
     {
         var cells = page.GraphModel.Descendants("mxCell").ToArray();
         var emittedNodes = cells.Where(x => (string?)x.Attribute("vertex") == "1").ToArray();
         var emittedArchitectureNodes = emittedNodes.Where(x => ((string?)x.Attribute("id"))?.StartsWith("v7_node_", StringComparison.Ordinal) == true).ToArray();
         var emittedEdges = cells.Where(x => (string?)x.Attribute("edge") == "1").ToArray();
+        var cellsById = cells.Where(x => x.Attribute("id") is not null).ToDictionary(x => (string)x.Attribute("id")!, StringComparer.Ordinal);
         var findings = new List<DiagramDiagnostic>();
         if (emittedArchitectureNodes.Length != scene.Nodes.Count) findings.Add(new DiagramDiagnostic("V7RendererNodeCount", $"Renderer emitted {emittedArchitectureNodes.Length} architecture nodes; scene contains {scene.Nodes.Count}."));
         if (emittedEdges.Length != scene.Routes.Count) findings.Add(new DiagramDiagnostic("V7RendererRouteCount", $"Renderer emitted {emittedEdges.Length} edges; scene contains {scene.Routes.Count}."));
         foreach (var node in scene.Nodes)
         {
             var cell = cells.FirstOrDefault(x => (string?)x.Attribute("id") == ArchitectureV7MechanicalDrawioRenderer.IdFor("node", node.PhysicalNodeId));
-            var geometry = cell?.Element("mxGeometry");
-            if (geometry is null || !Equal(node.Bounds.Left, geometry.Attribute("x")) || !Equal(node.Bounds.Top, geometry.Attribute("y")) || !Equal(node.Bounds.Right - node.Bounds.Left, geometry.Attribute("width")) || !Equal(node.Bounds.Bottom - node.Bounds.Top, geometry.Attribute("height")))
+            var bounds = cell is null ? null : AbsoluteBounds(cell, cellsById);
+            if (bounds is null || !Equal(node.Bounds.Left, bounds.Left) || !Equal(node.Bounds.Top, bounds.Top) || !Equal(node.Bounds.Right - node.Bounds.Left, bounds.Right - bounds.Left) || !Equal(node.Bounds.Bottom - node.Bounds.Top, bounds.Bottom - bounds.Top))
                 findings.Add(new DiagramDiagnostic("V7RendererNodeBounds", $"Renderer node geometry does not match frozen bounds for {node.PhysicalNodeId}.", node.PhysicalNodeId));
         }
         foreach (var route in scene.Routes)
@@ -378,16 +432,106 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             var expected = route.Points.Skip(1).Take(Math.Max(0, route.Points.Count - 2)).ToArray();
             if (cell is null || points.Length != expected.Length || points.Zip(expected, (actual, wanted) => Equal(wanted.X, actual.Attribute("x")) && Equal(wanted.Y, actual.Attribute("y"))).Any(x => !x))
                 findings.Add(new DiagramDiagnostic("V7RendererRouteGeometry", $"Renderer route geometry does not match frozen route {route.PhysicalLinkId}.", route.PhysicalLinkId));
+            var source = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+            var target = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+            var emittedSource = ReadPoint(cell, "v7SourceTerminalX", "v7SourceTerminalY");
+            var emittedTarget = ReadPoint(cell, "v7TargetTerminalX", "v7TargetTerminalY");
+            if (source is null || target is null || emittedSource is null || emittedTarget is null ||
+                !Equal(source.Position.X, cell?.Attribute("v7SourceTerminalX")) || !Equal(source.Position.Y, cell?.Attribute("v7SourceTerminalY")) ||
+                !Equal(target.Position.X, cell?.Attribute("v7TargetTerminalX")) || !Equal(target.Position.Y, cell?.Attribute("v7TargetTerminalY")))
+                findings.Add(new DiagramDiagnostic("V7RendererTerminalGeometry", $"Renderer terminal coordinates do not exactly match the frozen terminal geometry for {route.PhysicalLinkId}.", route.PhysicalLinkId));
+            var full = emittedSource is null || emittedTarget is null ? Array.Empty<(double X, double Y)>() : new[] { emittedSource.Value }
+                .Concat(points.Select(point => (double.Parse((string)point.Attribute("x")!, CultureInfo.InvariantCulture), double.Parse((string)point.Attribute("y")!, CultureInfo.InvariantCulture))))
+                .Append(emittedTarget.Value).ToArray();
+            if (full.Zip(full.Skip(1), (a, b) => (a, b)).Any(pair => pair.a.Item1 != pair.b.Item1 && pair.a.Item2 != pair.b.Item2))
+                findings.Add(new DiagramDiagnostic("V7RendererEndpointDiagonal", $"Renderer endpoint-to-waypoint geometry is diagonal for {route.PhysicalLinkId}.", route.PhysicalLinkId));
+            if (HasRendererAxisReversal(full))
+                findings.Add(new DiagramDiagnostic("V7RendererAxisReversal", $"Renderer endpoint-inclusive geometry reverses on a straight axis for {route.PhysicalLinkId}.", route.PhysicalLinkId));
+            var link = projection.PhysicalLinks.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId);
+            if (link is not null)
+                foreach (var node in scene.Nodes.Where(item => item.PhysicalNodeId != link.SourcePhysicalNodeId && item.PhysicalNodeId != link.DestinationPhysicalNodeId))
+                {
+                    var emittedNode = cellsById.TryGetValue(ArchitectureV7MechanicalDrawioRenderer.IdFor("node", node.PhysicalNodeId), out var emittedNodeCell) ? AbsoluteBounds(emittedNodeCell, cellsById) : null;
+                    if (emittedNode is not null && full.Zip(full.Skip(1), (start, end) => (start, end)).Any(segment => Intersects(emittedNode, segment.Item1, segment.Item2)))
+                        findings.Add(new DiagramDiagnostic("V7RendererRouteThroughNode", $"Emitted route geometry intersects unrelated node {node.PhysicalNodeId} for {route.PhysicalLinkId} (intersected-node={node.PhysicalNodeId}).", route.PhysicalLinkId));
+                }
         }
         return findings.ToArray();
     }
 
+    private static (double X, double Y)? ReadPoint(XElement? cell, string xName, string yName) =>
+        cell is not null && double.TryParse((string?)cell.Attribute(xName), NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
+        double.TryParse((string?)cell.Attribute(yName), NumberStyles.Float, CultureInfo.InvariantCulture, out var y) ? (x, y) : null;
+    private static ArchitectureV7PhysicalBounds AbsoluteBounds(XElement cell, IReadOnlyDictionary<string, XElement> cells)
+    {
+        var geometry = cell.Element("mxGeometry")!;
+        var origin = AbsoluteOrigin(cell, cells);
+        return new ArchitectureV7PhysicalBounds(origin.X, origin.Y, origin.X + double.Parse((string)geometry.Attribute("width")!, CultureInfo.InvariantCulture), origin.Y + double.Parse((string)geometry.Attribute("height")!, CultureInfo.InvariantCulture));
+    }
+    private static (double X, double Y) AbsoluteOrigin(XElement cell, IReadOnlyDictionary<string, XElement> cells)
+    {
+        var geometry = cell.Element("mxGeometry");
+        var x = double.TryParse((string?)geometry?.Attribute("x"), NumberStyles.Float, CultureInfo.InvariantCulture, out var localX) ? localX : 0;
+        var y = double.TryParse((string?)geometry?.Attribute("y"), NumberStyles.Float, CultureInfo.InvariantCulture, out var localY) ? localY : 0;
+        var parentId = (string?)cell.Attribute("parent");
+        if (parentId is not null && cells.TryGetValue(parentId, out var parent) && parentId != "0" && parentId != "1")
+        {
+            var parentOrigin = AbsoluteOrigin(parent, cells);
+            x += parentOrigin.X;
+            y += parentOrigin.Y;
+        }
+        return (x, y);
+    }
+    private static bool Intersects(ArchitectureV7PhysicalBounds bounds, (double X, double Y) start, (double X, double Y) end)
+    {
+        if (start.X == end.X)
+            return start.X >= bounds.Left && start.X <= bounds.Right && Math.Max(Math.Min(start.Y, end.Y), bounds.Top) <= Math.Min(Math.Max(start.Y, end.Y), bounds.Bottom);
+        if (start.Y == end.Y)
+            return start.Y >= bounds.Top && start.Y <= bounds.Bottom && Math.Max(Math.Min(start.X, end.X), bounds.Left) <= Math.Min(Math.Max(start.X, end.X), bounds.Right);
+        return false;
+    }
+
     private static bool Equal(double expected, XAttribute? actual) => actual is not null && double.TryParse(actual.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && Math.Abs(expected - value) < 0.0001;
+    private static bool Equal(double expected, double actual) => Math.Abs(expected - actual) < 0.0001;
+    private static bool HasRendererAxisReversal(IReadOnlyList<(double X, double Y)> points)
+    {
+        var horizontalDirections = points.Zip(points.Skip(1), (a, b) => (a, b))
+            .Where(pair => pair.a.Y == pair.b.Y && pair.a.X != pair.b.X)
+            .Select(pair => Math.Sign(pair.b.X - pair.a.X)).ToArray();
+        var verticalDirections = points.Zip(points.Skip(1), (a, b) => (a, b))
+            .Where(pair => pair.a.X == pair.b.X && pair.a.Y != pair.b.Y)
+            .Select(pair => Math.Sign(pair.b.Y - pair.a.Y)).ToArray();
+        return HasReversal(horizontalDirections) || HasReversal(verticalDirections);
+
+        static bool HasReversal(IReadOnlyList<int> directions)
+        {
+            for (var index = 1; index < directions.Count; index++)
+                if (directions[index] != directions[index - 1]) return true;
+            return false;
+        }
+    }
     private static IEnumerable<IReadOnlyList<(double X, double Y)>> RendererWaypointRuns(DrawioPage page) => page.GraphModel.Descendants("mxCell")
         .Where(cell => (string?)cell.Attribute("edge") == "1")
         .Select(cell => (IReadOnlyList<(double X, double Y)>)cell.Descendants("Array").Where(array => (string?)array.Attribute("as") == "points").Elements("mxPoint")
             .Select(point => (double.Parse((string)point.Attribute("x")!, CultureInfo.InvariantCulture), double.Parse((string)point.Attribute("y")!, CultureInfo.InvariantCulture)))
             .ToArray());
+    private static int RendererEndpointDiagonalCount(DrawioPage page, ArchitectureV7PhysicalSceneFreeze scene)
+    {
+        var count = 0;
+        foreach (var route in scene.Routes)
+        {
+            var source = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+            var target = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+            var cell = page.GraphModel.Descendants("mxCell").FirstOrDefault(item => (string?)item.Attribute("physicalLinkId") == route.PhysicalLinkId);
+            if (source is null || target is null || cell is null) continue;
+            var points = cell.Element("mxGeometry")?.Element("Array")?.Elements("mxPoint")
+                .Select(point => (double.Parse((string)point.Attribute("x")!, CultureInfo.InvariantCulture), double.Parse((string)point.Attribute("y")!, CultureInfo.InvariantCulture)))
+                .ToArray() ?? Array.Empty<(double X, double Y)>();
+            var full = new[] { (source.Position.X, source.Position.Y) }.Concat(points).Append((target.Position.X, target.Position.Y)).ToArray();
+            count += full.Zip(full.Skip(1), (a, b) => (a, b)).Count(pair => Math.Abs(pair.a.Item1 - pair.b.Item1) > 0.01 && Math.Abs(pair.a.Item2 - pair.b.Item2) > 0.01);
+        }
+        return count;
+    }
 
     private static ArchitectureV7PrePlacementConfiguration Configuration(LayoutSettings layout) => new(layout.BaseCellWidth, layout.NodeWidth, layout.LabelCharacterWidth, layout.LinkNodeWidthPadding,
         Math.Max(1, layout.EdgePortSpacing), Math.Max(0, layout.LinkNodeWidthPadding), (layout.ReservedLayerTypePatterns ?? new List<string>()).Select((pattern, index) => new ArchitectureV7ReservedRoleRule(pattern, pattern, index)).ToArray());
@@ -401,18 +545,33 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
     {
         var root = new XElement("root", new XElement("mxCell", new XAttribute("id", "0")), new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")));
         var nodes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var projectOrigins = new Dictionary<string, (double Left, double Top)>(StringComparer.Ordinal);
         foreach (var project in placement.Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal))
         {
             var transform = project.Transform; var id = Id("project", project.ProjectId);
+            var projectNodeIds = new HashSet<string>(projection.PhysicalNodes.Where(item => string.Equals(item.ProjectId, project.ProjectId, StringComparison.Ordinal) && !item.IsExternal && !item.IsStandalone).Select(item => item.PhysicalNodeId), StringComparer.Ordinal);
+            var projectNodes = scene.Nodes.Where(item => projectNodeIds.Contains(item.PhysicalNodeId)).ToArray();
+            var left = projectNodes.Length == 0 ? 0 : projectNodes.Min(item => item.Bounds.Left);
+            var top = projectNodes.Length == 0 ? 0 : projectNodes.Min(item => item.Bounds.Top);
+            var right = projectNodes.Length == 0 ? 0 : projectNodes.Max(item => item.Bounds.Right);
+            var bottom = projectNodes.Length == 0 ? 0 : projectNodes.Max(item => item.Bounds.Bottom);
+            projectOrigins[project.ProjectId] = (left, top);
             if (settings.ShowProjectContainers)
-                root.Add(Vertex(id, project.ProjectId, Style(settings.ProjectContainerStyle), "1", transform.InteriorOriginColumn, transform.InteriorOriginRow, transform.Width, transform.Height));
+                root.Add(Vertex(id, project.ProjectId, Style(settings.ProjectContainerStyle), "1", left, top, Math.Max(0, right - left), Math.Max(0, bottom - top)));
         }
         foreach (var node in scene.Nodes.OrderBy(x => x.PhysicalNodeId, StringComparer.Ordinal))
         {
             var source = projection.PhysicalNodes.FirstOrDefault(x => x.PhysicalNodeId == node.PhysicalNodeId); if (source is null) continue;
             var id = Id("node", node.PhysicalNodeId); nodes[node.PhysicalNodeId] = id;
             var parent = source.ProjectId is not null && placement.Projects.Any(x => x.ProjectId == source.ProjectId) ? Id("project", source.ProjectId) : "1";
-            root.Add(Vertex(id, source.Name, source.IsExternal ? Style(settings.ExternalDependencyStyle) : Style(ResolveNodeStyle(source, settings)), parent, node.Bounds.Left, node.Bounds.Top, node.Bounds.Right - node.Bounds.Left, node.Bounds.Bottom - node.Bounds.Top));
+            var nodeX = node.Bounds.Left;
+            var nodeY = node.Bounds.Top;
+            if (source.ProjectId is not null && projectOrigins.TryGetValue(source.ProjectId, out var origin))
+            {
+                nodeX -= origin.Left;
+                nodeY -= origin.Top;
+            }
+            root.Add(Vertex(id, source.Name, source.IsExternal ? Style(settings.ExternalDependencyStyle) : Style(ResolveNodeStyle(source, settings)), parent, nodeX, nodeY, node.Bounds.Right - node.Bounds.Left, node.Bounds.Bottom - node.Bounds.Top));
         }
         foreach (var link in projection.PhysicalLinks.OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal))
         {
@@ -422,13 +581,26 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
             var targetTerminal = scene.Terminals.FirstOrDefault(item => item.PhysicalLinkId == link.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
             var sourceNode = scene.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.SourcePhysicalNodeId);
             var targetNode = scene.Nodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
-            root.Add(new XElement("mxCell", new XAttribute("id", Id("edge", link.PhysicalLinkId)), new XAttribute("parent", "1"), new XAttribute("edge", "1"), new XAttribute("source", nodes[link.SourcePhysicalNodeId]), new XAttribute("target", nodes[link.DestinationPhysicalNodeId]), new XAttribute("physicalLinkId", link.PhysicalLinkId), new XAttribute("semanticLinkId", link.SemanticLinkId), new XAttribute("style", ConnectorStyle(settings.Connector, sourceTerminal?.Position, sourceNode?.Bounds, targetTerminal?.Position, targetNode?.Bounds)), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), points))));
+            var targetProjection = projection.PhysicalNodes.FirstOrDefault(item => item.PhysicalNodeId == link.DestinationPhysicalNodeId);
+            var targetStyle = targetProjection is null ? new NodeStyle() : targetProjection.IsExternal ? settings.ExternalDependencyStyle : ResolveNodeStyle(targetProjection, settings);
+            var edge = new XElement("mxCell", new XAttribute("id", Id("edge", link.PhysicalLinkId)), new XAttribute("parent", "1"), new XAttribute("edge", "1"), new XAttribute("source", nodes[link.SourcePhysicalNodeId]), new XAttribute("target", nodes[link.DestinationPhysicalNodeId]), new XAttribute("physicalLinkId", link.PhysicalLinkId), new XAttribute("semanticLinkId", link.SemanticLinkId), new XAttribute("style", ConnectorStyle(settings.Connector, targetStyle.FillColor, sourceTerminal?.Position, sourceNode?.Bounds, targetTerminal?.Position, targetNode?.Bounds)), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), points)));
+            if (sourceTerminal is not null)
+            {
+                edge.Add(new XAttribute("v7SourceTerminalX", sourceTerminal.Position.X.ToString("G17", CultureInfo.InvariantCulture)));
+                edge.Add(new XAttribute("v7SourceTerminalY", sourceTerminal.Position.Y.ToString("G17", CultureInfo.InvariantCulture)));
+            }
+            if (targetTerminal is not null)
+            {
+                edge.Add(new XAttribute("v7TargetTerminalX", targetTerminal.Position.X.ToString("G17", CultureInfo.InvariantCulture)));
+                edge.Add(new XAttribute("v7TargetTerminalY", targetTerminal.Position.Y.ToString("G17", CultureInfo.InvariantCulture)));
+            }
+            root.Add(edge);
         }
         var graph = GraphModel(root, settings.Canvas.BackgroundColor);
         return new DrawioPage("Architecture", "architecture", graph, Array.Empty<DiagramDiagnostic>());
     }
     internal static XElement GraphModelForTest(string background) => GraphModel(new XElement("root"), background);
-    private static XElement GraphModel(XElement root, string background) => new("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "1"), new XAttribute("background", background), root);
+    private static XElement GraphModel(XElement root, string background) => new("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "1"), new XAttribute("adaptiveColors", "none"), new XAttribute("background", background), root);
     private static XElement Vertex(string id, string value, string style, string parent, double x, double y, double width, double height) => new("mxCell", new XAttribute("id", id), new XAttribute("value", value), new XAttribute("style", style), new XAttribute("vertex", "1"), new XAttribute("parent", parent), new XElement("mxGeometry", new XAttribute("x", x.ToString(CultureInfo.InvariantCulture)), new XAttribute("y", y.ToString(CultureInfo.InvariantCulture)), new XAttribute("width", width.ToString(CultureInfo.InvariantCulture)), new XAttribute("height", height.ToString(CultureInfo.InvariantCulture)), new XAttribute("as", "geometry")));
     internal static object StyleEvidence(ArchitectureV7PhysicalNode node, ArchitectureRenderSettings settings) => new
     {
@@ -445,10 +617,10 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
     {
         $"shape={style.Shape}", "html=1", "whiteSpace=wrap", $"fillColor={style.FillColor}", $"strokeColor={style.StrokeColor}", $"fontColor={style.FontColor}", $"shadow={(style.Shadow ? 1 : 0)}", style.ExtraStyle
     }.Where(value => !string.IsNullOrWhiteSpace(value))) + ";";
-    private static string ConnectorStyle(ConnectorStyle style, ArchitectureV7PhysicalPoint? source, ArchitectureV7PhysicalBounds? sourceBounds,
+    private static string ConnectorStyle(ConnectorStyle style, string targetFillColor, ArchitectureV7PhysicalPoint? source, ArchitectureV7PhysicalBounds? sourceBounds,
         ArchitectureV7PhysicalPoint? target, ArchitectureV7PhysicalBounds? targetBounds) => string.Join(";", new[]
     {
-        "edgeStyle=none", "orthogonal=0", "curved=0", $"rounded={(style.Rounded ? 1 : 0)}", $"strokeColor={style.StrokeColor}", $"strokeWidth={style.StrokeWidth}", $"opacity={style.Opacity}", $"startArrow={style.StartArrow}", $"endArrow={style.EndArrow}", $"startFill={(style.StartFill ? 1 : 0)}", $"endFill={(style.EndFill ? 1 : 0)}", $"fontColor={style.FontColor}", "labelPosition=none", style.ExtraStyle
+        "edgeStyle=none", "orthogonal=0", "jettySize=0", "curved=0", "exitPerimeter=0", "entryPerimeter=0", $"rounded={(style.Rounded ? 1 : 0)}", $"strokeColor={targetFillColor}", $"strokeWidth={style.StrokeWidth}", $"opacity={style.Opacity}", $"startArrow={style.StartArrow}", $"endArrow={style.EndArrow}", $"startFill={(style.StartFill ? 1 : 0)}", $"endFill={(style.EndFill ? 1 : 0)}", $"fontColor={style.FontColor}", "labelPosition=none", style.ExtraStyle
         , ConnectionPoint("exit", source, sourceBounds), ConnectionPoint("entry", target, targetBounds)
     }.Where(value => !string.IsNullOrWhiteSpace(value))) + ";";
     private static string? ConnectionPoint(string prefix, ArchitectureV7PhysicalPoint? point, ArchitectureV7PhysicalBounds? bounds)
@@ -456,7 +628,7 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
         if (point is null || bounds is null || bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return null;
         var x = Math.Min(1d, Math.Max(0d, (point.X - bounds.Left) / (bounds.Right - bounds.Left)));
         var y = Math.Min(1d, Math.Max(0d, (point.Y - bounds.Top) / (bounds.Bottom - bounds.Top)));
-        return prefix + "X=" + x.ToString("0.######", CultureInfo.InvariantCulture) + ";" + prefix + "Y=" + y.ToString("0.######", CultureInfo.InvariantCulture);
+        return prefix + "X=" + x.ToString("G17", CultureInfo.InvariantCulture) + ";" + prefix + "Y=" + y.ToString("G17", CultureInfo.InvariantCulture);
     }
     internal static string IdFor(string kind, string value) { using var sha = SHA256.Create(); return "v7_" + kind + "_" + string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(value)).Take(8).Select(x => x.ToString("x2", CultureInfo.InvariantCulture))); }
     private static string Id(string kind, string value) => IdFor(kind, value);

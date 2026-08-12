@@ -36,6 +36,11 @@ public sealed class ArchitectureV7LogicalRelationshipRoutingStage
             var route = start.Row + 2 == end.Row && start.Column == end.Column
                 ? DirectChild(start, end, source, destination, cells)
                 : General(start, end, source, destination, cells);
+            if (route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b))
+                .Any(pair => pair.a.Row != pair.b.Row && pair.a.Column != pair.b.Column))
+            {
+                route = Failed(route.Cells, "DiagonalLogicalTransition", "A frozen logical route changed row and column in one transition.");
+            }
             var routeDiagnostics = route.Diagnostics;
             diagnostics.AddRange(routeDiagnostics);
             routes.Add(new ArchitectureV7LogicalRoute(link.PhysicalLinkId, link.SemanticLinkId, link.SourcePhysicalNodeId, link.DestinationPhysicalNodeId,

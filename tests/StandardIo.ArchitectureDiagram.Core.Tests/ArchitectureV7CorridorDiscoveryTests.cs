@@ -110,6 +110,41 @@ public sealed class ArchitectureV7CorridorDiscoveryTests
         Assert.Equal(before.Item2, placement.DiagramGrid.Cells);
     }
 
+    [Fact]
+    public void Node_footprint_rejects_horizontal_traversal_on_a_node_bearing_row()
+    {
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(
+            ArchitectureV7CellCapability.Blocked,
+            ArchitectureV7TraversalDirection.Left,
+            ArchitectureV7TraversalDirection.Right));
+    }
+
+    [Fact]
+    public void Empty_node_row_passthrough_rejects_an_illegal_horizontal_bend()
+    {
+        var capability = ArchitectureV7CellCapability.NodeAllowed;
+
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(capability,
+            ArchitectureV7TraversalDirection.Up,
+            ArchitectureV7TraversalDirection.Right));
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(capability,
+            ArchitectureV7TraversalDirection.Left,
+            ArchitectureV7TraversalDirection.Down));
+    }
+
+    [Fact]
+    public void Empty_node_row_passthrough_rejects_horizontal_straight_traversal()
+    {
+        Assert.False(ArchitectureV7CellTraversalPolicy.Allows(
+            ArchitectureV7CellCapability.NodeAllowed,
+            ArchitectureV7TraversalDirection.Left,
+            ArchitectureV7TraversalDirection.Right));
+        Assert.True(ArchitectureV7CellTraversalPolicy.Allows(
+            ArchitectureV7CellCapability.NodeAllowed,
+            ArchitectureV7TraversalDirection.Down,
+            ArchitectureV7TraversalDirection.Down));
+    }
+
     private static ArchitectureV7CorridorDiscoveryResult Discover(IReadOnlyList<ArchitectureV7LogicalCell> cells) =>
         new ArchitectureV7CapabilityCorridorDiscoveryStage().Discover(Freeze(cells));
 
