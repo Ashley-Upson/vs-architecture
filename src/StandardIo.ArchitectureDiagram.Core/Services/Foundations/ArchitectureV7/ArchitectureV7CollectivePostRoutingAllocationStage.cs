@@ -34,7 +34,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
 
         var diagnostics = new List<ArchitectureV7AllocationDiagnostic>();
         var runs = BuildRuns(routes, diagnostics);
-        var (lanes, assignments) = AllocateLanes(runs, configuration.ParallelLaneSpacing, corridorProjection);
+        var (lanes, assignments) = AllocateLanes(placement, routes, runs, configuration.ParallelLaneSpacing, corridorProjection);
         var terminals = AllocateTerminals(placement, routes, runs, assignments, configuration, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
         var handoffs = BuildHandoffs(placement, routes, runs, assignments, terminals, configuration, diagnostics);
@@ -76,12 +76,16 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
     }
 
     private static (IReadOnlyList<ArchitectureV7PhysicalLane> Lanes, IReadOnlyList<ArchitectureV7RunLaneAssignment> Assignments)
-        AllocateLanes(IReadOnlyList<ArchitectureV7StraightRun> runs, int spacing, ArchitectureV7RouteCorridorProjectionFreeze? corridorProjection)
+        AllocateLanes(ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes,
+            IReadOnlyList<ArchitectureV7StraightRun> runs, int spacing, ArchitectureV7RouteCorridorProjectionFreeze? corridorProjection)
     {
         var assignments = new List<ArchitectureV7RunLaneAssignment>();
         var lanes = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var used = new Dictionary<string, List<(int Start, int End, int Ordinal, string Link)>>(StringComparer.Ordinal);
-        foreach (var run in runs.OrderBy(x => x.Orientation).ThenBy(x => FixedCoordinate(x)).ThenBy(x => MinCoordinate(x)).ThenBy(x => x.RunId, StringComparer.Ordinal))
+        foreach (var run in runs.OrderBy(x => x.Orientation).ThenBy(x => FixedCoordinate(x))
+            .ThenBy(x => EndpointLaneOrderingKey(x).Primary)
+            .ThenBy(x => EndpointLaneOrderingKey(x).Secondary)
+            .ThenBy(x => MinCoordinate(x)).ThenBy(x => x.RunId, StringComparer.Ordinal))
         {
             var usage = corridorProjection?.Usages.FirstOrDefault(item => item.PhysicalLinkId == run.PhysicalLinkId && item.StartRouteIndex == run.StartRouteIndex);
             var domain = usage?.CorridorId ?? run.Orientation + ":" + FixedCoordinate(run);
@@ -101,6 +105,58 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             .Select(x => new ArchitectureV7PhysicalLane(x.Key, x.Key.Contains(":H:", StringComparison.Ordinal) ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical,
                 ParseOrdinal(x.Key), spacing, x.Value.OrderBy(v => v, StringComparer.Ordinal).ToArray())).ToArray();
         return (laneModels, assignments);
+
+        (int Primary, double Secondary) EndpointLaneOrderingKey(ArchitectureV7StraightRun run)
+        {
+            if (run.Orientation != ArchitectureV7RunOrientation.Horizontal) return (1, 0d);
+            var route = routes.Routes.FirstOrDefault(item => item.PhysicalLinkId == run.PhysicalLinkId);
+            if (route is null) return (1, 0d);
+            var candidates = new[] { ArchitectureV7EndpointKind.SourceDeparture, ArchitectureV7EndpointKind.DestinationArrival }
+                .Select(kind => EndpointLaneCandidate(run, route, kind))
+                .Where(candidate => candidate is not null && candidate.Value.DirectionGroup != 1)
+                .Select(candidate => candidate!.Value)
+                .ToArray();
+            if (candidates.Length == 0) return (1, 0d); // direct vertical connections remain outside side-group nesting
+            var candidate = candidates
+                .OrderByDescending(item => DomainAxisCount(item.EndpointKind, run))
+                .ThenBy(item => item.EndpointKind)
+                .First();
+            var outerToInner = candidate.DirectionGroup == 0 ? candidate.Axis : -candidate.Axis;
+            // Terminal order is outer-to-inner. Lane depth is deliberately independent:
+            // for bottom departures the first lane is nearest the node; for top arrivals
+            // the last lane is nearest the node, so invert the ordering on arrivals.
+            return candidate.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? (0, outerToInner)
+                : (0, -outerToInner);
+
+            (ArchitectureV7EndpointKind EndpointKind, int DirectionGroup, double Axis)? EndpointLaneCandidate(
+                ArchitectureV7StraightRun candidateRun, ArchitectureV7LogicalRoute candidateRoute, ArchitectureV7EndpointKind endpointKind)
+            {
+                var endpointRun = endpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                    ? runs.Where(item => item.PhysicalLinkId == candidateRoute.PhysicalLinkId && item.StartRouteIndex > 0)
+                        .OrderBy(item => item.StartRouteIndex).FirstOrDefault(item => item.Orientation == ArchitectureV7RunOrientation.Horizontal)
+                    : runs.Where(item => item.PhysicalLinkId == candidateRoute.PhysicalLinkId && item.EndRouteIndex < candidateRoute.Cells.Count - 1)
+                        .OrderByDescending(item => item.EndRouteIndex).FirstOrDefault(item => item.Orientation == ArchitectureV7RunOrientation.Horizontal);
+                if (endpointRun?.RunId != candidateRun.RunId) return null;
+                var node = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == (endpointKind == ArchitectureV7EndpointKind.SourceDeparture ? candidateRoute.SourcePhysicalNodeId : candidateRoute.DestinationPhysicalNodeId));
+                if (node is null) return null;
+                var endpoint = endpointKind == ArchitectureV7EndpointKind.SourceDeparture ? candidateRoute.Cells[0] : candidateRoute.Cells[candidateRoute.Cells.Count - 1];
+                var near = endpointKind == ArchitectureV7EndpointKind.SourceDeparture ? candidateRoute.Cells[1] : candidateRoute.Cells[candidateRoute.Cells.Count - 2];
+                var adjacentRun = endpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                    ? runs.FirstOrDefault(item => item.PhysicalLinkId == candidateRoute.PhysicalLinkId && item.StartRouteIndex == 0)
+                    : runs.LastOrDefault(item => item.PhysicalLinkId == candidateRoute.PhysicalLinkId && item.EndRouteIndex == candidateRoute.Cells.Count - 1);
+                var directionGroup = EndpointDirectionGroup(candidateRoute, endpointKind, near, endpoint, adjacentRun, node, runs);
+                return (endpointKind, directionGroup, EndpointPhysicalAxisCoordinate(candidateRoute, endpointKind, near, endpoint, adjacentRun, placement));
+            }
+
+            int DomainAxisCount(ArchitectureV7EndpointKind endpointKind, ArchitectureV7StraightRun domainRun) =>
+                runs.Where(item => item.Orientation == ArchitectureV7RunOrientation.Horizontal && FixedCoordinate(item) == FixedCoordinate(domainRun))
+                    .Select(item => (Run: item, Route: routes.Routes.FirstOrDefault(routeItem => routeItem.PhysicalLinkId == item.PhysicalLinkId)))
+                    .Where(item => item.Route is not null)
+                    .Select(item => EndpointLaneCandidate(item.Run, item.Route!, endpointKind))
+                    .Where(item => item is not null && item.Value.DirectionGroup != 1)
+                    .Select(item => item!.Value.Axis).Distinct().Count();
+        }
 
         static int UsageMin(IReadOnlyList<ArchitectureV7RouteCell> cells, ArchitectureV7RunOrientation orientation) =>
             cells.Min(cell => orientation == ArchitectureV7RunOrientation.Horizontal ? cell.Column : cell.Row);
@@ -169,8 +225,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 : 0;
             var anchor = near.Column;
             var endpointNode = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == nodeId);
-            var directionGroup = EndpointDirectionGroup(near, endpoint, adjacentRun, endpointNode);
-            var physicalAxisCoordinate = EndpointPhysicalAxisCoordinate(near, endpoint, adjacentRun);
+            var directionGroup = EndpointDirectionGroup(route, kind, near, endpoint, adjacentRun, endpointNode, runs);
+            var physicalAxisCoordinate = EndpointPhysicalAxisCoordinate(route, kind, near, endpoint, adjacentRun, placement);
             var key = (nodeId, kind);
             if (!groups.TryGetValue(key, out var list)) groups[key] = list = new();
             list.Add((route, anchor, adjacentRun, laneOffset, direction, directionGroup, physicalAxisCoordinate));
@@ -185,7 +241,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var directStart = directOffsets.Length == 0 ? 0d : directOffsets[0];
         var directEnd = directOffsets.Length == 0 ? 0d : directOffsets[directOffsets.Length - 1];
         var leftOffsets = SpreadInterval(leftCount, -usableHalfExtent, directStart - spacing, spacing);
-        var rightOffsets = SpreadInterval(rightCount, directEnd + spacing, usableHalfExtent, spacing);
+        var rightOffsets = SpreadInterval(rightCount, directEnd + spacing, usableHalfExtent, spacing).Reverse().ToArray();
         return leftOffsets.Concat(directOffsets).Concat(rightOffsets).ToArray();
     }
 
@@ -204,8 +260,26 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             Math.Round(actualStart + index * actualSpacing, MidpointRounding.AwayFromZero)).ToArray();
     }
 
-    private static int EndpointDirectionGroup(ArchitectureV7RouteCell near, ArchitectureV7RouteCell endpoint, ArchitectureV7StraightRun? run, ArchitectureV7FrozenNodePlacement? node)
+    private static int EndpointDirectionGroup(ArchitectureV7LogicalRoute route, ArchitectureV7EndpointKind endpointKind,
+        ArchitectureV7RouteCell near, ArchitectureV7RouteCell endpoint, ArchitectureV7StraightRun? run,
+        ArchitectureV7FrozenNodePlacement? node, IReadOnlyList<ArchitectureV7StraightRun> runs)
     {
+        var endpointRun = endpointKind == ArchitectureV7EndpointKind.SourceDeparture
+            ? runs.Where(item => item.PhysicalLinkId == route.PhysicalLinkId && item.StartRouteIndex > 0)
+                .OrderBy(item => item.StartRouteIndex).FirstOrDefault(item => item.Orientation == ArchitectureV7RunOrientation.Horizontal)
+            : runs.Where(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndRouteIndex < route.Cells.Count - 1)
+                .OrderByDescending(item => item.EndRouteIndex).FirstOrDefault(item => item.Orientation == ArchitectureV7RunOrientation.Horizontal);
+        if (endpointRun is not null)
+        {
+            var first = endpointRun.Cells[0];
+            var last = endpointRun.Cells[endpointRun.Cells.Count - 1];
+            var side = endpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? Math.Sign(last.Column - endpoint.Column)
+                : Math.Sign(first.Column - endpoint.Column);
+            if (side < 0) return 0;
+            if (side > 0) return 2;
+            return 1;
+        }
         if (node is not null && run?.Orientation == ArchitectureV7RunOrientation.Vertical)
             return endpoint.Column < node.CentreCell ? 0 : endpoint.Column > node.CentreCell ? 2 : 1;
         if (node is not null && run?.Orientation == ArchitectureV7RunOrientation.Horizontal)
@@ -222,12 +296,18 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         return near.Row == endpoint.Row ? 1 : near.Row < endpoint.Row ? 0 : 2;
     }
 
-    private static double EndpointPhysicalAxisCoordinate(ArchitectureV7RouteCell near, ArchitectureV7RouteCell endpoint, ArchitectureV7StraightRun? run) =>
-        run?.Orientation == ArchitectureV7RunOrientation.Vertical
-            ? near.Column
-            : run?.Orientation == ArchitectureV7RunOrientation.Horizontal
-                ? near.Row
-                : near.Column != endpoint.Column ? near.Column : near.Row;
+    private static double EndpointPhysicalAxisCoordinate(ArchitectureV7LogicalRoute route, ArchitectureV7EndpointKind endpointKind,
+        ArchitectureV7RouteCell near, ArchitectureV7RouteCell endpoint, ArchitectureV7StraightRun? run,
+        ArchitectureV7PlacementFreeze placement) =>
+        endpointKind == ArchitectureV7EndpointKind.SourceDeparture
+            ? placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == route.DestinationPhysicalNodeId)?.CentreCell ?? near.Column
+            : endpointKind == ArchitectureV7EndpointKind.DestinationArrival
+                ? placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == route.SourcePhysicalNodeId)?.CentreCell ?? near.Column
+                : run?.Orientation == ArchitectureV7RunOrientation.Vertical
+                    ? near.Column
+                    : run?.Orientation == ArchitectureV7RunOrientation.Horizontal
+                        ? near.Row
+                        : near.Column != endpoint.Column ? near.Column : near.Row;
 
     private static IReadOnlyList<ArchitectureV7EndpointApproachReservation> BuildApproaches(
         ArchitectureV7LogicalRouteFreeze routes, IReadOnlyList<ArchitectureV7StraightRun> runs,

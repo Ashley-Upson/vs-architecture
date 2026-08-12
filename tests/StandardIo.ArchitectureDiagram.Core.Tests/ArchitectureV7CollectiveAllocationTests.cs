@@ -103,6 +103,118 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Source_side_group_keeps_terminal_x_order_separate_from_near_node_lane_depth()
+    {
+        var routes = new[]
+        {
+            // Both links leave the source centre vertically, then turn left.
+            Route("source-outer", "s", "outer-target", (1, 3), (2, 3), (2, 1), (3, 1)),
+            Route("source-inner", "s", "inner-target", (1, 3), (2, 3), (2, 2), (3, 2))
+        };
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("s", 1, 3, 5), NodeAt("outer-target", 3, 1), NodeAt("inner-target", 3, 2)
+        }, spacing: 10, span: 5);
+
+        var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s")
+            .OrderBy(item => item.RelativeOffset).ToArray();
+        Assert.Equal(new[] { "source-outer", "source-inner" }, terminals.Select(item => item.PhysicalLinkId));
+        Assert.True(terminals[0].RelativeOffset < terminals[1].RelativeOffset);
+
+        var assignments = result.RunAssignments.ToDictionary(item => item.RunId, StringComparer.Ordinal);
+        Assert.True(assignments["run:source-outer:1"].LaneOrdinal < assignments["run:source-inner:1"].LaneOrdinal);
+    }
+
+    [Fact]
+    public void Turned_left_and_right_links_use_side_groups_while_true_direct_link_stays_centred()
+    {
+        var routes = new[]
+        {
+            Route("left", "s", "left-target", (1, 3), (2, 3), (2, 1), (3, 1)),
+            Route("direct", "s", "direct-target", (1, 3), (2, 3), (3, 3)),
+            Route("right", "s", "right-target", (1, 3), (2, 3), (2, 5), (3, 5))
+        };
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("s", 1, 3, 5), NodeAt("left-target", 3, 1), NodeAt("direct-target", 3, 3), NodeAt("right-target", 3, 5)
+        }, spacing: 10, span: 5);
+
+        var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s")
+            .OrderBy(item => item.RelativeOffset).ToArray();
+        Assert.Equal(new[] { "left", "direct", "right" }, terminals.Select(item => item.PhysicalLinkId));
+        Assert.True(terminals[0].RelativeOffset < 0);
+        Assert.Equal(0d, terminals[1].RelativeOffset);
+        Assert.True(terminals[2].RelativeOffset > 0);
+    }
+
+    [Fact]
+    public void Destination_side_group_mirrors_terminal_x_order_and_lane_depth_independently()
+    {
+        var routes = new[]
+        {
+            // Both links approach the destination centre from the left, then turn down.
+            Route("destination-outer", "outer-source", "t", (0, 1), (1, 1), (2, 1), (2, 4), (3, 4)),
+            Route("destination-inner", "inner-source", "t", (0, 2), (1, 2), (2, 2), (2, 4), (3, 4))
+        };
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("outer-source", 0, 1), NodeAt("inner-source", 0, 2), NodeAt("t", 3, 4, 5)
+        }, spacing: 10, span: 5);
+
+        var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "t")
+            .OrderBy(item => item.RelativeOffset).ToArray();
+        Assert.Equal(new[] { "destination-outer", "destination-inner" }, terminals.Select(item => item.PhysicalLinkId));
+        Assert.True(terminals[0].RelativeOffset < terminals[1].RelativeOffset);
+
+        var assignments = result.RunAssignments.ToDictionary(item => item.RunId, StringComparer.Ordinal);
+        Assert.True(assignments["run:destination-outer:2"].LaneOrdinal > assignments["run:destination-inner:2"].LaneOrdinal,
+            $"outer={assignments["run:destination-outer:2"].LaneOrdinal};inner={assignments["run:destination-inner:2"].LaneOrdinal}");
+    }
+
+    [Fact]
+    public void Direct_vertical_connections_remain_centred_and_do_not_enter_side_group_lane_nesting()
+    {
+        var routes = new[]
+        {
+            Route("direct", "s", "direct-target", (1, 3), (2, 3), (3, 3)),
+            Route("left", "s", "left-target", (1, 1), (2, 1), (2, 0))
+        };
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("s", 1, 3, 5), NodeAt("direct-target", 3, 3), NodeAt("left-target", 2, 0)
+        }, spacing: 10, span: 5);
+
+        var direct = Assert.Single(result.Terminals, item => item.PhysicalLinkId == "direct" && item.PhysicalNodeId == "s");
+        Assert.Equal(ArchitectureV7EndpointDirection.Down, direct.Direction);
+        Assert.Equal(0d, direct.RelativeOffset);
+    }
+
+    [Fact]
+    public void Side_group_lane_depth_order_is_deterministic_under_route_shuffle_and_mirrors_right_side()
+    {
+        var routes = new[]
+        {
+            Route("right-outer", "s", "right-outer-target", (1, 3), (2, 3), (2, 5), (3, 5)),
+            Route("right-inner", "s", "right-inner-target", (1, 3), (2, 3), (2, 4), (3, 4))
+        };
+        var nodes = new[]
+        {
+            NodeAt("s", 1, 3, 5), NodeAt("right-outer-target", 3, 5), NodeAt("right-inner-target", 3, 4)
+        };
+        var result = Allocate(routes, nodes, spacing: 10, span: 5);
+        var reversed = Allocate(routes.AsEnumerable().Reverse().ToArray(), nodes, spacing: 10, span: 5);
+
+        Assert.Equal(result.AllocationFingerprint, reversed.AllocationFingerprint);
+        var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s")
+            .OrderBy(item => item.RelativeOffset).ToArray();
+        Assert.Equal(new[] { "right-inner", "right-outer" }, terminals.Select(item => item.PhysicalLinkId));
+        Assert.True(terminals[0].RelativeOffset < terminals[1].RelativeOffset);
+
+        var assignments = result.RunAssignments.ToDictionary(item => item.RunId, StringComparer.Ordinal);
+        Assert.True(assignments["run:right-outer:1"].LaneOrdinal < assignments["run:right-inner:1"].LaneOrdinal);
+    }
+
+    [Fact]
     public void Expanded_node_span_uses_full_edge_capacity_for_busy_direct_group()
     {
         var routes = Enumerable.Range(0, 5).Select(index => Route("busy-" + index, "s", "t" + index, (1, 5), (2, 5), (3, 1 + index * 2))).ToArray();
