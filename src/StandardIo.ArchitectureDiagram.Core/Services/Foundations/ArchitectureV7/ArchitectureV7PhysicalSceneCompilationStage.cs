@@ -253,7 +253,11 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     {
         if (handoff.LogicalCell is not { } cell || (uint)cell.Row >= (uint)rows.Count || (uint)cell.Column >= (uint)columns.Count)
             throw new InvalidOperationException("A frozen endpoint handoff has no representable logical cell.");
-        var point = handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical
+        // The handoff is orthogonal to the adjacent run. Preserve the run's
+        // lane coordinate and the terminal's perpendicular coordinate; using
+        // the cell centre here creates a shared horizontal/vertical approach
+        // when several endpoint lanes leave the same node.
+        var point = handoff.HandoffOrientation == ArchitectureV7RunOrientation.Horizontal
             ? new ArchitectureV7PhysicalPoint(adjacentPoint.Point.X, terminal.Position.Y, "frozen-" + handoff.ResourceId)
             : new ArchitectureV7PhysicalPoint(terminal.Position.X, adjacentPoint.Point.Y, "frozen-" + handoff.ResourceId);
         return new(handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? 0 : route.Cells.Count - 1,
@@ -293,8 +297,8 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         // Straight traversal is owned by the maximal run lane. Crossing
         // resources describe interactions at the frozen intersection; they
         // must not displace the straight run or become a compiler authority.
-        var x = incoming.Orientation == ArchitectureV7RunOrientation.Horizontal ? (columns[route.Cells[index].Column].Start + columns[route.Cells[index].Column].End) / 2d : columns[route.Cells[index].Column].LaneCoordinates[incomingLane.LaneOrdinal];
-        var y = incoming.Orientation == ArchitectureV7RunOrientation.Vertical ? (rows[route.Cells[index].Row].Start + rows[route.Cells[index].Row].End) / 2d : rows[route.Cells[index].Row].LaneCoordinates[incomingLane.LaneOrdinal];
+        var x = incoming.Orientation == ArchitectureV7RunOrientation.Vertical ? columns[route.Cells[index].Column].LaneCoordinates[incomingLane.LaneOrdinal] : (columns[route.Cells[index].Column].Start + columns[route.Cells[index].Column].End) / 2d;
+        var y = incoming.Orientation == ArchitectureV7RunOrientation.Horizontal ? rows[route.Cells[index].Row].LaneCoordinates[incomingLane.LaneOrdinal] : (rows[route.Cells[index].Row].Start + rows[route.Cells[index].Row].End) / 2d;
         return new(index, route.Cells[index], new(x, y, "frozen-track-boundaries;straight-run"), incoming.RunId, incomingLane.LaneId, "straight-run;run=" + incoming.RunId + ";lane=" + incomingLane.LaneId);
     }
 

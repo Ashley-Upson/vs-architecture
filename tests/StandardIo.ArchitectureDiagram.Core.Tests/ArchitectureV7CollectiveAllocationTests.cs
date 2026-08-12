@@ -33,6 +33,45 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Overlapping_runs_in_distinct_corridors_get_distinct_physical_lanes()
+    {
+        var routes = new[]
+        {
+            Route("a", "a-source", "a-target", (1, 0), (1, 1), (1, 2), (1, 3)),
+            Route("b", "b-source", "b-target", (1, 1), (1, 2), (1, 3), (1, 4))
+        };
+        var placement = new ArchitectureV7PlacementFreeze(
+            new[]
+            {
+                NodeAt("a-source", 1, 0), NodeAt("a-target", 1, 3),
+                NodeAt("b-source", 1, 1), NodeAt("b-target", 1, 4)
+            },
+            Array.Empty<ArchitectureV7ProjectRegion>(),
+            new ArchitectureV7ExternalRegion(0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()),
+            new ArchitectureV7CommonDiagramGrid(3, 5, Array.Empty<ArchitectureV7LogicalCell>()),
+            Array.Empty<ArchitectureV7ProjectTransform>(), "projection", "ownership", "sizing", "reservation", "placement");
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(),
+            "placement", "projection", "routes");
+        var projection = new ArchitectureV7RouteCorridorProjectionFreeze(
+            new[]
+            {
+                new ArchitectureV7CorridorUsage("usage-a", "a", "corridor-a", ArchitectureV7RunOrientation.Horizontal, 0, 3,
+                    new[] { new ArchitectureV7RouteCell(1, 1), new ArchitectureV7RouteCell(1, 2) }, "test"),
+                new ArchitectureV7CorridorUsage("usage-b", "b", "corridor-b", ArchitectureV7RunOrientation.Horizontal, 0, 3,
+                    new[] { new ArchitectureV7RouteCell(1, 2), new ArchitectureV7RouteCell(1, 3) }, "test")
+            },
+            Array.Empty<ArchitectureV7UnprojectedCorridorRun>(), "placement", "routes", "corridors");
+
+        var result = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze, projection,
+            new ArchitectureV7AllocationConfiguration(10, 10, 0, 100));
+
+        Assert.Equal(2, result.Lanes.Count);
+        Assert.NotEqual(result.RunAssignments.Single(item => item.RunId == "run:a:0").LaneId,
+            result.RunAssignments.Single(item => item.RunId == "run:b:0").LaneId);
+    }
+
+    [Fact]
     public void Fan_out_terminals_are_symmetric_and_have_one_assignment_per_endpoint()
     {
         var routes = new[] { Route("a", "s", "t", (1, 3), (2, 3), (3, 1), (4, 1), (5, 1)), Route("b", "s", "u", (1, 3), (2, 3), (3, 5), (4, 5), (5, 5)) };

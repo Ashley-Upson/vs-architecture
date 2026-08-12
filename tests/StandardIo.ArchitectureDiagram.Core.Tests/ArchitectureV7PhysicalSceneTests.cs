@@ -130,18 +130,55 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.All(competingLanePoints, point => Assert.NotEqual(anchoredTerminal.Position.X, point.X));
 
         var segments = scene.Routes.SelectMany(route => route.Segments.Select(segment => (route.PhysicalLinkId, segment)))
-            .Where(x => x.segment.Start.X == x.segment.End.X && x.segment.Start.Y != x.segment.End.Y)
+            .Where(x => (x.segment.Start.X == x.segment.End.X && x.segment.Start.Y != x.segment.End.Y) ||
+                        (x.segment.Start.Y == x.segment.End.Y && x.segment.Start.X != x.segment.End.X))
             .ToArray();
         for (var left = 0; left < segments.Length; left++)
         for (var right = left + 1; right < segments.Length; right++)
         {
-            if (segments[left].PhysicalLinkId == segments[right].PhysicalLinkId || segments[left].segment.Start.X != segments[right].segment.Start.X) continue;
-            var leftTop = Math.Min(segments[left].segment.Start.Y, segments[left].segment.End.Y);
-            var leftBottom = Math.Max(segments[left].segment.Start.Y, segments[left].segment.End.Y);
-            var rightTop = Math.Min(segments[right].segment.Start.Y, segments[right].segment.End.Y);
-            var rightBottom = Math.Max(segments[right].segment.Start.Y, segments[right].segment.End.Y);
-            Assert.False(Math.Max(leftTop, rightTop) < Math.Min(leftBottom, rightBottom));
+            if (segments[left].PhysicalLinkId == segments[right].PhysicalLinkId) continue;
+            if (segments[left].segment.Start.X == segments[left].segment.End.X &&
+                segments[right].segment.Start.X == segments[right].segment.End.X)
+            {
+                if (segments[left].segment.Start.X != segments[right].segment.Start.X) continue;
+                var leftTop = Math.Min(segments[left].segment.Start.Y, segments[left].segment.End.Y);
+                var leftBottom = Math.Max(segments[left].segment.Start.Y, segments[left].segment.End.Y);
+                var rightTop = Math.Min(segments[right].segment.Start.Y, segments[right].segment.End.Y);
+                var rightBottom = Math.Max(segments[right].segment.Start.Y, segments[right].segment.End.Y);
+                Assert.False(Math.Max(leftTop, rightTop) < Math.Min(leftBottom, rightBottom));
+            }
+            else if (segments[left].segment.Start.Y == segments[left].segment.End.Y &&
+                     segments[right].segment.Start.Y == segments[right].segment.End.Y)
+            {
+                if (segments[left].segment.Start.Y != segments[right].segment.Start.Y) continue;
+                var leftStart = Math.Min(segments[left].segment.Start.X, segments[left].segment.End.X);
+                var leftEnd = Math.Max(segments[left].segment.Start.X, segments[left].segment.End.X);
+                var rightStart = Math.Min(segments[right].segment.Start.X, segments[right].segment.End.X);
+                var rightEnd = Math.Max(segments[right].segment.Start.X, segments[right].segment.End.X);
+                Assert.False(Math.Max(leftStart, rightStart) < Math.Min(leftEnd, rightEnd));
+            }
         }
+    }
+
+    [Fact]
+    public void Horizontal_straight_runs_materialise_on_their_allocated_lane_y_coordinates()
+    {
+        var routes = new[]
+        {
+            Route("a", "a-source", "a-target", (1, 0), (1, 1), (1, 2), (1, 3)),
+            Route("b", "b-source", "b-target", (1, 1), (1, 2), (1, 3), (1, 4))
+        };
+        var scene = Compile(routes, Nodes(("a-source", 1, 0), ("a-target", 1, 3), ("b-source", 1, 1), ("b-target", 1, 4)), spacing: 6);
+
+        var a = scene.Routes.Single(route => route.PhysicalLinkId == "a");
+        var b = scene.Routes.Single(route => route.PhysicalLinkId == "b");
+        var aPoints = a.Points.Where(point => point.Provenance.Contains("lane:H", StringComparison.Ordinal)).ToArray();
+        var bPoints = b.Points.Where(point => point.Provenance.Contains("lane:H", StringComparison.Ordinal)).ToArray();
+        Assert.NotEmpty(aPoints);
+        Assert.NotEmpty(bPoints);
+        Assert.NotEqual(aPoints[0].Y, bPoints[0].Y);
+        Assert.All(aPoints, point => Assert.Equal(aPoints[0].Y, point.Y));
+        Assert.All(bPoints, point => Assert.Equal(bPoints[0].Y, point.Y));
     }
 
     [Fact]

@@ -88,9 +88,20 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             .ThenBy(x => MinCoordinate(x)).ThenBy(x => x.RunId, StringComparer.Ordinal))
         {
             var usage = corridorProjection?.Usages.FirstOrDefault(item => item.PhysicalLinkId == run.PhysicalLinkId && item.StartRouteIndex == run.StartRouteIndex);
-            var domain = usage?.CorridorId ?? run.Orientation + ":" + FixedCoordinate(run);
-            var startCoordinate = usage is null ? MinCoordinate(run) : UsageMin(usage.TraversalCells, run.Orientation);
-            var endCoordinate = usage is null ? MaxCoordinate(run) : UsageMax(usage.TraversalCells, run.Orientation);
+            // Corridor IDs describe logical capability regions, but physical
+            // lane geometry is keyed by orientation and fixed coordinate.
+            // Distinct corridors can still occupy the same physical track;
+            // allocating their ordinals independently would collapse both
+            // runs onto the same materialised lane.
+            var domain = run.Orientation + ":" + FixedCoordinate(run);
+            // Endpoint cells are attachments for corridor discovery, but they
+            // still occupy the physical run interval: endpoint handoffs and
+            // terminal approaches are materialised in those same cells. Use
+            // the frozen run extent for conflict detection so two corridor
+            // usages cannot appear disjoint merely because each omitted its
+            // own endpoint attachment.
+            var startCoordinate = MinCoordinate(run);
+            var endCoordinate = MaxCoordinate(run);
             if (!used.TryGetValue(domain, out var intervals)) used[domain] = intervals = new();
             var ordinal = 0;
             while (intervals.Any(interval => interval.Ordinal == ordinal && interval.Link != run.PhysicalLinkId
@@ -157,12 +168,6 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                     .Where(item => item is not null && item.Value.DirectionGroup != 1)
                     .Select(item => item!.Value.Axis).Distinct().Count();
         }
-
-        static int UsageMin(IReadOnlyList<ArchitectureV7RouteCell> cells, ArchitectureV7RunOrientation orientation) =>
-            cells.Min(cell => orientation == ArchitectureV7RunOrientation.Horizontal ? cell.Column : cell.Row);
-
-        static int UsageMax(IReadOnlyList<ArchitectureV7RouteCell> cells, ArchitectureV7RunOrientation orientation) =>
-            cells.Max(cell => orientation == ArchitectureV7RunOrientation.Horizontal ? cell.Column : cell.Row);
 
     }
 
