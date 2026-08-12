@@ -28,7 +28,8 @@ public sealed record ArchitectureGenerationJob(
     string? PageNameHint = null,
     string? SettingsSourcePath = null,
     string? SettingsSourceHash = null,
-    string? ProjectSelectionInput = null)
+    string? ProjectSelectionInput = null,
+    string? InputPath = null)
     : DiagramGenerationJob(DiagramType.Architecture, PageNameHint);
 
 public sealed record DataModelGenerationJob(

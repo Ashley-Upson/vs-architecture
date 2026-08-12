@@ -115,7 +115,8 @@ public static class Program
                         LegacyDiagramSettingsAdapter.ToArchitectureRendering(settings),
                         SettingsSourcePath: settingsSource.Path,
                         SettingsSourceHash: settingsSource.Sha256,
-                        ProjectSelectionInput: options.ProjectFilter ?? "<all workspace projects>");
+                        ProjectSelectionInput: options.ProjectFilter ?? "<all workspace projects>",
+                        InputPath: options.InputPath);
                     var mode = options.StrictValidation
                         ? ArchitectureRenderingMode.StrictValidation
                         : string.IsNullOrWhiteSpace(options.ProjectRegionDirectory)

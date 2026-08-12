@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -49,6 +50,8 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             finally { stageTimings[name] = stopwatch.ElapsedMilliseconds; }
         }
         var pre = Configuration(job.Rendering.Layout);
+        var semanticEvidence = SemanticEvidence(diagram);
+        var analyserInputEvidence = AnalyserInputEvidence(job);
         var projection = Measure("projection", () => new ArchitectureV7PhysicalProjectionStage().Project(diagram, new ArchitectureV7ProjectionPolicy(
             job.Rendering.NodeDuplication.AllowDuplicateNodes ? ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches : ArchitectureV7ProjectionMode.Canonical,
             (job.Rendering.NodeDuplication.DuplicationExceptionPatterns ?? new List<string>()).Concat(job.Rendering.Layout.DuplicateHighNoiseNodePatterns ?? new List<string>()).Distinct(StringComparer.Ordinal).ToArray())));
@@ -190,6 +193,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             pipeline = "V7",
             input = new
             {
+                targetProjectPath = job.InputPath ?? "<unspecified>",
                 selectedProjectInput = job.ProjectSelectionInput ?? "<unspecified>",
                 selectedProjects = diagram.Projects.Select(project => project.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray(),
                 settingsPath = job.SettingsSourcePath ?? "<unspecified>",
@@ -208,6 +212,8 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             rendererFidelity,
             stages = new
             {
+                semantic = semanticEvidence,
+                analyserInput = analyserInputEvidence,
                 projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
                 sizing = new { RequirementCount = sizing.Requirements.Count, Fingerprint = sizing.FreezeFingerprint },
@@ -259,6 +265,71 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             serializationRepeatCount > 0 ? new SerializationRepeatResult(serializationRepeatCount, true, Array.Empty<string>()) : null));
     }
 
+    private static object SemanticEvidence(ArchitectureDiagramModel diagram)
+    {
+        var nodes = ArchitectureV7SemanticIdentity.SortedNodeKeys(diagram).ToArray();
+        var relationships = ArchitectureV7SemanticIdentity.SortedRelationshipKeys(diagram).ToArray();
+        var payload = string.Join("\n", nodes) + "\n--links--\n" + string.Join("\n", relationships);
+        using var sha = SHA256.Create();
+        var fingerprint = string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(payload)).Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
+        return new
+        {
+            NodeCount = nodes.Length,
+            RelationshipCount = relationships.Length,
+            PopulationFingerprint = fingerprint,
+            StableNodeKeys = nodes,
+            StableRelationshipKeys = relationships
+        };
+
+    }
+    private static object AnalyserInputEvidence(ArchitectureGenerationJob job)
+    {
+        var inputPath = job.InputPath;
+        if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath) ||
+            !string.Equals(Path.GetExtension(inputPath), ".csproj", StringComparison.OrdinalIgnoreCase))
+            return new { Resolved = false, TargetProjectPath = inputPath ?? "<unspecified>" };
+
+        var projectPath = Path.GetFullPath(inputPath);
+        var projectDirectory = Path.GetDirectoryName(projectPath)!;
+        var sourceFiles = Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildPath(path)).Select(Path.GetFullPath)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        var projectReferences = XDocument.Load(projectPath).Descendants()
+            .Where(element => string.Equals(element.Name.LocalName, "ProjectReference", StringComparison.Ordinal))
+            .Select(element => (string?)element.Attribute("Include"))
+            .Where(path => !string.IsNullOrWhiteSpace(path) && !path!.Contains("$(", StringComparison.Ordinal))
+            .Select(path => Path.GetFullPath(Path.Combine(projectDirectory, path!)))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        var duplicatePatterns = (job.Rendering.NodeDuplication.DuplicationExceptionPatterns ?? new List<string>())
+            .Concat(job.Rendering.Layout.DuplicateHighNoiseNodePatterns ?? new List<string>())
+            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var manifest = new
+        {
+            TargetProjectPath = projectPath,
+            ProjectName = Path.GetFileNameWithoutExtension(projectPath),
+            Configuration = "Debug",
+            SourceFiles = sourceFiles,
+            ProjectReferences = projectReferences,
+            ExplicitSourceExclusions = Array.Empty<string>(),
+            AnalyserOptions = new
+            {
+                ExcludedNames = job.Analysis.ExcludedNames.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                ExcludedNamespaces = job.Analysis.ExcludedNamespaces.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                job.Analysis.RootDiscoveryPatternsText,
+                job.Analysis.ExternalDependencyTag
+            },
+            DuplicateMode = job.Rendering.NodeDuplication.AllowDuplicateNodes ? "configured-duplicate" : "canonical",
+            DuplicationExceptionPatterns = duplicatePatterns,
+            Cache = "none-observed"
+        };
+        var canonical = JsonSerializer.Serialize(manifest);
+        using var sha = SHA256.Create();
+        var fingerprint = string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(canonical)).Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
+        return new { Resolved = true, AnalyserInputFingerprint = fingerprint, SourceFileCount = sourceFiles.Length, ProjectReferenceCount = projectReferences.Length, manifest };
+
+        static bool IsBuildPath(string path) => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(part => string.Equals(part, "bin", StringComparison.OrdinalIgnoreCase) || string.Equals(part, "obj", StringComparison.OrdinalIgnoreCase));
+    }
     private static DiagramDiagnostic[] ValidateRendererFidelity(DrawioPage page, ArchitectureV7PhysicalProjectionResult projection, ArchitectureV7PhysicalSceneFreeze scene)
     {
         var cells = page.GraphModel.Descendants("mxCell").ToArray();
