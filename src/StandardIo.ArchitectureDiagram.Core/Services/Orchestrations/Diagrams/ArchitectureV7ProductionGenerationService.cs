@@ -70,8 +70,10 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.Layout.BoundaryRowMinimum, job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, job.Rendering.Layout.ProjectHeaderHeight,
             job.Rendering.Layout.LabelCharacterWidth, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
-        var scene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
+        var unsimplifiedScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration,
             sizing.Requirements.ToDictionary(item => item.PhysicalNodeId, item => item.RequiredWidth, StringComparer.Ordinal)));
+        var simplification = Measure("allocated-route-simplification", () => new ArchitectureV7AllocatedRouteSimplificationStage().Simplify(unsimplifiedScene));
+        var scene = simplification.Scene;
         var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, ordinarySchedule.Reservations);
         var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, scheduledReservation, placement, routes, allocation, scene, sceneConfiguration));
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
@@ -242,7 +244,19 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 },
                 stageTimings,
                 allocation = new { AssignmentCount = allocation.RunAssignments.Count, Fingerprint = allocation.AllocationFingerprint },
-                scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint }
+                simplification = new
+                {
+                    RouteCount = simplification.Evidence.Count,
+                    PointsBefore = simplification.Evidence.Sum(item => item.PointsBefore),
+                    PointsAfter = simplification.Evidence.Sum(item => item.PointsAfter),
+                    RedundantPointsRemoved = simplification.Evidence.Sum(item => item.RedundantPointsRemoved),
+                    ReversalTransitions = simplification.Evidence.Sum(item => item.ReversalTransitions),
+                     OvershootGroups = simplification.Evidence.Sum(item => item.OvershootGroups),
+                     SameAxisLaneMismatches = simplification.Evidence.Sum(item => item.SameAxisLaneMismatchCount),
+                     DiagonalSegments = simplification.Evidence.Sum(item => item.DiagonalSegmentCount),
+                     Evidence = simplification.Evidence
+                },
+                scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint },
             }
         }, new JsonSerializerOptions { WriteIndented = true });
         var manifest = new ArchitectureGenerationManifest(diagram.Projects.Count, projection.PhysicalNodes.Count, diagram.Links.Count, routes.Routes.Count,
@@ -261,6 +275,17 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     ["final-v7-acceptance-report.json"] = JsonSerializer.Serialize(acceptanceSummary, new JsonSerializerOptions { WriteIndented = true }),
                     ["renderer-fidelity-report.json"] = JsonSerializer.Serialize(rendererFidelity, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-routing-placement-evidence.json"] = JsonSerializer.Serialize(new { routingEvidence, placementEvidence, representative, allocationSceneEvidence }, new JsonSerializerOptions { WriteIndented = true })
+                    , ["v7-route-simplification-evidence.json"] = JsonSerializer.Serialize(new
+                    {
+                        simplification.Evidence,
+                        sceneDiagnostics = scene.Diagnostics,
+                        routes = scene.Routes.Select(route => new
+                        {
+                            route.PhysicalLinkId,
+                            Points = route.Points.Select(point => new { point.X, point.Y, point.Provenance }).ToArray(),
+                            Segments = route.Segments.Select(segment => new { segment.RunId, segment.LaneId, segment.AllocationProvenance }).ToArray()
+                        }).ToArray()
+                    }, new JsonSerializerOptions { WriteIndented = true })
                 }, acceptance.HardFailureCount + rendererFindings.Length, routes.Routes.Count(x => !x.IsComplete)),
             serializationRepeatCount > 0 ? new SerializationRepeatResult(serializationRepeatCount, true, Array.Empty<string>()) : null));
     }

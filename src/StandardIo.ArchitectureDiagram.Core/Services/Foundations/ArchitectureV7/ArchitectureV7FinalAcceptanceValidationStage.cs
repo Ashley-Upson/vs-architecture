@@ -212,6 +212,21 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         var expectedCells = validIndexes
             ? segment.RouteCellIndices.Distinct().Select(index => frozen.Cells[index]).ToArray()
             : Array.Empty<ArchitectureV7RouteCell>();
+        if (segment.AllocationProvenance.StartsWith("canonical-simplification;", StringComparison.Ordinal))
+        {
+            // Canonicalisation may merge adjacent allocated resources (for
+            // example a terminal handoff and its straight run). Its aggregate
+            // provenance must still identify the contributing resources and its
+            // frozen route-cell projection must remain exact, but one physical
+            // segment no longer has one run/assignment owner.
+            var aggregateNamesResources = segment.AllocationProvenance.Contains("resource=", StringComparison.Ordinal) ||
+                segment.AllocationProvenance.Contains("run=", StringComparison.Ordinal);
+            var aggregateNamesLanes = segment.AllocationProvenance.Contains("lane=", StringComparison.Ordinal);
+            if (!validIndexes || !segment.LogicalCells.SequenceEqual(expectedCells) || !aggregateNamesResources || !aggregateNamesLanes)
+                Add(findings, "PHYSICAL-RESOURCE-PROVENANCE-MISMATCH", "physical-geometry", "Canonical physical segment provenance does not identify its contributing allocation resources and authoritative route cells.", route.PhysicalLinkId,
+                    segment.LogicalCells, new[] { segment.Start, segment.End }, new[] { segment.RunId, segment.LaneId, segment.AllocationProvenance });
+            return;
+        }
         var cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells) && expectedCells.All(cell => run?.Cells.Contains(cell) == true);
         var endpointResource = segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal);
         if (endpointResource)
