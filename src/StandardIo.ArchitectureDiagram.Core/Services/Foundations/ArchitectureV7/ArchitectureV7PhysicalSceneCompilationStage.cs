@@ -135,15 +135,18 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             var node = nodes.FirstOrDefault(x => x.PhysicalNodeId == slot.PhysicalNodeId);
             if (node is null) { diagnostics.Add(new("TERMINAL-NODE-MISSING", "A frozen terminal has no materialised node bounds.", true, slot.PhysicalLinkId)); continue; }
             var direction = slot.Direction;
-            var horizontalEdge = direction is ArchitectureV7EndpointDirection.Up or ArchitectureV7EndpointDirection.Down;
+            // Endpoint direction describes the approach group, not the physical
+            // node edge. V7 terminals always enter from the top or leave from
+            // the bottom; left/right approaches are nested on that edge by X.
+            var horizontalEdge = true;
             var route = routes.Routes.FirstOrDefault(item => item.PhysicalLinkId == slot.PhysicalLinkId);
             var adjacentRun = route is null ? null : slot.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
                 ? allocation.Runs.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.StartRouteIndex == 0)
                 : allocation.Runs.LastOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndRouteIndex == route.Cells.Count - 1);
             var assignment = adjacentRun is null ? null : allocation.RunAssignments.FirstOrDefault(item => item.RunId == adjacentRun.RunId);
-            var laneCoordinate = adjacentRun is null || assignment is null ? (double?)null : adjacentRun.Orientation == ArchitectureV7RunOrientation.Vertical
-                ? LaneCoordinate(columns, adjacentRun.Cells[0].Column, assignment.LaneOrdinal)
-                : LaneCoordinate(rows, adjacentRun.Cells[0].Row, assignment.LaneOrdinal);
+            var laneCoordinate = adjacentRun is null || assignment is null || adjacentRun.Orientation != ArchitectureV7RunOrientation.Vertical
+                ? (double?)null
+                : LaneCoordinate(columns, adjacentRun.Cells[0].Column, assignment.LaneOrdinal);
             var laneFitsNodeEdge = laneCoordinate is not null && (horizontalEdge
                 ? laneCoordinate.Value >= node.Bounds.Left + configuration.TerminalInset && laneCoordinate.Value <= node.Bounds.Right - configuration.TerminalInset
                 : laneCoordinate.Value >= node.Bounds.Top + configuration.TerminalInset && laneCoordinate.Value <= node.Bounds.Bottom - configuration.TerminalInset);
@@ -151,7 +154,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 ? Math.Round(laneFitsNodeEdge ? laneCoordinate!.Value : (node.Bounds.Left + node.Bounds.Right) / 2d + slot.RelativeOffset, MidpointRounding.AwayFromZero)
                 : Math.Round(direction == ArchitectureV7EndpointDirection.Left ? node.Bounds.Left : node.Bounds.Right, MidpointRounding.AwayFromZero);
             var y = horizontalEdge
-                ? Math.Round(direction == ArchitectureV7EndpointDirection.Down ? node.Bounds.Bottom : node.Bounds.Top, MidpointRounding.AwayFromZero)
+                ? Math.Round(slot.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? node.Bounds.Bottom : node.Bounds.Top, MidpointRounding.AwayFromZero)
                 : Math.Round(laneFitsNodeEdge ? laneCoordinate!.Value : (node.Bounds.Top + node.Bounds.Bottom) / 2d + slot.RelativeOffset, MidpointRounding.AwayFromZero);
             if ((horizontalEdge && (x < node.Bounds.Left + configuration.TerminalInset || x > node.Bounds.Right - configuration.TerminalInset)) ||
                 (!horizontalEdge && (y < node.Bounds.Top + configuration.TerminalInset || y > node.Bounds.Bottom - configuration.TerminalInset)))
@@ -273,13 +276,11 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     {
         if (handoff.LogicalCell is not { } cell || (uint)cell.Row >= (uint)rows.Count || (uint)cell.Column >= (uint)columns.Count)
             throw new InvalidOperationException("A frozen endpoint handoff has no representable logical cell.");
-        // The handoff is orthogonal to the adjacent run. Preserve the run's
-        // lane coordinate and the terminal's perpendicular coordinate; using
-        // the cell centre here creates a shared horizontal/vertical approach
-        // when several endpoint lanes leave the same node.
-        var point = handoff.HandoffOrientation == ArchitectureV7RunOrientation.Horizontal
-            ? new ArchitectureV7PhysicalPoint(adjacentPoint.Point.X, terminal.Position.Y, "frozen-" + handoff.ResourceId)
-            : new ArchitectureV7PhysicalPoint(terminal.Position.X, adjacentPoint.Point.Y, "frozen-" + handoff.ResourceId);
+        // V7 endpoints are always on the top/bottom node edge. Preserve the
+        // adjacent run's perpendicular coordinate, but keep the handoff's X
+        // on the authoritative terminal so the final approach cannot drift
+        // back to the lane coordinate.
+        var point = new ArchitectureV7PhysicalPoint(terminal.Position.X, adjacentPoint.Point.Y, "frozen-" + handoff.ResourceId);
         return new(handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? 0 : route.Cells.Count - 1,
             handoff.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1], point,
             handoff.ResourceId, handoff.ResourceId, "frozen-handoff:" + handoff.ResourceId + ";" + handoff.Provenance);
@@ -331,9 +332,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         var destinationApproach = run.EndRouteIndex == route.Cells.Count - 1;
         if (!sourceApproach && !destinationApproach) return point;
         var terminal = sourceApproach ? source : destination;
-        var aligned = run.Orientation == ArchitectureV7RunOrientation.Vertical
-            ? new ArchitectureV7PhysicalPoint(terminal.Position.X, point.Point.Y, point.Point.Provenance)
-            : new ArchitectureV7PhysicalPoint(point.Point.X, terminal.Position.Y, point.Point.Provenance);
+        var aligned = new ArchitectureV7PhysicalPoint(terminal.Position.X, point.Point.Y, point.Point.Provenance);
         var provenance = point.Point.Provenance + ";" + point.Provenance + ";terminal-coordinate;adjacent-routing-cell-authority;run=" + run.RunId + ";lane=" + assignment.LaneId;
         return new(index, point.Cell, new(aligned.X, aligned.Y, provenance), run.RunId, assignment.LaneId, provenance);
     }

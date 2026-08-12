@@ -56,7 +56,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var physical = Assert.Single(scene.Routes);
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
         Assert.Contains(physical.Points, point => point.Provenance.Contains("terminal-coordinate;adjacent-routing-cell-authority", StringComparison.Ordinal));
-        Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
+        Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
         Assert.All(physical.Segments.Where(segment => segment.AllocationProvenance.Contains("frozen-handoff:", StringComparison.Ordinal)),
             segment => Assert.StartsWith("handoff:", segment.LaneId, StringComparison.Ordinal));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
@@ -414,8 +414,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, missing,
             new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 2, 2, 0));
 
-        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
-        Assert.Single(scene.Routes);
+        Assert.Contains(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
+        Assert.Empty(scene.Routes);
     }
 
     [Fact]
@@ -567,6 +567,41 @@ public sealed class ArchitectureV7PhysicalSceneTests
             Assert.All(adjacentVertical, point => Assert.Equal(point.X, terminal.Position.X));
             Assert.Equal(terminal.Position.X, route.Points[1].X);
         }
+    }
+
+    [Fact]
+    public void Left_and_right_approaches_still_use_top_and_bottom_node_edges()
+    {
+        var routes = new[]
+        {
+            Route("source-right", "source", "target-a", (1, 2), (1, 1), (2, 1), (3, 1)),
+            Route("destination-left", "source-b", "target", (1, 4), (2, 4), (3, 4), (3, 3))
+        };
+        var scene = Compile(routes, new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("source", "source", "p", 1, 2, 1, 2,
+                new[] { (1, 2) }, false, false, false, "tree", "source", "source", "test"),
+            new ArchitectureV7FrozenNodePlacement("target-a", "target-a", "p", 3, 1, 1, 1,
+                new[] { (3, 1) }, false, false, false, "tree", "target-a", "target-a", "test"),
+            new ArchitectureV7FrozenNodePlacement("source-b", "source-b", "p", 1, 4, 1, 4,
+                new[] { (1, 4) }, false, false, false, "tree", "source-b", "source-b", "test"),
+            new ArchitectureV7FrozenNodePlacement("target", "target", "p", 3, 3, 1, 3,
+                new[] { (3, 3) }, false, false, false, "tree", "target", "target", "test")
+        }, spacing: 4);
+
+        var sourceTerminal = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "source-right" &&
+            item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        var sourceNode = Assert.Single(scene.Nodes, item => item.PhysicalNodeId == "source");
+        Assert.Equal(sourceNode.Bounds.Bottom, sourceTerminal.Position.Y);
+
+        var destinationTerminal = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "destination-left" &&
+            item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+        var destinationNode = Assert.Single(scene.Nodes, item => item.PhysicalNodeId == "target");
+        Assert.Equal(destinationNode.Bounds.Top, destinationTerminal.Position.Y);
+        var destinationRoute = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "destination-left");
+        Assert.Equal(destinationTerminal.Position.X, destinationRoute.Points[destinationRoute.Points.Count - 1].X);
+        Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Segments), segment =>
+            segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
     }
 
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
