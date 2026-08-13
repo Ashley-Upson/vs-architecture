@@ -36,15 +36,18 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var runs = BuildRuns(routes, diagnostics);
         var (lanes, assignments) = AllocateLanes(placement, routes, runs, configuration.ParallelLaneSpacing, corridorProjection);
         var terminals = AllocateTerminals(placement, routes, runs, assignments, configuration, diagnostics);
+        var sharedVerticalRunConstraints = BuildSharedVerticalRunConstraints(routes, runs);
+        ValidateSharedVerticalRunIntersections(placement, sharedVerticalRunConstraints, terminals, configuration, diagnostics);
+        var endpointLaneCoordinates = BuildEndpointLaneCoordinates(placement, routes, runs, terminals, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
         var handoffs = BuildHandoffs(placement, routes, runs, assignments, terminals, configuration, diagnostics);
         var bends = BuildBendsResources(runs, routes, assignments, configuration, diagnostics);
         var crossingResult = BuildCrossingResources(routes, runs, assignments, bends, configuration, diagnostics);
         var crossings = crossingResult.Resources;
         var crossingInteractions = crossingResult.Interactions;
-        var fingerprint = Fingerprint(placement.PlacementFingerprint, routes.RouteFingerprint, runs, assignments, terminals, approaches, handoffs, bends, crossings, diagnostics);
+        var fingerprint = Fingerprint(placement.PlacementFingerprint, routes.RouteFingerprint, runs, assignments, terminals, endpointLaneCoordinates, sharedVerticalRunConstraints, approaches, handoffs, bends, crossings, diagnostics);
         return new ArchitectureV7CollectiveAllocationFreeze(runs, lanes, assignments, terminals, approaches, handoffs, bends, crossings,
-            diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint, crossingInteractions, configuration);
+            diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint, crossingInteractions, configuration, endpointLaneCoordinates, sharedVerticalRunConstraints);
     }
 
     private static IReadOnlyList<ArchitectureV7StraightRun> BuildRuns(
@@ -335,6 +338,66 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         return result;
     }
 
+    private static IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint> BuildSharedVerticalRunConstraints(
+        ArchitectureV7LogicalRouteFreeze routes, IReadOnlyList<ArchitectureV7StraightRun> runs)
+    {
+        return routes.Routes
+            .Where(route => route.IsComplete && route.Cells.Count >= 2)
+            .Select(route =>
+            {
+                var routeRuns = runs.Where(run => run.PhysicalLinkId == route.PhysicalLinkId).OrderBy(run => run.StartRouteIndex).ToArray();
+                return (Route: route, Runs: routeRuns);
+            })
+            .Where(item => item.Runs.Length == 1 && item.Runs[0].Orientation == ArchitectureV7RunOrientation.Vertical
+                && item.Runs[0].StartRouteIndex == 0 && item.Runs[0].EndRouteIndex == item.Route.Cells.Count - 1)
+            .Select(item => new ArchitectureV7SharedVerticalRunConstraint(
+                item.Route.PhysicalLinkId,
+                item.Runs[0].RunId,
+                item.Route.SourcePhysicalNodeId,
+                item.Route.DestinationPhysicalNodeId,
+                "shared-maximal-vertical-run;source-terminal=run-X;destination-terminal=run-X;logical-topology-unchanged"))
+            .OrderBy(item => item.PhysicalLinkId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void ValidateSharedVerticalRunIntersections(
+        ArchitectureV7PlacementFreeze placement,
+        IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint> constraints,
+        IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
+        ArchitectureV7AllocationConfiguration configuration,
+        ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
+    {
+        foreach (var constraint in constraints)
+        {
+            var endpointIntervals = new List<(double Lower, double Upper)>();
+            foreach (var endpoint in terminals.Where(item => item.PhysicalLinkId == constraint.PhysicalLinkId))
+            {
+                var node = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
+                if (node is null) continue;
+                var centre = node.CentreCell * configuration.BaseCellWidth;
+                var half = Math.Max(0d, node.LogicalSpan * configuration.BaseCellWidth / 2d - configuration.TerminalInset);
+                var lower = centre - half;
+                var upper = centre + half;
+                var peers = terminals.Where(item => item.PhysicalNodeId == endpoint.PhysicalNodeId &&
+                    item.EndpointKind == endpoint.EndpointKind && item.PhysicalLinkId != endpoint.PhysicalLinkId).ToArray();
+                lower = Math.Max(lower, peers.Where(peer => peer.SlotOrdinal < endpoint.SlotOrdinal)
+                    .Select(peer => centre + peer.RelativeOffset + configuration.TerminalPortSpacing).DefaultIfEmpty(lower).Max());
+                upper = Math.Min(upper, peers.Where(peer => peer.SlotOrdinal > endpoint.SlotOrdinal)
+                    .Select(peer => centre + peer.RelativeOffset - configuration.TerminalPortSpacing).DefaultIfEmpty(upper).Min());
+                endpointIntervals.Add((lower, upper));
+            }
+            if (endpointIntervals.Count == 2)
+            {
+                var lower = endpointIntervals.Max(item => item.Lower);
+                var upper = endpointIntervals.Min(item => item.Upper);
+                if (lower > upper)
+                    diagnostics.Add(new("SHARED-VERTICAL-RUN-CONSTRAINT-EMPTY-INTERSECTION",
+                        $"No legal shared X exists for run {constraint.RunId}; endpoint legal intervals intersect as [{lower:R},{upper:R}].", true,
+                        constraint.PhysicalLinkId, constraint.RunId));
+            }
+        }
+    }
+
     private static IReadOnlyList<ArchitectureV7EndpointHandoff> BuildHandoffs(
         ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes, IReadOnlyList<ArchitectureV7StraightRun> runs,
         IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
@@ -362,53 +425,45 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 continue;
             }
 
-            var assignment = assignments.FirstOrDefault(x => x.RunId == run.RunId);
-            if (assignment is null)
+            // Ordinary horizontal-to-vertical endpoint turns are represented by
+            // the allocated bend. A terminal/lane offset is no longer an
+            // endpoint handoff reason; endpoint-local lane coordinates own it.
+            // Centre-cell compensation is diagnosed only by a concrete failure
+            // to represent the frozen route, never by terminal offset alone.
+            if (run.Orientation == ArchitectureV7RunOrientation.Vertical) continue;
+            diagnostics.Add(new("ENDPOINT-FINAL-VERTICAL-RUN-MISSING",
+                "The endpoint contract requires a final vertical approach lane on the top/bottom node edge.", true,
+                terminal.PhysicalLinkId, run.RunId, terminal.PhysicalNodeId, terminal.EndpointKind.ToString()));
+            continue;
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<ArchitectureV7EndpointLaneCoordinate> BuildEndpointLaneCoordinates(
+        ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes,
+        IReadOnlyList<ArchitectureV7StraightRun> runs,
+        IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
+        ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
+    {
+        var result = new List<ArchitectureV7EndpointLaneCoordinate>();
+        foreach (var terminal in terminals)
+        {
+            var route = routes.Routes.FirstOrDefault(item => item.PhysicalLinkId == terminal.PhysicalLinkId);
+            if (route is null) continue;
+            var run = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? runs.FirstOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.StartRouteIndex == 0)
+                : runs.LastOrDefault(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndRouteIndex == route.Cells.Count - 1);
+            var node = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
+            if (run is null || node is null) continue;
+            if (run.Orientation != ArchitectureV7RunOrientation.Vertical)
             {
-                diagnostics.Add(new("HANDOFF-CAPACITY-UNREPRESENTABLE", "An endpoint handoff has no adjacent lane allocation.", true,
-                    route.PhysicalLinkId, run.RunId, terminal.PhysicalNodeId, terminal.EndpointKind.ToString()));
+                diagnostics.Add(new("ENDPOINT-FINAL-VERTICAL-RUN-MISSING",
+                    "A top/bottom endpoint has no final vertical approach run to receive its terminal-anchored X coordinate.", true,
+                    terminal.PhysicalLinkId, run.RunId, terminal.PhysicalNodeId, terminal.EndpointKind.ToString()));
                 continue;
             }
-
-            var endpointNode = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == terminal.PhysicalNodeId);
-            var laneOffset = endpointNode is null
-                ? LaneAxisOffset(run, assignment, runs, assignments, configuration.ParallelLaneSpacing)
-                : TerminalLaneOffset(endpointNode, route, terminal.EndpointKind, run, assignments, runs, configuration);
-            var terminalOffset = terminal.RelativeOffset;
-            var relativeOffset = laneOffset - terminalOffset;
-            var sideEndpoint = terminal.Direction is ArchitectureV7EndpointDirection.Left or ArchitectureV7EndpointDirection.Right;
-            var requiresOrthogonalSideAttachment = run.Orientation == ArchitectureV7RunOrientation.Horizontal && sideEndpoint;
-            var endpointCell = source ? route.Cells[0] : route.Cells[route.Cells.Count - 1];
-            var multiSpanCentreAttachment = endpointNode is not null && endpointNode.LogicalSpan > 1 &&
-                endpointCell.Row == endpointNode.DiagramRow && endpointCell.Column == endpointNode.CentreCell;
-            if (Math.Abs(relativeOffset) < 0.0001 && !requiresOrthogonalSideAttachment && !multiSpanCentreAttachment) continue;
-
-            var startIndex = source ? 0 : route.Cells.Count - 2;
-            var endIndex = source ? 1 : route.Cells.Count - 1;
-            var cells = source ? route.Cells.Take(2).ToArray() : route.Cells.Skip(route.Cells.Count - 2).ToArray();
-            result.Add(new(
-                terminal.PhysicalLinkId,
-                terminal.PhysicalNodeId,
-                terminal.EndpointKind,
-                terminal.SlotOrdinal,
-                cells,
-                "terminal-slot/lane-offset mismatch;allocated orthogonal endpoint handoff",
-                "explicit-orthogonal-handoff;frozen-route-index=" + startIndex + ":" + endIndex,
-                $"handoff:{terminal.PhysicalLinkId}:{terminal.EndpointKind}:{terminal.SlotOrdinal}",
-                source ? route.Cells[1] : route.Cells[route.Cells.Count - 2],
-                startIndex,
-                endIndex,
-                run.RunId,
-                assignment.LaneId,
-                run.Orientation == ArchitectureV7RunOrientation.Vertical ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical,
-                terminal.Direction,
-                terminalOffset,
-                laneOffset,
-                relativeOffset,
-                Math.Max(Math.Abs(relativeOffset), configuration.ResourceClearance),
-                run.Orientation == ArchitectureV7RunOrientation.Vertical
-                    ? new ArchitectureV7PhysicalRelativePosition(relativeOffset, 0)
-                    : new ArchitectureV7PhysicalRelativePosition(0, relativeOffset)));
+            result.Add(new(terminal.PhysicalLinkId, terminal.PhysicalNodeId, terminal.EndpointKind, run.RunId,
+                terminal.RelativeOffset, "endpoint-local;terminal-authoritative;final-vertical-lane;source=bottom,destination=top"));
         }
         return result;
     }
@@ -615,9 +670,10 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
     private static int LaneOrdinal(ArchitectureV7StraightRun run, IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments) => assignments.First(x => x.RunId == run.RunId).LaneOrdinal;
 
     private static string Fingerprint(string placementFingerprint, string routeFingerprint, IEnumerable<ArchitectureV7StraightRun> runs, IEnumerable<ArchitectureV7RunLaneAssignment> assignments,
-        IEnumerable<ArchitectureV7TerminalSlotAssignment> terminals, IEnumerable<ArchitectureV7EndpointApproachReservation> approaches,
+        IEnumerable<ArchitectureV7TerminalSlotAssignment> terminals, IEnumerable<ArchitectureV7EndpointLaneCoordinate> endpointLaneCoordinates,
+        IEnumerable<ArchitectureV7SharedVerticalRunConstraint> sharedVerticalRunConstraints, IEnumerable<ArchitectureV7EndpointApproachReservation> approaches,
         IEnumerable<ArchitectureV7EndpointHandoff> handoffs, IEnumerable<ArchitectureV7BendAllocation> bends, IEnumerable<ArchitectureV7CrossingAllocation> crossings,
-        IEnumerable<ArchitectureV7AllocationDiagnostic> diagnostics) => placementFingerprint + "|" + routeFingerprint + "|" + string.Join(";", runs.Select(x => x.RunId + ":" + string.Join(",", x.Cells.Select(c => c.Row + "/" + c.Column))).Concat(assignments.Select(x => x.RunId + "=" + x.LaneId)).Concat(terminals.Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal)).Concat(approaches.Select(x => x.PhysicalLinkId + ":a" + x.TerminalSlotOrdinal)).Concat(handoffs.Select(x => x.ResourceId + ":h" + x.RelativePhysicalOffset + ":" + x.RequiredClearance)).Concat(bends.Select(x => x.BendId + ":b" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset)).Concat(crossings.Select(x => x.CrossingId + ":c" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset + ":" + x.Classification)).Concat(diagnostics.Select(x => x.Code)));
+        IEnumerable<ArchitectureV7AllocationDiagnostic> diagnostics) => placementFingerprint + "|" + routeFingerprint + "|" + string.Join(";", runs.Select(x => x.RunId + ":" + string.Join(",", x.Cells.Select(c => c.Row + "/" + c.Column))).Concat(assignments.Select(x => x.RunId + "=" + x.LaneId)).Concat(terminals.Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal)).Concat(endpointLaneCoordinates.Select(x => x.PhysicalLinkId + ":e" + x.EndpointKind + ":" + x.RunId + ":" + x.RelativeXOffset)).Concat(sharedVerticalRunConstraints.Select(x => x.PhysicalLinkId + ":shared=" + x.RunId)).Concat(approaches.Select(x => x.PhysicalLinkId + ":a" + x.TerminalSlotOrdinal)).Concat(handoffs.Select(x => x.ResourceId + ":h" + x.RelativePhysicalOffset + ":" + x.RequiredClearance)).Concat(bends.Select(x => x.BendId + ":b" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset)).Concat(crossings.Select(x => x.CrossingId + ":c" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset + ":" + x.Classification)).Concat(diagnostics.Select(x => x.Code)));
 
     private static ArchitectureV7RunOrientation Orientation(ArchitectureV7RouteCell a, ArchitectureV7RouteCell b) => a.Row == b.Row ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical;
     private static int FixedCoordinate(ArchitectureV7StraightRun run) => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? run.Cells[0].Row : run.Cells[0].Column;

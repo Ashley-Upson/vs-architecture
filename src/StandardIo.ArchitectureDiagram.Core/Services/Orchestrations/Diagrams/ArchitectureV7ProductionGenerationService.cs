@@ -109,6 +109,10 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             OverlapNodes = placementEvidence.Where(x => overlapNodes.Contains(x.PhysicalNodeId, StringComparer.Ordinal)).ToArray(),
             ExternalSeparation = placementEvidence.Where(x => externalNodes.Contains(x.PhysicalNodeId, StringComparer.Ordinal)).ToArray()
         };
+        var compiledRouteIds = new HashSet<string>(scene.CompiledPhysicalLinkIds, StringComparer.Ordinal);
+        var failedRouteIds = scene.FailedPhysicalLinkIds.ToArray();
+        var tracedFailureIds = failedRouteIds.Concat(allocation.Diagnostics.Where(item => item.IsHardFailure && item.PhysicalLinkId is not null).Select(item => item.PhysicalLinkId!))
+            .Distinct(StringComparer.Ordinal).ToArray();
         var allocationSceneEvidence = new
         {
             Summary = new
@@ -122,9 +126,14 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 TerminalCount = allocation.Terminals.Count,
                 ApproachCount = allocation.Approaches.Count,
                 HandoffCount = allocation.Handoffs.Count,
+                EndpointLaneCoordinateCount = allocation.EndpointLaneCoordinates.Count,
                 BendCount = allocation.Bends.Count,
                 CrossingCount = allocation.Crossings.Count,
-                PhysicalRouteCount = scene.Routes.Count
+                PhysicalRouteCount = scene.Routes.Count,
+                AccountedPhysicalLinkCount = scene.AccountedPhysicalLinkIds.Count,
+                FailedPhysicalLinkCount = failedRouteIds.Length,
+                RelationshipAccountingInvariant = scene.RelationshipAccountingInvariant && scene.AccountedPhysicalLinkIds.Count == routes.Routes.Count,
+                PhysicalSceneComplete = scene.IsComplete
             },
             AllocationSamples = allocation.Diagnostics.Take(128).Select(diagnostic => new
             {
@@ -190,15 +199,44 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             requirement.RequiredWidth,
             Reason = requirement.Provenance
         }).OrderByDescending(item => item.ChosenSpan).ThenBy(item => item.NodeName, StringComparer.Ordinal).ToArray();
+        var failedRouteTraces = routes.Routes.Where(route => tracedFailureIds.Contains(route.PhysicalLinkId, StringComparer.Ordinal)).Select(route => new
+        {
+            RelationshipId = route.PhysicalLinkId,
+            route.SourcePhysicalNodeId,
+            route.DestinationPhysicalNodeId,
+            SourceNode = placement.Nodes.FirstOrDefault(node => node.PhysicalNodeId == route.SourcePhysicalNodeId),
+            DestinationNode = placement.Nodes.FirstOrDefault(node => node.PhysicalNodeId == route.DestinationPhysicalNodeId),
+            route.Cells,
+            route.IsComplete,
+            route.Diagnostics,
+            route.AttemptEvidence,
+            Runs = allocation.Runs.Where(run => run.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            LaneAssignments = allocation.RunAssignments.Where(item => allocation.Runs.Any(run => run.PhysicalLinkId == route.PhysicalLinkId && run.RunId == item.RunId)).ToArray(),
+            Terminals = allocation.Terminals.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            EndpointLanes = allocation.EndpointLaneCoordinates.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            Bends = allocation.Bends.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            Handoffs = allocation.Handoffs.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            PhysicalCompilationDiagnostics = scene.Diagnostics.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            AllocationDiagnostics = allocation.Diagnostics.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            FirstFailingStage = route.Diagnostics.Count > 0 ? "logical-routing" : allocation.Diagnostics.Any(item => item.PhysicalLinkId == route.PhysicalLinkId && item.IsHardFailure) ? "allocation" : "scene-compilation"
+        }).ToArray();
         var strict = mode == ArchitectureRenderingMode.StrictValidation;
         var findings = acceptance.Findings.Select(finding => new ValidationFinding(finding.Code, finding.SubjectId ?? finding.Stage, finding.SubjectId, null, 1, finding.Message, true)).ToArray();
         DrawioPage page;
-        page = Measure("rendering", () => strict && !acceptance.IsStrictEligible
+        page = Measure("rendering", () => strict && (!scene.IsComplete || !acceptance.IsStrictEligible)
             ? RejectedPage()
             : new ArchitectureV7MechanicalDrawioRenderer().Render(diagram, projection, placement, scene, job.Rendering));
         var rendererFindings = Measure("renderer-fidelity", () => ValidateRendererFidelity(page, projection, scene));
         page = page with { Diagnostics = page.Diagnostics.Concat(rendererFindings).ToArray() };
-        if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() };
+        if (!scene.IsComplete)
+        {
+            page = page with
+            {
+                SuggestedName = "Architecture (V7 INCOMPLETE - " + failedRouteIds.Length.ToString(CultureInfo.InvariantCulture) + " ROUTES FAILED)",
+                Diagnostics = page.Diagnostics.Concat(new[] { new DiagramDiagnostic("V7Incomplete", failedRouteIds.Length.ToString(CultureInfo.InvariantCulture) + " route(s) failed compilation; this review artifact is not accepted.") }).ToArray()
+            };
+        }
+        if (!string.IsNullOrWhiteSpace(job.PageNameHint)) page = page with { SuggestedName = job.PageNameHint!.Trim() + (!scene.IsComplete ? " (V7 INCOMPLETE)" : string.Empty) };
         var rendererFidelity = new
         {
             Findings = rendererFindings,
@@ -299,7 +337,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     Fingerprint = corridorProjection.Fingerprint
                 },
                 stageTimings,
-                allocation = new { AssignmentCount = allocation.RunAssignments.Count, Fingerprint = allocation.AllocationFingerprint },
+                allocation = new { AssignmentCount = allocation.RunAssignments.Count, EndpointLaneCoordinateCount = allocation.EndpointLaneCoordinates.Count, HandoffCount = allocation.Handoffs.Count, Fingerprint = allocation.AllocationFingerprint },
                 simplification = new
                 {
                     RouteCount = simplification.Evidence.Count,
@@ -312,7 +350,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                      DiagonalSegments = simplification.Evidence.Sum(item => item.DiagonalSegmentCount),
                      Evidence = simplification.Evidence
                 },
-                scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint },
+                scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, AccountedPhysicalLinkCount = scene.AccountedPhysicalLinkIds.Count, IsComplete = scene.IsComplete, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint },
             }
         }, new JsonSerializerOptions { WriteIndented = true });
         var manifest = new ArchitectureGenerationManifest(diagram.Projects.Count, projection.PhysicalNodes.Count, diagram.Links.Count, routes.Routes.Count,
@@ -332,6 +370,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     ["renderer-fidelity-report.json"] = JsonSerializer.Serialize(rendererFidelity, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-routing-placement-evidence.json"] = JsonSerializer.Serialize(new { routingEvidence, placementEvidence, representative, allocationSceneEvidence }, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-endpoint-region-evidence.json"] = JsonSerializer.Serialize(endpointEvidence, new JsonSerializerOptions { WriteIndented = true })
+                    , ["v7-failed-route-traces.json"] = JsonSerializer.Serialize(failedRouteTraces, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-node-span-evidence.json"] = JsonSerializer.Serialize(nodeSpanEvidence, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-corridor-usage-evidence.json"] = JsonSerializer.Serialize(corridorProjection, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-simplification-evidence.json"] = JsonSerializer.Serialize(new

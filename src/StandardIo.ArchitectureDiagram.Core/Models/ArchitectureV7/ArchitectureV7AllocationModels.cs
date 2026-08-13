@@ -42,6 +42,21 @@ public sealed class ArchitectureV7StraightRun
 public sealed record ArchitectureV7PhysicalLane(string LaneId, ArchitectureV7RunOrientation Orientation, int LaneOrdinal, int ParallelLaneSpacing, IReadOnlyList<string> RunIds);
 public sealed record ArchitectureV7RunLaneAssignment(string RunId, string LaneId, int LaneOrdinal);
 
+public sealed record ArchitectureV7EndpointLaneCoordinate(
+    string PhysicalLinkId,
+    string PhysicalNodeId,
+    ArchitectureV7EndpointKind EndpointKind,
+    string RunId,
+    double RelativeXOffset,
+    string Provenance);
+
+public sealed record ArchitectureV7SharedVerticalRunConstraint(
+    string PhysicalLinkId,
+    string RunId,
+    string SourcePhysicalNodeId,
+    string DestinationPhysicalNodeId,
+    string Provenance);
+
 public sealed record ArchitectureV7TerminalSlotAssignment(
     string PhysicalLinkId,
     string PhysicalNodeId,
@@ -234,7 +249,9 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         IReadOnlyList<ArchitectureV7AllocationDiagnostic> diagnostics,
         string placementFingerprint, string routeFingerprint, string allocationFingerprint,
         IReadOnlyList<ArchitectureV7CrossingInteraction>? crossingInteractions = null,
-        ArchitectureV7AllocationConfiguration? allocationConfiguration = null)
+        ArchitectureV7AllocationConfiguration? allocationConfiguration = null,
+        IReadOnlyList<ArchitectureV7EndpointLaneCoordinate>? endpointLaneCoordinates = null,
+        IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint>? sharedVerticalRunConstraints = null)
     {
         Runs = Array.AsReadOnly((runs ?? Array.Empty<ArchitectureV7StraightRun>()).OrderBy(x => x.RunId, StringComparer.Ordinal).ToArray());
         Lanes = Array.AsReadOnly((lanes ?? Array.Empty<ArchitectureV7PhysicalLane>()).OrderBy(x => x.LaneId, StringComparer.Ordinal).ToArray());
@@ -245,6 +262,10 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         Bends = Array.AsReadOnly((bends ?? Array.Empty<ArchitectureV7BendAllocation>()).OrderBy(x => x.BendId, StringComparer.Ordinal).ToArray());
         Crossings = Array.AsReadOnly((crossings ?? Array.Empty<ArchitectureV7CrossingAllocation>()).OrderBy(x => x.CrossingId, StringComparer.Ordinal).ToArray());
         CrossingInteractions = Array.AsReadOnly((crossingInteractions ?? Array.Empty<ArchitectureV7CrossingInteraction>()).OrderBy(x => x.InteractionId, StringComparer.Ordinal).ToArray());
+        EndpointLaneCoordinates = Array.AsReadOnly((endpointLaneCoordinates ?? Array.Empty<ArchitectureV7EndpointLaneCoordinate>())
+            .OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.EndpointKind).ToArray());
+        SharedVerticalRunConstraints = Array.AsReadOnly((sharedVerticalRunConstraints ?? Array.Empty<ArchitectureV7SharedVerticalRunConstraint>())
+            .OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToArray());
         CrossingResources = Array.AsReadOnly(Crossings.GroupBy(crossing => GeometryKey(crossing.Cell, crossing.Classification,
                 crossing.HorizontalLaneId, crossing.VerticalLaneId, crossing.EffectiveRelativePosition, crossing.RequiredClearance), StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
@@ -263,6 +284,7 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         TrackDemandFingerprint = Fingerprint(TrackDemands.Select(demand => demand.LogicalRow + ":" + demand.LogicalColumn + ":" + demand.RequiredRowExtent + ":" + demand.RequiredColumnExtent + ":" + string.Join(",", demand.ResourceIds)));
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<ArchitectureV7AllocationDiagnostic>()).ToArray());
         PlacementFingerprint = placementFingerprint; RouteFingerprint = routeFingerprint; AllocationFingerprint = allocationFingerprint;
+        AllocationConfiguration = allocationConfiguration;
     }
     public IReadOnlyList<ArchitectureV7StraightRun> Runs { get; }
     public IReadOnlyList<ArchitectureV7PhysicalLane> Lanes { get; }
@@ -273,6 +295,8 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public IReadOnlyList<ArchitectureV7BendAllocation> Bends { get; }
     public IReadOnlyList<ArchitectureV7CrossingAllocation> Crossings { get; }
     public IReadOnlyList<ArchitectureV7CrossingInteraction> CrossingInteractions { get; }
+    public IReadOnlyList<ArchitectureV7EndpointLaneCoordinate> EndpointLaneCoordinates { get; }
+    public IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint> SharedVerticalRunConstraints { get; }
     public IReadOnlyList<ArchitectureV7PhysicalCrossingResource> CrossingResources { get; }
     public IReadOnlyList<ArchitectureV7PhysicalTrackDemand> TrackDemands { get; }
     public string CrossingInteractionFingerprint { get; }
@@ -282,6 +306,7 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public string PlacementFingerprint { get; }
     public string RouteFingerprint { get; }
     public string AllocationFingerprint { get; }
+    public ArchitectureV7AllocationConfiguration? AllocationConfiguration { get; }
     public bool IsComplete => !Diagnostics.Any(x => x.IsHardFailure);
 
     private static ArchitectureV7PhysicalTrackDemand[] BuildTrackDemands(

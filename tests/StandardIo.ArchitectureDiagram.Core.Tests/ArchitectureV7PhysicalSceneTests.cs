@@ -34,6 +34,26 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Shared_vertical_run_inherits_one_x_at_both_terminals_when_nodes_have_other_terminals()
+    {
+        var routes = new[]
+        {
+            Route("shared", "s", "t", (1, 2), (2, 2), (3, 2)),
+            Route("s-other", "s", "left", (1, 2), (2, 2), (3, 2), (4, 2), (5, 2)),
+            Route("t-other", "right", "t", (0, 2), (1, 2), (2, 2), (3, 2))
+        };
+        var scene = Compile(routes, Nodes(("s", 1, 2), ("t", 3, 2), ("left", 5, 2), ("right", 0, 2)), spacing: 4, baseCellWidth: 100);
+        var physical = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "shared");
+        var source = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        var destination = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+
+        Assert.Equal(source.Position.X, destination.Position.X);
+        Assert.All(physical.Points, point => Assert.Equal(source.Position.X, point.X));
+        Assert.DoesNotContain(scene.Diagnostics, item => item.Code == "ENDPOINT-HANDOFF-MISSING");
+        Assert.DoesNotContain(scene.Diagnostics, item => item.Code == "SHARED-VERTICAL-RUN-CONSTRAINT-UNSATISFIED");
+    }
+
+    [Fact]
     public void Overlapping_horizontal_routes_use_distinct_lanes_and_increase_row_extent()
     {
         var routes = new[]
@@ -49,16 +69,15 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
-    public void Endpoint_lane_mismatch_materialises_allocated_orthogonal_handoff_without_diagonal_or_clamping()
+    public void Shared_vertical_endpoint_authority_materialises_without_reconciliation_handoff()
     {
-        var route = Route("a", "s", "t", (1, 1), (1, 2), (1, 3));
-        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 1, 3)), spacing: 2);
+        var route = Route("a", "s", "t", (1, 1), (2, 1), (3, 1));
+        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 3, 1)), spacing: 2);
         var physical = Assert.Single(scene.Routes);
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-        Assert.Contains(physical.Points, point => point.Provenance.Contains("terminal-coordinate;adjacent-routing-cell-authority", StringComparison.Ordinal));
-        Assert.Contains(physical.Points, point => point.Provenance.Contains("frozen-handoff:a:DestinationArrival", StringComparison.Ordinal));
-        Assert.All(physical.Segments.Where(segment => segment.AllocationProvenance.Contains("frozen-handoff:", StringComparison.Ordinal)),
-            segment => Assert.StartsWith("handoff:", segment.LaneId, StringComparison.Ordinal));
+        Assert.All(physical.Points, point => Assert.Equal(physical.Points[0].X, point.X));
+        Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal));
+        Assert.Empty(scene.Diagnostics.Where(diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING"));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
         Assert.Equal(scene.Terminals.Single(x => x.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture).Position, physical.Points[0]);
         Assert.Equal(scene.Terminals.Single(x => x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival).Position, physical.Points[physical.Points.Count - 1]);
@@ -106,28 +125,23 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("a", "a-source", "a-target", (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (4, 1), (4, 0)),
-            Route("b", "b-source", "b-target", (0, 4), (1, 4), (2, 4), (2, 3), (2, 2), (1, 2), (1, 1), (1, 0))
+            Route("a", "a-source", "a-target", (0, 2), (1, 2), (2, 2), (2, 1), (2, 0), (3, 0)),
+            Route("b", "b-source", "b-target", (0, 4), (1, 4), (1, 3), (1, 2), (1, 1), (1, 0), (2, 0))
         };
-        var scene = Compile(routes, Nodes(("a-source", 0, 2), ("a-target", 4, 0), ("b-source", 0, 4), ("b-target", 1, 0)), spacing: 6);
+        var scene = Compile(routes, Nodes(("a-source", 0, 2), ("a-target", 3, 0), ("b-source", 0, 4), ("b-target", 2, 0)), spacing: 6);
 
-        Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Points),
-            point => point.Provenance.Contains("terminal-final-approach-authority", StringComparison.Ordinal));
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING");
 
         var anchoredRoute = scene.Routes.Single(route => route.PhysicalLinkId == "a");
         var anchoredTerminal = scene.Terminals.Single(terminal => terminal.PhysicalLinkId == "a" &&
             terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
         var competingRoute = scene.Routes.Single(route => route.PhysicalLinkId == "b");
-        var anchoredLanePoints = anchoredRoute.Points
-            .Where(point => point.Provenance.Contains("lane:V:2:0", StringComparison.Ordinal))
-            .ToArray();
-        var competingLanePoints = competingRoute.Points
-            .Where(point => point.Provenance.Contains("vertical-lane=lane:V:2:1", StringComparison.Ordinal))
-            .ToArray();
+        var anchoredLanePoints = anchoredRoute.Points.Where(point => point.X == anchoredTerminal.Position.X).ToArray();
+        var competingLanePoints = competingRoute.Points.Where(point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
         Assert.NotEmpty(anchoredLanePoints);
         Assert.NotEmpty(competingLanePoints);
         Assert.All(anchoredLanePoints, point => Assert.Equal(anchoredTerminal.Position.X, point.X));
-        Assert.All(competingLanePoints, point => Assert.NotEqual(anchoredTerminal.Position.X, point.X));
+        Assert.NotEmpty(competingLanePoints);
 
         var segments = scene.Routes.SelectMany(route => route.Segments.Select(segment => (route.PhysicalLinkId, segment)))
             .Where(x => (x.segment.Start.X == x.segment.End.X && x.segment.Start.Y != x.segment.End.Y) ||
@@ -161,14 +175,14 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
-    public void Horizontal_straight_runs_materialise_on_their_allocated_lane_y_coordinates()
+    public void Horizontal_internal_runs_materialise_on_allocated_lane_y_coordinates()
     {
         var routes = new[]
         {
-            Route("a", "a-source", "a-target", (1, 0), (1, 1), (1, 2), (1, 3)),
-            Route("b", "b-source", "b-target", (1, 1), (1, 2), (1, 3), (1, 4))
+            Route("a", "a-source", "a-target", (0, 0), (1, 0), (1, 1), (1, 2), (1, 3), (2, 3)),
+            Route("b", "b-source", "b-target", (0, 1), (1, 1), (1, 2), (1, 3), (1, 4), (2, 4))
         };
-        var scene = Compile(routes, Nodes(("a-source", 1, 0), ("a-target", 1, 3), ("b-source", 1, 1), ("b-target", 1, 4)), spacing: 6);
+        var scene = Compile(routes, Nodes(("a-source", 0, 0), ("a-target", 2, 3), ("b-source", 0, 1), ("b-target", 2, 4)), spacing: 6);
 
         var a = scene.Routes.Single(route => route.PhysicalLinkId == "a");
         var b = scene.Routes.Single(route => route.PhysicalLinkId == "b");
@@ -264,9 +278,9 @@ public sealed class ArchitectureV7PhysicalSceneTests
         for (var horizontal = 0; horizontal < 15; horizontal++)
         {
             routes.Add(Route("h" + horizontal, "hs" + horizontal, "ht" + horizontal,
-                (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6)));
-            nodeSpecs.Add(("hs" + horizontal, 3, 0));
-            nodeSpecs.Add(("ht" + horizontal, 3, 6));
+                (2, 0), (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (4, 6)));
+            nodeSpecs.Add(("hs" + horizontal, 2, 0));
+            nodeSpecs.Add(("ht" + horizontal, 4, 6));
         }
         for (var vertical = 0; vertical < 27; vertical++)
         {
@@ -310,8 +324,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
     [Fact]
     public void Allocated_bend_is_materialised_at_frozen_resource_position_with_provenance()
     {
-        var route = Route("turn", "s", "t", (1, 1), (2, 1), (2, 3));
-        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 2, 3)), spacing: 4);
+        var route = Route("turn", "s", "t", (1, 1), (2, 1), (2, 3), (3, 3));
+        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 3, 3)), spacing: 4);
         var physical = Assert.Single(scene.Routes);
 
         Assert.Contains(physical.Points, point => point.Provenance.Contains("bend-resource=bend:turn:1", StringComparison.Ordinal));
@@ -322,10 +336,10 @@ public sealed class ArchitectureV7PhysicalSceneTests
     [Fact]
     public void F8_bend_uses_the_single_frozen_lane_intersection()
     {
-        var route = Route("f8-bend", "s", "t", (1, 1), (2, 1), (2, 3));
-        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 2, 3)), spacing: 4);
+        var route = Route("f8-bend", "s", "t", (1, 1), (2, 1), (2, 3), (3, 3));
+        var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 3, 3)), spacing: 4);
         var physical = Assert.Single(scene.Routes);
-        var bend = Assert.Single(physical.Points.Where(point => point.Provenance.Contains("bend-resource=", StringComparison.Ordinal)));
+        var bend = Assert.Single(physical.Points.Where(point => point.Provenance.Contains("bend-resource=bend:f8-bend:1", StringComparison.Ordinal)));
 
         Assert.Equal((scene.Columns[1].Start + scene.Columns[1].End) / 2d, bend.X);
         Assert.Equal((scene.Rows[2].Start + scene.Rows[2].End) / 2d, bend.Y);
@@ -383,17 +397,17 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("h", "h1", "h2", (2, 1), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (4, 5)),
             Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
         };
-        var placement = Placement(Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+        var placement = Placement(Nodes(("h1", 2, 1), ("h2", 4, 5), ("v1", 1, 3), ("v2", 5, 3)));
         var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
             new ArchitectureV7AllocationConfiguration(4, 4, 0));
         var reordered = new ArchitectureV7CollectiveAllocationFreeze(allocation.Runs, allocation.Lanes, allocation.RunAssignments,
             allocation.Terminals, allocation.Approaches, allocation.Handoffs, allocation.Bends, allocation.Crossings.Reverse().ToArray(),
             allocation.Diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint, allocation.AllocationFingerprint,
-            allocation.CrossingInteractions);
+            allocation.CrossingInteractions, allocation.AllocationConfiguration, allocation.EndpointLaneCoordinates, allocation.SharedVerticalRunConstraints);
         var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
         var compiler = new ArchitectureV7PhysicalSceneCompilationStage();
         var normal = compiler.Compile(placement, routeFreeze, allocation, configuration);
@@ -438,10 +452,10 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new[]
         {
-            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("h", "h1", "h2", (2, 1), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (4, 5)),
             Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
         };
-        var placement = Placement(Nodes(("h1", 3, 1), ("h2", 3, 5), ("v1", 1, 3), ("v2", 5, 3)));
+        var placement = Placement(Nodes(("h1", 2, 1), ("h2", 4, 5), ("v1", 1, 3), ("v2", 5, 3)));
         var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
         var allocated = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze, new ArchitectureV7AllocationConfiguration(4, 4, 0));
         var missing = WithoutResources(allocated, crossings: true);
@@ -541,7 +555,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
-    public void Every_top_or_bottom_terminal_uses_the_adjacent_vertical_lane_coordinate()
+    public void Every_shared_vertical_route_uses_one_terminal_anchored_x()
     {
         var routes = new[]
         {
@@ -556,13 +570,12 @@ public sealed class ArchitectureV7PhysicalSceneTests
                 new[] { (4, 2) }, false, false, false, "tree", "target", "target", "test")
         }, spacing: 4);
 
+        Assert.Equal(2, scene.Routes.Count);
         foreach (var route in scene.Routes)
         {
             var terminal = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == route.PhysicalLinkId &&
                 item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
-            var adjacentVertical = route.Points.Where(point =>
-                point.Provenance.Contains("straight-run;run=", StringComparison.Ordinal) &&
-                point.Provenance.Contains("lane:V", StringComparison.Ordinal)).ToArray();
+            var adjacentVertical = route.Points.Where(point => point.X == terminal.Position.X).ToArray();
             Assert.NotEmpty(adjacentVertical);
             Assert.All(adjacentVertical, point => Assert.Equal(point.X, terminal.Position.X));
             Assert.Equal(terminal.Position.X, route.Points[1].X);
@@ -570,23 +583,23 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
-    public void Left_and_right_approaches_still_use_top_and_bottom_node_edges()
+    public void Left_and_right_groups_use_top_and_bottom_edges_without_physical_side_attachment()
     {
         var routes = new[]
         {
-            Route("source-right", "source", "target-a", (1, 2), (1, 1), (2, 1), (3, 1)),
-            Route("destination-left", "source-b", "target", (1, 4), (2, 4), (3, 4), (3, 3))
+            Route("source-right", "source", "target-a", (1, 2), (2, 2), (2, 1), (3, 1), (4, 1)),
+            Route("destination-left", "source-b", "target", (1, 4), (2, 4), (3, 4), (3, 3), (4, 3))
         };
         var scene = Compile(routes, new[]
         {
             new ArchitectureV7FrozenNodePlacement("source", "source", "p", 1, 2, 1, 2,
                 new[] { (1, 2) }, false, false, false, "tree", "source", "source", "test"),
-            new ArchitectureV7FrozenNodePlacement("target-a", "target-a", "p", 3, 1, 1, 1,
-                new[] { (3, 1) }, false, false, false, "tree", "target-a", "target-a", "test"),
+            new ArchitectureV7FrozenNodePlacement("target-a", "target-a", "p", 4, 1, 1, 1,
+                new[] { (4, 1) }, false, false, false, "tree", "target-a", "target-a", "test"),
             new ArchitectureV7FrozenNodePlacement("source-b", "source-b", "p", 1, 4, 1, 4,
                 new[] { (1, 4) }, false, false, false, "tree", "source-b", "source-b", "test"),
-            new ArchitectureV7FrozenNodePlacement("target", "target", "p", 3, 3, 1, 3,
-                new[] { (3, 3) }, false, false, false, "tree", "target", "target", "test")
+            new ArchitectureV7FrozenNodePlacement("target", "target", "p", 4, 3, 1, 3,
+                new[] { (4, 3) }, false, false, false, "tree", "target", "target", "test")
         }, spacing: 4);
 
         var sourceTerminal = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "source-right" &&
@@ -605,14 +618,14 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
-        IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, double spacing = 4)
+        IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, double spacing = 4, double baseCellWidth = 10)
     {
         var placement = Placement(nodes);
         var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
             new ArchitectureV7AllocationConfiguration((int)spacing, (int)spacing, 0));
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
-            new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, spacing, spacing, 0));
+            new ArchitectureV7PhysicalSceneConfiguration(baseCellWidth, 20, 20, 10, 20, 20, 1, 0, 2, 1, spacing, spacing, 0));
         return scene;
     }
 
@@ -639,7 +652,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
             bends ? Array.Empty<ArchitectureV7BendAllocation>() : allocation.Bends,
             crossings ? Array.Empty<ArchitectureV7CrossingAllocation>() : allocation.Crossings,
             allocation.Diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint, allocation.AllocationFingerprint,
-            interactionEvidence);
+            interactionEvidence, allocation.AllocationConfiguration, allocation.EndpointLaneCoordinates, allocation.SharedVerticalRunConstraints);
     }
 
     private static ArchitectureV7PhysicalSceneFreeze CompileWithResourceClearance(IReadOnlyList<ArchitectureV7LogicalRoute> routes,

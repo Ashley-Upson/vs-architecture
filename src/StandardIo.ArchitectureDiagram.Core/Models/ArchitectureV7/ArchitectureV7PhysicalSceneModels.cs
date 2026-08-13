@@ -79,7 +79,8 @@ public sealed class ArchitectureV7PhysicalSceneFreeze
         IReadOnlyList<ArchitectureV7PhysicalTerminal> terminals,
         IReadOnlyList<ArchitectureV7PhysicalRoute> routes,
         IReadOnlyList<ArchitectureV7PhysicalSceneDiagnostic> diagnostics,
-        string placementFingerprint, string routeFingerprint, string allocationFingerprint, string physicalSceneFingerprint)
+        string placementFingerprint, string routeFingerprint, string allocationFingerprint, string physicalSceneFingerprint,
+        IReadOnlyList<string>? accountedPhysicalLinkIds = null)
     {
         Rows = Array.AsReadOnly((rows ?? Array.Empty<ArchitectureV7PhysicalTrackDimension>()).OrderBy(x => x.LogicalIndex).ToArray());
         Columns = Array.AsReadOnly((columns ?? Array.Empty<ArchitectureV7PhysicalTrackDimension>()).OrderBy(x => x.LogicalIndex).ToArray());
@@ -87,6 +88,8 @@ public sealed class ArchitectureV7PhysicalSceneFreeze
         Terminals = Array.AsReadOnly((terminals ?? Array.Empty<ArchitectureV7PhysicalTerminal>()).OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.EndpointKind).ThenBy(x => x.SlotOrdinal).ToArray());
         Routes = Array.AsReadOnly((routes ?? Array.Empty<ArchitectureV7PhysicalRoute>()).OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToArray());
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<ArchitectureV7PhysicalSceneDiagnostic>()).ToArray());
+        AccountedPhysicalLinkIds = Array.AsReadOnly((accountedPhysicalLinkIds ?? Routes.Select(x => x.PhysicalLinkId))
+            .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray());
         PlacementFingerprint = placementFingerprint; RouteFingerprint = routeFingerprint; AllocationFingerprint = allocationFingerprint; PhysicalSceneFingerprint = physicalSceneFingerprint;
     }
     public IReadOnlyList<ArchitectureV7PhysicalTrackDimension> Rows { get; }
@@ -95,9 +98,14 @@ public sealed class ArchitectureV7PhysicalSceneFreeze
     public IReadOnlyList<ArchitectureV7PhysicalTerminal> Terminals { get; }
     public IReadOnlyList<ArchitectureV7PhysicalRoute> Routes { get; }
     public IReadOnlyList<ArchitectureV7PhysicalSceneDiagnostic> Diagnostics { get; }
+    public IReadOnlyList<string> AccountedPhysicalLinkIds { get; }
+    public IReadOnlyList<string> CompiledPhysicalLinkIds => Routes.Select(route => route.PhysicalLinkId).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+    public IReadOnlyList<string> FailedPhysicalLinkIds => AccountedPhysicalLinkIds.Except(CompiledPhysicalLinkIds, StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+    public bool RelationshipAccountingInvariant => CompiledPhysicalLinkIds.Count + FailedPhysicalLinkIds.Count == AccountedPhysicalLinkIds.Count;
     public string PlacementFingerprint { get; }
     public string RouteFingerprint { get; }
     public string AllocationFingerprint { get; }
     public string PhysicalSceneFingerprint { get; }
-    public bool IsComplete => !Diagnostics.Any(x => x.IsHardFailure);
+    public bool IsComplete => !Diagnostics.Any(x => x.IsHardFailure) &&
+        RelationshipAccountingInvariant && FailedPhysicalLinkIds.Count == 0;
 }

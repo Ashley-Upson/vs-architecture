@@ -305,29 +305,19 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
-    public void Endpoint_handoff_resource_contains_frozen_run_lane_offsets_and_route_indices()
+    public void Shared_vertical_run_allocation_replaces_reconciliation_handoff_expectation()
     {
         var routes = new[]
         {
-            Route("a", "s", "t", (1, 3), (2, 3), (3, 1)),
-            Route("b", "s", "u", (1, 3), (2, 3), (3, 5))
+            Route("a", "s", "t", (1, 3), (2, 3), (3, 3)),
+            Route("b", "s", "u", (1, 5), (2, 5), (3, 5))
         };
 
         var result = Allocate(routes, Nodes("s", "t", "u"), spacing: 4);
 
-        Assert.NotEmpty(result.Handoffs);
-        Assert.All(result.Handoffs, handoff =>
-        {
-            Assert.StartsWith("handoff:", handoff.ResourceId, StringComparison.Ordinal);
-            Assert.NotEmpty(handoff.AdjacentRunId);
-            Assert.NotEmpty(handoff.AdjacentLaneId);
-            Assert.NotNull(handoff.LogicalCell);
-            Assert.Equal(2, handoff.AuthoritativeCells.Count);
-            Assert.Equal(Math.Abs(handoff.RelativePhysicalOffset), handoff.RequiredClearance);
-            Assert.Contains("explicit-orthogonal-handoff", handoff.Provenance, StringComparison.Ordinal);
-            Assert.True(handoff.StartRouteIndex >= 0);
-            Assert.True(handoff.EndRouteIndex > handoff.StartRouteIndex);
-        });
+        Assert.Equal(2, result.SharedVerticalRunConstraints.Count);
+        Assert.Empty(result.Handoffs);
+        Assert.DoesNotContain(result.Diagnostics, item => item.Code == "TERMINAL-FINAL-LANE-AUTHORITY-VIOLATION");
     }
 
     [Fact]
@@ -361,11 +351,11 @@ public sealed class ArchitectureV7CollectiveAllocationTests
 
         Assert.Equal(new[] { "b", "a" }, terminals.Select(x => x.PhysicalLinkId));
         Assert.Equal(new[] { -450d, 450d }, terminals.Select(x => x.RelativeOffset));
-        Assert.Equal(2, result.Handoffs.Count(x => x.PhysicalNodeId == "t"));
+        Assert.Empty(result.Handoffs);
     }
 
     [Fact]
-    public void Capacity_constrained_terminal_alignment_retains_spacing_and_emits_handoff()
+    public void Capacity_constrained_terminal_allocation_retains_spacing_without_handoff()
     {
         var routes = new[]
         {
@@ -378,7 +368,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var terminals = result.Terminals.Where(x => x.PhysicalNodeId == "t").OrderBy(x => x.SlotOrdinal).ToArray();
 
         Assert.Equal(new[] { -50d, 50d }, terminals.Select(x => x.RelativeOffset));
-        Assert.Contains(result.Handoffs, x => x.PhysicalNodeId == "t");
+        Assert.Empty(result.Handoffs);
         Assert.DoesNotContain(result.Diagnostics, x => x.Code == "TERMINAL-OVERFLOW");
     }
 
@@ -434,11 +424,11 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     {
         var routes = new[]
         {
-            Route("h", "h1", "h2", (3, 1), (3, 2), (3, 3), (3, 4), (3, 5)),
+            Route("h", "h1", "h2", (2, 1), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (4, 5)),
             Route("v", "v1", "v2", (1, 3), (2, 3), (3, 3), (4, 3), (5, 3))
         };
-        var result = Allocate(routes, Nodes("h1", "h2", "v1", "v2"));
-        Assert.Empty(result.Bends);
+        var result = Allocate(routes, new[] { NodeAt("h1", 2, 1), NodeAt("h2", 4, 5), NodeAt("v1", 1, 3), NodeAt("v2", 5, 3) });
+        Assert.NotEmpty(result.Bends);
         Assert.Single(result.Crossings);
         Assert.True(result.IsComplete);
     }
@@ -638,6 +628,51 @@ public sealed class ArchitectureV7CollectiveAllocationTests
             new[] { new ArchitectureV7RouteDiagnostic("blocked", "blocked", true, Array.Empty<ArchitectureV7RouteCell>()) }, "test");
         var result = Allocate(new[] { route }, Nodes("s", "t"));
         Assert.Contains(result.Diagnostics, x => x.Code == "INCOMPLETE-ROUTE" && x.IsHardFailure);
+    }
+
+    [Fact]
+    public void Shared_vertical_source_to_destination_run_coordinates_both_terminals_with_other_endpoint_demand()
+    {
+        var routes = new[]
+        {
+            Route("shared", "s", "t", (1, 5), (2, 5), (3, 5)),
+            Route("s-other", "s", "left", (1, 5), (1, 4), (2, 4)),
+            Route("t-other", "right", "t", (2, 6), (3, 6), (3, 5))
+        };
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("s", 1, 5, 5), NodeAt("t", 3, 5, 5), NodeAt("left", 2, 4, 3), NodeAt("right", 2, 6, 3)
+        }, spacing: 10, span: 5, baseCellWidth: 100);
+
+        var constraint = Assert.Single(result.SharedVerticalRunConstraints);
+        Assert.Equal("shared", constraint.PhysicalLinkId);
+        var run = Assert.Single(result.Runs.Where(item => item.PhysicalLinkId == "shared"));
+        Assert.Equal(run.RunId, constraint.RunId);
+        var assignment = Assert.Single(result.RunAssignments.Where(item => item.RunId == run.RunId));
+        Assert.Contains(result.Terminals, item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        Assert.Contains(result.Terminals, item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+        Assert.Equal(ArchitectureV7RunOrientation.Vertical, run.Orientation);
+        Assert.Contains("shared-maximal-vertical-run", constraint.Provenance, StringComparison.Ordinal);
+        Assert.True(assignment.LaneOrdinal >= 0);
+
+        var reversed = Allocate(routes.AsEnumerable().Reverse().ToArray(), new[]
+        {
+            NodeAt("s", 1, 5, 5), NodeAt("t", 3, 5, 5), NodeAt("left", 2, 4, 3), NodeAt("right", 2, 6, 3)
+        }, spacing: 10, span: 5, baseCellWidth: 100);
+        Assert.Equal(result.AllocationFingerprint, reversed.AllocationFingerprint);
+    }
+
+    [Fact]
+    public void Empty_shared_vertical_run_legal_intersection_fails_at_allocation_with_explicit_evidence()
+    {
+        var route = Route("empty", "s", "t", (1, 5), (2, 5), (3, 5));
+        var result = Allocate(new[] { route }, new[] { NodeAt("s", 1, 0, 1), NodeAt("t", 3, 10, 1) }, spacing: 10, span: 1, baseCellWidth: 100);
+
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == "SHARED-VERTICAL-RUN-CONSTRAINT-EMPTY-INTERSECTION");
+        Assert.True(diagnostic.IsHardFailure);
+        Assert.Equal("empty", diagnostic.PhysicalLinkId);
+        Assert.Contains("legal shared X", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains(result.SharedVerticalRunConstraints, item => item.PhysicalLinkId == "empty");
     }
 
     private static ArchitectureV7CollectiveAllocationFreeze Allocate(IReadOnlyList<ArchitectureV7LogicalRoute> routes, IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes,

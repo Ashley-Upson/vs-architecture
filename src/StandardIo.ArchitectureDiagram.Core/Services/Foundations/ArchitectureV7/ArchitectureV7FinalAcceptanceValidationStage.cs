@@ -89,6 +89,11 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
     {
         var routeIds = new HashSet<string>(routes.Routes.Select(x => x.PhysicalLinkId), StringComparer.Ordinal);
         var sceneIds = new HashSet<string>(scene.Routes.Select(x => x.PhysicalLinkId), StringComparer.Ordinal);
+        var accountedIds = new HashSet<string>(scene.AccountedPhysicalLinkIds, StringComparer.Ordinal);
+        foreach (var linkId in routeIds.Except(accountedIds, StringComparer.Ordinal))
+            Add(findings, "MISSING-RELATIONSHIP-ACCOUNTING", "accounting", "Compiled scene retained no accounting identity for a route.", linkId, Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "scene-accounted=" + scene.AccountedPhysicalLinkIds.Count });
+        foreach (var linkId in accountedIds.Except(routeIds, StringComparer.Ordinal))
+            Add(findings, "UNEXPECTED-SCENE-ROUTE", "accounting", "Scene accounting contains a relationship absent from the route freeze.", linkId, Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "scene-accounted=" + scene.AccountedPhysicalLinkIds.Count });
         foreach (var unaccounted in projection.UnaccountedSemanticLinkIds)
             Add(findings, "MISSING-RELATIONSHIP-ACCOUNTING", "accounting", "Projection explicitly reports an unaccounted semantic relationship.", unaccounted, Array.Empty<ArchitectureV7RouteCell>(), Array.Empty<ArchitectureV7PhysicalPoint>(), new[] { "projection=" + projection.FreezeFingerprint });
         foreach (var link in projection.PhysicalLinks)
