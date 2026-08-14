@@ -37,7 +37,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var (lanes, assignments) = AllocateLanes(placement, routes, runs, configuration.ParallelLaneSpacing, corridorProjection);
         var terminals = AllocateTerminals(placement, routes, runs, assignments, configuration, diagnostics);
         var sharedVerticalRunConstraints = BuildSharedVerticalRunConstraints(routes, runs);
-        ValidateSharedVerticalRunIntersections(placement, sharedVerticalRunConstraints, terminals, configuration, diagnostics);
+        var endpointZBends = BuildEndpointZBends(placement, routes, runs, terminals, configuration);
+        ValidateSharedVerticalRunIntersections(placement, sharedVerticalRunConstraints, terminals, endpointZBends, configuration, diagnostics);
         var endpointLaneCoordinates = BuildEndpointLaneCoordinates(placement, routes, runs, terminals, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
         var handoffs = BuildHandoffs(placement, routes, runs, assignments, terminals, configuration, diagnostics);
@@ -45,9 +46,10 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var crossingResult = BuildCrossingResources(routes, runs, assignments, bends, configuration, diagnostics);
         var crossings = crossingResult.Resources;
         var crossingInteractions = crossingResult.Interactions;
-        var fingerprint = Fingerprint(placement.PlacementFingerprint, routes.RouteFingerprint, runs, assignments, terminals, endpointLaneCoordinates, sharedVerticalRunConstraints, approaches, handoffs, bends, crossings, diagnostics);
+        var fingerprint = Fingerprint(placement.PlacementFingerprint, routes.RouteFingerprint, runs, assignments, terminals, endpointLaneCoordinates, sharedVerticalRunConstraints, approaches, handoffs, bends, crossings, diagnostics,
+            endpointZBends);
         return new ArchitectureV7CollectiveAllocationFreeze(runs, lanes, assignments, terminals, approaches, handoffs, bends, crossings,
-            diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint, crossingInteractions, configuration, endpointLaneCoordinates, sharedVerticalRunConstraints);
+            diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, fingerprint, crossingInteractions, configuration, endpointLaneCoordinates, sharedVerticalRunConstraints, endpointZBends);
     }
 
     private static IReadOnlyList<ArchitectureV7StraightRun> BuildRuns(
@@ -82,8 +84,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         AllocateLanes(ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes,
             IReadOnlyList<ArchitectureV7StraightRun> runs, int spacing, ArchitectureV7RouteCorridorProjectionFreeze? corridorProjection)
     {
-        var assignments = new List<ArchitectureV7RunLaneAssignment>();
         var lanes = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var assignments = new List<ArchitectureV7RunLaneAssignment>();
         var used = new Dictionary<string, List<(int Start, int End, int Ordinal, string Link)>>(StringComparer.Ordinal);
         foreach (var run in runs.OrderBy(x => x.Orientation).ThenBy(x => FixedCoordinate(x))
             .ThenBy(x => EndpointLaneOrderingKey(x).Primary)
@@ -91,18 +93,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             .ThenBy(x => MinCoordinate(x)).ThenBy(x => x.RunId, StringComparer.Ordinal))
         {
             var usage = corridorProjection?.Usages.FirstOrDefault(item => item.PhysicalLinkId == run.PhysicalLinkId && item.StartRouteIndex == run.StartRouteIndex);
-            // Corridor IDs describe logical capability regions, but physical
-            // lane geometry is keyed by orientation and fixed coordinate.
-            // Distinct corridors can still occupy the same physical track;
-            // allocating their ordinals independently would collapse both
-            // runs onto the same materialised lane.
             var domain = run.Orientation + ":" + FixedCoordinate(run);
-            // Endpoint cells are attachments for corridor discovery, but they
-            // still occupy the physical run interval: endpoint handoffs and
-            // terminal approaches are materialised in those same cells. Use
-            // the frozen run extent for conflict detection so two corridor
-            // usages cannot appear disjoint merely because each omitted its
-            // own endpoint attachment.
             var startCoordinate = MinCoordinate(run);
             var endCoordinate = MaxCoordinate(run);
             if (!used.TryGetValue(domain, out var intervals)) used[domain] = intervals = new();
@@ -119,7 +110,6 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             .Select(x => new ArchitectureV7PhysicalLane(x.Key, x.Key.Contains(":H:", StringComparison.Ordinal) ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical,
                 ParseOrdinal(x.Key), spacing, x.Value.OrderBy(v => v, StringComparer.Ordinal).ToArray())).ToArray();
         return (laneModels, assignments);
-
         (int Primary, double Secondary) EndpointLaneOrderingKey(ArchitectureV7StraightRun run)
         {
             if (run.Orientation != ArchitectureV7RunOrientation.Horizontal) return (1, 0d);
@@ -170,6 +160,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                     .Select(item => EndpointLaneCandidate(item.Run, item.Route!, endpointKind))
                     .Where(item => item is not null && item.Value.DirectionGroup != 1)
                     .Select(item => item!.Value.Axis).Distinct().Count();
+
         }
 
     }
@@ -189,35 +180,46 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         var result = new List<ArchitectureV7TerminalSlotAssignment>();
         foreach (var group in groups.OrderBy(x => x.Key.Node, StringComparer.Ordinal).ThenBy(x => x.Key.Kind))
         {
-            var entries = group.Value.OrderBy(x => x.DirectionGroup)
-                .ThenBy(x => x.PhysicalAxisCoordinate)
-                .ThenBy(x => x.LaneOffset).ThenBy(x => x.Anchor).ThenBy(x => x.Route.PhysicalLinkId, StringComparer.Ordinal).ToArray();
             var node = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == group.Key.Node);
             if (node is null)
             {
-                diagnostics.Add(new("UNKNOWN-ENDPOINT", "A route endpoint is absent from the placement freeze.", true, entries[0].Route.PhysicalLinkId));
+                diagnostics.Add(new("UNKNOWN-ENDPOINT", "A route endpoint is absent from the placement freeze.", true, group.Value[0].Route.PhysicalLinkId));
                 continue;
             }
-            var capacity = entries.Length == 0 ? 0 : 2 * configuration.TerminalInset + Math.Max(0, entries.Length - 1) * configuration.TerminalPortSpacing;
-            var available = node.LogicalSpan * configuration.BaseCellWidth;
-            if (capacity > available)
-                diagnostics.Add(new("TERMINAL-OVERFLOW", "Terminal demand exceeds the frozen physical span; node expansion is forbidden.", true,
-                    entries[0].Route.PhysicalLinkId, null, node.PhysicalNodeId, group.Key.Kind.ToString(), capacity, available, node.LogicalSpan,
+            // The initial order defines the existing terminal-slot geometry.
+            // Fixed-X endpoints remain in these exact slots; only flexible
+            // turning endpoints are permuted around those anchors.
+            var entries = group.Value.OrderBy(x => x.DirectionGroup)
+                .ThenBy(x => x.PhysicalAxisCoordinate)
+                .ThenBy(x => x.LaneOffset).ThenBy(x => x.Anchor)
+                .ThenBy(x => x.Route.PhysicalLinkId, StringComparer.Ordinal).ToArray();
+            var occupiedSpan = Math.Max(0, entries.Length - 1) * (double)configuration.TerminalPortSpacing;
+            var available = node.LogicalSpan * (double)configuration.BaseCellWidth;
+            var usableWidth = Math.Max(0d, available - 2d * configuration.TerminalInset);
+            var capacity = 2 * configuration.TerminalInset + occupiedSpan;
+            if (occupiedSpan > usableWidth)
+            {
+                diagnostics.Add(new("NODE-SPAN-CAPACITY", "The frozen node span cannot contain the terminal population at configured spacing; downstream compensation is forbidden.", true,
+                    entries[0].Route.PhysicalLinkId, null, node.PhysicalNodeId, group.Key.Kind.ToString(), checked((int)Math.Round(capacity, MidpointRounding.AwayFromZero)), checked((int)Math.Round(available, MidpointRounding.AwayFromZero)), node.LogicalSpan,
                     entries.Select(x => x.Route.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray(), null));
-            var usableHalfExtent = Math.Max(0d, available / 2d - configuration.TerminalInset);
+                diagnostics.Add(new("TERMINAL-OVERFLOW", "Terminal demand exceeds the frozen physical span; node expansion is forbidden.", true,
+                    entries[0].Route.PhysicalLinkId, null, node.PhysicalNodeId, group.Key.Kind.ToString(), checked((int)Math.Round(capacity, MidpointRounding.AwayFromZero)), checked((int)Math.Round(available, MidpointRounding.AwayFromZero)), node.LogicalSpan,
+                    entries.Select(x => x.Route.PhysicalLinkId).Distinct(StringComparer.Ordinal).ToArray(), null));
+            }
             var direct = entries.Where(x => x.DirectionGroup == 1).ToArray();
             var left = entries.Where(x => x.DirectionGroup == 0).ToArray();
             var right = entries.Where(x => x.DirectionGroup == 2).ToArray();
-            var offsets = direct.Length > 0 && left.Length == 0 && right.Length == 0
-                ? SpreadAcrossEdge(direct.Length, usableHalfExtent, configuration.TerminalPortSpacing)
-                : direct.Length > 0
-                ? GroupedTerminalOffsets(left.Length, direct.Length, right.Length, usableHalfExtent, configuration.TerminalPortSpacing)
-                : SpreadAcrossEdge(entries.Length, usableHalfExtent, configuration.TerminalPortSpacing);
+            var (offsets, directCentred) = PackedTerminalOffsets(left.Length, direct.Length, right.Length,
+                configuration.TerminalPortSpacing, usableWidth / 2d);
+            // Slot geometry is packed here, but relationship-to-slot ordering
+            // is deliberately deferred until actual physical bend coordinates
+            // exist in ArchitectureV7EndpointGeometryAllocationStage.
             for (var index = 0; index < entries.Length; index++)
             {
                 var offset = offsets[index];
-                result.Add(new(entries[index].Route.PhysicalLinkId, node.PhysicalNodeId, group.Key.Kind, entries[index].Direction, index, offset, capacity,
-                    (direct.Length > 0 ? "terminal-order=direction-groups;direct-centred" : "terminal-order=direction-groups;complete-set-centred") + ";direction=" + entries[index].Direction));
+                result.Add(new(entries[index].Route.PhysicalLinkId, node.PhysicalNodeId, group.Key.Kind, entries[index].Direction, index, offset, checked((int)Math.Round(capacity, MidpointRounding.AwayFromZero)),
+                    (direct.Length > 0 && directCentred ? "terminal-order=direction-groups;direct-centred" :
+                        direct.Length > 0 ? "terminal-order=direction-groups;direct-displaced" : "terminal-order=direction-groups;complete-set-centred") + ";endpoint-order=deferred-to-actual-bend-depth;direction=" + entries[index].Direction + ";direction-group=" + entries[index].DirectionGroup));
             }
         }
         return result;
@@ -228,8 +230,14 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             var adjacentRun = source
                 ? runs.FirstOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.StartRouteIndex == 0)
                 : runs.LastOrDefault(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndRouteIndex == route.Cells.Count - 1);
-            var laneOffset = adjacentRun is not null
-                ? LaneAxisOffset(adjacentRun, assignments.First(x => x.RunId == adjacentRun.RunId), runs, assignments, configuration.ParallelLaneSpacing)
+            var approachRun = source
+                ? runs.Where(x => x.PhysicalLinkId == route.PhysicalLinkId && x.StartRouteIndex > 0)
+                    .OrderBy(x => x.StartRouteIndex).FirstOrDefault(x => x.Orientation == ArchitectureV7RunOrientation.Horizontal)
+                : runs.Where(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndRouteIndex < route.Cells.Count - 1)
+                    .OrderByDescending(x => x.EndRouteIndex).FirstOrDefault(x => x.Orientation == ArchitectureV7RunOrientation.Horizontal);
+            var laneSource = approachRun ?? adjacentRun;
+            var laneOffset = laneSource is not null
+                ? LaneAxisOffset(laneSource, assignments.First(x => x.RunId == laneSource.RunId), runs, assignments, configuration.ParallelLaneSpacing)
                 : 0;
             var anchor = near.Column;
             var endpointNode = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == nodeId);
@@ -237,35 +245,55 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             var physicalAxisCoordinate = EndpointPhysicalAxisCoordinate(route, kind, near, endpoint, adjacentRun, placement);
             var key = (nodeId, kind);
             if (!groups.TryGetValue(key, out var list)) groups[key] = list = new();
-            list.Add((route, anchor, adjacentRun, laneOffset, direction, directionGroup, physicalAxisCoordinate));
+            list.Add((route, anchor, approachRun, laneOffset, direction, directionGroup, physicalAxisCoordinate));
         }
     }
 
-    private static IReadOnlyList<double> GroupedTerminalOffsets(
-        int leftCount, int directCount, int rightCount, double usableHalfExtent, int spacing)
+    private static (IReadOnlyList<double> Offsets, bool DirectCentred) PackedTerminalOffsets(
+        int leftCount, int directCount, int rightCount, int spacing, double usableHalfExtent)
+    {
+        if (leftCount + directCount + rightCount == 1)
+            return (new[] { 0d }, directCount > 0);
+
+        var orderedCount = leftCount + directCount + rightCount;
+        var occupiedSpan = Math.Max(0, orderedCount - 1) * (double)spacing;
+        var centred = Enumerable.Range(0, orderedCount)
+            .Select(index => -occupiedSpan / 2d + index * (double)spacing)
+            .ToArray();
+
+        // One edge owns one contiguous slot sequence.  Group classification
+        // controls relationship order only; it must not reserve a separate
+        // negative/zero/positive coordinate band and introduce a hole at a
+        // group boundary.
+        // Without a genuine Direct/fixed-X anchor, the complete edge
+        // population owns one centred slot block.  Left/Right are ordering
+        // classifications only; neither group may shift the block toward its
+        // physical approach side.
+        if (directCount == 0)
+            return (centred, false);
+
+        // A direct relationship may stay at the midpoint when the complete
+        // sequence fits around that fixed slot.  The side counts determine
+        // the slot index, but every adjacent slot remains exactly one spacing
+        // apart.
+        var directCentred = Enumerable.Range(0, orderedCount)
+            .Select(index => (index - leftCount - (directCount - 1) / 2d) * (double)spacing)
+            .ToArray();
+        if (directCentred.All(offset => offset >= -usableHalfExtent && offset <= usableHalfExtent))
+            return (directCentred, true);
+
+        // Displaced-direct mode shifts the complete sequence as one unit,
+        // retaining configured spacing and equal outer margins.
+        return (centred, false);
+    }
+
+    private static IReadOnlyList<double> MidpointTerminalOffsets(int leftCount, int directCount, int rightCount, int spacing)
     {
         var directOffsets = Enumerable.Range(0, directCount)
             .Select(index => (index - (directCount - 1) / 2d) * spacing).ToArray();
-        var directStart = directOffsets.Length == 0 ? 0d : directOffsets[0];
-        var directEnd = directOffsets.Length == 0 ? 0d : directOffsets[directOffsets.Length - 1];
-        var leftOffsets = SpreadInterval(leftCount, -usableHalfExtent, directStart - spacing, spacing);
-        var rightOffsets = SpreadInterval(rightCount, directEnd + spacing, usableHalfExtent, spacing).Reverse().ToArray();
+        var leftOffsets = Enumerable.Range(1, leftCount).Select(index => -index * (double)spacing).Reverse().ToArray();
+        var rightOffsets = Enumerable.Range(1, rightCount).Select(index => index * (double)spacing).Reverse().ToArray();
         return leftOffsets.Concat(directOffsets).Concat(rightOffsets).ToArray();
-    }
-
-    private static IReadOnlyList<double> SpreadAcrossEdge(int count, double usableHalfExtent, int spacing) =>
-        SpreadInterval(count, -usableHalfExtent, usableHalfExtent, spacing);
-
-    private static IReadOnlyList<double> SpreadInterval(int count, double start, double end, int minimumSpacing)
-    {
-        if (count <= 0) return Array.Empty<double>();
-        if (count == 1) return new[] { Math.Round((start + end) / 2d, MidpointRounding.AwayFromZero) };
-        var required = (count - 1) * (double)Math.Max(0, minimumSpacing);
-        var extent = Math.Max(required, end - start);
-        var actualStart = (start + end) / 2d - extent / 2d;
-        var actualSpacing = extent / (count - 1);
-        return Enumerable.Range(0, count).Select(index =>
-            Math.Round(actualStart + index * actualSpacing, MidpointRounding.AwayFromZero)).ToArray();
     }
 
     private static int EndpointDirectionGroup(ArchitectureV7LogicalRoute route, ArchitectureV7EndpointKind endpointKind,
@@ -364,6 +392,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         ArchitectureV7PlacementFreeze placement,
         IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint> constraints,
         IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
+        IReadOnlyList<ArchitectureV7EndpointZBend> endpointZBends,
         ArchitectureV7AllocationConfiguration configuration,
         ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
     {
@@ -372,6 +401,11 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             var endpointIntervals = new List<(double Lower, double Upper)>();
             foreach (var endpoint in terminals.Where(item => item.PhysicalLinkId == constraint.PhysicalLinkId))
             {
+                // A displaced fixed-X endpoint deliberately no longer asks the
+                // terminal slot to equal the shared run X. Its final drop is
+                // terminal-anchored and the allocator owns the local Z bend.
+                if (endpointZBends.Any(z => z.PhysicalLinkId == endpoint.PhysicalLinkId && z.EndpointKind == endpoint.EndpointKind))
+                    continue;
                 var node = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
                 if (node is null) continue;
                 var centre = node.CentreCell * configuration.BaseCellWidth;
@@ -396,6 +430,44 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                         constraint.PhysicalLinkId, constraint.RunId));
             }
         }
+    }
+
+    private static IReadOnlyList<ArchitectureV7EndpointZBend> BuildEndpointZBends(
+        ArchitectureV7PlacementFreeze placement, ArchitectureV7LogicalRouteFreeze routes,
+        IReadOnlyList<ArchitectureV7StraightRun> runs,
+        IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
+        ArchitectureV7AllocationConfiguration configuration)
+    {
+        var result = new List<ArchitectureV7EndpointZBend>();
+        foreach (var terminal in terminals)
+        {
+            // Only a true maximal vertical relationship has fixed incoming-X
+            // authority. Ordinary endpoint turns already own a normal bend.
+            var route = routes.Routes.FirstOrDefault(x => x.PhysicalLinkId == terminal.PhysicalLinkId);
+            if (route is null || route.Cells.Count < 2) continue;
+            var routeRuns = runs.Where(x => x.PhysicalLinkId == route.PhysicalLinkId).OrderBy(x => x.StartRouteIndex).ToArray();
+            var fixedRun = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? routeRuns.FirstOrDefault(x => x.StartRouteIndex == 0)
+                : routeRuns.LastOrDefault(x => x.EndRouteIndex == route.Cells.Count - 1);
+            var direct = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+                ? terminal.Direction == ArchitectureV7EndpointDirection.Down
+                : terminal.Direction == ArchitectureV7EndpointDirection.Up;
+            if (!direct || routeRuns.Length != 1 || fixedRun?.Orientation != ArchitectureV7RunOrientation.Vertical ||
+                fixedRun.StartRouteIndex != 0 || fixedRun.EndRouteIndex != route.Cells.Count - 1) continue;
+            var node = placement.Nodes.FirstOrDefault(x => x.PhysicalNodeId == terminal.PhysicalNodeId);
+            if (node is null) continue;
+            var endpointCell = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1];
+            // The local Z resource is legal only when the frozen endpoint cell
+            // actually belongs to the node footprint. This keeps malformed
+            // shared-run fixtures as explicit allocation failures.
+            if (!node.LogicalFootprint.Any(cell => cell.Row == endpointCell.Row && cell.Column == endpointCell.Column)) continue;
+            var fixedOffset = (endpointCell.Column - node.CentreCell) * (double)configuration.BaseCellWidth;
+            if (Math.Abs(fixedOffset - terminal.RelativeOffset) <= 0.001) continue;
+            result.Add(new ArchitectureV7EndpointZBend(terminal.PhysicalLinkId, terminal.PhysicalNodeId,
+                terminal.EndpointKind, fixedRun.RunId,
+                "endpoint-z-bend;fixed-incoming-x;fit-first-packed-terminal;final-drop-terminal-x"));
+        }
+        return result;
     }
 
     private static IReadOnlyList<ArchitectureV7EndpointHandoff> BuildHandoffs(
@@ -673,7 +745,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         IEnumerable<ArchitectureV7TerminalSlotAssignment> terminals, IEnumerable<ArchitectureV7EndpointLaneCoordinate> endpointLaneCoordinates,
         IEnumerable<ArchitectureV7SharedVerticalRunConstraint> sharedVerticalRunConstraints, IEnumerable<ArchitectureV7EndpointApproachReservation> approaches,
         IEnumerable<ArchitectureV7EndpointHandoff> handoffs, IEnumerable<ArchitectureV7BendAllocation> bends, IEnumerable<ArchitectureV7CrossingAllocation> crossings,
-        IEnumerable<ArchitectureV7AllocationDiagnostic> diagnostics) => placementFingerprint + "|" + routeFingerprint + "|" + string.Join(";", runs.Select(x => x.RunId + ":" + string.Join(",", x.Cells.Select(c => c.Row + "/" + c.Column))).Concat(assignments.Select(x => x.RunId + "=" + x.LaneId)).Concat(terminals.Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal)).Concat(endpointLaneCoordinates.Select(x => x.PhysicalLinkId + ":e" + x.EndpointKind + ":" + x.RunId + ":" + x.RelativeXOffset)).Concat(sharedVerticalRunConstraints.Select(x => x.PhysicalLinkId + ":shared=" + x.RunId)).Concat(approaches.Select(x => x.PhysicalLinkId + ":a" + x.TerminalSlotOrdinal)).Concat(handoffs.Select(x => x.ResourceId + ":h" + x.RelativePhysicalOffset + ":" + x.RequiredClearance)).Concat(bends.Select(x => x.BendId + ":b" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset)).Concat(crossings.Select(x => x.CrossingId + ":c" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset + ":" + x.Classification)).Concat(diagnostics.Select(x => x.Code)));
+        IEnumerable<ArchitectureV7AllocationDiagnostic> diagnostics, IEnumerable<ArchitectureV7EndpointZBend> endpointZBends) => placementFingerprint + "|" + routeFingerprint + "|" + string.Join(";", runs.Select(x => x.RunId + ":" + string.Join(",", x.Cells.Select(c => c.Row + "/" + c.Column))).Concat(assignments.Select(x => x.RunId + "=" + x.LaneId)).Concat(terminals.Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal)).Concat(endpointLaneCoordinates.Select(x => x.PhysicalLinkId + ":e" + x.EndpointKind + ":" + x.RunId + ":" + x.RelativeXOffset)).Concat(sharedVerticalRunConstraints.Select(x => x.PhysicalLinkId + ":shared=" + x.RunId)).Concat(endpointZBends.Select(x => x.PhysicalLinkId + ":z" + x.EndpointKind + ":" + x.FixedRunId)).Concat(approaches.Select(x => x.PhysicalLinkId + ":a" + x.TerminalSlotOrdinal)).Concat(handoffs.Select(x => x.ResourceId + ":h" + x.RelativePhysicalOffset + ":" + x.RequiredClearance)).Concat(bends.Select(x => x.BendId + ":b" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset)).Concat(crossings.Select(x => x.CrossingId + ":c" + x.EffectiveRelativePosition.XOffset + "/" + x.EffectiveRelativePosition.YOffset + ":" + x.Classification)).Concat(diagnostics.Select(x => x.Code)));
 
     private static ArchitectureV7RunOrientation Orientation(ArchitectureV7RouteCell a, ArchitectureV7RouteCell b) => a.Row == b.Row ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical;
     private static int FixedCoordinate(ArchitectureV7StraightRun run) => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? run.Cells[0].Row : run.Cells[0].Column;

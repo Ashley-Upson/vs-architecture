@@ -78,8 +78,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var result = Allocate(routes, Nodes("s", "t", "u"), spacing: 2);
         var source = result.Terminals.Where(x => x.PhysicalNodeId == "s").OrderBy(x => x.SlotOrdinal).ToArray();
         Assert.Equal(2, source.Length);
-        Assert.Equal(-450, source[0].RelativeOffset);
-        Assert.Equal(450, source[1].RelativeOffset);
+        Assert.Equal(new[] { -1d, 1d }, source.Select(item => item.RelativeOffset).OrderBy(item => item));
         Assert.Equal(4, result.Approaches.Count);
         Assert.Equal(2, result.Terminals.Count(x => x.PhysicalNodeId == "s"));
         Assert.Equal(2, result.Terminals.Where(x => x.PhysicalNodeId == "s").Select(x => x.RelativeOffset).Distinct().Count());
@@ -96,6 +95,18 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Single_ordinary_side_connection_is_centred_on_the_node_edge()
+    {
+        var result = Allocate(new[]
+        {
+            Route("solo-left", "s", "t", (1, 5), (2, 5), (2, 3), (3, 3))
+        }, new[] { NodeAt("s", 1, 5), NodeAt("t", 3, 3) }, spacing: 10);
+
+        var terminal = Assert.Single(result.Terminals, item => item.PhysicalNodeId == "s");
+        Assert.Equal(0d, terminal.RelativeOffset);
+    }
+
+    [Fact]
     public void Left_direct_and_right_approaches_are_grouped_around_the_direct_centre()
     {
         var routes = new[]
@@ -108,11 +119,11 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s").OrderBy(item => item.RelativeOffset).ToArray();
 
         Assert.Equal(new[] { "left", "direct", "right" }, terminals.Select(item => item.PhysicalLinkId));
-        Assert.Equal(new[] { -275d, 0d, 275d }, terminals.Select(item => item.RelativeOffset));
+        Assert.Equal(new[] { -100d, 0d, 100d }, terminals.Select(item => item.RelativeOffset));
     }
 
     [Fact]
-    public void Without_a_direct_group_the_complete_terminal_population_is_centred_evenly()
+    public void Without_a_direct_group_fit_first_packing_centres_the_complete_block()
     {
         var routes = new[]
         {
@@ -123,7 +134,48 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s").OrderBy(item => item.RelativeOffset).ToArray();
 
         Assert.Equal(new[] { "left", "right" }, terminals.Select(item => item.PhysicalLinkId));
-        Assert.Equal(new[] { -450d, 450d }, terminals.Select(item => item.RelativeOffset));
+        Assert.Equal(new[] { -50d, 50d }, terminals.Select(item => item.RelativeOffset));
+        Assert.Equal(100d, terminals[1].RelativeOffset - terminals[0].RelativeOffset);
+        Assert.Equal(0d, (terminals[0].RelativeOffset + terminals[1].RelativeOffset) / 2d);
+    }
+
+    [Fact]
+    public void No_anchor_one_sided_and_asymmetric_fans_use_one_centred_block()
+    {
+        static void AssertCentred(ArchitectureV7CollectiveAllocationFreeze result, int expectedCount)
+        {
+            var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s")
+                .OrderBy(item => item.RelativeOffset).ToArray();
+            Assert.Equal(expectedCount, terminals.Length);
+            Assert.Equal(0d, (terminals[0].RelativeOffset + terminals[^1].RelativeOffset) / 2d);
+            Assert.All(terminals.Zip(terminals.Skip(1), (left, right) => right.RelativeOffset - left.RelativeOffset),
+                delta => Assert.Equal(10d, delta));
+        }
+
+        var leftRoutes = Enumerable.Range(0, 3).Select(index =>
+            Route("left-" + index, "s", "left-target-" + index,
+                (1, 5), (2, 5), (2, 2 + index), (3, 2 + index))).ToArray();
+        AssertCentred(Allocate(leftRoutes,
+            new[] { NodeAt("s", 1, 5, 7) }.Concat(Enumerable.Range(0, 3).Select(index => NodeAt("left-target-" + index, 3, 2 + index))).ToArray(),
+            spacing: 10, span: 7), 3);
+
+        var rightRoutes = Enumerable.Range(0, 3).Select(index =>
+            Route("right-" + index, "s", "right-target-" + index,
+                (1, 5), (2, 5), (2, 8 + index), (3, 8 + index))).ToArray();
+        AssertCentred(Allocate(rightRoutes,
+            new[] { NodeAt("s", 1, 5, 7) }.Concat(Enumerable.Range(0, 3).Select(index => NodeAt("right-target-" + index, 3, 8 + index))).ToArray(),
+            spacing: 10, span: 7), 3);
+
+        var asymmetricRoutes = new[]
+        {
+            Route("left-a", "s", "left-a-target", (1, 5), (2, 5), (2, 2), (3, 2)),
+            Route("left-b", "s", "left-b-target", (1, 5), (2, 5), (2, 3), (3, 3)),
+            Route("right-a", "s", "right-a-target", (1, 5), (2, 5), (2, 8), (3, 8))
+        };
+        AssertCentred(Allocate(asymmetricRoutes, new[]
+        {
+            NodeAt("s", 1, 5, 7), NodeAt("left-a-target", 3, 2), NodeAt("left-b-target", 3, 3), NodeAt("right-a-target", 3, 8)
+        }, spacing: 10, span: 7), 3);
     }
 
     [Fact]
@@ -211,6 +263,66 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Three_top_edge_turning_arrivals_pack_from_midpoint_and_follow_approach_distance()
+    {
+        var routes = new[]
+        {
+            Route("farthest", "s-farthest", "t", (0, 1), (1, 1), (2, 1), (2, 5), (3, 5), (4, 5), (5, 5)),
+            Route("middle", "s-middle", "t", (0, 2), (1, 2), (2, 2), (3, 2), (3, 5), (4, 5), (5, 5)),
+            Route("closest", "s-closest", "t", (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (4, 5), (5, 5))
+        };
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("s-farthest", 0, 1), NodeAt("s-middle", 0, 2), NodeAt("s-closest", 0, 3), NodeAt("t", 5, 5, 9)
+        }, spacing: 10, span: 9, baseCellWidth: 100);
+
+        var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "t").ToDictionary(item => item.PhysicalLinkId);
+        Assert.Equal(new[] { -10d, 0d, 10d }, terminals.Values.Select(x => x.RelativeOffset).OrderBy(x => x));
+        Assert.All(terminals.Values, terminal =>
+            Assert.Contains("endpoint-order=deferred-to-actual-bend-depth", terminal.Provenance, StringComparison.Ordinal));
+        Assert.Equal(terminals["closest"].RelativeOffset,
+            result.EndpointLaneCoordinates.Single(item => item.PhysicalLinkId == "closest" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival).RelativeXOffset);
+        Assert.DoesNotContain(result.Diagnostics, item => item.Code == "ENDPOINT-FIXED-X-SLOT-CONFLICT");
+    }
+
+    [Fact]
+    public void True_maximal_vertical_relationship_remains_a_shared_x_authority()
+    {
+        var result = Allocate(new[] { Route("shared", "s", "t", (1, 5), (2, 5), (3, 5)) },
+            new[] { NodeAt("s", 1, 5, 5), NodeAt("t", 3, 5, 5) }, spacing: 10, span: 5, baseCellWidth: 100);
+
+        Assert.Contains(result.SharedVerticalRunConstraints, item => item.PhysicalLinkId == "shared");
+        Assert.All(result.Terminals.Where(item => item.PhysicalLinkId == "shared"), terminal =>
+            Assert.DoesNotContain("endpoint-remap=midpoint-packed", terminal.Provenance, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Fixed_direct_connection_allocates_a_local_z_bend_when_packed_set_fits()
+    {
+        var routes = new[]
+        {
+            Route("direct", "s", "direct-target", (1, 5), (2, 5), (3, 5))
+        }.Concat(Enumerable.Range(0, 5).Select(index =>
+            Route("right-" + index, "s", "right-target-" + index, (1, 5), (2, 5), (2, 6 + index), (3, 6 + index)))).ToArray();
+        var nodes = new[] { NodeAt("s", 1, 5, 7), NodeAt("direct-target", 3, 5) }
+            .Concat(Enumerable.Range(0, 5).Select(index => NodeAt("right-target-" + index, 3, 6 + index))).ToArray();
+
+        var result = Allocate(routes, nodes, spacing: 100, span: 7, baseCellWidth: 100);
+        var direct = Assert.Single(result.Terminals, item => item.PhysicalLinkId == "direct" && item.PhysicalNodeId == "s");
+
+        Assert.NotEqual(0d, direct.RelativeOffset);
+        Assert.DoesNotContain(result.Diagnostics, item => item.Code == "DIRECT-ENDPOINT-PACKING-CONFLICT");
+        Assert.DoesNotContain(result.Diagnostics, item => item.Code == "NODE-SPAN-CAPACITY");
+        Assert.Contains(result.EndpointZBends, item => item.PhysicalLinkId == "direct" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        Assert.DoesNotContain(result.Handoffs, item => item.PhysicalLinkId == "direct");
+
+        var sourceOffsets = result.Terminals.Where(item => item.PhysicalNodeId == "s")
+            .Select(item => item.RelativeOffset).OrderBy(offset => offset).ToArray();
+        Assert.Equal(new[] { -250d, -150d, -50d, 50d, 150d, 250d }, sourceOffsets);
+        Assert.All(sourceOffsets.Zip(sourceOffsets.Skip(1), (left, right) => right - left), delta => Assert.Equal(100d, delta));
+    }
+
+    [Fact]
     public void Direct_vertical_connections_remain_centred_and_do_not_enter_side_group_lane_nesting()
     {
         var routes = new[]
@@ -261,7 +373,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var terminals = result.Terminals.Where(item => item.PhysicalNodeId == "s").OrderBy(item => item.RelativeOffset).ToArray();
 
         Assert.Equal(5, terminals.Length);
-        Assert.Equal(new[] { -450d, -225d, 0d, 225d, 450d }, terminals.Select(item => item.RelativeOffset));
+        Assert.Equal(new[] { -200d, -100d, 0d, 100d, 200d }, terminals.Select(item => item.RelativeOffset));
         Assert.DoesNotContain(result.Diagnostics, item => item.Code == "TERMINAL-OVERFLOW");
     }
 
@@ -350,7 +462,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var terminals = result.Terminals.Where(x => x.PhysicalNodeId == "t").OrderBy(x => x.SlotOrdinal).ToArray();
 
         Assert.Equal(new[] { "b", "a" }, terminals.Select(x => x.PhysicalLinkId));
-        Assert.Equal(new[] { -450d, 450d }, terminals.Select(x => x.RelativeOffset));
+        Assert.Equal(new[] { -50d, 50d }, terminals.Select(x => x.RelativeOffset));
         Assert.Empty(result.Handoffs);
     }
 

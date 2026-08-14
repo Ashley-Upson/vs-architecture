@@ -51,6 +51,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         }
         var pre = Configuration(job.Rendering.Layout);
         var semanticEvidence = SemanticEvidence(diagram);
+        EnsureCanonicalPopulation(job.InputPath, diagram, semanticEvidence);
         var analyserInputEvidence = AnalyserInputEvidence(job);
         var projection = Measure("projection", () => new ArchitectureV7PhysicalProjectionStage().Project(diagram, new ArchitectureV7ProjectionPolicy(
             job.Rendering.NodeDuplication.AllowDuplicateNodes ? ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches : ArchitectureV7ProjectionMode.Canonical,
@@ -71,11 +72,16 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.Layout.BoundaryRowMinimum, job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, job.Rendering.Layout.ProjectHeaderHeight,
             job.Rendering.Layout.LabelCharacterWidth, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
-        var unsimplifiedScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration));
+        var initialScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration));
+        var endpointAllocation = Measure("endpoint-geometry-allocation", () => new ArchitectureV7EndpointGeometryAllocationStage()
+            .Allocate(placement, routes, allocation, initialScene.Rows, initialScene.Nodes));
+        var downstreamAllocation = endpointAllocation;
+        var unsimplifiedScene = Measure("physical-endpoint-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage()
+            .Compile(placement, routes, downstreamAllocation, sceneConfiguration));
         var simplification = Measure("allocated-route-simplification", () => new ArchitectureV7AllocatedRouteSimplificationStage().Simplify(unsimplifiedScene));
         var scene = simplification.Scene;
         var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, ordinarySchedule.Reservations);
-        var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, scheduledReservation, placement, routes, allocation, scene, sceneConfiguration));
+        var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, scheduledReservation, placement, routes, downstreamAllocation, scene, sceneConfiguration));
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
         var routingEvidence = evidenceStage.Analyze(placement, routes);
         var placementEvidence = evidenceStage.Placement(placement).Select(item => new
@@ -111,48 +117,48 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         };
         var compiledRouteIds = new HashSet<string>(scene.CompiledPhysicalLinkIds, StringComparer.Ordinal);
         var failedRouteIds = scene.FailedPhysicalLinkIds.ToArray();
-        var tracedFailureIds = failedRouteIds.Concat(allocation.Diagnostics.Where(item => item.IsHardFailure && item.PhysicalLinkId is not null).Select(item => item.PhysicalLinkId!))
+        var tracedFailureIds = failedRouteIds.Concat(downstreamAllocation.Diagnostics.Where(item => item.IsHardFailure && item.PhysicalLinkId is not null).Select(item => item.PhysicalLinkId!))
             .Distinct(StringComparer.Ordinal).ToArray();
         var allocationSceneEvidence = new
         {
             Summary = new
             {
-                AllocationDiagnostics = allocation.Diagnostics.Count,
-                AllocationDiagnosticCodes = allocation.Diagnostics.GroupBy(x => x.Code, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Count(), StringComparer.Ordinal),
+                AllocationDiagnostics = downstreamAllocation.Diagnostics.Count,
+                AllocationDiagnosticCodes = downstreamAllocation.Diagnostics.GroupBy(x => x.Code, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Count(), StringComparer.Ordinal),
                 SceneDiagnostics = scene.Diagnostics.Count,
                 SceneDiagnosticCodes = scene.Diagnostics.GroupBy(x => x.Code, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Count(), StringComparer.Ordinal),
-                RunCount = allocation.Runs.Count,
-                LaneCount = allocation.Lanes.Count,
-                TerminalCount = allocation.Terminals.Count,
-                ApproachCount = allocation.Approaches.Count,
-                HandoffCount = allocation.Handoffs.Count,
-                EndpointLaneCoordinateCount = allocation.EndpointLaneCoordinates.Count,
-                BendCount = allocation.Bends.Count,
-                CrossingCount = allocation.Crossings.Count,
+                RunCount = downstreamAllocation.Runs.Count,
+                LaneCount = downstreamAllocation.Lanes.Count,
+                TerminalCount = downstreamAllocation.Terminals.Count,
+                ApproachCount = downstreamAllocation.Approaches.Count,
+                HandoffCount = downstreamAllocation.Handoffs.Count,
+                EndpointLaneCoordinateCount = downstreamAllocation.EndpointLaneCoordinates.Count,
+                BendCount = downstreamAllocation.Bends.Count,
+                CrossingCount = downstreamAllocation.Crossings.Count,
                 PhysicalRouteCount = scene.Routes.Count,
                 AccountedPhysicalLinkCount = scene.AccountedPhysicalLinkIds.Count,
                 FailedPhysicalLinkCount = failedRouteIds.Length,
                 RelationshipAccountingInvariant = scene.RelationshipAccountingInvariant && scene.AccountedPhysicalLinkIds.Count == routes.Routes.Count,
                 PhysicalSceneComplete = scene.IsComplete
             },
-            AllocationSamples = allocation.Diagnostics.Take(128).Select(diagnostic => new
+            AllocationSamples = downstreamAllocation.Diagnostics.Take(128).Select(diagnostic => new
             {
                 Diagnostic = diagnostic,
                 RelatedLinks = (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Concat(diagnostic.PhysicalLinkId is null ? Array.Empty<string>() : new[] { diagnostic.PhysicalLinkId }).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                 RelatedRuns = (diagnostic.ConflictingRunIds ?? Array.Empty<string>()).Concat(diagnostic.RunId is null ? Array.Empty<string>() : new[] { diagnostic.RunId }).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                 Routes = routes.Routes.Where(route => (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(route.PhysicalLinkId, StringComparer.Ordinal) || route.PhysicalLinkId == diagnostic.PhysicalLinkId).Select(route => new { route.PhysicalLinkId, route.SourcePhysicalNodeId, route.DestinationPhysicalNodeId, route.Cells, route.IsComplete }).ToArray(),
-                Runs = allocation.Runs.Where(run => (diagnostic.ConflictingRunIds ?? Array.Empty<string>()).Contains(run.RunId, StringComparer.Ordinal) || run.RunId == diagnostic.RunId).Select(run => new { run.RunId, run.PhysicalLinkId, run.Orientation, run.Cells, run.StartRouteIndex, run.EndRouteIndex }).ToArray(),
-                LaneAssignments = allocation.RunAssignments.Where(item => (diagnostic.ConflictingRunIds ?? Array.Empty<string>()).Contains(item.RunId, StringComparer.Ordinal) || item.RunId == diagnostic.RunId).ToArray(),
-                Terminals = allocation.Terminals.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
-                Approaches = allocation.Approaches.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
-                Handoffs = allocation.Handoffs.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
-                Bends = allocation.Bends.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
-                Crossings = allocation.Crossings.Where(item => item.HorizontalPhysicalLinkId == diagnostic.PhysicalLinkId || item.VerticalPhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.HorizontalPhysicalLinkId, StringComparer.Ordinal) || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.VerticalPhysicalLinkId, StringComparer.Ordinal)).ToArray(),
+                Runs = downstreamAllocation.Runs.Where(run => (diagnostic.ConflictingRunIds ?? Array.Empty<string>()).Contains(run.RunId, StringComparer.Ordinal) || run.RunId == diagnostic.RunId).Select(run => new { run.RunId, run.PhysicalLinkId, run.Orientation, run.Cells, run.StartRouteIndex, run.EndRouteIndex }).ToArray(),
+                LaneAssignments = downstreamAllocation.RunAssignments.Where(item => (diagnostic.ConflictingRunIds ?? Array.Empty<string>()).Contains(item.RunId, StringComparer.Ordinal) || item.RunId == diagnostic.RunId).ToArray(),
+                Terminals = downstreamAllocation.Terminals.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
+                Approaches = downstreamAllocation.Approaches.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
+                Handoffs = downstreamAllocation.Handoffs.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
+                Bends = downstreamAllocation.Bends.Where(item => item.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.PhysicalLinkId, StringComparer.Ordinal)).ToArray(),
+                Crossings = downstreamAllocation.Crossings.Where(item => item.HorizontalPhysicalLinkId == diagnostic.PhysicalLinkId || item.VerticalPhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.HorizontalPhysicalLinkId, StringComparer.Ordinal) || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(item.VerticalPhysicalLinkId, StringComparer.Ordinal)).ToArray(),
                 PhysicalRoutes = scene.Routes.Where(route => route.PhysicalLinkId == diagnostic.PhysicalLinkId || (diagnostic.ConflictingPhysicalLinkIds ?? Array.Empty<string>()).Contains(route.PhysicalLinkId, StringComparer.Ordinal)).Select(route => new { route.PhysicalLinkId, route.Points, route.Segments }).ToArray()
             }).ToArray(),
             SceneSamples = scene.Diagnostics.Take(128).ToArray()
         };
-        var endpointEvidence = allocation.Terminals.GroupBy(item => (item.PhysicalNodeId, item.EndpointKind))
+        var endpointEvidence = downstreamAllocation.Terminals.GroupBy(item => (item.PhysicalNodeId, item.EndpointKind))
             .Select(group =>
             {
                 var node = scene.Nodes.FirstOrDefault(item => item.PhysicalNodeId == group.Key.PhysicalNodeId);
@@ -162,7 +168,24 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     var physicalTerminal = scene.Terminals.FirstOrDefault(candidate => candidate.PhysicalLinkId == item.PhysicalLinkId && candidate.EndpointKind == item.EndpointKind);
                     var route = scene.Routes.FirstOrDefault(candidate => candidate.PhysicalLinkId == item.PhysicalLinkId);
                     var drop = route is null || route.Points.Count < 2 ? null : (ArchitectureV7PhysicalPoint?)(item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Points[1] : route.Points[route.Points.Count - 2]);
-                    return new { item.PhysicalLinkId, item.Direction, item.SlotOrdinal, Terminal = physicalTerminal?.Position, Drop = drop };
+                    var nodeEdge = node is null ? (double?)null : item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? node.Bounds.Bottom : node.Bounds.Top;
+                    var midpoint = node is null ? (double?)null : (node.Bounds.Left + node.Bounds.Right) / 2d;
+                    var endpointLane = downstreamAllocation.EndpointLaneCoordinates.FirstOrDefault(candidate => candidate.PhysicalLinkId == item.PhysicalLinkId && candidate.EndpointKind == item.EndpointKind);
+                    return new
+                    {
+                        item.PhysicalLinkId,
+                        item.Direction,
+                        Group = EndpointDirectionGroup(item.Provenance),
+                        item.SlotOrdinal,
+                        Terminal = physicalTerminal?.Position,
+                        Bend = drop,
+                        ApproachDepth = drop is null || nodeEdge is null ? (double?)null : Math.Abs(drop.Y - nodeEdge.Value),
+                        TerminalOutwardness = physicalTerminal is null || midpoint is null ? (double?)null : Math.Abs(physicalTerminal.Position.X - midpoint.Value),
+                        FinalVerticalX = physicalTerminal?.Position.X,
+                        EndpointLaneRelativeX = endpointLane?.RelativeXOffset,
+                        EndpointLaneRunId = endpointLane?.RunId,
+                        Drop = drop
+                    };
                 }).OrderBy(item => item.SlotOrdinal).ToArray();
                 var horizontal = node is null || terminals.Length == 0 || terminals.All(item => item.Terminal is not null && (item.Terminal.Y == node.Bounds.Top || item.Terminal.Y == node.Bounds.Bottom));
                 var axis = terminals.Where(item => item.Terminal is not null).Select(item => horizontal ? item.Terminal!.X : item.Terminal!.Y).ToArray();
@@ -210,15 +233,15 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             route.IsComplete,
             route.Diagnostics,
             route.AttemptEvidence,
-            Runs = allocation.Runs.Where(run => run.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
-            LaneAssignments = allocation.RunAssignments.Where(item => allocation.Runs.Any(run => run.PhysicalLinkId == route.PhysicalLinkId && run.RunId == item.RunId)).ToArray(),
-            Terminals = allocation.Terminals.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
-            EndpointLanes = allocation.EndpointLaneCoordinates.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
-            Bends = allocation.Bends.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
-            Handoffs = allocation.Handoffs.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            Runs = downstreamAllocation.Runs.Where(run => run.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            LaneAssignments = downstreamAllocation.RunAssignments.Where(item => downstreamAllocation.Runs.Any(run => run.PhysicalLinkId == route.PhysicalLinkId && run.RunId == item.RunId)).ToArray(),
+            Terminals = downstreamAllocation.Terminals.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            EndpointLanes = downstreamAllocation.EndpointLaneCoordinates.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            Bends = downstreamAllocation.Bends.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            Handoffs = downstreamAllocation.Handoffs.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
             PhysicalCompilationDiagnostics = scene.Diagnostics.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
-            AllocationDiagnostics = allocation.Diagnostics.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
-            FirstFailingStage = route.Diagnostics.Count > 0 ? "logical-routing" : allocation.Diagnostics.Any(item => item.PhysicalLinkId == route.PhysicalLinkId && item.IsHardFailure) ? "allocation" : "scene-compilation"
+            AllocationDiagnostics = downstreamAllocation.Diagnostics.Where(item => item.PhysicalLinkId == route.PhysicalLinkId).ToArray(),
+            FirstFailingStage = route.Diagnostics.Count > 0 ? "logical-routing" : downstreamAllocation.Diagnostics.Any(item => item.PhysicalLinkId == route.PhysicalLinkId && item.IsHardFailure) ? "allocation" : "scene-compilation"
         }).ToArray();
         var strict = mode == ArchitectureRenderingMode.StrictValidation;
         var findings = acceptance.Findings.Select(finding => new ValidationFinding(finding.Code, finding.SubjectId ?? finding.Stage, finding.SubjectId, null, 1, finding.Message, true)).ToArray();
@@ -337,7 +360,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     Fingerprint = corridorProjection.Fingerprint
                 },
                 stageTimings,
-                allocation = new { AssignmentCount = allocation.RunAssignments.Count, EndpointLaneCoordinateCount = allocation.EndpointLaneCoordinates.Count, HandoffCount = allocation.Handoffs.Count, Fingerprint = allocation.AllocationFingerprint },
+                allocation = new { AssignmentCount = downstreamAllocation.RunAssignments.Count, EndpointLaneCoordinateCount = downstreamAllocation.EndpointLaneCoordinates.Count, HandoffCount = downstreamAllocation.Handoffs.Count, EndpointZBendCount = downstreamAllocation.EndpointZBends.Count, Fingerprint = downstreamAllocation.AllocationFingerprint },
                 simplification = new
                 {
                     RouteCount = simplification.Evidence.Count,
@@ -353,7 +376,11 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 scene = new { NodeCount = scene.Nodes.Count, RouteCount = scene.Routes.Count, AccountedPhysicalLinkCount = scene.AccountedPhysicalLinkIds.Count, IsComplete = scene.IsComplete, DiagnosticCount = scene.Diagnostics.Count, scene.PhysicalSceneFingerprint },
             }
         }, new JsonSerializerOptions { WriteIndented = true });
-        var manifest = new ArchitectureGenerationManifest(diagram.Projects.Count, projection.PhysicalNodes.Count, diagram.Links.Count, routes.Routes.Count,
+        var manifest = new ArchitectureGenerationManifest(
+            diagram.Projects.Count,
+            semanticEvidence.NodeCount,
+            semanticEvidence.RelationshipCount,
+            routes.Routes.Count,
             acceptance.Findings.Count, acceptance.Findings.Count, page.StablePageKey)
         {
             ProjectedRenderNodeCount = projection.PhysicalNodes.Count, ProjectedRenderLinkCount = projection.PhysicalLinks.Count,
@@ -388,22 +415,58 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             serializationRepeatCount > 0 ? new SerializationRepeatResult(serializationRepeatCount, true, Array.Empty<string>()) : null));
     }
 
-    private static object SemanticEvidence(ArchitectureDiagramModel diagram)
+    private static SemanticPopulationEvidence SemanticEvidence(ArchitectureDiagramModel diagram)
     {
         var nodes = ArchitectureV7SemanticIdentity.SortedNodeKeys(diagram).ToArray();
         var relationships = ArchitectureV7SemanticIdentity.SortedRelationshipKeys(diagram).ToArray();
         var payload = string.Join("\n", nodes) + "\n--links--\n" + string.Join("\n", relationships);
         using var sha = SHA256.Create();
         var fingerprint = string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(payload)).Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
-        return new
-        {
-            NodeCount = nodes.Length,
-            RelationshipCount = relationships.Length,
-            PopulationFingerprint = fingerprint,
-            StableNodeKeys = nodes,
-            StableRelationshipKeys = relationships
-        };
+        return new SemanticPopulationEvidence(nodes.Length, relationships.Length, fingerprint, nodes, relationships);
 
+    }
+
+    private static void EnsureCanonicalPopulation(string? inputPath, ArchitectureDiagramModel diagram, SemanticPopulationEvidence semanticEvidence)
+    {
+        if (!IsCanonicalContentManagementTarget(inputPath)) return;
+
+        var nodeCount = semanticEvidence.NodeCount;
+        var relationshipCount = semanticEvidence.RelationshipCount;
+        const int expectedSemanticNodes = 225;
+        const int expectedSemanticRelationships = 340;
+        if (nodeCount == expectedSemanticNodes && relationshipCount == expectedSemanticRelationships) return;
+
+        throw new InvalidOperationException(
+            $"V7-CANONICAL-POPULATION-MISMATCH: expected semantic nodes={expectedSemanticNodes}, relationships={expectedSemanticRelationships}; " +
+            $"observed semantic nodes={nodeCount}, relationships={relationshipCount}. Generation stopped before routing and evidence interpretation.");
+    }
+
+    private static bool IsCanonicalContentManagementTarget(string? inputPath) =>
+        !string.IsNullOrWhiteSpace(inputPath) &&
+        string.Equals(Path.GetFileName(inputPath), "cCoder.ContentManagement.csproj", StringComparison.OrdinalIgnoreCase) &&
+        inputPath!.Replace('\\', '/').EndsWith("/ccoder.ContentManagement/src/cCoder.ContentManagement/cCoder.ContentManagement.csproj", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record SemanticPopulationEvidence(
+        int NodeCount,
+        int RelationshipCount,
+        string PopulationFingerprint,
+        IReadOnlyList<string> StableNodeKeys,
+        IReadOnlyList<string> StableRelationshipKeys);
+
+    private static string EndpointDirectionGroup(string provenance)
+    {
+        const string marker = ";direction-group=";
+        var start = provenance.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0) return "Direct";
+        start += marker.Length;
+        var end = provenance.IndexOf(';', start);
+        var value = end < 0 ? provenance.Substring(start) : provenance.Substring(start, end - start);
+        return value switch
+        {
+            "0" => "Left",
+            "2" => "Right",
+            _ => "Direct"
+        };
     }
 
     private static object AnalyserInputEvidence(ArchitectureGenerationJob job)

@@ -81,7 +81,9 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         Check(string.Equals(allocation.RouteFingerprint, routes.RouteFingerprint, StringComparison.Ordinal), "FINGERPRINT-MISMATCH", "allocation", "Allocation route fingerprint differs.", allocation.AllocationFingerprint, findings);
         Check(string.Equals(scene.PlacementFingerprint, placement.PlacementFingerprint, StringComparison.Ordinal), "FINGERPRINT-MISMATCH", "scene", "Scene placement fingerprint differs.", scene.PhysicalSceneFingerprint, findings);
         Check(string.Equals(scene.RouteFingerprint, routes.RouteFingerprint, StringComparison.Ordinal), "FINGERPRINT-MISMATCH", "scene", "Scene route fingerprint differs.", scene.PhysicalSceneFingerprint, findings);
-        Check(string.Equals(scene.AllocationFingerprint, allocation.AllocationFingerprint, StringComparison.Ordinal), "FINGERPRINT-MISMATCH", "scene", "Scene allocation fingerprint differs.", scene.PhysicalSceneFingerprint, findings);
+        var endpointDerivedScene = scene.AllocationFingerprint.StartsWith(allocation.AllocationFingerprint + "|endpoint-geometry:", StringComparison.Ordinal);
+        Check(string.Equals(scene.AllocationFingerprint, allocation.AllocationFingerprint, StringComparison.Ordinal) || endpointDerivedScene,
+            "FINGERPRINT-MISMATCH", "scene", "Scene allocation fingerprint differs.", scene.PhysicalSceneFingerprint, findings);
     }
 
     private static void ValidateAccounting(ArchitectureV7PhysicalProjectionResult projection, ArchitectureV7LogicalRouteFreeze routes,
@@ -236,7 +238,8 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             var bends = route.Points.Zip(route.Points.Skip(1), (a, b) => (a, b)).Zip(route.Points.Skip(2), (pair, c) => (pair.a, pair.b, c)).Count(x => (x.a.X == x.b.X) != (x.b.X == x.c.X));
             var allocatedBends = indexes.BendsByRoute.TryGetValue(route.PhysicalLinkId, out var routeBends) ? routeBends.Count : 0;
             var handoffs = indexes.HandoffsByRoute.TryGetValue(route.PhysicalLinkId, out var routeHandoffs) ? routeHandoffs.Count : 0;
-            if (bends > allocatedBends + handoffs) Add(findings, "UNALLOCATED-Z-GEOMETRY", "physical-geometry", "Physical polyline contains more bends than frozen bend/handoff allocation.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "allocated-bends=" + allocatedBends });
+            var endpointZBends = indexes.EndpointZBendsByRoute.TryGetValue(route.PhysicalLinkId, out var routeZBends) ? routeZBends.Count : 0;
+            if (bends > allocatedBends + handoffs + 2 * endpointZBends) Add(findings, "UNALLOCATED-Z-GEOMETRY", "physical-geometry", "Physical polyline contains more bends than frozen bend/handoff/endpoint-Z allocation.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "allocated-bends=" + allocatedBends, "allocated-endpoint-z-bends=" + endpointZBends + ";bend-allowance=2-per-endpoint-z" });
             var nodes = indexes.NodeById;
             ValidateTerminalEdge(source, nodes[source.PhysicalNodeId].Bounds, "SOURCE-NOT-EDGE", route, frozen, findings);
             ValidateTerminalEdge(destination, nodes[destination.PhysicalNodeId].Bounds, "DESTINATION-NOT-EDGE", route, frozen, findings);
@@ -702,6 +705,7 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
         public readonly Dictionary<string, IReadOnlyList<ArchitectureV7PhysicalTerminal>> TerminalsByRoute;
         public readonly Dictionary<string, IReadOnlyList<ArchitectureV7BendAllocation>> BendsByRoute;
         public readonly Dictionary<string, IReadOnlyList<ArchitectureV7EndpointHandoff>> HandoffsByRoute;
+        public readonly Dictionary<string, IReadOnlyList<ArchitectureV7EndpointZBend>> EndpointZBendsByRoute;
         public readonly HashSet<string> CrossingResourcePairs;
         public readonly MetricsBuilder MetricsBuilder;
         public ArchitectureV7AcceptanceValidationMetrics Metrics => MetricsBuilder.Freeze();
@@ -714,6 +718,7 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             TerminalsByRoute = scene.Terminals.GroupBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => (IReadOnlyList<ArchitectureV7PhysicalTerminal>)x.ToArray(), StringComparer.Ordinal);
             BendsByRoute = allocation.Bends.GroupBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => (IReadOnlyList<ArchitectureV7BendAllocation>)x.ToArray(), StringComparer.Ordinal);
             HandoffsByRoute = allocation.Handoffs.GroupBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => (IReadOnlyList<ArchitectureV7EndpointHandoff>)x.ToArray(), StringComparer.Ordinal);
+            EndpointZBendsByRoute = allocation.EndpointZBends.GroupBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => (IReadOnlyList<ArchitectureV7EndpointZBend>)x.ToArray(), StringComparer.Ordinal);
             CrossingResourcePairs = new HashSet<string>(allocation.Crossings.Select(x => x.HorizontalPhysicalLinkId + "\u001f" + x.VerticalPhysicalLinkId), StringComparer.Ordinal);
             MetricsBuilder = new MetricsBuilder(scene.Routes.Sum(x => x.Segments.Count));
             foreach (var route in scene.Routes)

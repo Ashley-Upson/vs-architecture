@@ -54,6 +54,42 @@ public sealed class ArchitectureV7PhysicalSceneTests
     }
 
     [Fact]
+    public void Physical_shared_x_mismatch_allocates_a_terminal_local_z_bend()
+    {
+        var route = Route("shared", "s", "t", (1, 2), (2, 2), (3, 2));
+        var nodes = new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("s", "s", "p", 1, 2, 1, 2,
+                new[] { (1, 2) }, false, false, false, "tree", "s", "s", "test"),
+            new ArchitectureV7FrozenNodePlacement("t", "t", "p", 3, 2, 2, 2,
+                new[] { (3, 2), (3, 3) }, false, false, false, "tree", "t", "t", "test")
+        };
+        var placement = Placement(nodes);
+        var routes = new ArchitectureV7LogicalRouteFreeze(new[] { route }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes,
+            new ArchitectureV7AllocationConfiguration(4, 4, 0, 100));
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
+        var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration);
+        var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(
+            placement, routes, allocation, initial.Rows, initial.Nodes);
+
+        var z = Assert.Single(endpointAllocation.EndpointZBends,
+            item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+        Assert.Contains("physical-shared-run-anchor", z.Provenance, StringComparison.Ordinal);
+        Assert.DoesNotContain(endpointAllocation.Handoffs, item => item.PhysicalLinkId == "shared");
+
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, endpointAllocation, configuration);
+        var physical = Assert.Single(scene.Routes);
+        Assert.DoesNotContain(scene.Diagnostics, item => item.Code == "ENDPOINT-HANDOFF-MISSING");
+        Assert.All(physical.Points.Zip(physical.Points.Skip(1), (a, b) => (a, b)), pair =>
+            Assert.True(pair.a.X == pair.b.X || pair.a.Y == pair.b.Y));
+        var source = Assert.Single(scene.Terminals, item => item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        var destination = Assert.Single(scene.Terminals, item => item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+        Assert.NotEqual(source.Position.X, destination.Position.X);
+        Assert.Equal(destination.Position.X, physical.Points[^1].X);
+    }
+
+    [Fact]
     public void Overlapping_horizontal_routes_use_distinct_lanes_and_increase_row_extent()
     {
         var routes = new[]
@@ -193,6 +229,64 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.NotEqual(aPoints[0].Y, bPoints[0].Y);
         Assert.All(aPoints, point => Assert.Equal(aPoints[0].Y, point.Y));
         Assert.All(bPoints, point => Assert.Equal(bPoints[0].Y, point.Y));
+    }
+
+    [Fact]
+    public void Endpoint_slots_follow_actual_bend_depth_after_physical_lane_sizing()
+    {
+        var routes = new[]
+        {
+            Route("farthest", "s-farthest", "t", (0, 1), (1, 1), (2, 1), (2, 5), (3, 5), (4, 5), (5, 5)),
+            Route("middle", "s-middle", "t", (0, 2), (1, 2), (2, 2), (3, 2), (3, 5), (4, 5), (5, 5)),
+            Route("closest", "s-closest", "t", (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (4, 5), (5, 5))
+        };
+        var scene = Compile(routes, new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("s-farthest", "s-farthest", "p", 0, 1, 1, 1, new[] { (0, 1) }, false, false, false, "tree", "s-farthest", "s-farthest", "test"),
+            new ArchitectureV7FrozenNodePlacement("s-middle", "s-middle", "p", 0, 2, 1, 2, new[] { (0, 2) }, false, false, false, "tree", "s-middle", "s-middle", "test"),
+            new ArchitectureV7FrozenNodePlacement("s-closest", "s-closest", "p", 0, 3, 1, 3, new[] { (0, 3) }, false, false, false, "tree", "s-closest", "s-closest", "test"),
+            new ArchitectureV7FrozenNodePlacement("t", "t", "p", 5, 5, 9, 5, new[] { (5, 5) }, false, false, false, "tree", "t", "t", "test")
+        }, spacing: 10, baseCellWidth: 100);
+
+        var node = scene.Nodes.Single(x => x.PhysicalNodeId == "t");
+        var evidence = routes.Select(route =>
+        {
+            var terminal = scene.Terminals.Single(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
+            var physical = scene.Routes.Single(x => x.PhysicalLinkId == route.PhysicalLinkId);
+            var bendY = physical.Points.Where(point => point.Provenance.Contains("lane:H", StringComparison.Ordinal)).Select(point => point.Y).Distinct().Single();
+            return new { route.PhysicalLinkId, terminal.Position.X, Depth = Math.Abs(bendY - node.Bounds.Top), Outwardness = Math.Abs(terminal.Position.X - (node.Bounds.Left + node.Bounds.Right) / 2d) };
+        }).OrderBy(x => x.Depth).ToArray();
+
+        Assert.Equal(new[] { "closest", "middle", "farthest" }, evidence.Select(x => x.PhysicalLinkId));
+        Assert.Equal(new[] { -10d, 0d, 10d }, evidence.Select(x => x.X - (node.Bounds.Left + node.Bounds.Right) / 2d).OrderBy(x => x));
+        Assert.Equal(0d, (evidence.Min(x => x.X) + evidence.Max(x => x.X)) / 2d - (node.Bounds.Left + node.Bounds.Right) / 2d);
+        Assert.All(evidence.Zip(evidence.Skip(1), (left, right) => right.X - left.X), delta => Assert.Equal(10d, delta));
+        Assert.All(scene.Routes, route => Assert.All(route.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y)));
+    }
+
+    [Fact]
+    public void Fractional_centred_spacing_uses_the_same_rounded_terminal_authority_as_compilation()
+    {
+        var scene = Compile(new[]
+        {
+            Route("left", "s", "left-target", (1, 3), (2, 3), (2, 2), (3, 2)),
+            Route("right", "s", "right-target", (1, 3), (2, 3), (2, 4), (3, 4))
+        }, new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("s", "s", "p", 1, 3, 5, 3,
+                new[] { (1, 1), (1, 2), (1, 3), (1, 4), (1, 5) }, false, false, false, "tree", "s", "s", "test"),
+            new ArchitectureV7FrozenNodePlacement("left-target", "left-target", "p", 3, 2, 1, 2,
+                new[] { (3, 2) }, false, false, false, "tree", "left-target", "left-target", "test"),
+            new ArchitectureV7FrozenNodePlacement("right-target", "right-target", "p", 3, 4, 1, 4,
+                new[] { (3, 4) }, false, false, false, "tree", "right-target", "right-target", "test")
+        }, spacing: 25);
+
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-FINAL-LANE-AUTHORITY-VIOLATION");
+        foreach (var route in scene.Routes)
+        {
+            var terminal = scene.Terminals.Single(item => item.PhysicalLinkId == route.PhysicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+            Assert.Equal(terminal.Position, route.Points[0]);
+        }
     }
 
     [Fact]
@@ -341,7 +435,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var physical = Assert.Single(scene.Routes);
         var bend = Assert.Single(physical.Points.Where(point => point.Provenance.Contains("bend-resource=bend:f8-bend:1", StringComparison.Ordinal)));
 
-        Assert.Equal((scene.Columns[1].Start + scene.Columns[1].End) / 2d, bend.X);
+        var sourceTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == "f8-bend" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        Assert.Equal(sourceTerminal.Position.X, bend.X);
         Assert.Equal((scene.Rows[2].Start + scene.Rows[2].End) / 2d, bend.Y);
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
@@ -606,6 +701,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
             item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
         var sourceNode = Assert.Single(scene.Nodes, item => item.PhysicalNodeId == "source");
         Assert.Equal(sourceNode.Bounds.Bottom, sourceTerminal.Position.Y);
+        Assert.Equal(sourceTerminal.Position, scene.Routes.Single(item => item.PhysicalLinkId == "source-right").Points[0]);
 
         var destinationTerminal = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "destination-left" &&
             item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
@@ -615,6 +711,64 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.Equal(destinationTerminal.Position.X, destinationRoute.Points[destinationRoute.Points.Count - 1].X);
         Assert.DoesNotContain(scene.Routes.SelectMany(route => route.Segments), segment =>
             segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
+    }
+
+    [Fact]
+    public void Destination_side_group_uses_geometric_lane_depth_not_lane_ordinal_direction()
+    {
+        var routes = new[]
+        {
+            Route("outer", "source-outer", "target", (0, 1), (1, 1), (2, 1), (2, 4), (3, 4)),
+            Route("inner", "source-inner", "target", (0, 2), (1, 2), (2, 2), (2, 4), (3, 4))
+        };
+        var scene = Compile(routes, new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("source-outer", "source-outer", "p", 0, 1, 1, 1,
+                new[] { (0, 1) }, false, false, false, "tree", "source-outer", "source-outer", "test"),
+            new ArchitectureV7FrozenNodePlacement("source-inner", "source-inner", "p", 0, 2, 1, 2,
+                new[] { (0, 2) }, false, false, false, "tree", "source-inner", "source-inner", "test"),
+            new ArchitectureV7FrozenNodePlacement("target", "target", "p", 3, 4, 5, 4,
+                new[] { (3, 2), (3, 3), (3, 4), (3, 5), (3, 6) }, false, false, false, "tree", "target", "target", "test")
+        }, spacing: 10);
+
+        var target = Assert.Single(scene.Nodes, item => item.PhysicalNodeId == "target");
+        var outer = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "outer");
+        var inner = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "inner");
+        var outerBend = outer.Points[^2];
+        var innerBend = inner.Points[^2];
+
+        Assert.True(target.Bounds.Top - outerBend.Y < target.Bounds.Top - innerBend.Y,
+            $"outer distance={target.Bounds.Top - outerBend.Y}; inner distance={target.Bounds.Top - innerBend.Y}");
+        Assert.Equal(Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "outer" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival).Position.X, outer.Points[^1].X);
+        Assert.Equal(Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "inner" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival).Position.X, inner.Points[^1].X);
+    }
+
+    [Fact]
+    public void Source_side_group_uses_geometric_lane_depth_from_the_bottom_edge()
+    {
+        var routes = new[]
+        {
+            Route("outer", "source", "target-outer", (1, 3), (2, 3), (2, 1), (3, 1)),
+            Route("inner", "source", "target-inner", (1, 3), (2, 3), (2, 2), (3, 2))
+        };
+        var scene = Compile(routes, new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("source", "source", "p", 1, 3, 5, 3,
+                new[] { (1, 1), (1, 2), (1, 3), (1, 4), (1, 5) }, false, false, false, "tree", "source", "source", "test"),
+            new ArchitectureV7FrozenNodePlacement("target-outer", "target-outer", "p", 3, 1, 1, 1,
+                new[] { (3, 1) }, false, false, false, "tree", "target-outer", "target-outer", "test"),
+            new ArchitectureV7FrozenNodePlacement("target-inner", "target-inner", "p", 3, 2, 1, 2,
+                new[] { (3, 2) }, false, false, false, "tree", "target-inner", "target-inner", "test")
+        }, spacing: 10);
+
+        var source = Assert.Single(scene.Nodes, item => item.PhysicalNodeId == "source");
+        var outer = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "outer");
+        var inner = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "inner");
+        var outerBend = outer.Points[1];
+        var innerBend = inner.Points[1];
+
+        Assert.True(outerBend.Y - source.Bounds.Bottom < innerBend.Y - source.Bounds.Bottom,
+            $"outer distance={outerBend.Y - source.Bounds.Bottom}; inner distance={innerBend.Y - source.Bounds.Bottom}");
     }
 
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,

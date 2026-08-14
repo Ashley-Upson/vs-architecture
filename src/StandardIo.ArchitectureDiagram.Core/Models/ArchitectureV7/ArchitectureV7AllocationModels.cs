@@ -50,6 +50,14 @@ public sealed record ArchitectureV7EndpointLaneCoordinate(
     double RelativeXOffset,
     string Provenance);
 
+/// <summary>Allocator-owned local orthogonal bend for a fixed incoming X and packed terminal X.</summary>
+public sealed record ArchitectureV7EndpointZBend(
+    string PhysicalLinkId,
+    string PhysicalNodeId,
+    ArchitectureV7EndpointKind EndpointKind,
+    string FixedRunId,
+    string Provenance);
+
 public sealed record ArchitectureV7SharedVerticalRunConstraint(
     string PhysicalLinkId,
     string RunId,
@@ -251,7 +259,8 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         IReadOnlyList<ArchitectureV7CrossingInteraction>? crossingInteractions = null,
         ArchitectureV7AllocationConfiguration? allocationConfiguration = null,
         IReadOnlyList<ArchitectureV7EndpointLaneCoordinate>? endpointLaneCoordinates = null,
-        IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint>? sharedVerticalRunConstraints = null)
+        IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint>? sharedVerticalRunConstraints = null,
+        IReadOnlyList<ArchitectureV7EndpointZBend>? endpointZBends = null)
     {
         Runs = Array.AsReadOnly((runs ?? Array.Empty<ArchitectureV7StraightRun>()).OrderBy(x => x.RunId, StringComparer.Ordinal).ToArray());
         Lanes = Array.AsReadOnly((lanes ?? Array.Empty<ArchitectureV7PhysicalLane>()).OrderBy(x => x.LaneId, StringComparer.Ordinal).ToArray());
@@ -266,6 +275,8 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
             .OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.EndpointKind).ToArray());
         SharedVerticalRunConstraints = Array.AsReadOnly((sharedVerticalRunConstraints ?? Array.Empty<ArchitectureV7SharedVerticalRunConstraint>())
             .OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ToArray());
+        EndpointZBends = Array.AsReadOnly((endpointZBends ?? Array.Empty<ArchitectureV7EndpointZBend>())
+            .OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.EndpointKind).ToArray());
         CrossingResources = Array.AsReadOnly(Crossings.GroupBy(crossing => GeometryKey(crossing.Cell, crossing.Classification,
                 crossing.HorizontalLaneId, crossing.VerticalLaneId, crossing.EffectiveRelativePosition, crossing.RequiredClearance), StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
@@ -297,6 +308,7 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public IReadOnlyList<ArchitectureV7CrossingInteraction> CrossingInteractions { get; }
     public IReadOnlyList<ArchitectureV7EndpointLaneCoordinate> EndpointLaneCoordinates { get; }
     public IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint> SharedVerticalRunConstraints { get; }
+    public IReadOnlyList<ArchitectureV7EndpointZBend> EndpointZBends { get; }
     public IReadOnlyList<ArchitectureV7PhysicalCrossingResource> CrossingResources { get; }
     public IReadOnlyList<ArchitectureV7PhysicalTrackDemand> TrackDemands { get; }
     public string CrossingInteractionFingerprint { get; }
@@ -308,6 +320,21 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public string AllocationFingerprint { get; }
     public ArchitectureV7AllocationConfiguration? AllocationConfiguration { get; }
     public bool IsComplete => !Diagnostics.Any(x => x.IsHardFailure);
+
+    public ArchitectureV7CollectiveAllocationFreeze WithEndpointGeometry(
+        IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
+        IReadOnlyList<ArchitectureV7EndpointApproachReservation> approaches,
+        IReadOnlyList<ArchitectureV7EndpointLaneCoordinate> endpointLaneCoordinates,
+        IReadOnlyList<ArchitectureV7EndpointZBend>? endpointZBends = null)
+    {
+        var terminalFingerprint = string.Join(";", terminals.OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal)
+            .ThenBy(x => x.EndpointKind).Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal + ":" + x.RelativeOffset.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+        return new ArchitectureV7CollectiveAllocationFreeze(
+            Runs, Lanes, RunAssignments, terminals, approaches, Handoffs, Bends, Crossings, Diagnostics,
+            PlacementFingerprint, RouteFingerprint, AllocationFingerprint + "|endpoint-geometry:" + terminalFingerprint,
+            CrossingInteractions, AllocationConfiguration, endpointLaneCoordinates, SharedVerticalRunConstraints,
+            endpointZBends ?? EndpointZBends);
+    }
 
     private static ArchitectureV7PhysicalTrackDemand[] BuildTrackDemands(
         IReadOnlyList<ArchitectureV7StraightRun> runs,

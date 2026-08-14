@@ -23,18 +23,20 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             throw new ArgumentException("The allocation freeze does not belong to the supplied placement and route freezes.", nameof(allocation));
 
         var diagnostics = new List<ArchitectureV7PhysicalSceneDiagnostic>();
-        var indexes = CompilationIndexes.Create(allocation);
         var rowCount = Math.Max(placement.DiagramGrid.RowCount, placement.Nodes.Count == 0 ? 0 : placement.Nodes.Max(x => x.DiagramRow) + 1);
         var columnCount = Math.Max(placement.DiagramGrid.ColumnCount, placement.Nodes.Count == 0 ? 0 : placement.Nodes.Max(x => x.DiagramColumn + x.LogicalSpan));
+        var indexes = CompilationIndexes.Create(allocation);
         var rows = SizeRows(rowCount, placement, allocation, indexes, configuration);
         var columns = SizeColumns(columnCount, placement, allocation, indexes, configuration);
         var nodes = MaterialiseNodes(placement, rows, columns, configuration, diagnostics);
-        var terminals = MaterialiseTerminals(allocation, routes, nodes, rows, columns, configuration, diagnostics);
-        ValidateEndpointLaneAuthority(allocation, indexes, nodes, columns, terminals, diagnostics);
-        var routesOutput = MaterialiseRoutes(routes, allocation, indexes, rows, columns, nodes, terminals, diagnostics);
-        var fingerprint = Fingerprint(rows, columns, nodes, terminals, routesOutput, diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, allocation.AllocationFingerprint);
+        var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement, routes, allocation, rows, nodes);
+        var endpointIndexes = CompilationIndexes.Create(endpointAllocation);
+        var terminals = MaterialiseTerminals(endpointAllocation, routes, nodes, rows, columns, configuration, diagnostics);
+        ValidateEndpointLaneAuthority(endpointAllocation, endpointIndexes, nodes, columns, terminals, diagnostics);
+        var routesOutput = MaterialiseRoutes(routes, endpointAllocation, endpointIndexes, rows, columns, nodes, terminals, diagnostics);
+        var fingerprint = Fingerprint(rows, columns, nodes, terminals, routesOutput, diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, endpointAllocation.AllocationFingerprint);
         return new ArchitectureV7PhysicalSceneFreeze(rows, columns, nodes, terminals, routesOutput, diagnostics,
-            placement.PlacementFingerprint, routes.RouteFingerprint, allocation.AllocationFingerprint, fingerprint,
+            placement.PlacementFingerprint, routes.RouteFingerprint, endpointAllocation.AllocationFingerprint, fingerprint,
             routes.Routes.Select(x => x.PhysicalLinkId).ToArray());
     }
 
@@ -142,16 +144,18 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             // X. This is consumption of allocation authority, not compiler
             // alignment or topology repair.
             var shared = allocation.SharedVerticalRunConstraints.FirstOrDefault(item => item.PhysicalLinkId == slot.PhysicalLinkId);
-            var x = shared is null
+            var displacedEndpointZ = allocation.EndpointZBends.Any(item => item.PhysicalLinkId == slot.PhysicalLinkId && item.EndpointKind == slot.EndpointKind);
+            var x = shared is null || displacedEndpointZ
                 ? Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + slot.RelativeOffset, MidpointRounding.AwayFromZero)
                 : SharedRunX(shared, allocation, nodes, slot.PhysicalLinkId, diagnostics);
             var y = Math.Round(slot.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? node.Bounds.Bottom : node.Bounds.Top, MidpointRounding.AwayFromZero);
             if (x < node.Bounds.Left + configuration.TerminalInset || x > node.Bounds.Right - configuration.TerminalInset)
                 diagnostics.Add(new("TERMINAL-OUT-OF-BOUNDS", "A frozen terminal slot does not fit; terminal clamping is forbidden.", true, slot.PhysicalLinkId));
-            var provenance = (shared is null
+            var provenance = (shared is null || displacedEndpointZ
                 ? "node-edge;terminal-authoritative;frozen-slot-ordinal;configured-spacing-inset"
                 : "node-edge;terminal-authoritative;shared-maximal-vertical-run;allocated-run-X;run=" + shared.RunId)
-                + ";direction=" + slot.Direction;
+                + (displacedEndpointZ ? ";endpoint-z-bend;fixed-incoming-x" : string.Empty)
+                + ";direction=" + slot.Direction + ";" + slot.Provenance;
             result.Add(new(slot.PhysicalLinkId, slot.PhysicalNodeId, slot.EndpointKind, slot.SlotOrdinal, new(x, y, "terminal-edge+frozen-slot"), provenance));
         }
         ValidateSharedRunLegalRanges(allocation, nodes, result, configuration, diagnostics);
@@ -171,12 +175,13 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             var node = nodes.FirstOrDefault(item => item.PhysicalNodeId == coordinate.PhysicalNodeId);
             var terminal = terminals.FirstOrDefault(item => item.PhysicalLinkId == coordinate.PhysicalLinkId && item.EndpointKind == coordinate.EndpointKind);
             if (node is null || terminal is null) continue;
-            var expectedX = indexes.SharedVerticalRunsByLinkId.TryGetValue(coordinate.PhysicalLinkId, out var shared)
+            var displacedEndpointZ = allocation.EndpointZBends.Any(item => item.PhysicalLinkId == coordinate.PhysicalLinkId && item.EndpointKind == coordinate.EndpointKind);
+            var expectedX = !displacedEndpointZ && indexes.SharedVerticalRunsByLinkId.TryGetValue(coordinate.PhysicalLinkId, out var shared)
                 ? SharedRunX(shared, allocation, nodes, coordinate.PhysicalLinkId, diagnostics)
-                : (node.Bounds.Left + node.Bounds.Right) / 2d + coordinate.RelativeXOffset;
+                : Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + coordinate.RelativeXOffset, MidpointRounding.AwayFromZero);
             if (Math.Abs(expectedX - terminal.Position.X) > .001)
                 diagnostics.Add(new("TERMINAL-FINAL-LANE-AUTHORITY-VIOLATION",
-                    "The allocated endpoint lane coordinate does not equal the allocated terminal coordinate.", true,
+                    $"The allocated endpoint lane coordinate does not equal the allocated terminal coordinate. expectedX={expectedX:R};terminalX={terminal.Position.X:R};relativeOffset={coordinate.RelativeXOffset:R};nodeBounds={node.Bounds.Left:R},{node.Bounds.Right:R}.", true,
                     coordinate.PhysicalLinkId));
         }
     }
@@ -211,6 +216,8 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         {
             var endpoints = terminals.Where(item => item.PhysicalLinkId == constraint.PhysicalLinkId).ToArray();
             if (endpoints.Length != 2) continue;
+            endpoints = endpoints.Where(endpoint => !allocation.EndpointZBends.Any(z => z.PhysicalLinkId == endpoint.PhysicalLinkId && z.EndpointKind == endpoint.EndpointKind)).ToArray();
+            if (endpoints.Length < 2) continue;
             var intervals = endpoints.Select(endpoint =>
             {
                 var node = nodes.FirstOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
@@ -270,7 +277,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             // A terminal/run mismatch is represented by the allocated handoff below;
             // rewriting the whole approach to the terminal coordinate can collapse
             // two distinct vertical lanes into one physical interval.
-            var expanded = AddAllocatedEndpointHandoffs(points, route, indexes, source, destination, rows, columns, diagnostics);
+            var expanded = AddAllocatedEndpointBoundaryGeometry(points, route, indexes, source, destination, rows, columns, diagnostics);
             if (expanded is null)
             {
                 diagnostics.Add(new("ROUTE-COMPILATION-FAILED", "A frozen endpoint resource could not be compiled without reconciliation or repair.", true, route.PhysicalLinkId));
@@ -300,7 +307,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         return result;
     }
 
-    private static List<CompiledPoint>? AddAllocatedEndpointHandoffs(List<CompiledPoint> points, ArchitectureV7LogicalRoute route,
+    private static List<CompiledPoint>? AddAllocatedEndpointBoundaryGeometry(List<CompiledPoint> points, ArchitectureV7LogicalRoute route,
         CompilationIndexes indexes, ArchitectureV7PhysicalTerminal source, ArchitectureV7PhysicalTerminal destination,
         IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows, IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
         ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
@@ -309,6 +316,12 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         var first = points[1];
         if (source.Position.X != first.Point.X && source.Position.Y != first.Point.Y)
         {
+            if (indexes.EndpointZBendsByEndpoint.TryGetValue((route.PhysicalLinkId, ArchitectureV7EndpointKind.SourceDeparture), out var sourceZBend))
+            {
+                result.Add(MaterialiseEndpointZBendPoint(sourceZBend, source, route, first));
+            }
+            else
+            {
             var handoff = indexes.HandoffsByEndpoint.TryGetValue((route.PhysicalLinkId, ArchitectureV7EndpointKind.SourceDeparture), out var sourceHandoff)
                 ? sourceHandoff : null;
             if (handoff is null)
@@ -317,11 +330,18 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 return null;
             }
             result.Add(MaterialiseHandoffPoint(handoff, source, route, rows, columns, first));
+            }
         }
         result.AddRange(points.Skip(1).Take(points.Count - 2));
         var last = points[points.Count - 1]; var previous = result[result.Count - 1];
         if (previous.Point.X != destination.Position.X && previous.Point.Y != destination.Position.Y)
         {
+            if (indexes.EndpointZBendsByEndpoint.TryGetValue((route.PhysicalLinkId, ArchitectureV7EndpointKind.DestinationArrival), out var destinationZBend))
+            {
+                result.Add(MaterialiseEndpointZBendPoint(destinationZBend, destination, route, previous));
+            }
+            else
+            {
             var handoff = indexes.HandoffsByEndpoint.TryGetValue((route.PhysicalLinkId, ArchitectureV7EndpointKind.DestinationArrival), out var destinationHandoff)
                 ? destinationHandoff : null;
             if (handoff is null)
@@ -330,9 +350,20 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 return null;
             }
             result.Add(MaterialiseHandoffPoint(handoff, destination, route, rows, columns, previous));
+            }
         }
         result.Add(last);
         return result;
+    }
+
+    private static CompiledPoint MaterialiseEndpointZBendPoint(ArchitectureV7EndpointZBend bend,
+        ArchitectureV7PhysicalTerminal terminal, ArchitectureV7LogicalRoute route, CompiledPoint adjacentPoint)
+    {
+        var point = new ArchitectureV7PhysicalPoint(terminal.Position.X, adjacentPoint.Point.Y,
+            "allocated-endpoint-z-bend-" + bend.PhysicalLinkId + "-" + bend.EndpointKind);
+        return new(bend.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? 0 : route.Cells.Count - 1,
+            bend.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? route.Cells[0] : route.Cells[route.Cells.Count - 1],
+            point, "endpoint-z-bend:" + bend.FixedRunId, bend.FixedRunId, "endpoint-z-bend:" + bend.Provenance);
     }
 
     private static CompiledPoint MaterialiseHandoffPoint(ArchitectureV7EndpointHandoff handoff, ArchitectureV7PhysicalTerminal terminal,
@@ -452,6 +483,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             IReadOnlyDictionary<(string PhysicalLinkId, int RouteIndex), ArchitectureV7StraightRun> outgoingRuns,
             IReadOnlyDictionary<(string PhysicalLinkId, int RouteIndex), ArchitectureV7BendAllocation> bends,
             IReadOnlyDictionary<(string PhysicalLinkId, ArchitectureV7EndpointKind EndpointKind), ArchitectureV7EndpointHandoff> handoffs,
+            IReadOnlyDictionary<(string PhysicalLinkId, ArchitectureV7EndpointKind EndpointKind), ArchitectureV7EndpointZBend> endpointZBends,
             IReadOnlyDictionary<(string PhysicalLinkId, ArchitectureV7EndpointKind EndpointKind), ArchitectureV7EndpointLaneCoordinate> endpointLanes,
             IReadOnlyDictionary<string, ArchitectureV7SharedVerticalRunConstraint> sharedVerticalRuns,
             IReadOnlyDictionary<(string PhysicalLinkId, int RouteIndex), ArchitectureV7CrossingAllocation> crossings,
@@ -460,7 +492,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             Allocation = allocation;
             RunsById = runsById; AssignmentsByRunId = assignmentsByRunId; RunsByPhysicalLinkId = runsByPhysicalLinkId;
             IncomingRunsByLinkAndRouteIndex = incomingRuns; OutgoingRunsByLinkAndRouteIndex = outgoingRuns;
-            BendsByLinkAndRouteIndex = bends; HandoffsByEndpoint = handoffs; EndpointLanesByLinkAndKind = endpointLanes; CrossingsByLinkAndRouteIndex = crossings;
+            BendsByLinkAndRouteIndex = bends; HandoffsByEndpoint = handoffs; EndpointZBendsByEndpoint = endpointZBends; EndpointLanesByLinkAndKind = endpointLanes; CrossingsByLinkAndRouteIndex = crossings;
             CrossingInteractionsByLinkAndRouteIndex = crossingInteractions;
             SharedVerticalRunsByLinkId = sharedVerticalRuns;
         }
@@ -472,6 +504,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         public IReadOnlyDictionary<(string PhysicalLinkId, int RouteIndex), ArchitectureV7StraightRun> OutgoingRunsByLinkAndRouteIndex { get; }
         public IReadOnlyDictionary<(string PhysicalLinkId, int RouteIndex), ArchitectureV7BendAllocation> BendsByLinkAndRouteIndex { get; }
         public IReadOnlyDictionary<(string PhysicalLinkId, ArchitectureV7EndpointKind EndpointKind), ArchitectureV7EndpointHandoff> HandoffsByEndpoint { get; }
+        public IReadOnlyDictionary<(string PhysicalLinkId, ArchitectureV7EndpointKind EndpointKind), ArchitectureV7EndpointZBend> EndpointZBendsByEndpoint { get; }
         public IReadOnlyDictionary<(string PhysicalLinkId, ArchitectureV7EndpointKind EndpointKind), ArchitectureV7EndpointLaneCoordinate> EndpointLanesByLinkAndKind { get; }
         public IReadOnlyDictionary<string, ArchitectureV7SharedVerticalRunConstraint> SharedVerticalRunsByLinkId { get; }
         public ArchitectureV7CollectiveAllocationFreeze Allocation { get; }
@@ -499,6 +532,8 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 .GroupBy(x => (x.PhysicalLinkId, x.RouteIndex)).ToDictionary(x => x.Key, x => x.First());
             var handoffs = allocation.Handoffs.OrderBy(x => x.EndpointKind).ThenBy(x => x.ResourceId, StringComparer.Ordinal)
                 .GroupBy(x => (x.PhysicalLinkId, x.EndpointKind)).ToDictionary(x => x.Key, x => x.First());
+            var endpointZBends = allocation.EndpointZBends
+                .GroupBy(x => (x.PhysicalLinkId, x.EndpointKind)).ToDictionary(x => x.Key, x => x.First());
             var endpointLanes = allocation.EndpointLaneCoordinates
                 .GroupBy(x => (x.PhysicalLinkId, x.EndpointKind)).ToDictionary(x => x.Key, x => x.First());
             var crossings = allocation.Crossings.OrderBy(x => x.CrossingId, StringComparer.Ordinal)
@@ -515,6 +550,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
                 new ReadOnlyDictionary<(string, int), ArchitectureV7StraightRun>(outgoing),
                 new ReadOnlyDictionary<(string, int), ArchitectureV7BendAllocation>(bends),
                 new ReadOnlyDictionary<(string, ArchitectureV7EndpointKind), ArchitectureV7EndpointHandoff>(handoffs),
+                new ReadOnlyDictionary<(string, ArchitectureV7EndpointKind), ArchitectureV7EndpointZBend>(endpointZBends),
                 new ReadOnlyDictionary<(string, ArchitectureV7EndpointKind), ArchitectureV7EndpointLaneCoordinate>(endpointLanes),
                 new ReadOnlyDictionary<string, ArchitectureV7SharedVerticalRunConstraint>(allocation.SharedVerticalRunConstraints.ToDictionary(x => x.PhysicalLinkId, StringComparer.Ordinal)),
                 new ReadOnlyDictionary<(string, int), ArchitectureV7CrossingAllocation>(crossings),
