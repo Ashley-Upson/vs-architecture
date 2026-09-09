@@ -239,7 +239,9 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             var allocatedBends = indexes.BendsByRoute.TryGetValue(route.PhysicalLinkId, out var routeBends) ? routeBends.Count : 0;
             var handoffs = indexes.HandoffsByRoute.TryGetValue(route.PhysicalLinkId, out var routeHandoffs) ? routeHandoffs.Count : 0;
             var endpointZBends = indexes.EndpointZBendsByRoute.TryGetValue(route.PhysicalLinkId, out var routeZBends) ? routeZBends.Count : 0;
-            if (bends > allocatedBends + handoffs + 2 * endpointZBends) Add(findings, "UNALLOCATED-Z-GEOMETRY", "physical-geometry", "Physical polyline contains more bends than frozen bend/handoff/endpoint-Z allocation.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "allocated-bends=" + allocatedBends, "allocated-endpoint-z-bends=" + endpointZBends + ";bend-allowance=2-per-endpoint-z" });
+            var corridorTransitions = allocation.EndpointCorridors.Count(c => c.PhysicalLinkId == route.PhysicalLinkId && c.X != c.OrdinaryX &&
+                allocation.Runs.Any(r => r.RunId == c.HorizontalRunId && r.IsEndpointTransition));
+            if (bends > allocatedBends + handoffs + 2 * endpointZBends + 2 * corridorTransitions) Add(findings, "UNALLOCATED-Z-GEOMETRY", "physical-geometry", "Physical polyline contains more bends than frozen bend/handoff/endpoint-Z/corridor allocation.", route.PhysicalLinkId, frozen.Cells, route.Points, new[] { "allocated-bends=" + allocatedBends, "allocated-endpoint-z-bends=" + endpointZBends, "allocated-routing-row-transitions=" + corridorTransitions });
             var nodes = indexes.NodeById;
             ValidateTerminalEdge(source, nodes[source.PhysicalNodeId].Bounds, "SOURCE-NOT-EDGE", route, frozen, findings);
             ValidateTerminalEdge(destination, nodes[destination.PhysicalNodeId].Bounds, "DESTINATION-NOT-EDGE", route, frozen, findings);
@@ -538,9 +540,17 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             return;
         }
         var cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells) && expectedCells.All(cell => run?.Cells.Contains(cell) == true);
+        if (run?.IsEndpointTransition == true)
+            cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells) && segment.RouteCellIndices.All(index => index == run.StartRouteIndex);
+        var corridor = allocation.EndpointCorridors.FirstOrDefault(c => c.ResourceId == segment.RunId && c.PhysicalLinkId == route.PhysicalLinkId);
         var endpointResource = segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal) || segment.RunId.StartsWith("endpoint-z-bend:", StringComparison.Ordinal);
+        endpointResource |= corridor is not null;
         if (endpointResource)
             cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells);
+        if (corridor is not null)
+            cellsMatch &= segment.Start.X == corridor.X && segment.End.X == corridor.X &&
+                Math.Min(segment.Start.Y, segment.End.Y) >= Math.Min(corridor.NodeEdgeY, corridor.RoutingY) &&
+                Math.Max(segment.Start.Y, segment.End.Y) <= Math.Max(corridor.NodeEdgeY, corridor.RoutingY);
         var laneMatches = assignment is not null && string.Equals(assignment.LaneId, segment.LaneId, StringComparison.Ordinal);
         var orientationMatches = run is not null && ((segment.Start.Y == segment.End.Y && run.Orientation == ArchitectureV7RunOrientation.Horizontal) ||
             (segment.Start.X == segment.End.X && run.Orientation == ArchitectureV7RunOrientation.Vertical));

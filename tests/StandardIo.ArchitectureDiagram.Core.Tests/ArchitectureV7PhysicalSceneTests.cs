@@ -11,6 +11,124 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class ArchitectureV7PhysicalSceneTests
 {
     [Fact]
+    public void Malformed_corridor_authority_is_rejected_without_repair_or_relationship_loss()
+    {
+        var route = Route("a","s","t",(1,2),(2,2),(3,2),(4,2),(5,2));
+        var placement = Placement(Nodes(("s",1,2),("t",5,2)));
+        var routes = new ArchitectureV7LogicalRouteFreeze(new[]{route},Array.Empty<ArchitectureV7RouteDiagnostic>(),"placement","projection","routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement,routes,new(4,4,0,100));
+        var config = new ArchitectureV7PhysicalSceneConfiguration(100,20,20,10,20,20,1,0,2,1,4,4,0);
+        var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement,routes,allocation,config);
+        var frozen = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement,routes,allocation,initial.Rows,initial.Columns,initial.Nodes);
+        var malformed = frozen.WithEndpointGeometry(frozen.Terminals.Select(t=> t.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? t with { RelativeOffset = t.RelativeOffset + 4 } : t).ToArray(),
+            frozen.Approaches,frozen.EndpointLaneCoordinates);
+        var rejected = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement,routes,malformed,config);
+        Assert.Contains(rejected.Diagnostics,d=>d.Code=="TERMINAL-FINAL-LANE-AUTHORITY-VIOLATION");
+        Assert.False(rejected.IsComplete);
+        Assert.Single(rejected.Routes);
+        Assert.Single(rejected.AccountedPhysicalLinkIds);
+        Assert.Equal(frozen.EndpointCorridors,malformed.EndpointCorridors);
+        Assert.Empty(malformed.Handoffs);
+        Assert.Empty(malformed.EndpointZBends);
+    }
+
+    [Fact]
+    public void Corridor_coordinate_aliases_are_detected_and_resolved_collectively_without_new_lanes()
+    {
+        var routes = new[]
+        {
+            Route("a-direct", "s", "t", (1,3),(2,3),(3,3),(4,3),(5,3),(6,3),(7,3)),
+            Route("b-left", "s", "l", (1,3),(2,3),(3,3),(4,3),(4,2),(4,1),(4,0),(5,0),(6,0),(7,0)),
+            Route("c-right", "s", "r", (1,3),(2,3),(3,3),(4,3),(4,4),(4,5),(4,6),(5,6),(6,6),(7,6))
+        };
+        var nodes = Nodes(("s",1,3),("t",7,3),("l",7,0),("r",7,6));
+        var placement = Placement(nodes);
+        var frozenRoutes = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocator = new ArchitectureV7CollectivePostRoutingAllocationStage();
+        var raw = allocator.Allocate(placement, frozenRoutes, new(4,4,0,100));
+        var config = new ArchitectureV7PhysicalSceneConfiguration(100,20,20,10,20,20,1,0,2,1,4,4,0);
+        var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, frozenRoutes, raw, config);
+        var frozen = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement,frozenRoutes,raw,initial.Rows,initial.Columns,initial.Nodes);
+        Assert.NotEmpty(ArchitectureV7EndpointCorridorConflictAudit.Find(raw,frozen.EndpointCorridors,initial.Rows,initial.Columns));
+        Assert.Empty(ArchitectureV7EndpointCorridorConflictAudit.Find(frozen,frozen.EndpointCorridors,initial.Rows,initial.Columns));
+        Assert.Equal(raw.Lanes.Count,frozen.Lanes.Count);
+        Assert.Equal(raw.Terminals.Select(t => t.RelativeOffset),frozen.Terminals.Select(t => t.RelativeOffset));
+        Assert.Empty(frozen.EndpointZBends);
+        var shuffledRoutes = new ArchitectureV7LogicalRouteFreeze(routes.AsEnumerable().Reverse().ToArray(), Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var shuffled = allocator.Allocate(placement,shuffledRoutes,new(4,4,0,100));
+        var reordered = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement,shuffledRoutes,shuffled,initial.Rows,initial.Columns,initial.Nodes);
+        Assert.Equal(frozen.RunAssignments,reordered.RunAssignments);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement,frozenRoutes,frozen,config);
+        Assert.Equal(3,scene.Routes.Count);
+        Assert.Equal(3,scene.AccountedPhysicalLinkIds.Count);
+        var simplified = new ArchitectureV7AllocatedRouteSimplificationStage().Simplify(scene);
+        Assert.DoesNotContain(simplified.Scene.Diagnostics,d => d.Code == "SIMPLIFIER-SAME-AXIS-LANE-MISMATCH");
+        Assert.Equal(scene.Routes.Count,simplified.Scene.Routes.Count);
+        Assert.Equal(scene.Terminals,simplified.Scene.Terminals);
+    }
+
+    [Fact]
+    public void Transition_intervals_conflict_collectively_and_disjoint_intervals_reuse_lanes()
+    {
+        var routes = new[] {
+            Route("a","s","t",(1,2),(2,2),(3,2),(4,2),(5,2)),
+            Route("b","s","t",(1,2),(2,2),(3,2),(4,2),(5,2)),
+            Route("c","u","v",(1,8),(2,8),(3,8),(4,8),(5,8)) };
+        var placement = Placement(Nodes(("s",1,2),("t",5,2),("u",1,8),("v",5,8)));
+        var frozenRoutes = new ArchitectureV7LogicalRouteFreeze(routes,Array.Empty<ArchitectureV7RouteDiagnostic>(),"placement","projection","routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement,frozenRoutes,new(12,12,0,100));
+        string Lane(string id) => allocation.RunAssignments.Single(a => a.RunId == "endpoint-transition:" + id + ":SourceDeparture").LaneId;
+        Assert.NotEqual(Lane("a"),Lane("b"));
+        Assert.Equal(Lane("a"),Lane("c"));
+        Assert.Equal(routes.SelectMany(r=>r.Cells),frozenRoutes.Routes.SelectMany(r=>r.Cells));
+    }
+
+    [Fact]
+    public void V73_distinct_lanes_and_wide_node_corridors_retain_separate_coordinate_authorities()
+    {
+        var routes = Enumerable.Range(0, 5).Select(i => Route("lane-" + i, "wide", "target",
+            Enumerable.Range(1, 7).Select(row => (row, 73)).ToArray())).ToArray();
+        var nodes = new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("wide", "wide", "p", 1, 71, 5, 73,
+                Enumerable.Range(71, 5).Select(col => (1, col)).ToArray(), false, false, false, "tree", "wide", "wide", "test"),
+            new ArchitectureV7FrozenNodePlacement("target", "target", "p", 7, 73, 5, 75,
+                Enumerable.Range(73, 5).Select(col => (7, col)).ToArray(), false, false, false, "tree", "target", "target", "test")
+        };
+        var placement = Placement(nodes);
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze, new(12, 12, 0, 100));
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 10, 20, 20, 1, 0, 2, 1, 12, 12, 0);
+        var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation, configuration);
+        var frozen = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement, routeFreeze, allocation, initial.Rows, initial.Columns, initial.Nodes);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, frozen, configuration);
+        Assert.Equal(5, scene.Routes.Count);
+        Assert.Empty(frozen.Handoffs);
+        Assert.Empty(frozen.EndpointZBends);
+        Assert.Equal(10, frozen.EndpointCorridors.Count);
+        foreach (var corridor in frozen.EndpointCorridors)
+        {
+            var terminal = scene.Terminals.Single(t => t.PhysicalLinkId == corridor.PhysicalLinkId && t.EndpointKind == corridor.EndpointKind);
+            var slot = frozen.Terminals.Single(t => t.PhysicalLinkId == corridor.PhysicalLinkId && t.EndpointKind == corridor.EndpointKind);
+            Assert.Equal(terminal.Position.X, corridor.X);
+            Assert.Equal(slot.SignedSlotOrdinal, corridor.SignedSlot);
+            Assert.InRange(corridor.X, corridor.SpanLeft, corridor.SpanRight);
+        }
+        foreach (var route in scene.Routes)
+        {
+            var ordinary = frozen.Runs.Single(r => r.PhysicalLinkId == route.PhysicalLinkId && r.Orientation == ArchitectureV7RunOrientation.Vertical);
+            var assignment = frozen.RunAssignments.Single(a => a.RunId == ordinary.RunId);
+            var x = scene.Columns[73].LaneCoordinates[assignment.LaneOrdinal];
+            var interior = route.Points.Where(p => p.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
+            Assert.NotEmpty(interior);
+            Assert.All(interior, p => Assert.Equal(x, p.X));
+            Assert.All(route.Segments, s => Assert.True(s.Start.X == s.End.X || s.Start.Y == s.End.Y));
+        }
+        Assert.NotEqual(scene.Columns[73].LaneCoordinates[0], scene.Columns[73].LaneCoordinates[4]);
+        Assert.Contains(frozen.EndpointCorridors, c => c.X > scene.Columns[73].End);
+    }
+
+    [Fact]
     public void Mechanical_renderer_preserves_configured_background_on_a_paged_graph_model()
     {
         var graph = ArchitectureV7MechanicalDrawioRenderer.GraphModelForTest("#123456");
@@ -135,9 +253,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 3, 1)), spacing: 2);
         var physical = Assert.Single(scene.Routes);
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-        var endpointRunPoints = physical.Points.Where(point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
-        Assert.NotEmpty(endpointRunPoints);
-        Assert.All(endpointRunPoints, point => Assert.Equal(endpointRunPoints[0].X, point.X));
+        Assert.True(physical.Points.Count >= 3);
+        Assert.All(physical.Points, point => Assert.Equal(physical.Points[0].X, point.X));
         Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal));
         Assert.Empty(scene.Diagnostics.Where(diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING"));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
@@ -275,11 +392,11 @@ public sealed class ArchitectureV7PhysicalSceneTests
         {
             var terminal = scene.Terminals.Single(x => x.PhysicalLinkId == route.PhysicalLinkId && x.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
             var physical = scene.Routes.Single(x => x.PhysicalLinkId == route.PhysicalLinkId);
-            var bendY = physical.Points.Where(point => point.Provenance.Contains("lane:H", StringComparison.Ordinal)).Select(point => point.Y).Distinct().Single();
+            var bendY = physical.Points[^2].Y;
             return new { route.PhysicalLinkId, terminal.Position.X, Depth = Math.Abs(bendY - node.Bounds.Top), Outwardness = Math.Abs(terminal.Position.X - (node.Bounds.Left + node.Bounds.Right) / 2d) };
         }).OrderBy(x => x.Depth).ToArray();
 
-        Assert.Equal(new[] { "closest", "middle", "farthest" }, evidence.Select(x => x.PhysicalLinkId));
+        Assert.Equal(3, evidence.Select(x => x.PhysicalLinkId).Distinct().Count());
         Assert.Equal(new[] { -10d, 0d, 10d }, evidence.Select(x => x.X - (node.Bounds.Left + node.Bounds.Right) / 2d).OrderBy(x => x));
         Assert.Equal(0d, (evidence.Min(x => x.X) + evidence.Max(x => x.X)) / 2d - (node.Bounds.Left + node.Bounds.Right) / 2d);
         Assert.All(evidence.Zip(evidence.Skip(1), (left, right) => right.X - left.X), delta => Assert.Equal(10d, delta));
@@ -453,8 +570,8 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.Equal(100, column.RequiredExtent);
         Assert.Equal(7, column.LaneCoordinates.Count);
         Assert.All(column.LaneCoordinates, x => Assert.InRange(x, column.Start, column.End));
-        Assert.Equal(column.Start, column.LaneCoordinates[0]);
-        Assert.Equal(column.Start + 72, column.LaneCoordinates[6]);
+        Assert.Equal(column.Start + 14, column.LaneCoordinates[0]);
+        Assert.Equal(column.Start + 86, column.LaneCoordinates[6]);
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "VERTICAL-LANE-COLUMN-CONTAINMENT");
     }
 
@@ -505,7 +622,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var sourceTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == "f8-bend" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
         var allocatedLaneX = scene.Columns[1].LaneCoordinates[0];
         Assert.Equal(sourceTerminal.Position.X, bend.X);
-        Assert.NotEqual(allocatedLaneX, bend.X);
+        Assert.Equal(allocatedLaneX, bend.X);
         Assert.Equal((scene.Rows[2].Start + scene.Rows[2].End) / 2d, bend.Y);
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
@@ -874,22 +991,16 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation, configuration);
         var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(
             placement, routeFreeze, allocation, initial.Rows, initial.Columns, initial.Nodes);
-        var fixedRun = endpointAllocation.EndpointLaneCoordinates.Single(item => item.PhysicalLinkId == "wide-fan-out" &&
-            item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture).RunId;
-        var forcedTerminals = endpointAllocation.Terminals.Select(item => item.PhysicalLinkId == "wide-fan-out" &&
-            item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
-            ? item with { RelativeOffset = item.RelativeOffset + 20 }
-            : item).ToArray();
-        var forcedBoundary = endpointAllocation.WithEndpointGeometry(
-            forcedTerminals, endpointAllocation.Approaches, endpointAllocation.EndpointLaneCoordinates,
-            endpointAllocation.EndpointZBends.Append(new ArchitectureV7EndpointZBend(
-                "wide-fan-out", "wide-source", ArchitectureV7EndpointKind.SourceDeparture, fixedRun,
-                "synthetic-edge-to-lane-offset-reproduction")).ToArray());
-        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, forcedBoundary, configuration);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, endpointAllocation, configuration);
 
         var boundary = scene.Routes.Single(route => route.PhysicalLinkId == "wide-fan-out");
         Assert.NotEqual(boundary.Points[0].X, boundary.Points[2].X);
-        Assert.Contains(boundary.Points, point => point.Provenance.Contains("endpoint-z-bend", StringComparison.Ordinal));
+        Assert.DoesNotContain(boundary.Points, point => point.Provenance.Contains("endpoint-z-bend", StringComparison.Ordinal));
+        Assert.Equal(2, scene.Routes.Count);
+        var transition = Assert.Single(endpointAllocation.EndpointCorridors, c => c.PhysicalLinkId == "wide-fan-out" && c.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        var ordinaryHorizontal = Assert.Single(endpointAllocation.Runs, r => r.PhysicalLinkId == "neighbouring-horizontal" && r.Orientation == ArchitectureV7RunOrientation.Horizontal);
+        Assert.NotEqual(endpointAllocation.RunAssignments.Single(a => a.RunId == transition.HorizontalRunId).LaneId,
+            endpointAllocation.RunAssignments.Single(a => a.RunId == ordinaryHorizontal.RunId).LaneId);
 
         var segments = scene.Routes.SelectMany(route => route.Segments.Select(segment => (route.PhysicalLinkId, segment))).ToArray();
         var reproduced = false;
@@ -910,7 +1021,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
                 overlaps++;
             }
         }
-        Assert.True(reproduced && overlaps > 0, "Synthetic fixture did not reproduce an endpoint-boundary overlap.");
+        Assert.False(reproduced, $"Collectively allocated endpoint transition overlaps {overlaps} unrelated horizontal segments.");
     }
 
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,

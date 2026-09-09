@@ -68,6 +68,7 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
                     {
                         SlotOrdinal = target.SlotOrdinal,
                         RelativeOffset = target.RelativeOffset,
+                        SignedSlotOrdinal = target.SignedSlotOrdinal,
                         Provenance = source.Provenance + ";endpoint-remap=actual-bend-depth"
                     };
                 }
@@ -88,18 +89,20 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
                 ? coordinate with
                 {
                     RelativeXOffset = terminal.RelativeOffset,
+                    SignedLaneOrdinal = terminal.SignedSlotOrdinal,
                     Provenance = coordinate.Provenance + ";endpoint-geometry=actual-bend-depth"
                 }
                 : coordinate;
         }).ToArray();
 
-        // A maximal vertical relationship owns one physical incoming X.  The
-        // endpoint slot sequence is packed against the actual node bounds, so
-        // a source and destination node may legitimately have different
-        // midpoint coordinates even though the relationship's run X is fixed.
-        // Allocate the local Z resource here, where both authorities are
-        // available; compilation only materialises it.
-        var endpointZBends = allocation.EndpointZBends.ToList();
+        // Node-span corridors and column lanes have distinct coordinate
+        // origins. Finalise their collective compatibility before freezing
+        // geometry; the compiler never chooses between these authorities.
+        var corridors = AllocateCorridors(allocation, routes, terminals, rows, columns, nodes);
+        allocation = ArchitectureV7CollectivePostRoutingAllocationStage.AllocateCorridorCompatibility(allocation, corridors, rows, columns);
+        corridors = AllocateCorridors(allocation, routes, terminals, rows, columns, nodes);
+        var endpointZBends = allocation.EndpointZBends.Where(z => !corridors.Any(c =>
+            c.PhysicalLinkId == z.PhysicalLinkId && c.EndpointKind == z.EndpointKind)).ToList();
         foreach (var constraint in allocation.SharedVerticalRunConstraints)
         {
             var source = terminals.FirstOrDefault(item => item.PhysicalLinkId == constraint.PhysicalLinkId &&
@@ -115,6 +118,7 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
             if (double.IsNaN(fixedX)) continue;
             foreach (var endpoint in terminals.Where(item => item.PhysicalLinkId == constraint.PhysicalLinkId))
             {
+                if (corridors.Any(c => c.PhysicalLinkId == endpoint.PhysicalLinkId && c.EndpointKind == endpoint.EndpointKind)) continue;
                 var node = nodes.FirstOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
                 if (node is null) continue;
                 var packedX = (node.Bounds.Left + node.Bounds.Right) / 2d + endpoint.RelativeOffset;
@@ -129,34 +133,81 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
             }
         }
 
-        // Long ordinary endpoint runs keep the allocated vertical lane for
-        // their full route. If the packed terminal is at another X, allocate
-        // the local orthogonal boundary Z here rather than allowing physical
-        // compilation to move the whole run onto the terminal coordinate.
-        foreach (var coordinate in endpointCoordinates)
+        var diagnostics = allocation.Diagnostics.ToList();
+        var grid = placement.DiagramGrid.Cells.ToDictionary(cell => (cell.Row, cell.Column));
+        foreach (var conflict in ArchitectureV7EndpointCorridorConflictAudit.Find(allocation, corridors, rows, columns))
+            diagnostics.Add(new("ENDPOINT-CORRIDOR-ORDINARY-LANE-OVERLAP", $"{conflict.CorridorId} overlaps {conflict.OrdinaryRunId} at X={conflict.X}, Y={conflict.StartY}..{conflict.EndY}.",
+                true, conflict.PhysicalLinkId, conflict.OrdinaryRunId));
+        foreach (var corridor in corridors)
         {
-            if (allocation.SharedVerticalRunConstraints.Any(item => item.PhysicalLinkId == coordinate.PhysicalLinkId))
-                continue;
-            var terminal = terminals.FirstOrDefault(item => item.PhysicalLinkId == coordinate.PhysicalLinkId && item.EndpointKind == coordinate.EndpointKind);
-            var route = routes.Routes.FirstOrDefault(item => item.PhysicalLinkId == coordinate.PhysicalLinkId);
-            var run = route is null ? null : runs.FirstOrDefault(item => item.RunId == coordinate.RunId &&
-                (coordinate.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? item.StartRouteIndex == 0 : item.EndRouteIndex == route.Cells.Count - 1));
-            var assignment = run is null ? null : assignments.FirstOrDefault(item => item.RunId == run.RunId);
-            var node = terminal is null ? null : nodes.FirstOrDefault(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
-            if (terminal is null || run is null || assignment is null || node is null || run.Cells.Count <= 2 ||
-                (uint)run.Cells[0].Column >= (uint)columns.Count ||
-                (uint)assignment.LaneOrdinal >= (uint)columns[run.Cells[0].Column].LaneCoordinates.Count)
-                continue;
-            var runX = columns[run.Cells[0].Column].LaneCoordinates[assignment.LaneOrdinal];
-            var terminalX = (node.Bounds.Left + node.Bounds.Right) / 2d + terminal.RelativeOffset;
-            if (Math.Abs(runX - terminalX) <= 0.001 || endpointZBends.Any(item => item.PhysicalLinkId == terminal.PhysicalLinkId && item.EndpointKind == terminal.EndpointKind))
-                continue;
-            endpointZBends.Add(new ArchitectureV7EndpointZBend(terminal.PhysicalLinkId, terminal.PhysicalNodeId,
-                terminal.EndpointKind, run.RunId,
-                "endpoint-z-bend;fixed-incoming-lane-x;long-endpoint-run;terminal-anchored-boundary-transition"));
+            if (grid.Count > 0 && corridor.X != corridor.OrdinaryX)
+                for (var column = 0; column < columns.Count; column++)
+                {
+                    if (columns[column].End <= Math.Min(corridor.X, corridor.OrdinaryX) || columns[column].Start >= Math.Max(corridor.X, corridor.OrdinaryX)) continue;
+                    if (!grid.TryGetValue((corridor.RoutingRow, column), out var cell) ||
+                        (cell.Capabilities & ArchitectureV7CellCapability.GeneralRouting) == 0 ||
+                        (cell.Capabilities & (ArchitectureV7CellCapability.Blocked | ArchitectureV7CellCapability.HeaderBlocked)) != 0)
+                        diagnostics.Add(new("ENDPOINT-CORRIDOR-ROUTING-ROW-CONFLICT", $"Allocated transition crosses unavailable GeneralRouting cell ({corridor.RoutingRow},{column}); capabilities={cell?.Capabilities}; owner={cell?.OccupantId}.", true, corridor.PhysicalLinkId, corridor.HorizontalRunId));
+                }
+            if (corridor.X < corridor.SpanLeft || corridor.X > corridor.SpanRight)
+                diagnostics.Add(new("ENDPOINT-CORRIDOR-SPAN-VIOLATION", "Endpoint corridor lies outside its owning node span.", true, corridor.PhysicalLinkId, corridor.ResourceId));
+            foreach (var other in corridors.Where(c => string.CompareOrdinal(c.ResourceId, corridor.ResourceId) > 0 && c.PhysicalLinkId != corridor.PhysicalLinkId && c.X == corridor.X))
+                if (Math.Min(Math.Max(corridor.NodeEdgeY, corridor.RoutingY), Math.Max(other.NodeEdgeY, other.RoutingY)) >
+                    Math.Max(Math.Min(corridor.NodeEdgeY, corridor.RoutingY), Math.Min(other.NodeEdgeY, other.RoutingY)))
+                    diagnostics.Add(new("ENDPOINT-CORRIDOR-OVERLAP", "Unrelated endpoint corridors overlap: " + other.ResourceId, true, corridor.PhysicalLinkId, corridor.ResourceId));
+            foreach (var node in nodes.Where(n => n.PhysicalNodeId != corridor.PhysicalNodeId && corridor.X > n.Bounds.Left && corridor.X < n.Bounds.Right))
+                if (Math.Min(Math.Max(corridor.NodeEdgeY, corridor.RoutingY), node.Bounds.Bottom) > Math.Max(Math.Min(corridor.NodeEdgeY, corridor.RoutingY), node.Bounds.Top))
+                    diagnostics.Add(new("ENDPOINT-CORRIDOR-NODE-CROSSING", "Endpoint corridor crosses unrelated node " + node.PhysicalNodeId, true, corridor.PhysicalLinkId, corridor.ResourceId));
         }
+        return allocation.WithEndpointGeometry(terminals, approaches, endpointCoordinates, endpointZBends, corridors, diagnostics);
+    }
 
-        return allocation.WithEndpointGeometry(terminals, approaches, endpointCoordinates, endpointZBends);
+    private static IReadOnlyList<ArchitectureV7EndpointCorridor> AllocateCorridors(
+        ArchitectureV7CollectiveAllocationFreeze allocation, ArchitectureV7LogicalRouteFreeze routes,
+        IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
+        IReadOnlyList<ArchitectureV7PhysicalSceneNode> nodes)
+    {
+        var result = new List<ArchitectureV7EndpointCorridor>();
+        foreach (var terminal in terminals)
+        {
+            var route = routes.Routes.First(r => r.PhysicalLinkId == terminal.PhysicalLinkId);
+            var source = terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture;
+            var vertical = allocation.Runs.FirstOrDefault(r => r.PhysicalLinkId == terminal.PhysicalLinkId &&
+                r.Orientation == ArchitectureV7RunOrientation.Vertical &&
+                (source ? r.StartRouteIndex == 0 : r.EndRouteIndex == route.Cells.Count - 1));
+            if (vertical is null) continue;
+            var index = source ? 1 : route.Cells.Count - 2;
+            var horizontal = allocation.Runs.FirstOrDefault(r => r.PhysicalLinkId == terminal.PhysicalLinkId &&
+                r.EndpointContext == "endpoint-transition:" + terminal.EndpointKind);
+            if (horizontal is null && vertical.EndRouteIndex - vertical.StartRouteIndex == 1)
+                horizontal = allocation.Runs.FirstOrDefault(r => r.PhysicalLinkId == terminal.PhysicalLinkId &&
+                    r.Orientation == ArchitectureV7RunOrientation.Horizontal &&
+                    (source ? r.StartRouteIndex == index : r.EndRouteIndex == index));
+            if (horizontal is null) continue;
+            var node = nodes.First(n => n.PhysicalNodeId == terminal.PhysicalNodeId);
+            var horizontalLane = allocation.RunAssignments.First(a => a.RunId == horizontal.RunId);
+            var verticalLane = allocation.RunAssignments.First(a => a.RunId == vertical.RunId);
+            var x = Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + terminal.RelativeOffset, MidpointRounding.AwayFromZero);
+            result.Add(new ArchitectureV7EndpointCorridor("endpoint-corridor:" + terminal.PhysicalLinkId + ":" + terminal.EndpointKind,
+                terminal.PhysicalLinkId, terminal.PhysicalNodeId, terminal.EndpointKind, index, horizontal.Cells[0].Row,
+                vertical.RunId, horizontal.RunId, terminal.SignedSlotOrdinal, x,
+                source ? node.Bounds.Bottom : node.Bounds.Top,
+                rows[horizontal.Cells[0].Row].LaneCoordinates[horizontalLane.LaneOrdinal],
+                columns[vertical.Cells[0].Column].LaneCoordinates[verticalLane.LaneOrdinal],
+                node.Bounds.Left, node.Bounds.Right, "node-span;signed-terminal-slot;collective-horizontal-resource"));
+        }
+        foreach (var group in result.GroupBy(c => (c.PhysicalLinkId, c.RouteIndex)).Where(g => g.Count() == 2).ToArray())
+        {
+            var pair = group.ToArray();
+            if (pair[0].X != pair[1].X || pair.Any(c => c.X != c.OrdinaryX)) continue;
+            // Both resources meet in the same routing cell with no horizontal
+            // movement. There is one straight shared coordinate, not two turns.
+            var y = (rows[pair[0].RoutingRow].Start + rows[pair[0].RoutingRow].End) / 2d;
+            foreach (var corridor in pair) result[result.IndexOf(corridor)] = corridor with { RoutingY = y };
+        }
+        return result;
     }
 
     private static double SharedRunPhysicalX(
@@ -180,7 +231,8 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
     {
         // Endpoint-local Z is an exceptional displaced-Direct resource. A
         // coordinate mismatch by itself is never sufficient authority.
-        if (terminal.PhysicalLinkId != constraint.PhysicalLinkId || TerminalGroup(terminal) != 1 ||
+        if (!terminal.Provenance.Contains("direct-displaced", StringComparison.Ordinal) ||
+            terminal.PhysicalLinkId != constraint.PhysicalLinkId || TerminalGroup(terminal) != 1 ||
             terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture && terminal.Direction != ArchitectureV7EndpointDirection.Down ||
             terminal.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival && terminal.Direction != ArchitectureV7EndpointDirection.Up)
             return false;
@@ -229,7 +281,7 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
         ArchitectureV7TerminalSlotAssignment terminal)
     {
         var route = routes.Routes.First(x => x.PhysicalLinkId == terminal.PhysicalLinkId);
-        var routeRuns = runs.Where(x => x.PhysicalLinkId == terminal.PhysicalLinkId)
+        var routeRuns = runs.Where(x => x.PhysicalLinkId == terminal.PhysicalLinkId && !x.IsEndpointTransition)
             .OrderBy(x => x.StartRouteIndex).ToArray();
         return routeRuns.Length == 1 && routeRuns[0].Orientation == ArchitectureV7RunOrientation.Vertical
             && routeRuns[0].StartRouteIndex == 0 && routeRuns[0].EndRouteIndex == route.Cells.Count - 1;

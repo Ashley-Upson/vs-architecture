@@ -21,6 +21,10 @@ public sealed class LayoutSettings
     public int ContainerPadding { get; set; } = 40;
     public int EdgePortSpacing { get; set; } = 5;
     public int ParallelLaneSpacing { get; set; } = 12;
+    // V7 has one midpoint-relative connection/lane spacing authority. The
+    // older fields remain readable for settings migration but are not used by
+    // the V7 production pipeline.
+    public int ConnectionLaneSpacing { get; set; } = 12;
     public int StandaloneGroupSpacing { get; set; } = 160;
     public int ProjectHeaderHeight { get; set; } = 34;
     public int LinkPadding { get; set; } = 10;

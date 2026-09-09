@@ -102,12 +102,12 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
         var corridorProjection = Measure("route-corridor-projection", () => new ArchitectureV7RouteCorridorProjectionStage().Project(placement, routes, corridorDiscovery));
         var allocation = Measure("collective-allocation", () => new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes, corridorProjection,
-            new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.BaseCellWidth,
+            new ArchitectureV7AllocationConfiguration(job.Rendering.Layout.ConnectionLaneSpacing, job.Rendering.Layout.ConnectionLaneSpacing, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.BaseCellWidth,
                 job.Rendering.Layout.LinkPadding)));
         var sceneConfiguration = new ArchitectureV7PhysicalSceneConfiguration(job.Rendering.Layout.BaseCellWidth, job.Rendering.Layout.RoutingRowMinimum,
             job.Rendering.Layout.BoundaryRowMinimum, job.Rendering.Layout.NodeWidth, job.Rendering.Layout.NodeHeight, job.Rendering.Layout.ProjectHeaderHeight,
             job.Rendering.Layout.LabelCharacterWidth, job.Rendering.Layout.LinkNodeWidthPadding, job.Rendering.Layout.LinkPadding,
-            job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
+                job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ConnectionLaneSpacing, job.Rendering.Layout.ConnectionLaneSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
         var initialScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration));
         var endpointAllocation = Measure("endpoint-geometry-allocation", () => new ArchitectureV7EndpointGeometryAllocationStage()
             .Allocate(placement, routes, allocation, initialScene.Rows, initialScene.Columns, initialScene.Nodes));
@@ -550,7 +550,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     Fingerprint = corridorProjection.Fingerprint
                 },
                 stageTimings,
-                allocation = new { AssignmentCount = downstreamAllocation.RunAssignments.Count, EndpointLaneCoordinateCount = downstreamAllocation.EndpointLaneCoordinates.Count, HandoffCount = downstreamAllocation.Handoffs.Count, EndpointZBendCount = downstreamAllocation.EndpointZBends.Count, Fingerprint = downstreamAllocation.AllocationFingerprint },
+                allocation = new { AssignmentCount = downstreamAllocation.RunAssignments.Count, EndpointLaneCoordinateCount = downstreamAllocation.EndpointLaneCoordinates.Count, HandoffCount = downstreamAllocation.Handoffs.Count, EndpointZBendCount = downstreamAllocation.EndpointZBends.Count, EndpointCorridors = downstreamAllocation.EndpointCorridors, Diagnostics = downstreamAllocation.Diagnostics, Fingerprint = downstreamAllocation.AllocationFingerprint },
                 simplification = new
                 {
                     RouteCount = simplification.Evidence.Count,

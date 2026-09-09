@@ -170,7 +170,9 @@ public sealed class ArchitectureV7AllocatedRouteSimplificationStage
     }
 
     private static bool IsEndpointResource(ArchitectureV7PhysicalSegment segment) =>
-        segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal);
+        segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal) ||
+        (segment.RunId.StartsWith("endpoint-corridor:", StringComparison.Ordinal) &&
+            segment.AllocationProvenance.Contains("resource=" + segment.RunId, StringComparison.Ordinal));
 
     private static bool IsBendResource(ArchitectureV7PhysicalSegment segment) =>
         segment.AllocationProvenance.Contains("bend-resource=", StringComparison.Ordinal);

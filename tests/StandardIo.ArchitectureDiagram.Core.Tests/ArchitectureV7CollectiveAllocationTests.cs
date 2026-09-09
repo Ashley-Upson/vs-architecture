@@ -492,7 +492,8 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var route = Route("a", "s", "t", (1, 3), (2, 3), (3, 5), (4, 5));
         var result = Allocate(new[] { route }, Nodes("s", "t"), spacing: 0);
         Assert.Empty(result.Handoffs);
-        Assert.All(result.Runs, run => Assert.Equal(run.Cells.Count, run.EndRouteIndex - run.StartRouteIndex + 1));
+        Assert.All(result.Runs.Where(run => !run.IsEndpointTransition), run => Assert.Equal(run.Cells.Count, run.EndRouteIndex - run.StartRouteIndex + 1));
+        Assert.All(result.Runs.Where(run => run.IsEndpointTransition), run => Assert.Equal(run.StartRouteIndex, run.EndRouteIndex));
     }
 
     [Fact]
@@ -569,8 +570,8 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var routes = new[] { Route("a", "s", "t", (1, 3), (2, 3), (3, 3)) };
         var result = Allocate(routes, Nodes("s", "t"));
 
-        var run = Assert.Single(result.Runs);
-        var assignment = Assert.Single(result.RunAssignments);
+        var run = Assert.Single(result.Runs, r => !r.IsEndpointTransition);
+        var assignment = Assert.Single(result.RunAssignments, a => a.RunId == run.RunId);
         Assert.Equal(run.RunId, assignment.RunId);
         Assert.StartsWith("lane:", assignment.LaneId, StringComparison.Ordinal);
         Assert.DoesNotContain(result.Diagnostics, x => x.Code == "RUN-LANE-SUBSTITUTED");
@@ -837,7 +838,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
 
         var constraint = Assert.Single(result.SharedVerticalRunConstraints);
         Assert.Equal("shared", constraint.PhysicalLinkId);
-        var run = Assert.Single(result.Runs.Where(item => item.PhysicalLinkId == "shared"));
+        var run = Assert.Single(result.Runs.Where(item => item.PhysicalLinkId == "shared" && !item.IsEndpointTransition));
         Assert.Equal(run.RunId, constraint.RunId);
         var assignment = Assert.Single(result.RunAssignments.Where(item => item.RunId == run.RunId));
         Assert.Contains(result.Terminals, item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);

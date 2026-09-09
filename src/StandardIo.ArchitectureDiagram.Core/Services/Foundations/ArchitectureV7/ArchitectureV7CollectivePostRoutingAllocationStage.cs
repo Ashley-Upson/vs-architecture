@@ -9,6 +9,70 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV
 /// <summary>Allocates physical routing resources without changing frozen logical topology.</summary>
 public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
 {
+    // Complete the same collective allocation after node-span coordinates are
+    // known. A bijection of the existing vertical lanes preserves every
+    // interval conflict, lane count and domain boundary. It adds only the
+    // missing compatibility with separately owned endpoint corridors.
+    public static ArchitectureV7CollectiveAllocationFreeze AllocateCorridorCompatibility(
+        ArchitectureV7CollectiveAllocationFreeze allocation,
+        IReadOnlyList<ArchitectureV7EndpointCorridor> corridors,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns)
+    {
+        var diagnostics = allocation.Diagnostics.ToList();
+        var assigned = allocation.RunAssignments.ToDictionary(a => a.RunId, StringComparer.Ordinal);
+        foreach (var domain in allocation.Runs.Where(r => r.Orientation == ArchitectureV7RunOrientation.Vertical).GroupBy(r => r.Cells[0].Column))
+        {
+            var groups = domain.GroupBy(r => assigned[r.RunId].LaneOrdinal).OrderBy(g => g.Key).ToArray();
+            var candidates = new Dictionary<int, int[]>();
+            foreach (var group in groups)
+                candidates[group.Key] = groups.Select(g => g.Key).Where(lane =>
+                    ArchitectureV7EndpointCorridorConflictAudit.Find(allocation, corridors, rows, columns,
+                        group.ToDictionary(r => r.RunId, _ => lane, StringComparer.Ordinal)).Count == 0)
+                    .OrderBy(lane => lane == group.Key ? 0 : 1).ThenBy(lane => lane).ToArray();
+            var owner = new Dictionary<int, int>();
+            bool Place(int original, HashSet<int> visited)
+            {
+                foreach (var lane in candidates[original])
+                {
+                    if (!visited.Add(lane)) continue;
+                    if (!owner.TryGetValue(lane, out var previous) || Place(previous, visited))
+                    { owner[lane] = original; return true; }
+                }
+                return false;
+            }
+            // Keep already-compatible domains byte-for-byte unchanged.
+            if (groups.All(g => candidates[g.Key].Contains(g.Key))) continue;
+            var complete = groups.OrderBy(g => candidates[g.Key].Length).ThenBy(g => g.Key)
+                .All(g => Place(g.Key, new HashSet<int>()));
+            if (!complete)
+            {
+                diagnostics.Add(new("ENDPOINT-CORRIDOR-LANE-DOMAIN-CONFLICT",
+                    "No bijection of existing vertical lanes avoids endpoint corridors in column " + domain.Key + "; candidates=" +
+                    string.Join(";", candidates.Select(pair => pair.Key + "->[" + string.Join(",", pair.Value) + "]")), true));
+                continue;
+            }
+            foreach (var group in groups)
+            {
+                var lane = owner.Single(pair => pair.Value == group.Key).Key;
+                foreach (var run in group)
+                    assigned[run.RunId] = assigned[run.RunId] with { LaneOrdinal = lane,
+                        LaneId = "lane:V:" + domain.Key + ":" + lane, SignedLaneOrdinal = lane - (groups.Length - 1) / 2d };
+            }
+        }
+        var assignments = allocation.RunAssignments.Select(a => assigned[a.RunId]).ToArray();
+        var lanes = allocation.Lanes.Select(l => l with { RunIds = assignments.Where(a => a.LaneId == l.LaneId).Select(a => a.RunId).OrderBy(id => id, StringComparer.Ordinal).ToArray() }).ToArray();
+        var spacing = allocation.AllocationConfiguration?.ParallelLaneSpacing ?? 0;
+        var bends = allocation.Bends.Select(b => b with { IncomingLaneId = assigned[b.IncomingRunId].LaneId, OutgoingLaneId = assigned[b.OutgoingRunId].LaneId,
+            RelativePosition = new ArchitectureV7PhysicalRelativePosition(assigned[b.IncomingOrientation == ArchitectureV7RunOrientation.Vertical ? b.IncomingRunId : b.OutgoingRunId].SignedLaneOrdinal * spacing, b.EffectiveRelativePosition.YOffset) }).ToArray();
+        var crossings = allocation.Crossings.Select(c => c with { VerticalLaneId = assigned[c.VerticalRunId].LaneId,
+            RelativePosition = new ArchitectureV7PhysicalRelativePosition(assigned[c.VerticalRunId].SignedLaneOrdinal * spacing, c.EffectiveRelativePosition.YOffset) }).ToArray();
+        var interactions = allocation.CrossingInteractions.Select(c => c with { VerticalLaneId = assigned[c.VerticalRunId].LaneId }).ToArray();
+        return new ArchitectureV7CollectiveAllocationFreeze(allocation.Runs, lanes, assignments, allocation.Terminals, allocation.Approaches,
+            allocation.Handoffs, bends, crossings, diagnostics, allocation.PlacementFingerprint, allocation.RouteFingerprint,
+            allocation.AllocationFingerprint + "|corridor-compatible:" + string.Join(";", assignments.Select(a => a.RunId + "=" + a.LaneId)),
+            interactions, allocation.AllocationConfiguration, allocation.EndpointLaneCoordinates, allocation.SharedVerticalRunConstraints, allocation.EndpointZBends);
+    }
     public ArchitectureV7CollectiveAllocationFreeze Allocate(
         ArchitectureV7PlacementFreeze placement,
         ArchitectureV7LogicalRouteFreeze routes,
@@ -34,12 +98,14 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
 
         var diagnostics = new List<ArchitectureV7AllocationDiagnostic>();
         var runs = BuildRuns(routes, diagnostics);
+        var logicalRuns = runs;
+        var sharedVerticalRunConstraints = BuildSharedVerticalRunConstraints(routes, runs);
+        runs = ArchitectureV7EndpointCorridorResources.AddTransitions(placement, routes, runs, diagnostics);
         var (lanes, assignments) = AllocateLanes(placement, routes, runs, configuration.ParallelLaneSpacing, corridorProjection);
         ValidateHorizontalLaneConflicts(runs, assignments, diagnostics);
-        var terminals = AllocateTerminals(placement, routes, runs, assignments, configuration, diagnostics);
-        var sharedVerticalRunConstraints = BuildSharedVerticalRunConstraints(routes, runs);
-        var endpointZBends = BuildEndpointZBends(placement, routes, runs, terminals, configuration);
-        ValidateSharedVerticalRunIntersections(placement, sharedVerticalRunConstraints, terminals, endpointZBends, configuration, diagnostics);
+        var terminals = AllocateTerminals(placement, routes, logicalRuns, assignments, configuration, diagnostics);
+        var endpointZBends = BuildEndpointZBends(placement, routes, logicalRuns, terminals, configuration);
+        ValidateSharedVerticalRunIntersections(placement, sharedVerticalRunConstraints, terminals, endpointZBends, configuration, diagnostics, runs);
         var endpointLaneCoordinates = BuildEndpointLaneCoordinates(placement, routes, runs, terminals, diagnostics);
         var approaches = BuildApproaches(routes, runs, assignments, terminals);
         var handoffs = BuildHandoffs(placement, routes, runs, assignments, terminals, configuration, diagnostics);
@@ -113,10 +179,25 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
             if (!lanes.TryGetValue(laneId, out var laneRuns)) lanes[laneId] = laneRuns = new();
             laneRuns.Add(run.RunId);
         }
+        assignments = assignments.Select(assignment =>
+        {
+            var domain = runsByAssignmentDomain(assignment.RunId);
+            var domainOrdinals = assignments.Where(candidate => runsByAssignmentDomain(candidate.RunId) == domain)
+                .Select(candidate => candidate.LaneOrdinal).Distinct().OrderBy(value => value).ToArray();
+            var index = Array.IndexOf(domainOrdinals, assignment.LaneOrdinal);
+            return assignment with { SignedLaneOrdinal = index - (domainOrdinals.Length - 1) / 2d };
+        }).ToList();
+
         var laneModels = lanes.OrderBy(x => x.Key, StringComparer.Ordinal)
             .Select(x => new ArchitectureV7PhysicalLane(x.Key, x.Key.Contains(":H:", StringComparison.Ordinal) ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical,
                 ParseOrdinal(x.Key), spacing, x.Value.OrderBy(v => v, StringComparer.Ordinal).ToArray())).ToArray();
         return (laneModels, assignments);
+
+        string runsByAssignmentDomain(string runId)
+        {
+            var run = runById[runId];
+            return run.Orientation + ":" + FixedCoordinate(run);
+        }
 
         bool HorizontalIntervalsConflict(ArchitectureV7StraightRun left, ArchitectureV7StraightRun right,
             int leftStart, int leftEnd, int rightStart, int rightEnd)
@@ -286,7 +367,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 var offset = offsets[index];
                 result.Add(new(entries[index].Route.PhysicalLinkId, node.PhysicalNodeId, group.Key.Kind, entries[index].Direction, index, offset, checked((int)Math.Round(capacity, MidpointRounding.AwayFromZero)),
                     (direct.Length > 0 && directCentred ? "terminal-order=direction-groups;direct-centred" :
-                        direct.Length > 0 ? "terminal-order=direction-groups;direct-displaced" : "terminal-order=direction-groups;complete-set-centred") + ";endpoint-order=deferred-to-actual-bend-depth;direction=" + entries[index].Direction + ";direction-group=" + entries[index].DirectionGroup));
+                        direct.Length > 0 ? "terminal-order=direction-groups;direct-displaced" : "terminal-order=direction-groups;complete-set-centred") + ";endpoint-order=deferred-to-actual-bend-depth;direction=" + entries[index].Direction + ";direction-group=" + entries[index].DirectionGroup)
+                { SignedSlotOrdinal = configuration.TerminalPortSpacing == 0 ? 0 : offset / configuration.TerminalPortSpacing });
             }
         }
         return result;
@@ -474,7 +556,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
         IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
         IReadOnlyList<ArchitectureV7EndpointZBend> endpointZBends,
         ArchitectureV7AllocationConfiguration configuration,
-        ICollection<ArchitectureV7AllocationDiagnostic> diagnostics)
+        ICollection<ArchitectureV7AllocationDiagnostic> diagnostics,
+        IReadOnlyList<ArchitectureV7StraightRun> runs)
     {
         foreach (var constraint in constraints)
         {
@@ -488,6 +571,11 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                     continue;
                 var node = placement.Nodes.FirstOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
                 if (node is null) continue;
+                var run = runs.First(item => item.RunId == constraint.RunId);
+                var cell = endpoint.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? run.Cells[0] : run.Cells[run.Cells.Count - 1];
+                if (node.LogicalFootprint.Any(occupied => occupied.Row == cell.Row && occupied.Column == cell.Column) &&
+                    runs.Any(item => item.PhysicalLinkId == endpoint.PhysicalLinkId && item.EndpointContext == "endpoint-transition:" + endpoint.EndpointKind))
+                    continue; // Node-span corridor, not a shared terminal-X constraint.
                 var centre = node.CentreCell * configuration.BaseCellWidth;
                 var half = Math.Max(0d, node.LogicalSpan * configuration.BaseCellWidth / 2d - configuration.TerminalInset);
                 var lower = centre - half;
@@ -617,7 +705,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
                 continue;
             }
             result.Add(new(terminal.PhysicalLinkId, terminal.PhysicalNodeId, terminal.EndpointKind, run.RunId,
-                terminal.RelativeOffset, "endpoint-local;terminal-authoritative;final-vertical-lane;source=bottom,destination=top"));
+                terminal.RelativeOffset, "endpoint-local;terminal-authoritative;final-vertical-lane;source=bottom,destination=top")
+            { SignedLaneOrdinal = terminal.SignedSlotOrdinal });
         }
         return result;
     }
@@ -625,15 +714,7 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
     private static double LaneAxisOffset(ArchitectureV7StraightRun run, ArchitectureV7RunLaneAssignment assignment,
         IReadOnlyList<ArchitectureV7StraightRun> runs, IReadOnlyList<ArchitectureV7RunLaneAssignment> assignments, int spacing)
     {
-        var domain = runs.Where(x => x.Orientation == run.Orientation && FixedCoordinate(x) == FixedCoordinate(run))
-            .Select(x => assignments.First(a => a.RunId == x.RunId).LaneOrdinal)
-            .Distinct()
-            .OrderBy(x => x)
-            .ToArray();
-        var ordinalIndex = Array.IndexOf(domain, assignment.LaneOrdinal);
-        // Ordinal zero is the shared centred anchor. Keep all bend, handoff,
-        // and straight-run coordinates in this same anchored lane frame.
-        return ordinalIndex * spacing;
+        return assignment.SignedLaneOrdinal * spacing;
     }
 
     private static double TerminalLaneOffset(ArchitectureV7FrozenNodePlacement node, ArchitectureV7LogicalRoute route,
@@ -831,8 +912,8 @@ public sealed class ArchitectureV7CollectivePostRoutingAllocationStage
 
     private static ArchitectureV7RunOrientation Orientation(ArchitectureV7RouteCell a, ArchitectureV7RouteCell b) => a.Row == b.Row ? ArchitectureV7RunOrientation.Horizontal : ArchitectureV7RunOrientation.Vertical;
     private static int FixedCoordinate(ArchitectureV7StraightRun run) => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? run.Cells[0].Row : run.Cells[0].Column;
-    private static int MinCoordinate(ArchitectureV7StraightRun run) => run.Cells.Min(x => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? x.Column : x.Row);
-    private static int MaxCoordinate(ArchitectureV7StraightRun run) => run.Cells.Max(x => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? x.Column : x.Row);
+    private static int MinCoordinate(ArchitectureV7StraightRun run) => run.ConflictStart ?? run.Cells.Min(x => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? x.Column : x.Row);
+    private static int MaxCoordinate(ArchitectureV7StraightRun run) => run.ConflictEnd ?? run.Cells.Max(x => run.Orientation == ArchitectureV7RunOrientation.Horizontal ? x.Column : x.Row);
     private static int ParseOrdinal(string laneId) => int.Parse(laneId.Substring(laneId.LastIndexOf(':') + 1));
     private static int DirectionOrder(ArchitectureV7EndpointDirection direction) => direction switch { ArchitectureV7EndpointDirection.Left => 0, ArchitectureV7EndpointDirection.Down => 1, ArchitectureV7EndpointDirection.Right => 2, _ => 3 };
     private static ArchitectureV7EndpointDirection Direction(ArchitectureV7RouteCell near, ArchitectureV7RouteCell endpoint, bool source)

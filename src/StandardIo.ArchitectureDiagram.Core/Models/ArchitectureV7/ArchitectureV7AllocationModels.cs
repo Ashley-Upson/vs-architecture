@@ -37,10 +37,28 @@ public sealed class ArchitectureV7StraightRun
     public int EndRouteIndex { get; }
     public string EndpointContext { get; }
     public string Provenance { get; }
+    public bool IsEndpointTransition => EndpointContext.StartsWith("endpoint-transition:", StringComparison.Ordinal);
+    public int? ConflictStart { get; init; }
+    public int? ConflictEnd { get; init; }
 }
 
+/// <summary>A node-span-owned vertical corridor and its collectively allocated routing-row transition.</summary>
+public sealed record ArchitectureV7EndpointCorridor(
+    string ResourceId, string PhysicalLinkId, string PhysicalNodeId,
+    ArchitectureV7EndpointKind EndpointKind, int RouteIndex, int RoutingRow,
+    string OrdinaryRunId, string HorizontalRunId, double SignedSlot,
+    double X, double NodeEdgeY, double RoutingY, double OrdinaryX,
+    double SpanLeft, double SpanRight, string Provenance);
+
 public sealed record ArchitectureV7PhysicalLane(string LaneId, ArchitectureV7RunOrientation Orientation, int LaneOrdinal, int ParallelLaneSpacing, IReadOnlyList<string> RunIds);
-public sealed record ArchitectureV7RunLaneAssignment(string RunId, string LaneId, int LaneOrdinal);
+public sealed record ArchitectureV7RunLaneAssignment(string RunId, string LaneId, int LaneOrdinal)
+{
+    /// <summary>
+    /// The domain-local midpoint-relative slot. LaneOrdinal remains the stable
+    /// allocation identity; this value is the physical signed authority.
+    /// </summary>
+    public double SignedLaneOrdinal { get; init; } = LaneOrdinal;
+}
 
 public sealed record ArchitectureV7EndpointLaneCoordinate(
     string PhysicalLinkId,
@@ -48,7 +66,10 @@ public sealed record ArchitectureV7EndpointLaneCoordinate(
     ArchitectureV7EndpointKind EndpointKind,
     string RunId,
     double RelativeXOffset,
-    string Provenance);
+    string Provenance)
+{
+    public double SignedLaneOrdinal { get; init; }
+}
 
 /// <summary>Allocator-owned local orthogonal bend for a fixed incoming X and packed terminal X.</summary>
 public sealed record ArchitectureV7EndpointZBend(
@@ -73,7 +94,10 @@ public sealed record ArchitectureV7TerminalSlotAssignment(
     int SlotOrdinal,
     double RelativeOffset,
     int TerminalCapacityRequirement,
-    string Provenance);
+    string Provenance)
+{
+    public double SignedSlotOrdinal { get; init; }
+}
 
 public sealed record ArchitectureV7EndpointApproachReservation(
     string PhysicalLinkId,
@@ -264,9 +288,11 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         ArchitectureV7AllocationConfiguration? allocationConfiguration = null,
         IReadOnlyList<ArchitectureV7EndpointLaneCoordinate>? endpointLaneCoordinates = null,
         IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint>? sharedVerticalRunConstraints = null,
-        IReadOnlyList<ArchitectureV7EndpointZBend>? endpointZBends = null)
+        IReadOnlyList<ArchitectureV7EndpointZBend>? endpointZBends = null,
+        IReadOnlyList<ArchitectureV7EndpointCorridor>? endpointCorridors = null)
     {
         Runs = Array.AsReadOnly((runs ?? Array.Empty<ArchitectureV7StraightRun>()).OrderBy(x => x.RunId, StringComparer.Ordinal).ToArray());
+        EndpointCorridors = Array.AsReadOnly((endpointCorridors ?? Array.Empty<ArchitectureV7EndpointCorridor>()).ToArray());
         Lanes = Array.AsReadOnly((lanes ?? Array.Empty<ArchitectureV7PhysicalLane>()).OrderBy(x => x.LaneId, StringComparer.Ordinal).ToArray());
         RunAssignments = Array.AsReadOnly((runAssignments ?? Array.Empty<ArchitectureV7RunLaneAssignment>()).OrderBy(x => x.RunId, StringComparer.Ordinal).ToArray());
         Terminals = Array.AsReadOnly((terminals ?? Array.Empty<ArchitectureV7TerminalSlotAssignment>()).OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal).ThenBy(x => x.EndpointKind).ThenBy(x => x.SlotOrdinal).ToArray());
@@ -313,6 +339,7 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
     public IReadOnlyList<ArchitectureV7EndpointLaneCoordinate> EndpointLaneCoordinates { get; }
     public IReadOnlyList<ArchitectureV7SharedVerticalRunConstraint> SharedVerticalRunConstraints { get; }
     public IReadOnlyList<ArchitectureV7EndpointZBend> EndpointZBends { get; }
+    public IReadOnlyList<ArchitectureV7EndpointCorridor> EndpointCorridors { get; }
     public IReadOnlyList<ArchitectureV7PhysicalCrossingResource> CrossingResources { get; }
     public IReadOnlyList<ArchitectureV7PhysicalTrackDemand> TrackDemands { get; }
     public string CrossingInteractionFingerprint { get; }
@@ -329,15 +356,17 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
         IReadOnlyList<ArchitectureV7TerminalSlotAssignment> terminals,
         IReadOnlyList<ArchitectureV7EndpointApproachReservation> approaches,
         IReadOnlyList<ArchitectureV7EndpointLaneCoordinate> endpointLaneCoordinates,
-        IReadOnlyList<ArchitectureV7EndpointZBend>? endpointZBends = null)
+        IReadOnlyList<ArchitectureV7EndpointZBend>? endpointZBends = null,
+        IReadOnlyList<ArchitectureV7EndpointCorridor>? endpointCorridors = null,
+        IReadOnlyList<ArchitectureV7AllocationDiagnostic>? endpointDiagnostics = null)
     {
         var terminalFingerprint = string.Join(";", terminals.OrderBy(x => x.PhysicalLinkId, StringComparer.Ordinal)
             .ThenBy(x => x.EndpointKind).Select(x => x.PhysicalLinkId + ":" + x.EndpointKind + ":" + x.SlotOrdinal + ":" + x.RelativeOffset.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
         return new ArchitectureV7CollectiveAllocationFreeze(
-            Runs, Lanes, RunAssignments, terminals, approaches, Handoffs, Bends, Crossings, Diagnostics,
+            Runs, Lanes, RunAssignments, terminals, approaches, Handoffs, Bends, Crossings, endpointDiagnostics ?? Diagnostics,
             PlacementFingerprint, RouteFingerprint, AllocationFingerprint + "|endpoint-geometry:" + terminalFingerprint,
             CrossingInteractions, AllocationConfiguration, endpointLaneCoordinates, SharedVerticalRunConstraints,
-            endpointZBends ?? EndpointZBends);
+            endpointZBends ?? EndpointZBends, endpointCorridors ?? EndpointCorridors);
     }
 
     private static ArchitectureV7PhysicalTrackDemand[] BuildTrackDemands(
