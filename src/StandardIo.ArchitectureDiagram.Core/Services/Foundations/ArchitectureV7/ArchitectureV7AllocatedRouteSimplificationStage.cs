@@ -35,7 +35,7 @@ public sealed class ArchitectureV7AllocatedRouteSimplificationStage
             .Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture)));
         var simplified = new ArchitectureV7PhysicalSceneFreeze(scene.Rows, scene.Columns, scene.Nodes, scene.Terminals,
             routes, diagnostics, scene.PlacementFingerprint, scene.RouteFingerprint, scene.AllocationFingerprint, fingerprint,
-            scene.AccountedPhysicalLinkIds);
+            scene.AccountedPhysicalLinkIds, scene.ProjectBounds);
         return new ArchitectureV7RouteSimplificationResult(simplified, evidence);
     }
 

@@ -9,9 +9,13 @@ namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.ArchitectureV
 
 public sealed class ArchitectureV7ProjectCompositionStage
 {
-    public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees) => Compose(trees, null);
+    public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees) => Compose(trees, null, null);
 
     public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees, ArchitectureV7PrePlacementConfiguration? configuration)
+        => Compose(trees, configuration, null);
+
+    public ArchitectureV7PlacementFreeze Compose(ArchitectureV7RecursiveTreeGridResult trees, ArchitectureV7PrePlacementConfiguration? configuration,
+        IReadOnlyDictionary<string, string>? projectDisplayNames)
     {
         if (trees is null) throw new ArgumentNullException(nameof(trees));
         var projection = trees.Sizing.Ownership.Projection;
@@ -23,7 +27,11 @@ public sealed class ArchitectureV7ProjectCompositionStage
             .ThenBy(tree => tree.TreeId, StringComparer.Ordinal)
             .Where(tree => tree.Placements.Any(placement => nodes[placement.PhysicalNodeId].ProjectId is not null && !nodes[placement.PhysicalNodeId].IsExternal && !nodes[placement.PhysicalNodeId].IsStandalone))
             .ToArray();
-        var standaloneIds = nodes.Values.Where(node => node.IsStandalone && !node.IsExternal).Select(node => node.PhysicalNodeId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        // Standalone classification owns the physical region. A reservation
+        // role may still be present on a standalone node, but it must not put
+        // that node back inside an ordinary project layer.
+        var standaloneIds = nodes.Values.Where(node => node.IsStandalone && !node.IsExternal)
+            .Select(node => node.PhysicalNodeId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
         var projectIds = nodes.Values.Where(node => node.ProjectId is not null && !node.IsExternal).Select(node => node.ProjectId!).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
 
         var projects = new List<ArchitectureV7ProjectRegion>();
@@ -39,10 +47,11 @@ public sealed class ArchitectureV7ProjectCompositionStage
             var transform = new ArchitectureV7ProjectTransform(projectId, 0, projectCursor, 2, projectCursor + 2,
                 interiorWidth + 4, interiorHeight + 4);
             transforms.Add(transform);
-            var headerTextWidth = HeaderTextCellCount(projectId, configuration);
-            var projectCells = BuildProjectCells(transform, interiorWidth, interiorHeight, projectTrees, headerTextWidth);
-            projects.Add(new ArchitectureV7ProjectRegion(projectId, transform, projectTrees.Select(tree => tree.TreeId).ToArray(), projectCells, interiorWidth, interiorHeight));
+            var displayName = projectDisplayNames is not null && projectDisplayNames.TryGetValue(projectId, out var suppliedName) && !string.IsNullOrWhiteSpace(suppliedName)
+                ? suppliedName : projectId;
+            var headerTextWidth = HeaderTextCellCount(displayName, configuration);
             var treeCursor = 0;
+            var projectNodeRows = new Dictionary<int, List<string>>();
             foreach (var tree in projectTrees)
             {
                 foreach (var placement in tree.Placements.Where(item => !nodes[item.PhysicalNodeId].IsExternal && !nodes[item.PhysicalNodeId].IsStandalone))
@@ -51,10 +60,18 @@ public sealed class ArchitectureV7ProjectCompositionStage
                     var finalColumn = transform.InteriorOriginColumn + treeCursor + placement.LocalColumn;
                     var frozen = FreezeNode(nodes[placement.PhysicalNodeId], placement, finalRow, finalColumn, tree.TreeId, sizing);
                     placements.Add(frozen);
+                    if (!projectNodeRows.TryGetValue(finalRow, out var rowNodes))
+                        projectNodeRows[finalRow] = rowNodes = new List<string>();
+                    rowNodes.Add(frozen.PhysicalNodeId);
                     foreach (var cell in frozen.LogicalFootprint) occupied.Add(cell);
                 }
                 treeCursor = checked(treeCursor + tree.Width + 1);
             }
+            var projectLayers = BuildProjectLayers(transform, projectNodeRows, trees);
+            ValidateProjectLayerPlacements(projectLayers, projectNodeRows, nodes, trees);
+            var projectCells = BuildProjectCells(transform, interiorWidth, interiorHeight, projectTrees, headerTextWidth, projectLayers);
+            projects.Add(new ArchitectureV7ProjectRegion(projectId, transform, projectTrees.Select(tree => tree.TreeId).ToArray(), projectCells, interiorWidth, interiorHeight,
+                displayName, projectLayers));
             projectCursor = checked(projectCursor + transform.Width + 1);
         }
 
@@ -78,10 +95,12 @@ public sealed class ArchitectureV7ProjectCompositionStage
         var standaloneOriginRow = Math.Max(externalRow + 2, deepestProjectRow + 1);
         var standalonePlacements = PlaceStandalone(nodes, sizing, standaloneIds, standaloneOriginRow, occupied, ref commonWidth);
         placements.AddRange(standalonePlacements);
-        var standalone = BuildStandaloneRegion(standalonePlacements, externalRow);
-        var rowCount = Math.Max(externalRow + 1, Math.Max(projects.Count == 0 ? 0 : projects.Max(project => project.Transform.RegionOriginRow + project.Height), standalonePlacements.Count == 0 ? 0 : standalonePlacements.Max(item => item.DiagramRow) + 1));
-        var columnCount = Math.Max(commonWidth, Math.Max(projects.Count == 0 ? 0 : projects.Max(project => project.Transform.RegionOriginColumn + project.Width), standalonePlacements.Count == 0 ? 0 : standalonePlacements.Max(item => item.DiagramColumn + item.LogicalSpan)));
+        var allStandalonePlacements = standalonePlacements.OrderBy(item => item.DiagramRow).ThenBy(item => item.DiagramColumn).ToArray();
+        var standalone = BuildStandaloneRegion(allStandalonePlacements, externalRow);
+        var rowCount = Math.Max(externalRow + 1, Math.Max(projects.Count == 0 ? 0 : projects.Max(project => project.Transform.RegionOriginRow + project.Height), allStandalonePlacements.Length == 0 ? 0 : allStandalonePlacements.Max(item => item.DiagramRow) + 1));
+        var columnCount = Math.Max(commonWidth, Math.Max(projects.Count == 0 ? 0 : projects.Max(project => project.Transform.RegionOriginColumn + project.Width), allStandalonePlacements.Length == 0 ? 0 : allStandalonePlacements.Max(item => item.DiagramColumn + item.LogicalSpan)));
         var grid = BuildDiagramGrid(rowCount, columnCount, projects, external, standalone, placements);
+        ValidateNodeFootprints(grid, placements);
         var orderedNodes = placements.OrderBy(item => item.DiagramRow).ThenBy(item => item.DiagramColumn).ThenBy(item => item.PhysicalNodeId, StringComparer.Ordinal).ToArray();
         ArchitectureV7PlacementAccounting.Validate(projection, orderedNodes, external, standalone);
         var fingerprint = Fingerprint(trees, transforms, orderedNodes, grid);
@@ -90,22 +109,79 @@ public sealed class ArchitectureV7ProjectCompositionStage
             trees.Reservations.Fingerprint, fingerprint);
     }
 
-    private static IReadOnlyList<ArchitectureV7LogicalCell> BuildProjectCells(ArchitectureV7ProjectTransform transform, int interiorWidth, int interiorHeight, IReadOnlyList<ArchitectureV7TopLevelTreeGrid> projectTrees, int headerTextWidth)
+    private static IReadOnlyList<ArchitectureV7ProjectLayer> BuildProjectLayers(
+        ArchitectureV7ProjectTransform transform,
+        IReadOnlyDictionary<int, List<string>> nodeRows,
+        ArchitectureV7RecursiveTreeGridResult trees)
     {
+        var reservationByFrozenRow = trees.Reservations.Reservations
+            .Where(item => !item.IsExternal)
+            .ToDictionary(item => ArchitectureV7ReservationCoordinates.FinalCommonNodeRowFromReservedNodeRow(item.NodeRow), item => item.Name);
+        var result = new List<ArchitectureV7ProjectLayer>();
+        for (var localRow = 0; localRow < transform.Height; localRow++)
+        {
+            var logicalRow = transform.RegionOriginRow + localRow;
+            var occupants = nodeRows.TryGetValue(logicalRow, out var ids)
+                ? (IReadOnlyList<string>)ids.OrderBy(id => id, StringComparer.Ordinal).ToArray()
+                : Array.Empty<string>();
+            var reservationName = reservationByFrozenRow.TryGetValue(logicalRow, out var name) ? name : null;
+            var outer = localRow == 0 || localRow == transform.Height - 1;
+            var inner = localRow == 1 || localRow == transform.Height - 2;
+            var nodeLayer = !outer && !inner && (localRow - 2) % 2 == 1;
+            var type = reservationName is not null
+                ? ArchitectureV7ProjectLayerType.HardReserved
+                : localRow == 1
+                    ? ArchitectureV7ProjectLayerType.ProjectHeader
+                    : inner
+                        ? ArchitectureV7ProjectLayerType.ProjectBoundary
+                        : nodeLayer
+                            ? ArchitectureV7ProjectLayerType.Free
+                            : ArchitectureV7ProjectLayerType.Routing;
+            result.Add(new ArchitectureV7ProjectLayer(logicalRow, localRow, type, reservationName, occupants));
+        }
+        return result;
+    }
+
+    private static void ValidateProjectLayerPlacements(
+        IReadOnlyList<ArchitectureV7ProjectLayer> layers,
+        IReadOnlyDictionary<int, List<string>> nodeRows,
+        IReadOnlyDictionary<string, ArchitectureV7PhysicalNode> nodes,
+        ArchitectureV7RecursiveTreeGridResult trees)
+    {
+        var byRow = layers.ToDictionary(layer => layer.LogicalRow);
+        foreach (var item in nodeRows)
+        {
+            if (!byRow.TryGetValue(item.Key, out var layer) ||
+                (layer.Type != ArchitectureV7ProjectLayerType.Free && layer.Type != ArchitectureV7ProjectLayerType.HardReserved))
+                throw new InvalidOperationException($"V7 project node placement is illegal on layer row {item.Key}; layerType={layer?.Type.ToString() ?? "missing"};nodes={string.Join(",", item.Value)}");
+            foreach (var id in item.Value)
+            {
+                if (!nodes.TryGetValue(id, out var node)) continue;
+                var reserved = trees.ReservedNodeRowByPhysicalNodeId.TryGetValue(id, out var reservedRow);
+                if (reserved && layer.Type != ArchitectureV7ProjectLayerType.HardReserved)
+                    throw new InvalidOperationException($"V7 reserved node {id} was placed on non-reserved project layer row {item.Key};reservedRow={reservedRow}");
+            }
+        }
+    }
+
+    private static IReadOnlyList<ArchitectureV7LogicalCell> BuildProjectCells(ArchitectureV7ProjectTransform transform, int interiorWidth, int interiorHeight, IReadOnlyList<ArchitectureV7TopLevelTreeGrid> projectTrees, int headerTextWidth, IReadOnlyList<ArchitectureV7ProjectLayer> layers)
+    {
+        var layerByRow = layers.ToDictionary(layer => layer.LogicalRow);
         var cells = new List<ArchitectureV7LogicalCell>();
         for (var row = 0; row < transform.Height; row++)
             for (var column = 0; column < transform.Width; column++)
             {
                 var outer = row == 0 || row == transform.Height - 1 || column == 0 || column == transform.Width - 1;
                 var inner = row == 1 || row == transform.Height - 2 || column == 1 || column == transform.Width - 2;
+                var layer = layerByRow[transform.RegionOriginRow + row];
                 var capability = ArchitectureV7CellCapability.None;
                 if (outer && !inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
                 if (inner) capability |= ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
                 if (row == 1 && column >= 2 && column < 2 + headerTextWidth)
                     capability |= ArchitectureV7CellCapability.Blocked | ArchitectureV7CellCapability.HeaderBlocked;
-                if (!outer && !inner) capability |= (row - 2) % 2 == 1
-                    ? ArchitectureV7CellCapability.NodeAllowed
-                    : ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
+                if (!outer && !inner) capability |= layer.Type == ArchitectureV7ProjectLayerType.Routing
+                    ? ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting
+                    : ArchitectureV7CellCapability.NodeAllowed;
                 cells.Add(new ArchitectureV7LogicalCell(transform.RegionOriginRow + row, transform.RegionOriginColumn + column, capability));
             }
         var treeCursor = 0;
@@ -114,15 +190,33 @@ public sealed class ArchitectureV7ProjectCompositionStage
             foreach (var cell in tree.Cells)
             {
                 if (cell.Row >= interiorHeight || cell.Column >= tree.Width) continue;
+                var logicalRow = transform.InteriorOriginRow + cell.Row + 1;
+                var layer = layerByRow[logicalRow];
+                var capability = cell.OccupantId is not null
+                    ? ArchitectureV7CellCapability.Blocked
+                    : layer.Type == ArchitectureV7ProjectLayerType.Routing
+                        ? ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting
+                        : ArchitectureV7CellCapability.NodeAllowed;
                 cells.Add(new ArchitectureV7LogicalCell(
-                    transform.InteriorOriginRow + cell.Row + 1,
+                    logicalRow,
                     transform.InteriorOriginColumn + treeCursor + cell.Column,
-                    cell.Capabilities,
+                    capability,
                     cell.OccupantId));
             }
             treeCursor = checked(treeCursor + tree.Width + 1);
         }
         return cells;
+    }
+    private static void ValidateNodeFootprints(ArchitectureV7CommonDiagramGrid grid, IReadOnlyList<ArchitectureV7FrozenNodePlacement> placements)
+    {
+        var cells = grid.Cells.ToDictionary(cell => (cell.Row, cell.Column));
+        foreach (var placement in placements)
+            foreach (var coordinate in placement.LogicalFootprint)
+            {
+                if (!cells.TryGetValue(coordinate, out var cell) ||
+                    (cell.Capabilities & (ArchitectureV7CellCapability.HeaderBlocked | ArchitectureV7CellCapability.NonRoutingSeparator)) != 0)
+                    throw new InvalidOperationException($"V7 node footprint {placement.PhysicalNodeId} occupies a non-node-capable project/header/boundary cell at ({coordinate.Row},{coordinate.Column}).");
+            }
     }
 
     private static int HeaderTextCellCount(string projectId, ArchitectureV7PrePlacementConfiguration? configuration)
@@ -201,7 +295,13 @@ public sealed class ArchitectureV7ProjectCompositionStage
                 cells[(row, column)] = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting;
         foreach (var project in projects)
             foreach (var cell in project.Cells) cells[(cell.Row, cell.Column)] = cell.Capabilities;
-        var separatorRows = new HashSet<int>(standalone.Placements.Select(item => item.DiagramRow - 1));
+        // Only the ordinary standalone region owns a separator above its first
+        // physical row. Reserved standalone placements can be interleaved with
+        // ordinary project layers; they remain routable node rows and must not
+        // turn their preceding GeneralRouting row into a global separator.
+        var separatorRows = new HashSet<int>(standalone.Placements
+            .Where(item => string.Equals(item.TreeId, "standalone-region", StringComparison.Ordinal))
+            .Select(item => item.DiagramRow - 1));
         if (standalone.Placements.Count > 0) separatorRows.Add(external.NodeRow + 1);
         foreach (var row in separatorRows.Where(row => row >= 0 && row < rows))
             for (var column = 0; column < columns; column++)

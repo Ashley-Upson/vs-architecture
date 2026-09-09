@@ -82,7 +82,17 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             tree.TreeId + ":" + tree.AnalyserOrdinal + ":" + tree.Width + ":" + tree.Height + ":" + string.Join(",", tree.Placements.Select(item => item.PhysicalNodeId + "@" + item.LocalRow + ":" + item.LocalColumn))));
         using var sha = SHA256.Create();
         var fingerprint = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(fingerprintText))).Replace("-", string.Empty);
-        return new ArchitectureV7RecursiveTreeGridResult(sizing, reservations, trees, fingerprint,
+        var reservedNodeRows = schedule is null
+            ? new Dictionary<string, int>(StringComparer.Ordinal)
+            : schedule.ReservationInspection.Requirements
+                .Where(requirement => !string.Equals(requirement.ReservationName, "External", StringComparison.Ordinal))
+                .SelectMany(requirement => requirement.Constraints.Select(constraint =>
+                {
+                    var frozen = reservations.Reservations.First(item => string.Equals(item.Name, requirement.ReservationName, StringComparison.Ordinal));
+                    return new { constraint.PhysicalNodeId, frozen.NodeRow };
+                }))
+                .ToDictionary(item => item.PhysicalNodeId, item => item.NodeRow, StringComparer.Ordinal);
+        return new ArchitectureV7RecursiveTreeGridResult(sizing, reservations, trees, fingerprint, reservedNodeRows,
             roots.Length, parallelStopwatch.ElapsedMilliseconds, joinStopwatch.ElapsedMilliseconds);
 
         ArchitectureV7TopLevelTreeGrid BuildTree(ArchitectureV7PositionalOwnershipDecision root)
@@ -93,14 +103,40 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             var detached = built.Detached.ToList();
             var allPlacements = new List<ArchitectureV7TreeGridNodePlacement>(mainUnit.Placements);
             allPlacements.AddRange(detached.SelectMany(unit => unit.Placements));
-            var width = built.Complete.Width;
-            var height = allPlacements.Count == 0 ? 0 : allPlacements.Max(item => item.LocalRow) + 1;
+            // The complete top-level freeze is the authority consumed by project
+            // composition. Detached units can originate from different recursive
+            // branches, so their local packing guarantees do not by themselves
+            // guarantee a one-cell gap after flattening. Repair only that frozen
+            // horizontal packing here; do not change rows, spans, or topology.
+            var packedPlacements = PackRows(allPlacements);
+            var width = Math.Max(built.Complete.Width, packedPlacements.Count == 0 ? 0 : packedPlacements.Max(item => item.LocalColumn + item.LogicalSpan));
+            var height = packedPlacements.Count == 0 ? 0 : packedPlacements.Max(item => item.LocalRow) + 1;
             stopwatch.Stop();
             return new ArchitectureV7TopLevelTreeGrid(
-                "tree:" + root.PhysicalNodeId, root.PhysicalNodeId, mainUnit, detached, allPlacements, width, height,
+                "tree:" + root.PhysicalNodeId, root.PhysicalNodeId, mainUnit, detached, packedPlacements, width, height,
                 projection.FreezeFingerprint, sizing.Ownership.FreezeFingerprint, sizing.FreezeFingerprint,
                 reservations.Fingerprint, "v7-recursive-tree-grid;root=" + root.PhysicalNodeId + ";construction-ms=" + stopwatch.ElapsedMilliseconds,
-                nodes[root.PhysicalNodeId].AnalyserOrdinal, BuildCells(allPlacements, width, height), stopwatch.ElapsedMilliseconds);
+                nodes[root.PhysicalNodeId].AnalyserOrdinal, BuildCells(packedPlacements, width, height), stopwatch.ElapsedMilliseconds);
+        }
+
+        static IReadOnlyList<ArchitectureV7TreeGridNodePlacement> PackRows(IReadOnlyList<ArchitectureV7TreeGridNodePlacement> placements)
+        {
+            var result = new List<ArchitectureV7TreeGridNodePlacement>(placements.Count);
+            foreach (var row in placements.GroupBy(item => item.LocalRow).OrderBy(group => group.Key))
+            {
+                var cursor = 0;
+                foreach (var placement in row.OrderBy(item => item.LocalColumn).ThenBy(item => item.PhysicalNodeId, StringComparer.Ordinal))
+                {
+                    var column = Math.Max(placement.LocalColumn, cursor);
+                    result.Add(placement with
+                    {
+                        LocalColumn = column,
+                        CentreCell = checked(placement.CentreCell + column - placement.LocalColumn)
+                    });
+                    cursor = checked(column + placement.LogicalSpan + 1);
+                }
+            }
+            return result.OrderBy(item => item.LocalRow).ThenBy(item => item.LocalColumn).ThenBy(item => item.PhysicalNodeId, StringComparer.Ordinal).ToArray();
         }
 
         int NaturalLayer(string physicalNodeId)
@@ -112,12 +148,25 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
         int? ReservedLayer(ArchitectureV7PhysicalNode node)
         {
             if (node.IsExternal) return ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(reservations.External.NodeRow);
+            if (schedule is not null)
+            {
+                var requirement = schedule.ReservationInspection.Requirements
+                    .Where(item => !string.Equals(item.ReservationName, "External", StringComparison.Ordinal))
+                    .OrderBy(item => item.Order)
+                    .FirstOrDefault(item => item.Constraints.Any(constraint => string.Equals(constraint.PhysicalNodeId, node.PhysicalNodeId, StringComparison.Ordinal)));
+                if (requirement is not null)
+                {
+                    var frozen = reservations.Reservations.FirstOrDefault(item => string.Equals(item.Name, requirement.ReservationName, StringComparison.Ordinal));
+                    if (frozen is not null) return ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(frozen.NodeRow);
+                }
+            }
             foreach (var reservation in reservations.Reservations.Where(item => !item.IsExternal).OrderBy(item => item.Order))
             {
                 var suffix = reservation.Pattern.Trim();
                 if (suffix.StartsWith("*", StringComparison.Ordinal)) suffix = suffix.Substring(1);
                 if (suffix.EndsWith("$", StringComparison.Ordinal)) suffix = suffix.Substring(0, suffix.Length - 1);
-                if (suffix.Length > 0 && node.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                var names = new[] { node.Name, node.Name.Split(new[] { " : " }, StringSplitOptions.None)[0], node.FullName };
+                if (suffix.Length > 0 && names.Any(name => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
                     return ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(reservation.NodeRow);
             }
             return null;
@@ -151,7 +200,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
             foreach (var childId in children.TryGetValue(physicalNodeId, out var childIds) ? childIds : Array.Empty<string>())
             {
                 var childLayers = Layers(nodes[childId]);
-                childUnits.Add(childLayers.Reserved.HasValue && childLayers.Target <= layer
+                childUnits.Add(childLayers.Target <= layer
                     ? BuildDetachedUnit(childId, childLayers.Target, true)
                     : BuildNode(childId, layer, false));
             }
@@ -258,7 +307,7 @@ public sealed class ArchitectureV7RecursiveTreeGridStage
                     var left = placements[index];
                     var right = placements[other];
                     if (left.LocalRow == right.LocalRow && left.LocalColumn < right.LocalColumn + right.LogicalSpan && right.LocalColumn < left.LocalColumn + left.LogicalSpan)
-                        throw new InvalidOperationException($"V7 recursive tree footprint overlap: {context}; {left.PhysicalNodeId}@{left.LocalRow}:{left.LocalColumn}+{left.LogicalSpan} with {right.PhysicalNodeId}@{right.LocalRow}:{right.LocalColumn}+{right.LogicalSpan}");
+                        throw new InvalidOperationException($"V7 recursive tree footprint overlap: {context}; {left.PhysicalNodeId}@{left.LocalRow}:{left.LocalColumn}+{left.LogicalSpan};layer={left.NodeLayer};detached={left.IsDetached};provenance={left.Provenance} with {right.PhysicalNodeId}@{right.LocalRow}:{right.LocalColumn}+{right.LogicalSpan};layer={right.NodeLayer};detached={right.IsDetached};provenance={right.Provenance}");
                 }
         }
     }

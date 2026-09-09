@@ -12,6 +12,25 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class ArchitectureV7ProjectCompositionTests
 {
     [Fact]
+    public void Project_display_name_drives_header_reservation_and_node_footprints_never_enter_header_cells()
+    {
+        var diagram = new ArchitectureDiagramModel(
+            new[] { new ArchitectureProject("p", "A considerably longer display name", new[] { Node("a", "A") }, "p") },
+            Array.Empty<ArchitectureExternalNode>(), Array.Empty<ArchitectureLink>(), null);
+        var trees = BuildTrees(diagram);
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(trees, new ArchitectureV7PrePlacementConfiguration(10, 1, 1, 0, 5, 0, Array.Empty<ArchitectureV7ReservedRoleRule>()),
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["p"] = "A considerably longer display name" });
+        var project = Assert.Single(freeze.Projects);
+        Assert.Equal("A considerably longer display name", project.DisplayName);
+        var headerCells = project.Cells.Where(cell => (cell.Capabilities & ArchitectureV7CellCapability.HeaderBlocked) != 0).ToArray();
+        Assert.True(headerCells.Length > 1);
+        Assert.DoesNotContain(freeze.Nodes.SelectMany(node => node.LogicalFootprint), coordinate =>
+            headerCells.Any(cell => cell.Row == coordinate.Row && cell.Column == coordinate.Column));
+        Assert.DoesNotContain(freeze.Nodes.SelectMany(node => node.LogicalFootprint), coordinate =>
+            freeze.DiagramGrid.Cells.Any(cell => cell.Row == coordinate.Row && cell.Column == coordinate.Column &&
+                (cell.Capabilities & ArchitectureV7CellCapability.NonRoutingSeparator) != 0));
+    }
+    [Fact]
     public void Independent_top_level_trees_compose_fifo_with_one_column_and_no_interleaving()
     {
         var diagram = Diagram(new[] { Node("a", "A"), Node("a-child", "AChild"), Node("b", "B"), Node("b-child", "BChild") },
@@ -234,6 +253,33 @@ public sealed class ArchitectureV7ProjectCompositionTests
     }
 
     [Fact]
+    public void Project_exposes_typed_layers_without_changing_node_placement()
+    {
+        var diagram = Diagram(new[] { Node("root", "ProcessingService"), Node("child", "Child") },
+            new[] { Link("one", "root", "child") });
+        var projection = new ArchitectureV7PhysicalProjectionStage().Project(diagram,
+            new ArchitectureV7ProjectionPolicy(ArchitectureV7ProjectionMode.Canonical, Array.Empty<string>()));
+        var ownership = new ArchitectureV7PositionalOwnershipStage().Resolve(projection);
+        var configuration = new ArchitectureV7PrePlacementConfiguration(10, 1, 1, 0, 5, 0,
+            new[] { new ArchitectureV7ReservedRoleRule("Processing", "*ProcessingService", 0) });
+        var sizing = new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, configuration);
+        var reservations = new ArchitectureV7ReservationReconciliationStage().Reconcile(
+            new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, configuration));
+        var trees = new ArchitectureV7RecursiveTreeGridStage().Build(sizing, reservations.Table);
+        var freeze = new ArchitectureV7ProjectCompositionStage().Compose(trees, configuration);
+        var project = Assert.Single(freeze.Projects);
+        var root = freeze.Nodes.Single(node => node.PhysicalNodeId == "physical:root");
+
+        var reserved = Assert.Single(project.Layers.Where(layer => layer.Type == ArchitectureV7ProjectLayerType.HardReserved));
+        Assert.Equal(root.DiagramRow, reserved.LogicalRow);
+        Assert.Equal("Processing", reserved.ReservationName);
+        Assert.Contains(root.PhysicalNodeId, reserved.OccupantIds);
+        Assert.Contains(project.Layers, layer => layer.Type == ArchitectureV7ProjectLayerType.Routing);
+        Assert.Contains(project.Layers, layer => layer.Type == ArchitectureV7ProjectLayerType.Free);
+        Assert.Equal(root.DiagramRow, freeze.Nodes.Single(node => node.PhysicalNodeId == "physical:root").DiagramRow);
+    }
+
+    [Fact]
     public void Ordinary_reserved_and_external_nodes_share_the_same_final_row_conversion()
     {
         var freeze = Compose(Diagram(new[] { Node("root", "Processing"), Node("broker", "Broker"), Node("external", "ExternalApi") },
@@ -242,6 +288,19 @@ public sealed class ArchitectureV7ProjectCompositionTests
             freeze.Nodes.Single(node => node.PhysicalNodeId == "physical:root").DiagramRow);
         Assert.Equal(ArchitectureV7ReservationCoordinates.FinalCommonNodeRowFromReservedNodeRow(5), freeze.External.NodeRow);
         Assert.Equal(freeze.External.NodeRow, freeze.External.Placements.Single().DiagramRow);
+    }
+
+    [Fact]
+    public void Project_owned_standalone_nodes_with_reservation_roles_remain_in_standalone_band()
+    {
+        var freeze = Compose(Diagram(new[] { Node("metadata", "ContentManagementMetadataTypeService") }, Array.Empty<ArchitectureLink>()));
+        var node = Assert.Single(freeze.Nodes);
+
+        Assert.True(node.IsStandalone);
+        Assert.Contains(freeze.Standalone.PhysicalNodeIds, id => id == node.PhysicalNodeId);
+        Assert.DoesNotContain(freeze.Projects.SelectMany(project => project.Cells), cell =>
+            cell.Row == node.DiagramRow && cell.Column >= node.DiagramColumn && cell.Column < node.DiagramColumn + node.LogicalSpan);
+        Assert.Equal(freeze.Standalone.FirstNodeRow, node.DiagramRow);
     }
 
     [Fact]

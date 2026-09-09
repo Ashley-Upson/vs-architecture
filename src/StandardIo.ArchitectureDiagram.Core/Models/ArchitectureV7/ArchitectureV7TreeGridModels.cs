@@ -119,6 +119,7 @@ public sealed class ArchitectureV7RecursiveTreeGridResult
         ArchitectureV7FrozenReservationTable reservations,
         IReadOnlyList<ArchitectureV7TopLevelTreeGrid> trees,
         string freezeFingerprint,
+        IReadOnlyDictionary<string, int>? reservedNodeRowByPhysicalNodeId = null,
         int parallelWorkerCount = 0,
         long parallelConstructionElapsedMilliseconds = 0,
         long deterministicJoinElapsedMilliseconds = 0)
@@ -127,6 +128,7 @@ public sealed class ArchitectureV7RecursiveTreeGridResult
         Reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
         Trees = Array.AsReadOnly((trees ?? Array.Empty<ArchitectureV7TopLevelTreeGrid>()).ToArray());
         FreezeFingerprint = freezeFingerprint ?? throw new ArgumentNullException(nameof(freezeFingerprint));
+        ReservedNodeRowByPhysicalNodeId = (reservedNodeRowByPhysicalNodeId ?? new Dictionary<string, int>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         ParallelWorkerCount = parallelWorkerCount;
         ParallelConstructionElapsedMilliseconds = parallelConstructionElapsedMilliseconds;
         DeterministicJoinElapsedMilliseconds = deterministicJoinElapsedMilliseconds;
@@ -136,6 +138,7 @@ public sealed class ArchitectureV7RecursiveTreeGridResult
     public ArchitectureV7FrozenReservationTable Reservations { get; }
     public IReadOnlyList<ArchitectureV7TopLevelTreeGrid> Trees { get; }
     public string FreezeFingerprint { get; }
+    public IReadOnlyDictionary<string, int> ReservedNodeRowByPhysicalNodeId { get; }
     public int ParallelWorkerCount { get; }
     public long ParallelConstructionElapsedMilliseconds { get; }
     public long DeterministicJoinElapsedMilliseconds { get; }

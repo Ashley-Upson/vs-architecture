@@ -47,8 +47,13 @@ public sealed class ArchitectureV7AcceptanceTests
         var placement = new ArchitectureV7PlacementFreeze(pipeline.Placement.Nodes, new[] { project }, pipeline.Placement.External,
             pipeline.Placement.Standalone, pipeline.Placement.DiagramGrid, pipeline.Placement.Transforms, pipeline.Placement.ProjectionFingerprint,
             pipeline.Placement.OwnershipFingerprint, pipeline.Placement.SizingFingerprint, pipeline.Placement.ReservationFingerprint, pipeline.Placement.PlacementFingerprint);
+        var scene = new ArchitectureV7PhysicalSceneFreeze(pipeline.Scene.Rows, pipeline.Scene.Columns, pipeline.Scene.Nodes, pipeline.Scene.Terminals,
+            pipeline.Scene.Routes, pipeline.Scene.Diagnostics, pipeline.Scene.PlacementFingerprint, pipeline.Scene.RouteFingerprint,
+            pipeline.Scene.AllocationFingerprint, pipeline.Scene.PhysicalSceneFingerprint, pipeline.Scene.AccountedPhysicalLinkIds,
+            new[] { new ArchitectureV7PhysicalProjectBounds("p", new ArchitectureV7PhysicalBounds(sceneLeft, sceneTop,
+                pipeline.Scene.Nodes.Max(node => node.Bounds.Right), pipeline.Scene.Nodes.Max(node => node.Bounds.Bottom)), "test-authority") });
         var page = new ArchitectureV7MechanicalDrawioRenderer().Render(new ArchitectureDiagramModel(Array.Empty<ArchitectureProject>(), Array.Empty<ArchitectureExternalNode>(), Array.Empty<ArchitectureLink>(), null),
-            pipeline.Projection, placement, pipeline.Scene, new ArchitectureRenderSettings());
+            pipeline.Projection, placement, scene, new ArchitectureRenderSettings());
         var container = page.GraphModel.Descendants("mxCell").Single(item => (string?)item.Attribute("id") == ArchitectureV7MechanicalDrawioRenderer.IdFor("project", "p"));
         var containerGeometry = container.Element("mxGeometry")!;
         foreach (var node in pipeline.Scene.Nodes)
@@ -63,6 +68,30 @@ public sealed class ArchitectureV7AcceptanceTests
     }
 
     [Fact]
+    public void Mechanical_renderer_keeps_project_owned_standalone_nodes_outside_project_container()
+    {
+        var pipeline = Build();
+        var standaloneId = pipeline.Projection.PhysicalNodes[0].PhysicalNodeId;
+        var projection = new ArchitectureV7PhysicalProjectionResult(
+            pipeline.Projection.PhysicalNodes.Select(node => node.PhysicalNodeId == standaloneId ? node with { IsStandalone = true } : node).ToArray(),
+            pipeline.Projection.PhysicalLinks, pipeline.Projection.SemanticNodeToPhysicalNodeIds, pipeline.Projection.SemanticLinkToPhysicalLinkIds,
+            pipeline.Projection.UnaccountedSemanticNodeIds, pipeline.Projection.UnaccountedSemanticLinkIds, pipeline.Projection.Diagnostics,
+            pipeline.Projection.FreezeFingerprint);
+        var placement = new ArchitectureV7PlacementFreeze(
+            pipeline.Placement.Nodes.Select(node => node.PhysicalNodeId == standaloneId ? node with { IsStandalone = true, TreeId = "standalone-region" } : node).ToArray(),
+            pipeline.Placement.Projects, pipeline.Placement.External, pipeline.Placement.Standalone,
+            pipeline.Placement.DiagramGrid, pipeline.Placement.Transforms, pipeline.Placement.ProjectionFingerprint,
+            pipeline.Placement.OwnershipFingerprint, pipeline.Placement.SizingFingerprint, pipeline.Placement.ReservationFingerprint,
+            pipeline.Placement.PlacementFingerprint);
+        var page = new ArchitectureV7MechanicalDrawioRenderer().Render(
+            new ArchitectureDiagramModel(Array.Empty<ArchitectureProject>(), Array.Empty<ArchitectureExternalNode>(), Array.Empty<ArchitectureLink>(), null),
+            projection, placement, pipeline.Scene, new ArchitectureRenderSettings());
+
+        var emitted = page.GraphModel.Descendants("mxCell").Single(item => (string?)item.Attribute("id") == ArchitectureV7MechanicalDrawioRenderer.IdFor("node", standaloneId));
+        Assert.Equal("1", (string?)emitted.Attribute("parent"));
+    }
+
+    [Fact]
     public void Renderer_translates_project_relative_geometry_to_global_coordinates_exactly_once()
     {
         var fixture = BuildRendererCoordinateFixture();
@@ -73,6 +102,7 @@ public sealed class ArchitectureV7AcceptanceTests
             var origin = fixture.Origins[project.ProjectId];
             var container = page.GraphModel.Descendants("mxCell").Single(item => (string?)item.Attribute("id") == ArchitectureV7MechanicalDrawioRenderer.IdFor("project", project.ProjectId));
             var containerGeometry = container.Element("mxGeometry")!;
+            Assert.Equal(project.DisplayName, (string?)container.Attribute("value"));
             Assert.Equal(origin.X, double.Parse((string)containerGeometry.Attribute("x")!, System.Globalization.CultureInfo.InvariantCulture));
             Assert.Equal(origin.Y, double.Parse((string)containerGeometry.Attribute("y")!, System.Globalization.CultureInfo.InvariantCulture));
             foreach (var node in fixture.Nodes.Where(item => item.ProjectId == project.ProjectId))
@@ -166,7 +196,7 @@ public sealed class ArchitectureV7AcceptanceTests
         var pipeline = Build();
         var report = new ArchitectureV7FinalAcceptanceValidationStage().Validate(pipeline.Projection, pipeline.Ownership, pipeline.Sizing,
             pipeline.Reservation, pipeline.Placement, pipeline.Routes, pipeline.Allocation, pipeline.Scene, pipeline.Configuration);
-        Assert.False(report.HasHardFailures, string.Join(";", report.Findings.Select(x => x.Code + ":" + x.Message)));
+        Assert.False(report.HasHardFailures, string.Join(";", report.Findings.Select(x => x.Code + ":" + x.SubjectId + ":" + string.Join("|", x.Provenance))));
         Assert.True(report.IsStrictEligible);
         Assert.True(report.IsNormalEligible);
     }
@@ -323,22 +353,25 @@ public sealed class ArchitectureV7AcceptanceTests
         var sizing = new ArchitectureV7NodeSpanSizingResult(ownership, new[] { Requirement("s"), Requirement("t") }, "sizing");
         var inspection = new ArchitectureV7ReservationInspectionResult(ownership, new Dictionary<string, int> { ["s"] = 0, ["t"] = 1 }, Array.Empty<ArchitectureV7ReservedDepthRequirement>(), Array.Empty<string>(), "inspection");
         var reservation = new ArchitectureV7ReservationReconciliationResult(inspection, new ArchitectureV7FrozenReservationTable(new[] { new ArchitectureV7FrozenReservation("External", "", 0, 0, 5, true) }, "reservation"));
-        var nodes = new[] { Placement("s", 1), Placement("t", 3) };
+        var nodes = new[] { Placement("s", 1), Placement("t", 4) };
         var grid = Enumerable.Range(0, 6).SelectMany(row => Enumerable.Range(0, 6).Select(column => new ArchitectureV7LogicalCell(row, column, ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.GeneralRouting))).ToArray();
         var placement = new ArchitectureV7PlacementFreeze(nodes, Array.Empty<ArchitectureV7ProjectRegion>(), new ArchitectureV7ExternalRegion(5, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()), new ArchitectureV7StandaloneRegion(0, 0, 0, Array.Empty<string>(), Array.Empty<ArchitectureV7FrozenNodePlacement>()), new ArchitectureV7CommonDiagramGrid(6, 6, grid), Array.Empty<ArchitectureV7ProjectTransform>(), "projection", "ownership", "sizing", "reservation", "placement");
-        var routes = new ArchitectureV7LogicalRouteFreeze(new[] { new ArchitectureV7LogicalRoute("a", "a", "s", "t", new[] { new ArchitectureV7RouteCell(1, 1), new ArchitectureV7RouteCell(2, 1), new ArchitectureV7RouteCell(3, 1) }, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), "test") }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var routes = new ArchitectureV7LogicalRouteFreeze(new[] { new ArchitectureV7LogicalRoute("a", "a", "s", "t", new[] { new ArchitectureV7RouteCell(1, 1), new ArchitectureV7RouteCell(2, 1), new ArchitectureV7RouteCell(3, 1), new ArchitectureV7RouteCell(4, 1) }, true, Array.Empty<ArchitectureV7RouteDiagnostic>(), "test") }, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
         var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routes, new ArchitectureV7AllocationConfiguration(4, 4, 0));
-        var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
-        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration);
-        return new Pipeline(projection, ownership, sizing, reservation, placement, routes, allocation, scene, configuration);
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 5, 1, 4, 4, 0);
+        var initialScene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration);
+        var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage()
+            .Allocate(placement, routes, allocation, initialScene.Rows, initialScene.Columns, initialScene.Nodes);
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, endpointAllocation, configuration);
+        return new Pipeline(projection, ownership, sizing, reservation, placement, routes, endpointAllocation, scene, configuration);
     }
 
     private static RendererCoordinateFixture BuildRendererCoordinateFixture()
     {
         var projects = new[]
         {
-            new ArchitectureV7ProjectRegion("A", new ArchitectureV7ProjectTransform("A", 0, 0, 0, 0, 100, 100), Array.Empty<string>(), Array.Empty<ArchitectureV7LogicalCell>(), 100, 100),
-            new ArchitectureV7ProjectRegion("B", new ArchitectureV7ProjectTransform("B", 0, 0, 0, 0, 100, 100), Array.Empty<string>(), Array.Empty<ArchitectureV7LogicalCell>(), 100, 100)
+            new ArchitectureV7ProjectRegion("A", new ArchitectureV7ProjectTransform("A", 0, 0, 0, 0, 100, 100), Array.Empty<string>(), Array.Empty<ArchitectureV7LogicalCell>(), 100, 100, "Project Alpha"),
+            new ArchitectureV7ProjectRegion("B", new ArchitectureV7ProjectTransform("B", 0, 0, 0, 0, 100, 100), Array.Empty<string>(), Array.Empty<ArchitectureV7LogicalCell>(), 100, 100, "Project Beta")
         };
         var origins = new Dictionary<string, (double X, double Y)>
         {
@@ -387,7 +420,9 @@ public sealed class ArchitectureV7AcceptanceTests
             };
         }).ToArray();
         var scene = new ArchitectureV7PhysicalSceneFreeze(Array.Empty<ArchitectureV7PhysicalTrackDimension>(), Array.Empty<ArchitectureV7PhysicalTrackDimension>(), sceneNodes, terminals, sceneRoutes,
-            Array.Empty<ArchitectureV7PhysicalSceneDiagnostic>(), "renderer-placement", "renderer-routes", "renderer-allocation", "renderer-scene");
+            Array.Empty<ArchitectureV7PhysicalSceneDiagnostic>(), "renderer-placement", "renderer-routes", "renderer-allocation", "renderer-scene",
+            projectBounds: origins.Select(item => new ArchitectureV7PhysicalProjectBounds(item.Key,
+                new ArchitectureV7PhysicalBounds(item.Value.X, item.Value.Y, item.Value.X + 1000, item.Value.Y + 1000), "renderer-fixture-authority")).ToArray());
         return new RendererCoordinateFixture(new ArchitectureDiagramModel(Array.Empty<ArchitectureProject>(), Array.Empty<ArchitectureExternalNode>(), Array.Empty<ArchitectureLink>(), null), projection, placement, scene,
             projects, origins, nodes, links, relativeRoutePoints);
     }

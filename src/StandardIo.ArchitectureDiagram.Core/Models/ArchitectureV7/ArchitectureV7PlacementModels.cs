@@ -29,6 +29,28 @@ public sealed record ArchitectureV7ProjectTransform(
     int Width,
     int Height);
 
+/// <summary>
+/// The role of a project-local logical layer. This is metadata for layer-aware
+/// allocation; it does not replace node placement or change the grid.
+/// </summary>
+public enum ArchitectureV7ProjectLayerType
+{
+    Free,
+    Routing,
+    SoftReserved,
+    HardReserved,
+    ProjectBoundary,
+    ProjectHeader,
+    External
+}
+
+public sealed record ArchitectureV7ProjectLayer(
+    int LogicalRow,
+    int LocalRow,
+    ArchitectureV7ProjectLayerType Type,
+    string? ReservationName,
+    IReadOnlyList<string> OccupantIds);
+
 public sealed class ArchitectureV7ProjectRegion
 {
     public ArchitectureV7ProjectRegion(
@@ -37,7 +59,9 @@ public sealed class ArchitectureV7ProjectRegion
         IReadOnlyList<string> treeIds,
         IReadOnlyList<ArchitectureV7LogicalCell> cells,
         int interiorWidth,
-        int interiorHeight)
+        int interiorHeight,
+        string? displayName = null,
+        IReadOnlyList<ArchitectureV7ProjectLayer>? layers = null)
     {
         ProjectId = projectId ?? throw new ArgumentNullException(nameof(projectId));
         Transform = transform ?? throw new ArgumentNullException(nameof(transform));
@@ -45,6 +69,9 @@ public sealed class ArchitectureV7ProjectRegion
         Cells = Array.AsReadOnly((cells ?? Array.Empty<ArchitectureV7LogicalCell>()).ToArray());
         InteriorWidth = interiorWidth;
         InteriorHeight = interiorHeight;
+        DisplayName = string.IsNullOrWhiteSpace(displayName) ? projectId : displayName!;
+        Layers = Array.AsReadOnly((layers ?? Array.Empty<ArchitectureV7ProjectLayer>())
+            .OrderBy(item => item.LogicalRow).ToArray());
     }
 
     public string ProjectId { get; }
@@ -53,6 +80,8 @@ public sealed class ArchitectureV7ProjectRegion
     public IReadOnlyList<ArchitectureV7LogicalCell> Cells { get; }
     public int InteriorWidth { get; }
     public int InteriorHeight { get; }
+    public string DisplayName { get; }
+    public IReadOnlyList<ArchitectureV7ProjectLayer> Layers { get; }
     public int Width => Transform.Width;
     public int Height => Transform.Height;
 }

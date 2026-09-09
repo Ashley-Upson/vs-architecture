@@ -28,8 +28,10 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         var indexes = CompilationIndexes.Create(allocation);
         var rows = SizeRows(rowCount, placement, allocation, indexes, configuration);
         var columns = SizeColumns(columnCount, placement, allocation, indexes, configuration);
+        ValidateVerticalLaneContainment(columns, allocation, indexes, diagnostics);
         var nodes = MaterialiseNodes(placement, rows, columns, configuration, diagnostics);
-        var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement, routes, allocation, rows, nodes);
+        var projectBounds = MaterialiseProjectBounds(placement, rows, columns, diagnostics);
+        var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(placement, routes, allocation, rows, columns, nodes);
         var endpointIndexes = CompilationIndexes.Create(endpointAllocation);
         var terminals = MaterialiseTerminals(endpointAllocation, routes, nodes, rows, columns, configuration, diagnostics);
         ValidateEndpointLaneAuthority(endpointAllocation, endpointIndexes, nodes, columns, terminals, diagnostics);
@@ -37,7 +39,32 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         var fingerprint = Fingerprint(rows, columns, nodes, terminals, routesOutput, diagnostics, placement.PlacementFingerprint, routes.RouteFingerprint, endpointAllocation.AllocationFingerprint);
         return new ArchitectureV7PhysicalSceneFreeze(rows, columns, nodes, terminals, routesOutput, diagnostics,
             placement.PlacementFingerprint, routes.RouteFingerprint, endpointAllocation.AllocationFingerprint, fingerprint,
-            routes.Routes.Select(x => x.PhysicalLinkId).ToArray());
+            routes.Routes.Select(x => x.PhysicalLinkId).ToArray(), projectBounds);
+    }
+
+    private static IReadOnlyList<ArchitectureV7PhysicalProjectBounds> MaterialiseProjectBounds(
+        ArchitectureV7PlacementFreeze placement,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
+        ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
+    {
+        var result = new List<ArchitectureV7PhysicalProjectBounds>();
+        foreach (var project in placement.Projects)
+        {
+            var transform = project.Transform;
+            var rightColumn = transform.RegionOriginColumn + transform.Width - 1;
+            var bottomRow = transform.RegionOriginRow + transform.Height - 1;
+            if (transform.RegionOriginRow < 0 || transform.RegionOriginColumn < 0 || bottomRow >= rows.Count || rightColumn >= columns.Count)
+            {
+                diagnostics.Add(new("PROJECT-BOUNDS-OUT-OF-RANGE", $"Project {project.ProjectId} has no representable final physical bounds.", true));
+                continue;
+            }
+            result.Add(new(project.ProjectId,
+                new ArchitectureV7PhysicalBounds(columns[transform.RegionOriginColumn].Start, rows[transform.RegionOriginRow].Start,
+                    columns[rightColumn].End, rows[bottomRow].End),
+                "placement-transform;physical-row-column-tables;includes-header-boundary-surround"));
+        }
+        return result;
     }
 
     private static IReadOnlyList<ArchitectureV7PhysicalTrackDimension> SizeRows(int count, ArchitectureV7PlacementFreeze placement,
@@ -59,7 +86,11 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         for (var index = 0; index < count; index++)
         {
             var laneCount = LaneCount(allocation.Runs.Where(x => x.Orientation == ArchitectureV7RunOrientation.Horizontal && x.Cells[0].Row == index), indexes);
-            var laneCoordinates = LaneCoordinates(cursor, extents[index], laneCount, configuration.ParallelLaneSpacing);
+            var demands = allocation.TrackDemands.Where(demand => demand.LogicalRow == index && demand.RequiredRowExtent > 0).ToArray();
+            var minimumOffset = demands.Length == 0 ? 0 : demands.Min(demand => demand.RequiredRowMinimumOffset);
+            var maximumOffset = demands.Length == 0 ? Math.Max(0, laneCount - 1) * configuration.ParallelLaneSpacing : demands.Max(demand => demand.RequiredRowMaximumOffset);
+            var clearance = demands.Length == 0 ? configuration.RouteClearance : demands.Max(demand => demand.RequiredRowExtent - (demand.RequiredRowMaximumOffset - demand.RequiredRowMinimumOffset)) / 2d;
+            var laneCoordinates = HorizontalLaneCoordinates(cursor, extents[index], laneCount, configuration.ParallelLaneSpacing, minimumOffset, clearance);
             result.Add(new(index, cursor, cursor + extents[index], extents[index], laneCoordinates));
             cursor += extents[index];
         }
@@ -87,7 +118,11 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         for (var index = 0; index < count; index++)
         {
             var laneCount = LaneCount(allocation.Runs.Where(x => x.Orientation == ArchitectureV7RunOrientation.Vertical && x.Cells[0].Column == index), indexes);
-            result.Add(new(index, cursor, cursor + extents[index], extents[index], LaneCoordinates(cursor, extents[index], laneCount, configuration.ParallelLaneSpacing)));
+            var demands = allocation.TrackDemands.Where(demand => demand.LogicalColumn == index && demand.RequiredColumnExtent > 0).ToArray();
+            var laneClearance = demands.Length == 0
+                ? configuration.RouteClearance
+                : demands.Max(demand => Math.Max(0, (demand.RequiredColumnExtent - (demand.RequiredColumnMaximumOffset - demand.RequiredColumnMinimumOffset)) / 2d));
+            result.Add(new(index, cursor, cursor + extents[index], extents[index], LaneCoordinates(cursor, extents[index], laneCount, configuration.ParallelLaneSpacing, laneClearance)));
             cursor += extents[index];
         }
         return result;
@@ -147,7 +182,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             var displacedEndpointZ = allocation.EndpointZBends.Any(item => item.PhysicalLinkId == slot.PhysicalLinkId && item.EndpointKind == slot.EndpointKind);
             var x = shared is null || displacedEndpointZ
                 ? Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + slot.RelativeOffset, MidpointRounding.AwayFromZero)
-                : SharedRunX(shared, allocation, nodes, slot.PhysicalLinkId, diagnostics);
+                : SharedRunX(shared, allocation, nodes, columns, slot.PhysicalLinkId, diagnostics);
             var y = Math.Round(slot.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? node.Bounds.Bottom : node.Bounds.Top, MidpointRounding.AwayFromZero);
             if (x < node.Bounds.Left + configuration.TerminalInset || x > node.Bounds.Right - configuration.TerminalInset)
                 diagnostics.Add(new("TERMINAL-OUT-OF-BOUNDS", "A frozen terminal slot does not fit; terminal clamping is forbidden.", true, slot.PhysicalLinkId));
@@ -177,7 +212,7 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             if (node is null || terminal is null) continue;
             var displacedEndpointZ = allocation.EndpointZBends.Any(item => item.PhysicalLinkId == coordinate.PhysicalLinkId && item.EndpointKind == coordinate.EndpointKind);
             var expectedX = !displacedEndpointZ && indexes.SharedVerticalRunsByLinkId.TryGetValue(coordinate.PhysicalLinkId, out var shared)
-                ? SharedRunX(shared, allocation, nodes, coordinate.PhysicalLinkId, diagnostics)
+                ? SharedRunX(shared, allocation, nodes, columns, coordinate.PhysicalLinkId, diagnostics)
                 : Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + coordinate.RelativeXOffset, MidpointRounding.AwayFromZero);
             if (Math.Abs(expectedX - terminal.Position.X) > .001)
                 diagnostics.Add(new("TERMINAL-FINAL-LANE-AUTHORITY-VIOLATION",
@@ -189,19 +224,25 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
     private static double SharedRunX(ArchitectureV7SharedVerticalRunConstraint constraint,
         ArchitectureV7CollectiveAllocationFreeze allocation,
         IReadOnlyList<ArchitectureV7PhysicalSceneNode> nodes,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
         string physicalLinkId,
         ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
     {
+        var run = allocation.Runs.FirstOrDefault(item => item.RunId == constraint.RunId);
+        var assignment = run is null ? null : allocation.RunAssignments.FirstOrDefault(item => item.RunId == run.RunId);
+        if (run is not null && assignment is not null && (uint)run.Cells[0].Column < (uint)columns.Count &&
+            (uint)assignment.LaneOrdinal < (uint)columns[run.Cells[0].Column].LaneCoordinates.Count)
+            return columns[run.Cells[0].Column].LaneCoordinates[assignment.LaneOrdinal];
+
         var sourceSlot = allocation.Terminals.FirstOrDefault(item => item.PhysicalLinkId == physicalLinkId && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
         var sourceNode = sourceSlot is null ? null : nodes.FirstOrDefault(item => item.PhysicalNodeId == sourceSlot.PhysicalNodeId);
         if (sourceSlot is null || sourceNode is null)
         {
-            diagnostics.Add(new("SHARED-VERTICAL-RUN-RESOURCE-MISSING", "A shared vertical run constraint has no allocated source terminal coordinate.", true, physicalLinkId));
+            diagnostics.Add(new("SHARED-VERTICAL-RUN-RESOURCE-MISSING", "A shared vertical run constraint has no allocated physical lane or source terminal coordinate.", true, physicalLinkId));
             return double.NaN;
         }
-        // The allocator's source terminal slot is the single shared-run X
-        // anchor. The destination terminal and every point on the maximal run
-        // inherit it; no global lane ordinal is converted or adjusted here.
+        // Legacy fallback is retained only for malformed synthetic freezes
+        // that omit the constrained run assignment.
         return Math.Round((sourceNode.Bounds.Left + sourceNode.Bounds.Right) / 2d + sourceSlot.RelativeOffset, MidpointRounding.AwayFromZero);
     }
 
@@ -295,8 +336,9 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
             {
                 var a = expanded[index]; var b = expanded[index + 1];
                 if (a.Point.X != b.Point.X && a.Point.Y != b.Point.Y) { diagnostics.Add(new("DIAGONAL-COMPILER-OUTPUT", "Mechanical compilation produced a diagonal; no repair is permitted.", true, route.PhysicalLinkId)); continue; }
-                var resourceOwner = a.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal) ? a : b.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal) ? b : a;
-                var ownershipProvenance = resourceOwner.RunId.StartsWith("handoff:", StringComparison.Ordinal) || resourceOwner.RunId.StartsWith("terminal:", StringComparison.Ordinal)
+                var resourceOwner = a.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal) ? a : b.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal) ? b :
+                    a.RunId.StartsWith("endpoint-z-bend:", StringComparison.Ordinal) ? a : b.RunId.StartsWith("endpoint-z-bend:", StringComparison.Ordinal) ? b : a;
+                var ownershipProvenance = resourceOwner.RunId.StartsWith("handoff:", StringComparison.Ordinal) || resourceOwner.RunId.StartsWith("terminal:", StringComparison.Ordinal) || resourceOwner.RunId.StartsWith("endpoint-z-bend:", StringComparison.Ordinal)
                     ? "resource=" + resourceOwner.RunId + ";lane=" + resourceOwner.LaneId
                     : "run=" + resourceOwner.RunId + ";lane=" + resourceOwner.LaneId;
                 segments.Add(new(route.PhysicalLinkId, a.Point, b.Point, new[] { a.RouteIndex, b.RouteIndex }.Distinct().ToArray(), new[] { route.Cells[a.RouteIndex], route.Cells[b.RouteIndex] }.Distinct().ToArray(), resourceOwner.RunId, resourceOwner.LaneId,
@@ -431,40 +473,61 @@ public sealed class ArchitectureV7PhysicalSceneCompilationStage
         ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
     {
         if (indexes.SharedVerticalRunsByLinkId.TryGetValue(route.PhysicalLinkId, out var shared) && shared.RunId == run.RunId)
-            return SharedRunX(shared, indexes.Allocation, nodes, route.PhysicalLinkId, diagnostics);
-        var endpointKind = run.StartRouteIndex == 0
-            ? ArchitectureV7EndpointKind.SourceDeparture
-            : run.EndRouteIndex == route.Cells.Count - 1
-                ? ArchitectureV7EndpointKind.DestinationArrival
-                : (ArchitectureV7EndpointKind?)null;
-        if (endpointKind is null)
-            return columns[route.Cells[index].Column].LaneCoordinates[assignment.LaneOrdinal];
-        if (!indexes.EndpointLanesByLinkAndKind.TryGetValue((route.PhysicalLinkId, endpointKind.Value), out var endpointLane))
+            return SharedRunX(shared, indexes.Allocation, nodes, columns, route.PhysicalLinkId, diagnostics);
+        // Endpoint geometry owns the final vertical approach coordinate. A
+        // terminal-anchored endpoint run must retain that coordinate through
+        // its allocated approach; shared/fixed-X runs are handled by the
+        // authority above.
+        var endpointCoordinate = indexes.EndpointLanesByLinkAndKind.Values
+            .FirstOrDefault(item => item.RunId == run.RunId);
+        // A one-cell endpoint approach terminates directly at its bend, so its
+        // terminal-anchored X is also the bend X. For a longer endpoint run,
+        // the terminal X is local to the node edge; using it for every point
+        // in the run can pull the run through an unrelated node. The endpoint
+        // allocator owns the explicit boundary Z for that case, while the
+        // run itself remains on its allocated column lane.
+        if (endpointCoordinate is not null && run.Cells.Count <= 2)
         {
-            diagnostics.Add(new("ENDPOINT-FINAL-VERTICAL-LANE-MISSING", "An endpoint vertical run has no allocated endpoint-local coordinate.", true, route.PhysicalLinkId));
-            return null;
+            var endpointNode = nodes.FirstOrDefault(item => item.PhysicalNodeId == endpointCoordinate.PhysicalNodeId);
+            if (endpointNode is not null)
+                return Math.Round((endpointNode.Bounds.Left + endpointNode.Bounds.Right) / 2d + endpointCoordinate.RelativeXOffset, MidpointRounding.AwayFromZero);
         }
-        var node = nodes.FirstOrDefault(item => item.PhysicalNodeId == endpointLane.PhysicalNodeId);
-        if (node is null)
-        {
-            diagnostics.Add(new("ENDPOINT-FINAL-VERTICAL-LANE-NODE-MISSING", "An endpoint-local lane has no materialised node authority.", true, route.PhysicalLinkId));
-            return null;
-        }
-        return Math.Round((node.Bounds.Left + node.Bounds.Right) / 2d + endpointLane.RelativeXOffset, MidpointRounding.AwayFromZero);
+        return columns[route.Cells[index].Column].LaneCoordinates[assignment.LaneOrdinal];
     }
 
     private static string LaneFor(ArchitectureV7StraightRun run, CompilationIndexes indexes) => indexes.AssignmentsByRunId[run.RunId].LaneId;
     private static string TerminalResourceId(ArchitectureV7PhysicalTerminal terminal) =>
         $"terminal:{terminal.PhysicalLinkId}:{terminal.EndpointKind}:{terminal.SlotOrdinal}";
     private static int LaneCount(IEnumerable<ArchitectureV7StraightRun> runs, CompilationIndexes indexes) => runs.Select(x => indexes.AssignmentsByRunId[x.RunId].LaneOrdinal).DefaultIfEmpty(-1).Max() + 1;
-    private static IReadOnlyList<double> LaneCoordinates(double start, double extent, int count, double spacing)
+    private static IReadOnlyList<double> LaneCoordinates(double start, double extent, int count, double spacing, double clearance)
     {
         if (count <= 0) return Array.Empty<double>();
-        var centre = start + extent / 2d;
-        // Lane ordinal zero is the centred anchor. Additional lanes depart
-        // from that anchor progressively, so a single-link node approach does
-        // not move when another route later joins the same corridor.
-        return Enumerable.Range(0, count).Select(index => Math.Round(centre + index * spacing, MidpointRounding.AwayFromZero)).ToArray();
+        // Vertical lane demand is one-sided: lane zero starts after the
+        // reserved left clearance and subsequent lanes advance by spacing.
+        return Enumerable.Range(0, count).Select(index => Math.Round(start + clearance + index * spacing, MidpointRounding.AwayFromZero)).ToArray();
+    }
+
+    private static void ValidateVerticalLaneContainment(IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
+        ArchitectureV7CollectiveAllocationFreeze allocation, CompilationIndexes indexes,
+        ICollection<ArchitectureV7PhysicalSceneDiagnostic> diagnostics)
+    {
+        foreach (var run in allocation.Runs.Where(run => run.Orientation == ArchitectureV7RunOrientation.Vertical))
+        {
+            var column = columns.ElementAtOrDefault(run.Cells[0].Column);
+            if (column is null) continue;
+            var assignment = indexes.AssignmentsByRunId[run.RunId];
+            var lane = column.LaneCoordinates.ElementAtOrDefault(assignment.LaneOrdinal);
+            if (lane < column.Start || lane > column.End)
+                diagnostics.Add(new("VERTICAL-LANE-COLUMN-CONTAINMENT", $"Vertical lane {assignment.LaneId} escapes physical column {column.LogicalIndex}: {lane} not in [{column.Start},{column.End}].", true, run.PhysicalLinkId));
+        }
+    }
+
+    private static IReadOnlyList<double> HorizontalLaneCoordinates(double start, double extent, int count, double spacing, double minimumOffset, double clearance)
+    {
+        if (count <= 0) return Array.Empty<double>();
+        if (count == 1) return new[] { Math.Round(start + extent / 2d, MidpointRounding.AwayFromZero) };
+        var origin = start + clearance - minimumOffset;
+        return Enumerable.Range(0, count).Select(index => Math.Round(origin + index * spacing, MidpointRounding.AwayFromZero)).ToArray();
     }
     private static string Fingerprint(IEnumerable<ArchitectureV7PhysicalTrackDimension> rows, IEnumerable<ArchitectureV7PhysicalTrackDimension> columns,
         IEnumerable<ArchitectureV7PhysicalSceneNode> nodes, IEnumerable<ArchitectureV7PhysicalTerminal> terminals, IEnumerable<ArchitectureV7PhysicalRoute> routes,

@@ -255,6 +255,29 @@ public sealed class ArchitectureV7PrePlacementTests
     }
 
     [Fact]
+    public void Top_level_one_node_tree_to_external_is_packed_against_external()
+    {
+        var schedule = Schedule(Diagram(new[] { Node("root", "Root"), Node("external", "ExternalApi") },
+            new[] { Link("to-external", "root", "external") }));
+
+        var externalLayer = schedule.LayerByPhysicalNodeId["physical:external"];
+        Assert.Equal(externalLayer - 1, schedule.LayerByPhysicalNodeId["physical:root"]);
+        Assert.Contains(schedule.Diagnostics, item => item.StartsWith("v7-tree-packed-against-external=physical:root", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Top_level_three_level_tree_to_external_is_packed_upward_by_tree_depth()
+    {
+        var schedule = Schedule(Diagram(new[] { Node("root", "Root"), Node("child", "Child"), Node("leaf", "Leaf"), Node("external", "ExternalApi") },
+            new[] { Link("one", "root", "child"), Link("two", "child", "leaf"), Link("to-external", "leaf", "external") }));
+
+        var externalLayer = schedule.LayerByPhysicalNodeId["physical:external"];
+        Assert.Equal(externalLayer - 3, schedule.LayerByPhysicalNodeId["physical:root"]);
+        Assert.Equal(new[] { externalLayer - 3, externalLayer - 2, externalLayer - 1 },
+            new[] { "physical:root", "physical:child", "physical:leaf" }.Select(id => schedule.LayerByPhysicalNodeId[id]));
+    }
+
+    [Fact]
     public void Ordinary_schedule_preserves_hard_order_and_external_is_final()
     {
         var diagram = Diagram(new[] { Node("root", "Root"), Node("hard", "Processing"), Node("external", "ExternalApi") },
@@ -266,6 +289,37 @@ public sealed class ArchitectureV7PrePlacementTests
 
         Assert.True(schedule.LayerByPhysicalNodeId["physical:external"] > schedule.LayerByPhysicalNodeId["physical:hard"]);
         Assert.Equal(schedule.Reservations.External.NodeRow / 2, schedule.LayerByPhysicalNodeId["physical:external"]);
+    }
+
+    [Fact]
+    public void Incompatible_reservation_offsets_detach_units_without_discarding_hard_rows()
+    {
+        var diagram = DiagramWithoutExternal(
+            new[] { Node("root", "Processing"), Node("child", "Service"), Node("leaf", "Leaf") },
+            new[] { Link("one", "root", "child"), Link("two", "child", "leaf") });
+        var ownership = Ownership(diagram);
+        var inspection = new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, Config(patterns: new[]
+        {
+            new ArchitectureV7ReservedRoleRule("Processing", "*Processing", 0),
+            new ArchitectureV7ReservedRoleRule("Service", "*Service", 1)
+        }));
+        var reservation = new ArchitectureV7ReservationReconciliationResult(inspection,
+            new ArchitectureV7FrozenReservationTable(new[]
+            {
+                new ArchitectureV7FrozenReservation("Processing", "*Processing", 0, 1, 3, false),
+                new ArchitectureV7FrozenReservation("Service", "*Service", 1, 1, 7, false),
+                new ArchitectureV7FrozenReservation("External", "<external>", int.MaxValue, 0, 9, true)
+            }, "test-conflicting-offsets"));
+
+        var schedule = new ArchitectureV7OrdinaryLayerSchedulingStage().Schedule(ownership, reservation);
+
+        Assert.Equal(ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(
+            reservation.Table.Reservations.Single(item => item.Name == "Processing").NodeRow),
+            schedule.LayerByPhysicalNodeId["physical:root"]);
+        Assert.Equal(ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(
+            reservation.Table.Reservations.Single(item => item.Name == "Service").NodeRow),
+            schedule.LayerByPhysicalNodeId["physical:child"]);
+        Assert.Contains(schedule.Diagnostics, item => item.Contains("action=detach-conflicting-units", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -292,6 +346,14 @@ public sealed class ArchitectureV7PrePlacementTests
 
     private static ArchitectureV7FrozenReservationTable Reconcile(ArchitectureDiagramModel diagram, IReadOnlyList<ArchitectureV7ReservedRoleRule> patterns) =>
         new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(Ownership(diagram), Config(patterns: patterns))).Table;
+
+    private static ArchitectureV7FrozenOrdinaryLayerSchedule Schedule(ArchitectureDiagramModel diagram)
+    {
+        var ownership = Ownership(diagram);
+        var reservation = new ArchitectureV7ReservationReconciliationStage().Reconcile(
+            new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, Config(patterns: Array.Empty<ArchitectureV7ReservedRoleRule>())));
+        return new ArchitectureV7OrdinaryLayerSchedulingStage().Schedule(ownership, reservation);
+    }
 
     private static ArchitectureV7PositionalOwnershipResult Ownership(ArchitectureDiagramModel diagram)
     {

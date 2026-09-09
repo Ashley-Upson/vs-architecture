@@ -33,6 +33,57 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Partially_overlapping_runs_require_distinct_lanes()
+    {
+        var routes = new[]
+        {
+            Route("a", "a-source", "a-target", (1, 0), (1, 1), (1, 2), (1, 3)),
+            Route("b", "b-source", "b-target", (1, 2), (1, 3), (1, 4), (1, 5))
+        };
+
+        var result = Allocate(routes, Nodes("a-source", "a-target", "b-source", "b-target"));
+
+        Assert.NotEqual(
+            result.RunAssignments.Single(item => item.RunId == "run:a:0").LaneOrdinal,
+            result.RunAssignments.Single(item => item.RunId == "run:b:0").LaneOrdinal);
+    }
+
+    [Fact]
+    public void Touching_only_horizontal_intervals_may_reuse_a_lane()
+    {
+        var routes = new[]
+        {
+            Route("a", "a-source", "a-target", (1, 0), (1, 1), (1, 2)),
+            Route("b", "b-source", "b-target", (1, 2), (1, 3), (1, 4))
+        };
+
+        var result = Allocate(routes, Nodes("a-source", "a-target", "b-source", "b-target"));
+
+        Assert.Equal(
+            result.RunAssignments.Single(item => item.RunId == "run:a:0").LaneOrdinal,
+            result.RunAssignments.Single(item => item.RunId == "run:b:0").LaneOrdinal);
+    }
+
+    [Fact]
+    public void Earlier_next_bend_is_allocated_before_runs_continuing_farther()
+    {
+        var routes = new[]
+        {
+            Route("far", "far-source", "far-target", (1, 0), (1, 1), (1, 2), (1, 3), (1, 4)),
+            Route("early", "early-source", "early-target", (1, 0), (1, 1), (1, 2)),
+            Route("middle", "middle-source", "middle-target", (1, 0), (1, 1), (1, 2), (1, 3))
+        };
+
+        var result = Allocate(routes, Nodes("far-source", "far-target", "early-source", "early-target", "middle-source", "middle-target"));
+        var early = result.RunAssignments.Single(item => item.RunId == "run:early:0").LaneOrdinal;
+        var middle = result.RunAssignments.Single(item => item.RunId == "run:middle:0").LaneOrdinal;
+        var far = result.RunAssignments.Single(item => item.RunId == "run:far:0").LaneOrdinal;
+
+        Assert.True(early < middle);
+        Assert.True(middle < far);
+    }
+
+    [Fact]
     public void Overlapping_runs_in_distinct_corridors_get_distinct_physical_lanes()
     {
         var routes = new[]
@@ -341,6 +392,34 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
+    public void Off_centre_maximal_vertical_relationship_is_direct_fixed_x_not_a_side_group_anchor()
+    {
+        var routes = new[]
+        {
+            Route("shared-direct", "s", "direct-target", (1, 7), (2, 7), (3, 7)),
+            Route("left", "s", "left-target", (1, 5), (2, 5), (2, 3), (3, 3)),
+            Route("right", "s", "right-target", (1, 5), (2, 5), (2, 6), (3, 6))
+        };
+
+        var result = Allocate(routes, new[]
+        {
+            NodeAt("s", 1, 5, 7), NodeAt("direct-target", 3, 7),
+            NodeAt("left-target", 3, 3), NodeAt("right-target", 3, 6)
+        }, spacing: 10, span: 7);
+
+        var direct = Assert.Single(result.Terminals,
+            item => item.PhysicalLinkId == "shared-direct" && item.PhysicalNodeId == "s");
+        Assert.Contains("direction-group=1", direct.Provenance, StringComparison.Ordinal);
+        Assert.Equal(0d, direct.RelativeOffset);
+
+        var sourceTerminals = result.Terminals.Where(item => item.PhysicalNodeId == "s")
+            .OrderBy(item => item.RelativeOffset).ToArray();
+        Assert.Equal(new[] { -10d, 0d, 10d }, sourceTerminals.Select(item => item.RelativeOffset));
+        Assert.Equal(new[] { "left", "shared-direct", "right" },
+            sourceTerminals.Select(item => item.PhysicalLinkId));
+    }
+
+    [Fact]
     public void Side_group_lane_depth_order_is_deterministic_under_route_shuffle_and_mirrors_right_side()
     {
         var routes = new[]
@@ -449,7 +528,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
     }
 
     [Fact]
-    public void Terminal_order_follows_adjacent_run_coordinate_before_relationship_id()
+    public void Maximal_vertical_relationships_use_direct_group_stable_ordering()
     {
         var routes = new[]
         {
@@ -461,7 +540,7 @@ public sealed class ArchitectureV7CollectiveAllocationTests
         var result = Allocate(routes, Nodes("s1", "s2").Append(target).ToArray(), spacing: 100);
         var terminals = result.Terminals.Where(x => x.PhysicalNodeId == "t").OrderBy(x => x.SlotOrdinal).ToArray();
 
-        Assert.Equal(new[] { "b", "a" }, terminals.Select(x => x.PhysicalLinkId));
+        Assert.Equal(new[] { "a", "b" }, terminals.Select(x => x.PhysicalLinkId));
         Assert.Equal(new[] { -50d, 50d }, terminals.Select(x => x.RelativeOffset));
         Assert.Empty(result.Handoffs);
     }

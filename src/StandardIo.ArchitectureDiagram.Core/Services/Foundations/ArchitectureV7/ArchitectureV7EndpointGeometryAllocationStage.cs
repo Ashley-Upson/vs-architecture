@@ -17,12 +17,14 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
         ArchitectureV7LogicalRouteFreeze routes,
         ArchitectureV7CollectiveAllocationFreeze allocation,
         IReadOnlyList<ArchitectureV7PhysicalTrackDimension> rows,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns,
         IReadOnlyList<ArchitectureV7PhysicalSceneNode> nodes)
     {
         if (placement is null) throw new ArgumentNullException(nameof(placement));
         if (routes is null) throw new ArgumentNullException(nameof(routes));
         if (allocation is null) throw new ArgumentNullException(nameof(allocation));
         if (rows is null) throw new ArgumentNullException(nameof(rows));
+        if (columns is null) throw new ArgumentNullException(nameof(columns));
         if (nodes is null) throw new ArgumentNullException(nameof(nodes));
 
         // Physical compilation may be invoked once to establish dimensions and
@@ -104,13 +106,22 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
                 item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
             var sourceNode = source is null ? null : nodes.FirstOrDefault(item => item.PhysicalNodeId == source.PhysicalNodeId);
             if (source is null || sourceNode is null) continue;
-            var fixedX = (sourceNode.Bounds.Left + sourceNode.Bounds.Right) / 2d + source.RelativeOffset;
+            // The shared run's physical lane is the fixed-X authority.  The
+            // node midpoint plus terminal offset is only the packed-terminal
+            // candidate; using it as the fixed coordinate misses displaced
+            // maximal vertical relationships when column centres and node
+            // bounds are not identical.
+            var fixedX = SharedRunPhysicalX(constraint, allocation, columns);
+            if (double.IsNaN(fixedX)) continue;
             foreach (var endpoint in terminals.Where(item => item.PhysicalLinkId == constraint.PhysicalLinkId))
             {
                 var node = nodes.FirstOrDefault(item => item.PhysicalNodeId == endpoint.PhysicalNodeId);
                 if (node is null) continue;
                 var packedX = (node.Bounds.Left + node.Bounds.Right) / 2d + endpoint.RelativeOffset;
                 if (Math.Abs(fixedX - packedX) <= 0.001) continue;
+                var edgePopulation = terminals.Count(item => item.PhysicalNodeId == endpoint.PhysicalNodeId &&
+                    item.EndpointKind == endpoint.EndpointKind);
+                if (!CanAllocateEndpointLocalZ(endpoint, constraint, node, edgePopulation)) continue;
                 if (endpointZBends.Any(item => item.PhysicalLinkId == endpoint.PhysicalLinkId && item.EndpointKind == endpoint.EndpointKind)) continue;
                 endpointZBends.Add(new ArchitectureV7EndpointZBend(endpoint.PhysicalLinkId, endpoint.PhysicalNodeId,
                     endpoint.EndpointKind, constraint.RunId,
@@ -118,7 +129,75 @@ public sealed class ArchitectureV7EndpointGeometryAllocationStage
             }
         }
 
+        // Long ordinary endpoint runs keep the allocated vertical lane for
+        // their full route. If the packed terminal is at another X, allocate
+        // the local orthogonal boundary Z here rather than allowing physical
+        // compilation to move the whole run onto the terminal coordinate.
+        foreach (var coordinate in endpointCoordinates)
+        {
+            if (allocation.SharedVerticalRunConstraints.Any(item => item.PhysicalLinkId == coordinate.PhysicalLinkId))
+                continue;
+            var terminal = terminals.FirstOrDefault(item => item.PhysicalLinkId == coordinate.PhysicalLinkId && item.EndpointKind == coordinate.EndpointKind);
+            var route = routes.Routes.FirstOrDefault(item => item.PhysicalLinkId == coordinate.PhysicalLinkId);
+            var run = route is null ? null : runs.FirstOrDefault(item => item.RunId == coordinate.RunId &&
+                (coordinate.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture ? item.StartRouteIndex == 0 : item.EndRouteIndex == route.Cells.Count - 1));
+            var assignment = run is null ? null : assignments.FirstOrDefault(item => item.RunId == run.RunId);
+            var node = terminal is null ? null : nodes.FirstOrDefault(item => item.PhysicalNodeId == terminal.PhysicalNodeId);
+            if (terminal is null || run is null || assignment is null || node is null || run.Cells.Count <= 2 ||
+                (uint)run.Cells[0].Column >= (uint)columns.Count ||
+                (uint)assignment.LaneOrdinal >= (uint)columns[run.Cells[0].Column].LaneCoordinates.Count)
+                continue;
+            var runX = columns[run.Cells[0].Column].LaneCoordinates[assignment.LaneOrdinal];
+            var terminalX = (node.Bounds.Left + node.Bounds.Right) / 2d + terminal.RelativeOffset;
+            if (Math.Abs(runX - terminalX) <= 0.001 || endpointZBends.Any(item => item.PhysicalLinkId == terminal.PhysicalLinkId && item.EndpointKind == terminal.EndpointKind))
+                continue;
+            endpointZBends.Add(new ArchitectureV7EndpointZBend(terminal.PhysicalLinkId, terminal.PhysicalNodeId,
+                terminal.EndpointKind, run.RunId,
+                "endpoint-z-bend;fixed-incoming-lane-x;long-endpoint-run;terminal-anchored-boundary-transition"));
+        }
+
         return allocation.WithEndpointGeometry(terminals, approaches, endpointCoordinates, endpointZBends);
+    }
+
+    private static double SharedRunPhysicalX(
+        ArchitectureV7SharedVerticalRunConstraint constraint,
+        ArchitectureV7CollectiveAllocationFreeze allocation,
+        IReadOnlyList<ArchitectureV7PhysicalTrackDimension> columns)
+    {
+        var run = allocation.Runs.FirstOrDefault(item => item.RunId == constraint.RunId);
+        var assignment = run is null ? null : allocation.RunAssignments.FirstOrDefault(item => item.RunId == run.RunId);
+        if (run is null || assignment is null || (uint)run.Cells[0].Column >= (uint)columns.Count ||
+            (uint)assignment.LaneOrdinal >= (uint)columns[run.Cells[0].Column].LaneCoordinates.Count)
+            return double.NaN;
+        return columns[run.Cells[0].Column].LaneCoordinates[assignment.LaneOrdinal];
+    }
+
+    private static bool CanAllocateEndpointLocalZ(
+        ArchitectureV7TerminalSlotAssignment terminal,
+        ArchitectureV7SharedVerticalRunConstraint constraint,
+        ArchitectureV7PhysicalSceneNode node,
+        int edgePopulation)
+    {
+        // Endpoint-local Z is an exceptional displaced-Direct resource. A
+        // coordinate mismatch by itself is never sufficient authority.
+        if (terminal.PhysicalLinkId != constraint.PhysicalLinkId || TerminalGroup(terminal) != 1 ||
+            terminal.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture && terminal.Direction != ArchitectureV7EndpointDirection.Down ||
+            terminal.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival && terminal.Direction != ArchitectureV7EndpointDirection.Up)
+            return false;
+
+        // A single shared vertical endpoint already has a legal fixed-X
+        // terminal.  The exceptional local Z resource exists only to let a
+        // displaced Direct relationship participate in a real multi-terminal
+        // fit-first pack.
+        if (edgePopulation < 2) return false;
+
+        // The fixed run may be physically displaced from the node midpoint by
+        // non-uniform column geometry even when the initial logical packing
+        // marker says that the Direct slot was centred.  The actual shared
+        // lane/terminal mismatch is the authority here; the capacity check
+        // below is what keeps this exceptional local Z resource bounded.
+        var available = node.Bounds.Right - node.Bounds.Left;
+        return terminal.TerminalCapacityRequirement <= available + 0.001;
     }
 
     private static double ApproachDepth(

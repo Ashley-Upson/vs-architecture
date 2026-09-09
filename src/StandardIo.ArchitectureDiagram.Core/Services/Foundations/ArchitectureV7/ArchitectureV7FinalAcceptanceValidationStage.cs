@@ -538,7 +538,7 @@ public sealed class ArchitectureV7FinalAcceptanceValidationStage
             return;
         }
         var cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells) && expectedCells.All(cell => run?.Cells.Contains(cell) == true);
-        var endpointResource = segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal);
+        var endpointResource = segment.RunId.StartsWith("handoff:", StringComparison.Ordinal) || segment.RunId.StartsWith("terminal:", StringComparison.Ordinal) || segment.RunId.StartsWith("endpoint-z-bend:", StringComparison.Ordinal);
         if (endpointResource)
             cellsMatch = validIndexes && segment.LogicalCells.SequenceEqual(expectedCells);
         var laneMatches = assignment is not null && string.Equals(assignment.LaneId, segment.LaneId, StringComparison.Ordinal);

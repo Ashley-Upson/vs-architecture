@@ -22,10 +22,13 @@ public sealed class ArchitectureV7RoutingEvidenceStage
                 var attempted = diagnostic.AttemptedCells;
                 var failure = attempted.Count == 0 ? null : attempted[attempted.Count - 1];
                 var scenario = Scenario(diagnostic.Code, sourceCell, targetCell);
-                var candidateSummary = scenario.StartsWith("upward", StringComparison.Ordinal) && scenario.Contains("escape", StringComparison.Ordinal)
-                    ? AuthoritativeUpwardEscapeCandidates(route.AttemptEvidence.FirstOrDefault(x => x.Scenario == "upward-escape"))
+                var candidateSummary = scenario == "destination-approach"
+                    ? AttemptCandidates(route.AttemptEvidence.FirstOrDefault(x => x.Scenario == "destination-approach"))
+                    : scenario.StartsWith("upward", StringComparison.Ordinal) && scenario.Contains("escape", StringComparison.Ordinal)
+                    ? AuthoritativeUpwardEscapeCandidates(route.AttemptEvidence.FirstOrDefault(x => x.Scenario == "upward-escape") ??
+                        route.AttemptEvidence.LastOrDefault(x => x.Scenario == "general-routing-escape-row"))
                     : scenario.Contains("continuation", StringComparison.Ordinal)
-                        ? ContinuationCandidates(failure, targetCell.Column, scenario.StartsWith("upward", StringComparison.Ordinal) ? -1 : 1, cells, source, target)
+                        ? AttemptCandidates(route.AttemptEvidence.LastOrDefault(x => x.Scenario == "continuation-selection"))
                         : EmptyCandidateSummary();
                 result.Add(new ArchitectureV7RelationshipRoutingEvidence(route.SemanticLinkId, route.PhysicalLinkId, route.SourcePhysicalNodeId, route.DestinationPhysicalNodeId,
                     sourceCell, targetCell, scenario, attempted, failure, Direction(attempted, -1), Direction(attempted, 0),
@@ -92,6 +95,32 @@ public sealed class ArchitectureV7RoutingEvidenceStage
         });
     }
 
+    private static ArchitectureV7RoutingCandidateSummary AttemptCandidates(ArchitectureV7RouteAttemptEvidence? attempt)
+    {
+        if (attempt is null || attempt.Candidates.Count == 0) return EmptyCandidateSummary();
+        var candidates = attempt.Candidates.Select(candidate => new ArchitectureV7RoutingCandidateEvidence(
+            candidate.CandidateColumn,
+            Math.Abs(candidate.CandidateColumn - (attempt.CurrentContinuationColumn ?? candidate.CandidateColumn)) == 2,
+            candidate.Accepted,
+            candidate.RejectionReason,
+            candidate.TraversedCells.Count,
+            candidate.TraversedCells)).ToArray();
+        var origin = attempt.CurrentContinuationColumn ?? candidates[0].CandidateColumn;
+        var selected = candidates.FirstOrDefault(candidate => candidate.Accepted);
+        var histogram = candidates.GroupBy(candidate => candidate.RejectionReason, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var distances = candidates.GroupBy(candidate => Math.Abs(candidate.CandidateColumn - origin))
+            .ToDictionary(group => group.Key, group => group.Count());
+        return new ArchitectureV7RoutingCandidateSummary(
+            candidates.Length, candidates[0].CandidateColumn, candidates[candidates.Length - 1].CandidateColumn,
+            selected?.CandidateColumn, candidates.Min(candidate => Math.Abs(candidate.CandidateColumn - origin)),
+            candidates.Max(candidate => Math.Abs(candidate.CandidateColumn - origin)), histogram, distances,
+            candidates.Sum(candidate => candidate.TraversedCellCount), candidates.Max(candidate => candidate.TraversedCellCount),
+            selected, selected is null ? candidates[candidates.Length - 1] : null,
+            candidates.Take(RepresentativeCandidateLimit).ToArray(),
+            candidates.Skip(Math.Max(0, candidates.Length - RepresentativeCandidateLimit)).ToArray(), candidates);
+    }
+
     private static ArchitectureV7RoutingCandidateSummary AuthoritativeUpwardEscapeCandidates(ArchitectureV7RouteAttemptEvidence? attempt)
     {
         if (attempt is null || attempt.Candidates.Count == 0) return EmptyCandidateSummary();
@@ -125,7 +154,8 @@ public sealed class ArchitectureV7RoutingEvidenceStage
             selected,
             selected is null ? candidates[candidates.Length - 1] : null,
             first,
-            last);
+            last,
+            candidates);
     }
 
     private const int RepresentativeCandidateLimit = 4;
@@ -138,6 +168,7 @@ public sealed class ArchitectureV7RoutingEvidenceStage
     {
         var first = new List<ArchitectureV7RoutingCandidateEvidence>(RepresentativeCandidateLimit);
         var last = new Queue<ArchitectureV7RoutingCandidateEvidence>(RepresentativeCandidateLimit);
+        var all = new List<ArchitectureV7RoutingCandidateEvidence>();
         var rejectionReasons = new Dictionary<string, int>(StringComparer.Ordinal);
         var distances = new Dictionary<int, int>();
         // Probe evidence observes candidate legality; it does not own the
@@ -159,6 +190,7 @@ public sealed class ArchitectureV7RoutingEvidenceStage
             var traversedCount = probe.TraversedCells.Count;
             var detailed = new ArchitectureV7RoutingCandidateEvidence(probe.Column, probe.IsPlusOrMinusTwo, probe.Accepted,
                 probe.RejectionReason, traversedCount, probe.TraversedCells);
+            all.Add(detailed);
 
             total++;
             firstColumn ??= column;
@@ -179,7 +211,7 @@ public sealed class ArchitectureV7RoutingEvidenceStage
         return new ArchitectureV7RoutingCandidateSummary(total, firstColumn, lastColumn, null,
             total == 0 ? null : nearest, total == 0 ? null : farthest,
             rejectionReasons, distances, totalTraversed, maximumTraversed, null,
-            lastProbe, first.ToArray(), last.ToArray());
+            lastProbe, first.ToArray(), last.ToArray(), all.ToArray());
     }
 
     private static ArchitectureV7RoutingCandidateSummary EmptyCandidateSummary() => new(0, null, null, null, null, null,

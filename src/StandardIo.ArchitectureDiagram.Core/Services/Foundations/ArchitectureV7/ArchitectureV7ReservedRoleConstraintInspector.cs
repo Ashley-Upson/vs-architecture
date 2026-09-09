@@ -49,7 +49,7 @@ public sealed class ArchitectureV7ReservedRoleConstraintInspector
         var grouped = new Dictionary<string, List<ArchitectureV7ReservedDepthConstraint>>(StringComparer.Ordinal);
         foreach (var node in nodes)
         {
-            var role = ResolveRole(node.Name, rules);
+            var role = ResolveRole(node, rules);
             if (role is null) continue;
             var depth = depths[node.PhysicalNodeId];
             if (!grouped.TryGetValue(role.Name, out var constraints))
@@ -93,15 +93,21 @@ public sealed class ArchitectureV7ReservedRoleConstraintInspector
     }
 
     private static ArchitectureV7ReservedRoleRule? ResolveRole(
-        string name,
+        ArchitectureV7PhysicalNode node,
         IReadOnlyList<(ArchitectureV7ReservedRoleRule rule, int index)> rules)
     {
+        var names = new[]
+        {
+            node.Name,
+            node.Name.Split(new[] { " : " }, StringSplitOptions.None)[0],
+            node.FullName
+        }.Distinct(StringComparer.Ordinal).ToArray();
         foreach (var item in rules)
         {
             var suffix = item.rule.Pattern?.Trim() ?? string.Empty;
             if (suffix.StartsWith("*", StringComparison.Ordinal)) suffix = suffix.Substring(1);
             if (suffix.EndsWith("$", StringComparison.Ordinal)) suffix = suffix.Substring(0, suffix.Length - 1);
-            if (suffix.Length > 0 && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return item.rule;
+            if (suffix.Length > 0 && names.Any(name => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))) return item.rule;
         }
         return null;
     }

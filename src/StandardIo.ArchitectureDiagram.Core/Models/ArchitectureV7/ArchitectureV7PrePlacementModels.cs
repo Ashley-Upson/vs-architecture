@@ -162,11 +162,13 @@ public sealed class ArchitectureV7FrozenOrdinaryLayerSchedule
 {
     public ArchitectureV7FrozenOrdinaryLayerSchedule(
         ArchitectureV7FrozenReservationTable reservations,
+        ArchitectureV7ReservationInspectionResult reservationInspection,
         IReadOnlyDictionary<string, int> layerByPhysicalNodeId,
         IReadOnlyList<string> diagnostics,
         string fingerprint)
     {
         Reservations = reservations ?? throw new ArgumentNullException(nameof(reservations));
+        ReservationInspection = reservationInspection ?? throw new ArgumentNullException(nameof(reservationInspection));
         LayerByPhysicalNodeId = (layerByPhysicalNodeId ?? new Dictionary<string, int>())
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         Diagnostics = Array.AsReadOnly((diagnostics ?? Array.Empty<string>()).OrderBy(item => item, StringComparer.Ordinal).ToArray());
@@ -174,6 +176,7 @@ public sealed class ArchitectureV7FrozenOrdinaryLayerSchedule
     }
 
     public ArchitectureV7FrozenReservationTable Reservations { get; }
+    public ArchitectureV7ReservationInspectionResult ReservationInspection { get; }
     public IReadOnlyDictionary<string, int> LayerByPhysicalNodeId { get; }
     public IReadOnlyList<string> Diagnostics { get; }
     public string Fingerprint { get; }

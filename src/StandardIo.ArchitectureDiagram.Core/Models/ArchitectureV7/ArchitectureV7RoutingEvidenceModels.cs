@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace StandardIo.ArchitectureDiagram.Core.Models.ArchitectureV7;
 
@@ -24,7 +26,13 @@ public sealed record ArchitectureV7RoutingCandidateSummary(
     ArchitectureV7RoutingCandidateEvidence? SelectedCandidateEvidence,
     ArchitectureV7RoutingCandidateEvidence? FinalFailedCandidateEvidence,
     IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> RepresentativeFirstCandidates,
-    IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> RepresentativeLastCandidates);
+    IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> RepresentativeLastCandidates,
+    IReadOnlyList<ArchitectureV7RoutingCandidateEvidence>? AllCandidates = null)
+{
+    [JsonIgnore]
+    public IReadOnlyList<ArchitectureV7RoutingCandidateEvidence> CompleteCandidates =>
+        AllCandidates ?? RepresentativeFirstCandidates.Concat(RepresentativeLastCandidates).ToArray();
+}
 
 public sealed record ArchitectureV7RelationshipRoutingEvidence(
     string SemanticRelationshipId,

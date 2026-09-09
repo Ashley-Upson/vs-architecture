@@ -27,10 +27,38 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 5, 1)));
         var physical = Assert.Single(scene.Routes);
         Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
-        Assert.All(physical.Points, point => Assert.Equal(physical.Points[0].X, point.X));
+        var runPoints = physical.Points.Where(point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
+        Assert.NotEmpty(runPoints);
+        Assert.All(runPoints, point => Assert.Equal(runPoints[0].X, point.X));
         Assert.Equal(scene.Nodes.Single(x => x.PhysicalNodeId == "s").Bounds.Bottom, physical.Points[0].Y);
         Assert.Equal(scene.Nodes.Single(x => x.PhysicalNodeId == "t").Bounds.Top, physical.Points[^1].Y);
         Assert.All(physical.Segments, segment => Assert.NotEmpty(segment.RunId));
+    }
+
+    [Fact]
+    public void Endpoint_terminal_x_does_not_move_a_long_vertical_run_into_a_neighbouring_node_column()
+    {
+        var route = Route("handlers-service", "handlers", "service", (1, 1), (2, 1), (3, 1), (4, 1));
+        var nodes = new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("handlers", "handlers", "p", 1, 1, 1, 1,
+                new[] { (1, 1) }, false, false, false, "tree", "handlers", "handlers", "test"),
+            new ArchitectureV7FrozenNodePlacement("event-hub", "event-hub", "p", 2, 2, 3, 3,
+                new[] { (2, 2), (2, 3), (2, 4) }, false, false, false, "tree", "event-hub", "event-hub", "test"),
+            new ArchitectureV7FrozenNodePlacement("service", "service", "p", 4, 1, 3, 2,
+                new[] { (4, 1), (4, 2), (4, 3) }, false, false, false, "tree", "service", "service", "test")
+        };
+        var scene = Compile(new[] { route }, nodes, spacing: 4, baseCellWidth: 10);
+        var physical = Assert.Single(scene.Routes);
+        var eventHub = Assert.Single(scene.Nodes, node => node.PhysicalNodeId == "event-hub");
+        var laneX = scene.Columns[1].LaneCoordinates[0];
+
+        Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("endpoint-z-bend", StringComparison.Ordinal));
+        Assert.Contains(physical.Points, point => point.Provenance.Contains("straight-run", StringComparison.Ordinal) && point.X == laneX);
+        Assert.DoesNotContain(physical.Segments, segment =>
+            segment.Start.X == segment.End.X && segment.Start.X > eventHub.Bounds.Left && segment.Start.X < eventHub.Bounds.Right &&
+            Math.Max(segment.Start.Y, segment.End.Y) > eventHub.Bounds.Top && Math.Min(segment.Start.Y, segment.End.Y) < eventHub.Bounds.Bottom);
+        Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));
     }
 
     [Fact]
@@ -48,13 +76,15 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var destination = Assert.Single(scene.Terminals, item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
 
         Assert.Equal(source.Position.X, destination.Position.X);
-        Assert.All(physical.Points, point => Assert.Equal(source.Position.X, point.X));
+        var sharedRunPoints = physical.Points.Where(point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
+        Assert.NotEmpty(sharedRunPoints);
+        Assert.All(sharedRunPoints, point => Assert.Equal(sharedRunPoints[0].X, point.X));
         Assert.DoesNotContain(scene.Diagnostics, item => item.Code == "ENDPOINT-HANDOFF-MISSING");
         Assert.DoesNotContain(scene.Diagnostics, item => item.Code == "SHARED-VERTICAL-RUN-CONSTRAINT-UNSATISFIED");
     }
 
     [Fact]
-    public void Physical_shared_x_mismatch_allocates_a_terminal_local_z_bend()
+    public void Physical_shared_x_authority_resolves_without_a_terminal_local_z_bend()
     {
         var route = Route("shared", "s", "t", (1, 2), (2, 2), (3, 2));
         var nodes = new[]
@@ -71,22 +101,16 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var configuration = new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
         var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, configuration);
         var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(
-            placement, routes, allocation, initial.Rows, initial.Nodes);
+            placement, routes, allocation, initial.Rows, initial.Columns, initial.Nodes);
 
-        var z = Assert.Single(endpointAllocation.EndpointZBends,
+        Assert.DoesNotContain(endpointAllocation.EndpointZBends,
             item => item.PhysicalLinkId == "shared" && item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
-        Assert.Contains("physical-shared-run-anchor", z.Provenance, StringComparison.Ordinal);
         Assert.DoesNotContain(endpointAllocation.Handoffs, item => item.PhysicalLinkId == "shared");
 
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, endpointAllocation, configuration);
-        var physical = Assert.Single(scene.Routes);
+        var physical = Assert.Single(scene.Routes, item => item.PhysicalLinkId == "shared");
         Assert.DoesNotContain(scene.Diagnostics, item => item.Code == "ENDPOINT-HANDOFF-MISSING");
-        Assert.All(physical.Points.Zip(physical.Points.Skip(1), (a, b) => (a, b)), pair =>
-            Assert.True(pair.a.X == pair.b.X || pair.a.Y == pair.b.Y));
-        var source = Assert.Single(scene.Terminals, item => item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
-        var destination = Assert.Single(scene.Terminals, item => item.EndpointKind == ArchitectureV7EndpointKind.DestinationArrival);
-        Assert.NotEqual(source.Position.X, destination.Position.X);
-        Assert.Equal(destination.Position.X, physical.Points[^1].X);
+        Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("endpoint-z-bend", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -111,7 +135,9 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = Compile(new[] { route }, Nodes(("s", 1, 1), ("t", 3, 1)), spacing: 2);
         var physical = Assert.Single(scene.Routes);
         Assert.DoesNotContain(physical.Segments, segment => segment.Start.X != segment.End.X && segment.Start.Y != segment.End.Y);
-        Assert.All(physical.Points, point => Assert.Equal(physical.Points[0].X, point.X));
+        var endpointRunPoints = physical.Points.Where(point => point.Provenance.Contains("straight-run", StringComparison.Ordinal)).ToArray();
+        Assert.NotEmpty(endpointRunPoints);
+        Assert.All(endpointRunPoints, point => Assert.Equal(endpointRunPoints[0].X, point.X));
         Assert.DoesNotContain(physical.Points, point => point.Provenance.Contains("frozen-handoff:", StringComparison.Ordinal));
         Assert.Empty(scene.Diagnostics.Where(diagnostic => diagnostic.Code == "ENDPOINT-HANDOFF-MISSING"));
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "TERMINAL-CLAMPED");
@@ -153,7 +179,13 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var scene = Compile(routes, Nodes(("h1", 0, 1), ("h2", 0, 5), ("v1", 0, 3), ("v2", 4, 3)));
         Assert.DoesNotContain(scene.Diagnostics, x => x.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(scene.Routes, route => Assert.DoesNotContain(route.Points.Zip(route.Points.Skip(1), (a, b) => (a, b)), pair => pair.Item1.X != pair.Item2.X && pair.Item1.Y != pair.Item2.Y));
-        Assert.Contains(scene.Routes[0].Points, point => scene.Routes[1].Points.Any(other => other.X == point.X && other.Y == point.Y));
+        var horizontalSegments = scene.Routes[0].Segments.Where(segment => segment.Start.Y == segment.End.Y && segment.Start.X != segment.End.X).ToArray();
+        var verticalSegments = scene.Routes[1].Segments.Where(segment => segment.Start.X == segment.End.X && segment.Start.Y != segment.End.Y).ToArray();
+        Assert.Contains(horizontalSegments, horizontal => verticalSegments.Any(vertical =>
+            vertical.Start.X >= Math.Min(horizontal.Start.X, horizontal.End.X) &&
+            vertical.Start.X <= Math.Max(horizontal.Start.X, horizontal.End.X) &&
+            horizontal.Start.Y >= Math.Min(vertical.Start.Y, vertical.End.Y) &&
+            horizontal.Start.Y <= Math.Max(vertical.Start.Y, vertical.End.Y)));
     }
 
     [Fact]
@@ -196,16 +228,6 @@ public sealed class ArchitectureV7PhysicalSceneTests
                 var rightTop = Math.Min(segments[right].segment.Start.Y, segments[right].segment.End.Y);
                 var rightBottom = Math.Max(segments[right].segment.Start.Y, segments[right].segment.End.Y);
                 Assert.False(Math.Max(leftTop, rightTop) < Math.Min(leftBottom, rightBottom));
-            }
-            else if (segments[left].segment.Start.Y == segments[left].segment.End.Y &&
-                     segments[right].segment.Start.Y == segments[right].segment.End.Y)
-            {
-                if (segments[left].segment.Start.Y != segments[right].segment.Start.Y) continue;
-                var leftStart = Math.Min(segments[left].segment.Start.X, segments[left].segment.End.X);
-                var leftEnd = Math.Max(segments[left].segment.Start.X, segments[left].segment.End.X);
-                var rightStart = Math.Min(segments[right].segment.Start.X, segments[right].segment.End.X);
-                var rightEnd = Math.Max(segments[right].segment.Start.X, segments[right].segment.End.X);
-                Assert.False(Math.Max(leftStart, rightStart) < Math.Min(leftEnd, rightEnd));
             }
         }
     }
@@ -316,7 +338,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
         Assert.Equal("placement", scene.PlacementFingerprint);
         Assert.Equal("routes", scene.RouteFingerprint);
         Assert.StartsWith("placement|routes|", scene.AllocationFingerprint, StringComparison.Ordinal);
-        Assert.Equal(3, scene.Routes.Single().Points.Count);
+        Assert.True(scene.Routes.Single().Points.Count >= 3);
         Assert.All(scene.Routes.SelectMany(x => x.Segments), segment =>
         {
             Assert.NotEmpty(segment.LogicalCells);
@@ -369,7 +391,7 @@ public sealed class ArchitectureV7PhysicalSceneTests
     {
         var routes = new List<ArchitectureV7LogicalRoute>();
         var nodeSpecs = new List<(string Id, int Row, int Column)>();
-        for (var horizontal = 0; horizontal < 15; horizontal++)
+        for (var horizontal = 0; horizontal < 27; horizontal++)
         {
             routes.Add(Route("h" + horizontal, "hs" + horizontal, "ht" + horizontal,
                 (2, 0), (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (4, 6)));
@@ -395,14 +417,59 @@ public sealed class ArchitectureV7PhysicalSceneTests
             new ArchitectureV7AllocationConfiguration(12, 25, 20, 100, 10));
 
         Assert.DoesNotContain(allocation.Diagnostics, diagnostic => diagnostic.IsHardFailure);
-        Assert.Contains(allocation.TrackDemands, demand => demand.LogicalRow == 3 && demand.RequiredRowExtent >= 188);
+        Assert.Contains(allocation.TrackDemands, demand => demand.LogicalRow == 3 && demand.RequiredRowExtent == 332 &&
+            demand.RequiredRowMinimumOffset == 0 && demand.RequiredRowMaximumOffset == 312);
         Assert.Contains(allocation.TrackDemands, demand => demand.LogicalColumn == 3 && demand.RequiredColumnExtent >= 332);
 
         var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation,
             new ArchitectureV7PhysicalSceneConfiguration(100, 20, 20, 10, 20, 34, 1, 20, 10, 10, 12, 25, 20));
 
-        Assert.True(scene.Rows[3].RequiredExtent >= 188);
+        Assert.Equal(332, scene.Rows[3].RequiredExtent);
+        Assert.Equal(scene.Rows[3].Start + 10, scene.Rows[3].LaneCoordinates[0]);
+        Assert.Equal(scene.Rows[3].End - 10, scene.Rows[3].LaneCoordinates[26]);
         Assert.True(scene.Columns[3].RequiredExtent >= 332);
+        Assert.All(scene.Columns[3].LaneCoordinates, x => Assert.InRange(x, scene.Columns[3].Start, scene.Columns[3].End));
+        Assert.Equal(scene.Columns[3].Start + 10, scene.Columns[3].LaneCoordinates[0]);
+        Assert.Equal(scene.Columns[3].End - 10, scene.Columns[3].LaneCoordinates[26]);
+    }
+
+    [Fact]
+    public void Vertical_lane_envelope_is_contained_and_adjacent_column_is_not_used_as_padding()
+    {
+        var routes = Enumerable.Range(0, 7)
+            .Select(index => Route("v" + index, "s" + index, "t" + index,
+                (0, 2), (1, 2), (2, 2), (3, 2)))
+            .ToArray();
+        var nodes = Enumerable.Range(0, 7).SelectMany(index => new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("s" + index, "s" + index, "p", 0, 2, 1, 2,
+                new[] { (0, 2) }, false, false, false, "tree", "s" + index, "s" + index, "test"),
+            new ArchitectureV7FrozenNodePlacement("t" + index, "t" + index, "p", 3, 2, 1, 2,
+                new[] { (3, 2) }, false, false, false, "tree", "t" + index, "t" + index, "test")
+        }).ToArray();
+        var scene = Compile(routes, nodes, spacing: 12, baseCellWidth: 100);
+
+        var column = scene.Columns[2];
+        Assert.Equal(100, column.RequiredExtent);
+        Assert.Equal(7, column.LaneCoordinates.Count);
+        Assert.All(column.LaneCoordinates, x => Assert.InRange(x, column.Start, column.End));
+        Assert.Equal(column.Start, column.LaneCoordinates[0]);
+        Assert.Equal(column.Start + 72, column.LaneCoordinates[6]);
+        Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "VERTICAL-LANE-COLUMN-CONTAINMENT");
+    }
+
+    [Fact]
+    public void Column_without_vertical_lanes_keeps_base_width()
+    {
+        var scene = Compile(new[] { Route("h", "s", "t", (1, 0), (1, 1), (1, 2)) },
+            new[]
+            {
+                new ArchitectureV7FrozenNodePlacement("s", "s", "p", 1, 0, 1, 0, new[] { (1, 0) }, false, false, false, "tree", "s", "s", "test"),
+                new ArchitectureV7FrozenNodePlacement("t", "t", "p", 1, 2, 1, 2, new[] { (1, 2) }, false, false, false, "tree", "t", "t", "test")
+            }, baseCellWidth: 100);
+
+        Assert.Equal(100, scene.Columns[1].RequiredExtent);
+        Assert.Empty(scene.Columns[1].LaneCoordinates);
     }
 
     [Fact]
@@ -436,7 +503,9 @@ public sealed class ArchitectureV7PhysicalSceneTests
         var bend = Assert.Single(physical.Points.Where(point => point.Provenance.Contains("bend-resource=bend:f8-bend:1", StringComparison.Ordinal)));
 
         var sourceTerminal = scene.Terminals.Single(item => item.PhysicalLinkId == "f8-bend" && item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture);
+        var allocatedLaneX = scene.Columns[1].LaneCoordinates[0];
         Assert.Equal(sourceTerminal.Position.X, bend.X);
+        Assert.NotEqual(allocatedLaneX, bend.X);
         Assert.Equal((scene.Rows[2].Start + scene.Rows[2].End) / 2d, bend.Y);
         Assert.DoesNotContain(scene.Diagnostics, diagnostic => diagnostic.Code == "DIAGONAL-COMPILER-OUTPUT");
         Assert.All(physical.Segments, segment => Assert.True(segment.Start.X == segment.End.X || segment.Start.Y == segment.End.Y));

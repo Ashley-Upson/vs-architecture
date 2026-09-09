@@ -18,6 +18,18 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
+    public void Blocked_direct_child_uses_normal_failure_instead_of_direct_child_contract()
+    {
+        var route = Route(new[] { PlacementNode("s", 1, 2), PlacementNode("t", 3, 2) },
+            Link("blocked-direct" , "s", "t"), 5, 5,
+            Grid(5, 5, (2, 2, ArchitectureV7CellCapability.Blocked)));
+
+        Assert.False(route.IsComplete);
+        Assert.DoesNotContain(route.Diagnostics, diagnostic => diagnostic.Code == "DirectChildBlocked");
+        Assert.Contains(route.Diagnostics, diagnostic => diagnostic.Code == "NoLegalDestinationApproach");
+    }
+
+    [Fact]
     public void RoutingAllowed_permits_vertical_down_entry_and_down_exit()
     {
         var route = Route(new[] { PlacementNode("s", 1, 2), PlacementNode("t", 3, 2) }, Link("routing-allowed-down", "s", "t"), 5, 5,
@@ -55,19 +67,17 @@ public sealed class ArchitectureV7LogicalRoutingTests
     [InlineData(3)]
     [InlineData(5)]
     [InlineData(7)]
-    public void Destination_target_spans_use_one_routing_row_early_alignment_when_boundary_blocks_final_bend(int span)
+    public void Destination_target_spans_cross_a_straight_boundary_before_final_entry(int span)
     {
         var targetCentre = 2 + (span - 1) / 2;
         var boundary = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
-        var boundaryRow = Enumerable.Range(targetCentre + 1, 8 - targetCentre).Select(column => (6, column, boundary)).ToArray();
+        var boundaryRow = Enumerable.Range(targetCentre + 1, 8 - targetCentre).Select(column => (4, column, boundary)).ToArray();
         var route = Route(new[] { PlacementNode("s", 1, 8), PlacementNode("t", 7, 2, span) }, Link("boundary-target-" + span, "s", "t"), 9, 11,
             Grid(9, 11, boundaryRow));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code + ":" + item.Message)));
-        Assert.Contains(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 4 && pair.to.Row == 4);
-        Assert.Contains(route.Cells, cell => cell.Row == 5 && cell.Column == targetCentre);
-        Assert.Contains(route.Cells, cell => cell.Row == 6 && cell.Column == targetCentre);
-        Assert.Equal((7, targetCentre), (route.Cells[^1].Row, route.Cells[^1].Column));
-        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 6 && pair.to.Row == 6);
+        Assert.InRange(route.Cells[^1].Column, 2, 2 + span - 1);
+        Assert.Contains(route.Cells, cell => cell.Row == 4 && cell.Column == 8);
+        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 4 && pair.to.Row == 4);
     }
 
     [Fact]
@@ -79,14 +89,42 @@ public sealed class ArchitectureV7LogicalRoutingTests
     }
 
     [Fact]
+    public void Destination_top_entry_selects_an_alternate_span_column_when_centre_approach_is_blocked()
+    {
+        var blockedCentreApproach = (4, 5, ArchitectureV7CellCapability.Blocked);
+        var route = Route(new[] { PlacementNode("s", 1, 5), PlacementNode("obstacle", 3, 5), PlacementNode("t", 5, 3, 3) },
+            Link("alternate-destination-entry", "s", "t"), 7, 9,
+            Grid(7, 9, blockedCentreApproach));
+
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code + ":" + item.Message)));
+        Assert.Equal((5, 3), (route.Cells[^1].Row, route.Cells[^1].Column));
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "destination-approach"));
+        Assert.Equal(new[] { 3 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
+        Assert.Equal(3, evidence.Candidates[0].CandidateColumn);
+        Assert.True(evidence.Candidates[0].Accepted);
+    }
+
+    [Fact]
+    public void Destination_top_entry_searches_the_complete_wide_span_in_deterministic_distance_order()
+    {
+        var route = Route(new[] { PlacementNode("s", 1, 1), PlacementNode("t", 5, 3, 7) },
+            Link("wide-destination-entry", "s", "t"), 7, 13, GeneralGrid(7, 13));
+
+        Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code + ":" + item.Message)));
+        var evidence = Assert.Single(route.AttemptEvidence.Where(item => item.Scenario == "destination-approach"));
+        Assert.Equal(new[] { 3 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
+        Assert.Equal(3, evidence.Candidates.Single(candidate => candidate.Accepted).CandidateColumn);
+    }
+
+    [Fact]
     public void Destination_approach_from_right_crosses_straight_boundary_before_vertical_entry()
     {
         var boundary = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
-        var boundaryRow = Enumerable.Range(3, 6).Select(column => (6, column, boundary)).ToArray();
+        var boundaryRow = Enumerable.Range(3, 6).Select(column => (4, column, boundary)).ToArray();
         var route = Route(new[] { PlacementNode("s", 1, 8), PlacementNode("t", 7, 2) }, Link("destination-right-cross-project", "s", "t", "source", "target"), 9, 11,
             Grid(9, 11, boundaryRow));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code + ":" + item.Message)));
-        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 6 && pair.to.Row == 6);
+        Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (from, to) => (from, to)), pair => pair.from.Row == 4 && pair.to.Row == 4);
         Assert.Equal((7, 2), (route.Cells[^1].Row, route.Cells[^1].Column));
     }
 
@@ -95,12 +133,12 @@ public sealed class ArchitectureV7LogicalRoutingTests
     {
         var route = Route(new[] { PlacementNode("s", 1, 1), PlacementNode("t", 7, 3, 5) }, Link("terminal-entry", "s", "t"), 9, 9, GeneralGrid(9, 9));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(item => item.Code)));
-        Assert.Equal((7, 5), (route.Cells[^1].Row, route.Cells[^1].Column));
-        Assert.DoesNotContain(route.Cells, cell => cell.Row == 7 && cell.Column != 5);
+        Assert.InRange(route.Cells[^1].Column, 3, 7);
+        Assert.DoesNotContain(route.Cells, cell => cell.Row == 7 && cell.Column != route.Cells[^1].Column);
     }
 
     [Fact]
-    public void Destination_approach_fails_when_target_centre_boundary_transition_is_blocked()
+    public void Destination_approach_fails_when_the_final_boundary_is_straight_only()
     {
         var boundary = ArchitectureV7CellCapability.RoutingAllowed | ArchitectureV7CellCapability.ProjectBoundary | ArchitectureV7CellCapability.StraightPassthroughOnly;
         var blockedTargetColumn = (6, 5, ArchitectureV7CellCapability.Blocked | ArchitectureV7CellCapability.HeaderBlocked);
@@ -108,7 +146,21 @@ public sealed class ArchitectureV7LogicalRoutingTests
         var route = Route(new[] { PlacementNode("s", 1, 8), PlacementNode("t", 7, 3, 5) }, Link("impossible-destination", "s", "t"), 9, 9,
             Grid(9, 9, boundaryRow));
         Assert.False(route.IsComplete);
+        Assert.Contains(route.Diagnostics, item => item.Code == "NoLegalDestinationApproach");
+    }
+
+    [Fact]
+    public void Destination_approach_fails_explicitly_when_every_top_entry_candidate_is_blocked()
+    {
+        var blocked = Enumerable.Range(3, 3).Select(column => (4, column, ArchitectureV7CellCapability.Blocked)).ToArray();
+        var route = Route(new[] { PlacementNode("s", 1, 1), PlacementNode("t", 5, 3, 3) },
+            Link("all-destination-entries-blocked", "s", "t"), 7, 9, Grid(7, 9, blocked));
+
+        Assert.False(route.IsComplete);
         Assert.Contains(route.Diagnostics, diagnostic => diagnostic.Code == "NoLegalDestinationApproach");
+        var evidence = route.AttemptEvidence.Last(item => item.Scenario == "destination-approach");
+        Assert.Equal(new[] { 3, 4, 5 }, evidence.Candidates.Select(candidate => candidate.CandidateColumn));
+        Assert.All(evidence.Candidates, candidate => Assert.False(candidate.Accepted));
     }
 
     [Fact]
@@ -159,7 +211,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
         Assert.Contains(route.Cells, cell => cell.Row == 3 && cell.Column == 1);
         Assert.DoesNotContain(route.Cells, cell => cell.Row == 3 && cell.Column == 5);
         Assert.DoesNotContain(route.Cells.Zip(route.Cells.Skip(1), (a, b) => (a, b)), pair => pair.a.Row == pair.b.Row && Math.Abs(pair.a.Column - pair.b.Column) > 1);
-        Assert.Equal(2, route.OperationMetrics.ContinuationCandidatesEvaluated);
+        Assert.Equal(3, route.OperationMetrics.ContinuationCandidatesEvaluated);
     }
 
     [Fact]
@@ -193,7 +245,7 @@ public sealed class ArchitectureV7LogicalRoutingTests
         var nodes = new[] { PlacementNode("s", 1, 100), PlacementNode("t", 7, 150), PlacementNode("obstacle", 3, 100) };
         var route = Route(nodes, Link("wide-grid", "s", "t"), 9, width, GeneralGrid(9, width));
         Assert.True(route.IsComplete, string.Join(";", route.Diagnostics.Select(diagnostic => diagnostic.Code + ":" + diagnostic.Message)));
-        Assert.Equal(2, route.OperationMetrics.ContinuationCandidatesEvaluated);
+        Assert.Equal(3, route.OperationMetrics.ContinuationCandidatesEvaluated);
         Assert.True(route.OperationMetrics.ContinuationCandidatesEvaluated < width / 10);
     }
 

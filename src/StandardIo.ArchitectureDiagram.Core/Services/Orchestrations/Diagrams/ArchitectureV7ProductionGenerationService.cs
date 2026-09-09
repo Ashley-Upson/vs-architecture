@@ -47,11 +47,14 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         {
             var stopwatch = Stopwatch.StartNew();
             try { return action(); }
-            finally { stageTimings[name] = stopwatch.ElapsedMilliseconds; }
+            finally
+            {
+                stageTimings[name] = stopwatch.ElapsedMilliseconds;
+            }
         }
         var pre = Configuration(job.Rendering.Layout);
         var semanticEvidence = SemanticEvidence(diagram);
-        EnsureCanonicalPopulation(job.InputPath, diagram, semanticEvidence);
+        var canonicalPopulation = CanonicalPopulationEvidence(job.InputPath, semanticEvidence);
         var analyserInputEvidence = AnalyserInputEvidence(job);
         var projection = Measure("projection", () => new ArchitectureV7PhysicalProjectionStage().Project(diagram, new ArchitectureV7ProjectionPolicy(
             job.Rendering.NodeDuplication.AllowDuplicateNodes ? ArchitectureV7ProjectionMode.ConfiguredDuplicateBranches : ArchitectureV7ProjectionMode.Canonical,
@@ -60,8 +63,41 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
         var sizing = Measure("sizing", () => new ArchitectureV7PreRoutingNodeSpanSizer().Size(ownership, pre));
         var reservation = Measure("reservation", () => new ArchitectureV7ReservationReconciliationStage().Reconcile(new ArchitectureV7ReservedRoleConstraintInspector().Inspect(ownership, pre)));
         var ordinarySchedule = Measure("ordinary-layer-scheduling", () => new ArchitectureV7OrdinaryLayerSchedulingStage().Schedule(ownership, reservation));
+        var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, ordinarySchedule.Reservations);
         var trees = Measure("recursive-placement", () => new ArchitectureV7RecursiveTreeGridStage().Build(sizing, ordinarySchedule));
-        var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees, pre));
+        var layerSchedulingEvidence = trees.Trees.Select(tree =>
+        {
+            var treeNodeIds = new HashSet<string>(tree.Placements.Select(item => item.PhysicalNodeId), StringComparer.Ordinal);
+            var externalLinks = projection.PhysicalLinks.Where(link => treeNodeIds.Contains(link.SourcePhysicalNodeId) &&
+                projection.PhysicalNodes.FirstOrDefault(node => node.PhysicalNodeId == link.DestinationPhysicalNodeId)?.IsExternal == true).ToArray();
+            var anchor = externalLinks.Length == 0 ? null : "External";
+            var anchorNodeRow = anchor is null ? (int?)null : ordinarySchedule.LayerByPhysicalNodeId
+                .Where(item => projection.PhysicalNodes.FirstOrDefault(node => node.PhysicalNodeId == item.Key)?.IsExternal == true)
+                .Select(item => (int?)item.Value).FirstOrDefault();
+            var rootLayer = ordinarySchedule.LayerByPhysicalNodeId[tree.RootPhysicalNodeId];
+            var orderedLayers = tree.Placements.GroupBy(item => ordinarySchedule.LayerByPhysicalNodeId[item.PhysicalNodeId])
+                .OrderBy(group => group.Key).Select(group => new { Layer = group.Key, Nodes = group.Select(item => item.PhysicalNodeId).OrderBy(id => id, StringComparer.Ordinal).ToArray() }).ToArray();
+            var insertedLayers = anchorNodeRow is null ? Array.Empty<int>() : Enumerable.Range(rootLayer + 1, Math.Max(0, anchorNodeRow.Value - rootLayer - 1))
+                .Where(layer => !ordinarySchedule.Reservations.Reservations.Any(reservation => reservation.NodeRow / 2 == layer)).ToArray();
+            return new
+            {
+                TreeRoot = tree.RootPhysicalNodeId,
+                PositionalDepth = tree.Placements.FirstOrDefault(item => item.PhysicalNodeId == tree.RootPhysicalNodeId)?.NodeLayer,
+                DeepestDescendantDepth = tree.Placements.Where(item => item.PhysicalNodeId != tree.RootPhysicalNodeId).Select(item => (int?)item.NodeLayer).Max(),
+                LowerAnchor = anchor,
+                LowerAnchorRow = anchorNodeRow,
+                ChosenRootRow = rootLayer,
+                ChosenRowsForTreeLevels = orderedLayers,
+                InsertedOrdinaryLayers = insertedLayers,
+                ReservedRowsBeforeReconciliation = reservation.Table.Reservations.Select(item => new { item.Name, item.NodeRow, item.Order }).ToArray(),
+                ReservedRowsAfterReconciliation = ordinarySchedule.Reservations.Reservations.Select(item => new { item.Name, item.NodeRow, item.Order }).ToArray()
+            };
+        }).OrderBy(item => item.TreeRoot, StringComparer.Ordinal).ToArray();
+        var projectDisplayNames = diagram.Projects.ToDictionary(project => project.Id, project => project.Name, StringComparer.Ordinal);
+        var placement = Measure("project-composition", () => new ArchitectureV7ProjectCompositionStage().Compose(trees, pre, projectDisplayNames));
+        var gridStructure = ArchitectureV7GridStructureAudit.Audit(placement);
+        if (!gridStructure.IsValid)
+            throw new InvalidOperationException("V7 final grid structure is not routable: " + string.Join("; ", gridStructure.Findings));
         var corridorDiscovery = Measure("corridor-discovery", () => new ArchitectureV7CapabilityCorridorDiscoveryStage().Discover(placement));
         var routes = Measure("logical-routing", () => new ArchitectureV7LogicalRelationshipRoutingStage().Route(placement, projection));
         var corridorProjection = Measure("route-corridor-projection", () => new ArchitectureV7RouteCorridorProjectionStage().Project(placement, routes, corridorDiscovery));
@@ -74,13 +110,118 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             job.Rendering.Layout.VerticalNodeClearance, job.Rendering.Layout.ParallelLaneSpacing, job.Rendering.Layout.EdgePortSpacing, job.Rendering.Layout.LinkNodeWidthPadding);
         var initialScene = Measure("physical-sizing-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routes, allocation, sceneConfiguration));
         var endpointAllocation = Measure("endpoint-geometry-allocation", () => new ArchitectureV7EndpointGeometryAllocationStage()
-            .Allocate(placement, routes, allocation, initialScene.Rows, initialScene.Nodes));
+            .Allocate(placement, routes, allocation, initialScene.Rows, initialScene.Columns, initialScene.Nodes));
         var downstreamAllocation = endpointAllocation;
         var unsimplifiedScene = Measure("physical-endpoint-scene-compilation", () => new ArchitectureV7PhysicalSceneCompilationStage()
             .Compile(placement, routes, downstreamAllocation, sceneConfiguration));
         var simplification = Measure("allocated-route-simplification", () => new ArchitectureV7AllocatedRouteSimplificationStage().Simplify(unsimplifiedScene));
         var scene = simplification.Scene;
-        var scheduledReservation = new ArchitectureV7ReservationReconciliationResult(reservation.Inspection, ordinarySchedule.Reservations);
+        var reservationEvidence = scheduledReservation.Table.Reservations
+            .Where(item => !item.IsExternal)
+            .OrderBy(item => item.Order)
+            .Select(item =>
+            {
+                var requirement = reservation.Inspection.Requirements.FirstOrDefault(candidate => string.Equals(candidate.ReservationName, item.Name, StringComparison.Ordinal));
+                var matchedIds = new HashSet<string>(requirement?.Constraints.Select(constraint => constraint.PhysicalNodeId) ?? Array.Empty<string>(), StringComparer.Ordinal);
+                var matches = projection.PhysicalNodes
+                    .Where(node => matchedIds.Contains(node.PhysicalNodeId))
+                    .OrderBy(node => node.PhysicalNodeId, StringComparer.Ordinal)
+                    .Select(node =>
+                    {
+                        var placementNode = placement.Nodes.FirstOrDefault(candidate => candidate.PhysicalNodeId == node.PhysicalNodeId);
+                        var sceneNode = scene.Nodes.FirstOrDefault(candidate => candidate.PhysicalNodeId == node.PhysicalNodeId);
+                        return new
+                        {
+                            node.PhysicalNodeId,
+                            node.Name,
+                            node.IsStandalone,
+                            node.IsExternal,
+                            MatchedReservationPattern = item.Pattern,
+                            ReconciledReservedRow = item.NodeRow,
+                            ReconciledReservedLayer = ArchitectureV7ReservationCoordinates.TreeLayerFromReservedNodeRow(item.NodeRow),
+                            ScheduledLogicalLayer = ordinarySchedule.LayerByPhysicalNodeId.TryGetValue(node.PhysicalNodeId, out var scheduledLayer) ? scheduledLayer : (int?)null,
+                            RecursivePlacementRow = placementNode?.DiagramRow,
+                            Detached = placementNode?.IsDetached ?? false,
+                            ComposedCommonGridRow = placementNode?.DiagramRow,
+                            FinalPhysicalY = sceneNode?.Bounds.Top
+                        };
+                    }).ToArray();
+                return new
+                {
+                    Role = item.Name,
+                    ReconciledRow = item.NodeRow,
+                    MatchedNodeCount = matches.Length,
+                    DistinctScheduledLogicalRows = matches.Select(match => match.ScheduledLogicalLayer).Distinct().ToArray(),
+                    DistinctFinalPhysicalY = matches.Select(match => match.FinalPhysicalY).Distinct().ToArray(),
+                    Nodes = matches
+                };
+            }).ToArray();
+        var physicalRowSizingEvidence = scene.Rows
+            .Where(row => ArchitectureV7PhysicalSceneSizing.IsRoutingRow(row.LogicalIndex, placement))
+            .Select(row =>
+            {
+                var horizontalRuns = downstreamAllocation.Runs.Where(run => run.Orientation == ArchitectureV7RunOrientation.Horizontal && run.Cells[0].Row == row.LogicalIndex).ToArray();
+                var assignments = horizontalRuns.Select(run => downstreamAllocation.RunAssignments.First(item => item.RunId == run.RunId)).ToArray();
+                var laneOrdinals = assignments.Select(item => item.LaneOrdinal).Distinct().OrderBy(value => value).ToArray();
+                var demands = downstreamAllocation.TrackDemands.Where(demand => demand.LogicalRow == row.LogicalIndex && demand.RequiredRowExtent > 0).ToArray();
+                var requiredTopBottomClearance = demands.Length == 0 ? 0 : demands.Max(demand => demand.RequiredRowExtent - (demand.RequiredRowMaximumOffset - demand.RequiredRowMinimumOffset)) / 2d;
+                var usedCoordinates = laneOrdinals.Where(value => value >= 0 && value < row.LaneCoordinates.Count).Select(value => row.LaneCoordinates[value]).ToArray();
+                var minUsed = usedCoordinates.Length == 0 ? (double?)null : usedCoordinates.Min();
+                var maxUsed = usedCoordinates.Length == 0 ? (double?)null : usedCoordinates.Max();
+                return new
+                {
+                    Row = row.LogicalIndex,
+                    PhysicalRowTop = row.Start,
+                    PhysicalRowBottom = row.End,
+                    PhysicalRowHeight = row.RequiredExtent,
+                    HorizontalLaneCount = laneOrdinals.Length,
+                    ConfiguredLaneSpacing = downstreamAllocation.AllocationConfiguration?.ParallelLaneSpacing ?? 0,
+                    LaneOrdinalToPhysicalY = laneOrdinals.ToDictionary(value => value.ToString(CultureInfo.InvariantCulture), value => row.LaneCoordinates[value]),
+                    MinimumUsedLaneY = minUsed,
+                    MaximumUsedLaneY = maxUsed,
+                    ActualUsedLaneEnvelope = minUsed is null || maxUsed is null ? 0 : maxUsed.Value - minUsed.Value,
+                    UnusedSpaceAboveUsedLanes = minUsed is null ? row.RequiredExtent : minUsed.Value - row.Start,
+                    UnusedSpaceBelowUsedLanes = maxUsed is null ? row.RequiredExtent : row.End - maxUsed.Value,
+                    RequiredTopClearance = requiredTopBottomClearance,
+                    RequiredBottomClearance = requiredTopBottomClearance,
+                    FinalRowExtentReason = demands.Length == 0 ? "routing-row-minimum" : string.Join(";", demands.Select(demand => demand.Provenance).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
+                    TrackDemandExtents = demands.Select(demand => new { demand.RequiredRowExtent, demand.RequiredRowMinimumOffset, demand.RequiredRowMaximumOffset, demand.Provenance }).ToArray()
+                };
+            }).OrderByDescending(item => item.PhysicalRowHeight).ThenBy(item => item.Row).ToArray();
+        var physicalColumnSizingEvidence = scene.Columns
+            .Select(column =>
+            {
+                var verticalRuns = downstreamAllocation.Runs.Where(run => run.Orientation == ArchitectureV7RunOrientation.Vertical && run.Cells[0].Column == column.LogicalIndex).ToArray();
+                var assignments = verticalRuns.Select(run => downstreamAllocation.RunAssignments.First(item => item.RunId == run.RunId)).ToArray();
+                var laneOrdinals = assignments.Select(item => item.LaneOrdinal).Distinct().OrderBy(value => value).ToArray();
+                var laneOffsets = laneOrdinals.Select(value => value * sceneConfiguration.ParallelLaneSpacing).ToArray();
+                var demands = downstreamAllocation.TrackDemands.Where(demand => demand.LogicalColumn == column.LogicalIndex && demand.RequiredColumnExtent > 0).ToArray();
+                var nodeSpans = placement.Nodes.Where(node => node.LogicalFootprint.Any(cell => cell.Column == column.LogicalIndex)).Select(node => node.LogicalSpan).ToArray();
+                var oldLaneCoordinates = laneOrdinals.Select(value => Math.Round(column.Start + column.RequiredExtent / 2d + value * sceneConfiguration.ParallelLaneSpacing, MidpointRounding.AwayFromZero)).ToArray();
+                var oldOverflowLeft = oldLaneCoordinates.Length == 0 ? 0 : Math.Max(0, column.Start - oldLaneCoordinates.Min());
+                var oldOverflowRight = oldLaneCoordinates.Length == 0 ? 0 : Math.Max(0, oldLaneCoordinates.Max() - column.End);
+                return new
+                {
+                    LogicalColumn = column.LogicalIndex,
+                    BaseWidth = sceneConfiguration.BaseCellWidth,
+                    NodeSpanDemand = nodeSpans.Length == 0 ? 0 : nodeSpans.Max() * sceneConfiguration.BaseCellWidth,
+                    VerticalLaneCount = laneOrdinals.Length,
+                    LaneOrdinals = laneOrdinals,
+                    MinimumUsedOffset = laneOffsets.Length == 0 ? 0 : laneOffsets.Min(),
+                    MaximumUsedOffset = laneOffsets.Length == 0 ? 0 : laneOffsets.Max(),
+                    RoutingDemand = demands.Length == 0 ? 0 : demands.Max(demand => demand.RequiredColumnExtent),
+                    FinalColumnWidth = column.RequiredExtent,
+                    ColumnLeft = column.Start,
+                    ColumnRight = column.End,
+                    MinimumLaneX = column.LaneCoordinates.Count == 0 ? (double?)null : column.LaneCoordinates.Min(),
+                    MaximumLaneX = column.LaneCoordinates.Count == 0 ? (double?)null : column.LaneCoordinates.Max(),
+                    OverflowLeft = column.LaneCoordinates.Count == 0 ? 0 : Math.Max(0, column.Start - column.LaneCoordinates.Min()),
+                    OverflowRight = column.LaneCoordinates.Count == 0 ? 0 : Math.Max(0, column.LaneCoordinates.Max() - column.End),
+                    BeforeFixOverflowLeft = oldOverflowLeft,
+                    BeforeFixOverflowRight = oldOverflowRight,
+                    BeforeFixMaximumOverflow = Math.Max(oldOverflowLeft, oldOverflowRight)
+                };
+            }).OrderByDescending(item => item.BeforeFixMaximumOverflow).ThenBy(item => item.LogicalColumn).ToArray();
         var acceptance = Measure("acceptance-validation", () => new ArchitectureV7FinalAcceptanceValidationStage().Validate(projection, ownership, sizing, scheduledReservation, placement, routes, downstreamAllocation, scene, sceneConfiguration));
         var evidenceStage = new ArchitectureV7RoutingEvidenceStage();
         var routingEvidence = evidenceStage.Analyze(placement, routes);
@@ -222,6 +363,29 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             requirement.RequiredWidth,
             Reason = requirement.Provenance
         }).OrderByDescending(item => item.ChosenSpan).ThenBy(item => item.NodeName, StringComparer.Ordinal).ToArray();
+        var projectPlacementEvidence = placement.Projects.Select(project =>
+        {
+            var transform = project.Transform;
+            var bound = scene.ProjectBounds.FirstOrDefault(item => item.ProjectId == project.ProjectId);
+            var projectNodeIds = new HashSet<string>(projection.PhysicalNodes.Where(node => node.ProjectId == project.ProjectId && !node.IsExternal && !node.IsStandalone)
+                .Select(node => node.PhysicalNodeId), StringComparer.Ordinal);
+            var nodeBounds = scene.Nodes.Where(node => projectNodeIds.Contains(node.PhysicalNodeId)).Select(node => node.Bounds).ToArray();
+            return new
+            {
+                project.ProjectId,
+                project.DisplayName,
+                CommonOrigin = new { transform.RegionOriginRow, transform.RegionOriginColumn },
+                CommonBounds = new { Top = transform.RegionOriginRow, Left = transform.RegionOriginColumn, Right = transform.RegionOriginColumn + transform.Width - 1, Bottom = transform.RegionOriginRow + transform.Height - 1 },
+                HeaderCells = project.Cells.Where(cell => cell.Capabilities.HasFlag(ArchitectureV7CellCapability.HeaderBlocked)).Select(cell => new { cell.Row, cell.Column }).ToArray(),
+                HeaderText = project.DisplayName,
+                BoundaryCells = project.Cells.Where(cell => cell.Capabilities.HasFlag(ArchitectureV7CellCapability.ProjectBoundary)).Select(cell => new { cell.Row, cell.Column }).ToArray(),
+                SurroundCells = project.Cells.Where(cell => !cell.Capabilities.HasFlag(ArchitectureV7CellCapability.NodeAllowed) && !cell.Capabilities.HasFlag(ArchitectureV7CellCapability.Blocked)).Select(cell => new { cell.Row, cell.Column, cell.Capabilities }).ToArray(),
+                NodeBounds = nodeBounds,
+                PhysicalProjectBounds = bound?.Bounds,
+                PhysicalProjectBoundsProvenance = bound?.Provenance,
+                RendererProjectBounds = bound?.Bounds
+            };
+        }).ToArray();
         var failedRouteTraces = routes.Routes.Where(route => tracedFailureIds.Contains(route.PhysicalLinkId, StringComparer.Ordinal)).Select(route => new
         {
             RelationshipId = route.PhysicalLinkId,
@@ -325,6 +489,7 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
             stages = new
             {
                 semantic = semanticEvidence,
+                canonicalPopulation,
                 analyserInput = analyserInputEvidence,
                     projection = new { PhysicalNodeCount = projection.PhysicalNodes.Count, PhysicalLinkCount = projection.PhysicalLinks.Count, Fingerprint = projection.FreezeFingerprint },
                 ownership = new { DecisionCount = ownership.Decisions.Count, Fingerprint = ownership.FreezeFingerprint },
@@ -332,6 +497,31 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                 reservation = new { ReservationCount = scheduledReservation.Table.Reservations.Count, Fingerprint = scheduledReservation.Table.Fingerprint },
                 ordinaryLayerSchedule = new { Fingerprint = ordinarySchedule.Fingerprint, Diagnostics = ordinarySchedule.Diagnostics, AssignedNodeCount = ordinarySchedule.LayerByPhysicalNodeId.Count },
                 placement = new { ProjectCount = placement.Projects.Count, NodeCount = placement.Nodes.Count, Fingerprint = placement.PlacementFingerprint },
+                gridStructure,
+                gridStructureEvidence = new
+                {
+                    Nodes = placement.Nodes.OrderBy(node => node.DiagramRow).ThenBy(node => node.DiagramColumn).ThenBy(node => node.PhysicalNodeId, StringComparer.Ordinal)
+                        .Select(node => new
+                        {
+                            node.PhysicalNodeId,
+                            Name = projection.PhysicalNodes.FirstOrDefault(candidate => candidate.PhysicalNodeId == node.PhysicalNodeId)?.Name,
+                            node.DiagramRow,
+                            node.DiagramColumn,
+                            node.LogicalSpan,
+                            node.CentreCell,
+                            node.IsDetached,
+                            node.TreeId,
+                            Footprint = node.LogicalFootprint.Select(cell => new { cell.Row, cell.Column }).ToArray()
+                        }).ToArray(),
+                    Rows = Enumerable.Range(0, placement.DiagramGrid.RowCount)
+                        .Select(row => new
+                        {
+                            Row = row,
+                            NodeCount = placement.Nodes.Count(node => node.DiagramRow == row),
+                            OccupiedColumns = placement.DiagramGrid.Cells.Where(cell => cell.Row == row && cell.OccupantId is not null).Select(cell => cell.Column).ToArray(),
+                            Capabilities = placement.DiagramGrid.Cells.Where(cell => cell.Row == row).GroupBy(cell => cell.Capabilities).Select(group => new { Capabilities = group.Key, Count = group.Count() }).ToArray()
+                        }).ToArray()
+                },
                 corridorDiscovery = new
                 {
                     HorizontalCount = corridorDiscovery.Horizontal.Count,
@@ -398,7 +588,12 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
                     , ["v7-routing-placement-evidence.json"] = JsonSerializer.Serialize(new { routingEvidence, placementEvidence, representative, allocationSceneEvidence }, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-endpoint-region-evidence.json"] = JsonSerializer.Serialize(endpointEvidence, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-failed-route-traces.json"] = JsonSerializer.Serialize(failedRouteTraces, new JsonSerializerOptions { WriteIndented = true })
-                    , ["v7-node-span-evidence.json"] = JsonSerializer.Serialize(nodeSpanEvidence, new JsonSerializerOptions { WriteIndented = true })
+                     , ["v7-node-span-evidence.json"] = JsonSerializer.Serialize(nodeSpanEvidence, new JsonSerializerOptions { WriteIndented = true })
+                     , ["v7-project-placement-evidence.json"] = JsonSerializer.Serialize(projectPlacementEvidence, new JsonSerializerOptions { WriteIndented = true })
+                     , ["v7-layer-scheduling-evidence.json"] = JsonSerializer.Serialize(layerSchedulingEvidence, new JsonSerializerOptions { WriteIndented = true })
+                     , ["v7-reservation-evidence.json"] = JsonSerializer.Serialize(reservationEvidence, new JsonSerializerOptions { WriteIndented = true })
+                     , ["v7-physical-row-sizing-evidence.json"] = JsonSerializer.Serialize(physicalRowSizingEvidence, new JsonSerializerOptions { WriteIndented = true })
+                     , ["v7-physical-column-sizing-evidence.json"] = JsonSerializer.Serialize(physicalColumnSizingEvidence, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-corridor-usage-evidence.json"] = JsonSerializer.Serialize(corridorProjection, new JsonSerializerOptions { WriteIndented = true })
                     , ["v7-route-simplification-evidence.json"] = JsonSerializer.Serialize(new
                     {
@@ -426,19 +621,26 @@ public sealed class ArchitectureV7ProductionGenerationService : IArchitectureGen
 
     }
 
-    private static void EnsureCanonicalPopulation(string? inputPath, ArchitectureDiagramModel diagram, SemanticPopulationEvidence semanticEvidence)
+    private static object CanonicalPopulationEvidence(string? inputPath, SemanticPopulationEvidence semanticEvidence)
     {
-        if (!IsCanonicalContentManagementTarget(inputPath)) return;
-
-        var nodeCount = semanticEvidence.NodeCount;
-        var relationshipCount = semanticEvidence.RelationshipCount;
         const int expectedSemanticNodes = 225;
         const int expectedSemanticRelationships = 340;
-        if (nodeCount == expectedSemanticNodes && relationshipCount == expectedSemanticRelationships) return;
-
-        throw new InvalidOperationException(
-            $"V7-CANONICAL-POPULATION-MISMATCH: expected semantic nodes={expectedSemanticNodes}, relationships={expectedSemanticRelationships}; " +
-            $"observed semantic nodes={nodeCount}, relationships={relationshipCount}. Generation stopped before routing and evidence interpretation.");
+        var isCanonicalTarget = IsCanonicalContentManagementTarget(inputPath);
+        var matches = !isCanonicalTarget ||
+            semanticEvidence.NodeCount == expectedSemanticNodes &&
+            semanticEvidence.RelationshipCount == expectedSemanticRelationships;
+        return new
+        {
+            IsCanonicalTarget = isCanonicalTarget,
+            ExpectedSemanticNodes = expectedSemanticNodes,
+            ExpectedSemanticRelationships = expectedSemanticRelationships,
+            ObservedSemanticNodes = semanticEvidence.NodeCount,
+            ObservedSemanticRelationships = semanticEvidence.RelationshipCount,
+            Matches = matches,
+            Diagnostic = matches ? null :
+                $"V7-CANONICAL-POPULATION-MISMATCH: expected semantic nodes={expectedSemanticNodes}, relationships={expectedSemanticRelationships}; " +
+                $"observed semantic nodes={semanticEvidence.NodeCount}, relationships={semanticEvidence.RelationshipCount}. Review artifact is non-canonical and must not be interpreted as canonical evidence."
+        };
     }
 
     private static bool IsCanonicalContentManagementTarget(string? inputPath) =>
@@ -668,22 +870,26 @@ internal sealed class ArchitectureV7MechanicalDrawioRenderer
         var projectOrigins = new Dictionary<string, (double Left, double Top)>(StringComparer.Ordinal);
         foreach (var project in placement.Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal))
         {
-            var transform = project.Transform; var id = Id("project", project.ProjectId);
-            var projectNodeIds = new HashSet<string>(projection.PhysicalNodes.Where(item => string.Equals(item.ProjectId, project.ProjectId, StringComparison.Ordinal) && !item.IsExternal && !item.IsStandalone).Select(item => item.PhysicalNodeId), StringComparer.Ordinal);
-            var projectNodes = scene.Nodes.Where(item => projectNodeIds.Contains(item.PhysicalNodeId)).ToArray();
-            var left = projectNodes.Length == 0 ? 0 : projectNodes.Min(item => item.Bounds.Left);
-            var top = projectNodes.Length == 0 ? 0 : projectNodes.Min(item => item.Bounds.Top);
-            var right = projectNodes.Length == 0 ? 0 : projectNodes.Max(item => item.Bounds.Right);
-            var bottom = projectNodes.Length == 0 ? 0 : projectNodes.Max(item => item.Bounds.Bottom);
+            var id = Id("project", project.ProjectId);
+            var physicalBounds = scene.ProjectBounds.FirstOrDefault(item => string.Equals(item.ProjectId, project.ProjectId, StringComparison.Ordinal))?.Bounds
+                ?? throw new InvalidOperationException($"V7 renderer requires authoritative physical bounds for project '{project.ProjectId}'.");
+            var left = physicalBounds.Left;
+            var top = physicalBounds.Top;
+            var right = physicalBounds.Right;
+            var bottom = physicalBounds.Bottom;
             projectOrigins[project.ProjectId] = (left, top);
             if (settings.ShowProjectContainers)
-                root.Add(Vertex(id, project.ProjectId, Style(settings.ProjectContainerStyle), "1", left, top, Math.Max(0, right - left), Math.Max(0, bottom - top)));
+                root.Add(Vertex(id, project.DisplayName, Style(settings.ProjectContainerStyle), "1", left, top, Math.Max(0, right - left), Math.Max(0, bottom - top)));
         }
         foreach (var node in scene.Nodes.OrderBy(x => x.PhysicalNodeId, StringComparer.Ordinal))
         {
             var source = projection.PhysicalNodes.FirstOrDefault(x => x.PhysicalNodeId == node.PhysicalNodeId); if (source is null) continue;
             var id = Id("node", node.PhysicalNodeId); nodes[node.PhysicalNodeId] = id;
-            var parent = source.ProjectId is not null && placement.Projects.Any(x => x.ProjectId == source.ProjectId) ? Id("project", source.ProjectId) : "1";
+            // A project-owned standalone node belongs to the standalone/root
+            // region in the rendered document. ProjectId identifies ownership
+            // for analysis, but must not override the standalone placement
+            // authority.
+            var parent = source.ProjectId is not null && !source.IsStandalone && placement.Projects.Any(x => x.ProjectId == source.ProjectId) ? Id("project", source.ProjectId) : "1";
             var nodeX = node.Bounds.Left;
             var nodeY = node.Bounds.Top;
             if (source.ProjectId is not null && projectOrigins.TryGetValue(source.ProjectId, out var origin))

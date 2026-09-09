@@ -237,7 +237,11 @@ public sealed record ArchitectureV7PhysicalTrackDemand(
     double RequiredRowExtent,
     double RequiredColumnExtent,
     IReadOnlyList<string> ResourceIds,
-    string Provenance);
+    string Provenance,
+    double RequiredRowMinimumOffset = 0,
+    double RequiredRowMaximumOffset = 0,
+    double RequiredColumnMinimumOffset = 0,
+    double RequiredColumnMaximumOffset = 0);
 
 public sealed record ArchitectureV7AllocationDiagnostic(string Code, string Message, bool IsHardFailure, string? PhysicalLinkId = null, string? RunId = null,
     string? PhysicalNodeId = null, string? EndpointKind = null, int? RequiredWidth = null, int? AvailableWidth = null, int? LogicalSpan = null,
@@ -357,44 +361,57 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
                 if (laneIds.Length == 0) continue;
                 var spacing = group.Select(run => lanes.First(lane => lane.RunIds.Contains(run.RunId, StringComparer.Ordinal)).ParallelLaneSpacing)
                     .DefaultIfEmpty(configuration.ParallelLaneSpacing).Max();
-                var envelope = checked(2 * configuration.ResourceClearance + Math.Max(0, laneIds.Length - 1) * spacing);
                 var row = group.Key.Orientation == ArchitectureV7RunOrientation.Horizontal ? group.Key.Item2 : -1;
                 var column = group.Key.Orientation == ArchitectureV7RunOrientation.Vertical ? group.Key.Item2 : -1;
-                AddDemand(demands, row, column, group.Key.Orientation == ArchitectureV7RunOrientation.Horizontal ? envelope : 0,
-                    group.Key.Orientation == ArchitectureV7RunOrientation.Vertical ? envelope : 0, laneIds,
-                    "lane-envelope;lane-count=" + laneIds.Length);
+                var offsets = Enumerable.Range(0, laneIds.Length).Select(index => (double)index * spacing).ToArray();
+                AddDemand(demands, row, column,
+                    group.Key.Orientation == ArchitectureV7RunOrientation.Horizontal ? offsets[0] : 0,
+                    group.Key.Orientation == ArchitectureV7RunOrientation.Horizontal ? offsets[offsets.Length - 1] : null,
+                    group.Key.Orientation == ArchitectureV7RunOrientation.Vertical ? offsets[0] : 0,
+                    group.Key.Orientation == ArchitectureV7RunOrientation.Vertical ? offsets[offsets.Length - 1] : null,
+                    configuration.ResourceClearance, laneIds, "lane-envelope;lane-count=" + laneIds.Length);
             }
         }
 
         foreach (var handoff in handoffs)
         {
             if (handoff.LogicalCell is not { } cell) continue;
-            var extent = Math.Max(0, 2 * handoff.RequiredClearance + 2 * Math.Abs(handoff.RelativePhysicalOffset));
             AddDemand(demands, cell.Row, cell.Column,
-                handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical ? extent : 0,
-                handoff.HandoffOrientation == ArchitectureV7RunOrientation.Horizontal ? extent : 0,
-                new[] { handoff.ResourceId }, "endpoint-handoff;cell-centre-relative-offset");
+                handoff.HandoffOrientation == ArchitectureV7RunOrientation.Horizontal ? handoff.RelativePhysicalOffset : null,
+                handoff.HandoffOrientation == ArchitectureV7RunOrientation.Horizontal ? handoff.RelativePhysicalOffset : null,
+                handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical ? handoff.RelativePhysicalOffset : null,
+                handoff.HandoffOrientation == ArchitectureV7RunOrientation.Vertical ? handoff.RelativePhysicalOffset : null,
+                handoff.RequiredClearance, new[] { handoff.ResourceId }, "endpoint-handoff;cell-centre-relative-offset");
         }
         foreach (var bend in bends)
         {
             var position = bend.EffectiveRelativePosition;
-            var extent = Math.Max(0, 2 * bend.RequiredClearance);
             AddDemand(demands, bend.Cell.Row, bend.Cell.Column,
-                Math.Max(extent, 2 * Math.Abs(position.YOffset) + extent),
-                Math.Max(extent, 2 * Math.Abs(position.XOffset) + extent),
-                new[] { bend.BendId }, "bend-envelope;cell-centre-relative-offset");
+                position.YOffset, position.YOffset, position.XOffset, position.XOffset,
+                bend.RequiredClearance, new[] { bend.BendId }, "bend-envelope;cell-centre-relative-offset");
         }
 
         return demands.OrderBy(item => item.Key.Row).ThenBy(item => item.Key.Column)
             .Select(item => item.Value.Freeze(item.Key.Row, item.Key.Column)).ToArray();
 
         static void AddDemand(Dictionary<(int Row, int Column), MutableTrackDemand> demands, int row, int column,
-            double rowExtent, double columnExtent, IEnumerable<string> resourceIds, string provenance)
+            double? rowMinimumOffset, double? rowMaximumOffset, double? columnMinimumOffset, double? columnMaximumOffset,
+            double clearance, IEnumerable<string> resourceIds, string provenance)
         {
             var key = (row, column);
             if (!demands.TryGetValue(key, out var demand)) demands[key] = demand = new();
-            demand.RowExtent = Math.Max(demand.RowExtent, rowExtent);
-            demand.ColumnExtent = Math.Max(demand.ColumnExtent, columnExtent);
+            if (rowMinimumOffset.HasValue && rowMaximumOffset.HasValue)
+            {
+                demand.RowMinimumOffset = Math.Min(demand.RowMinimumOffset, rowMinimumOffset.Value);
+                demand.RowMaximumOffset = Math.Max(demand.RowMaximumOffset, rowMaximumOffset.Value);
+                demand.RowClearance = Math.Max(demand.RowClearance, clearance);
+            }
+            if (columnMinimumOffset.HasValue && columnMaximumOffset.HasValue)
+            {
+                demand.ColumnMinimumOffset = Math.Min(demand.ColumnMinimumOffset, columnMinimumOffset.Value);
+                demand.ColumnMaximumOffset = Math.Max(demand.ColumnMaximumOffset, columnMaximumOffset.Value);
+                demand.ColumnClearance = Math.Max(demand.ColumnClearance, clearance);
+            }
             demand.ResourceIds.UnionWith(resourceIds);
             demand.Provenance.Add(provenance);
         }
@@ -405,13 +422,26 @@ public sealed class ArchitectureV7CollectiveAllocationFreeze
 
     private sealed class MutableTrackDemand
     {
-        public double RowExtent { get; set; }
-        public double ColumnExtent { get; set; }
+        public double RowMinimumOffset { get; set; } = double.PositiveInfinity;
+        public double RowMaximumOffset { get; set; } = double.NegativeInfinity;
+        public double RowClearance { get; set; }
+        public double ColumnMinimumOffset { get; set; } = double.PositiveInfinity;
+        public double ColumnMaximumOffset { get; set; } = double.NegativeInfinity;
+        public double ColumnClearance { get; set; }
         public HashSet<string> ResourceIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> Provenance { get; } = new(StringComparer.Ordinal);
 
-        public ArchitectureV7PhysicalTrackDemand Freeze(int row, int column) => new(row, column, RowExtent, ColumnExtent,
-            ResourceIds.OrderBy(id => id, StringComparer.Ordinal).ToArray(), string.Join(";", Provenance.OrderBy(value => value, StringComparer.Ordinal)));
+        public ArchitectureV7PhysicalTrackDemand Freeze(int row, int column)
+        {
+            var rowExtent = double.IsPositiveInfinity(RowMinimumOffset) ? 0 : RowMaximumOffset - RowMinimumOffset + 2 * RowClearance;
+            var columnExtent = double.IsPositiveInfinity(ColumnMinimumOffset) ? 0 : ColumnMaximumOffset - ColumnMinimumOffset + 2 * ColumnClearance;
+            return new(row, column, rowExtent, columnExtent,
+                ResourceIds.OrderBy(id => id, StringComparer.Ordinal).ToArray(), string.Join(";", Provenance.OrderBy(value => value, StringComparer.Ordinal)),
+                double.IsPositiveInfinity(RowMinimumOffset) ? 0 : RowMinimumOffset,
+                double.IsNegativeInfinity(RowMaximumOffset) ? 0 : RowMaximumOffset,
+                double.IsPositiveInfinity(ColumnMinimumOffset) ? 0 : ColumnMinimumOffset,
+                double.IsNegativeInfinity(ColumnMaximumOffset) ? 0 : ColumnMaximumOffset);
+        }
     }
 
     private static string Fingerprint(IEnumerable<string> values)
