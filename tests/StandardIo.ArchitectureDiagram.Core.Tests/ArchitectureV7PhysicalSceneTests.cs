@@ -840,6 +840,79 @@ public sealed class ArchitectureV7PhysicalSceneTests
             $"outer distance={outerBend.Y - source.Bounds.Bottom}; inner distance={innerBend.Y - source.Bounds.Bottom}");
     }
 
+    [Fact]
+    public void Endpoint_boundary_offset_must_not_overlap_an_unrelated_horizontal_run()
+    {
+        // The first route ends in a wide destination span. Its final vertical
+        // resource is in the left-most column, while fit-first terminal
+        // packing places the terminal at the span midpoint. The second route
+        // deliberately owns a neighbouring horizontal run on the same
+        // physical row. This reproduces the production failure mode where the
+        // compiler emits the endpoint offset as a horizontal segment over that
+        // unrelated run.
+        var routes = new[]
+        {
+            Route("wide-fan-out", "wide-source", "wide-target", (0, 1), (1, 1), (2, 1), (3, 1)),
+            Route("neighbouring-horizontal", "horizontal-source", "horizontal-target", (0, 4), (1, 4), (1, 0), (2, 0))
+        };
+        var nodes = new[]
+        {
+            new ArchitectureV7FrozenNodePlacement("wide-source", "wide-source", "p", 0, 0, 4, 0,
+                new[] { (0, 0), (0, 1), (0, 2), (0, 3) }, false, false, false, "tree", "wide-source", "wide-source", "test"),
+            new ArchitectureV7FrozenNodePlacement("wide-target", "wide-target", "p", 3, 1, 1, 1,
+                new[] { (3, 1) }, false, false, false, "tree", "wide-target", "wide-target", "test"),
+            new ArchitectureV7FrozenNodePlacement("horizontal-source", "horizontal-source", "p", 0, 4, 1, 4,
+                new[] { (0, 4) }, false, false, false, "tree", "horizontal-source", "horizontal-source", "test"),
+            new ArchitectureV7FrozenNodePlacement("horizontal-target", "horizontal-target", "p", 2, 0, 1, 0,
+                new[] { (2, 0) }, false, false, false, "tree", "horizontal-target", "horizontal-target", "test")
+        };
+        var placement = Placement(nodes);
+        var routeFreeze = new ArchitectureV7LogicalRouteFreeze(routes, Array.Empty<ArchitectureV7RouteDiagnostic>(), "placement", "projection", "routes");
+        var allocation = new ArchitectureV7CollectivePostRoutingAllocationStage().Allocate(placement, routeFreeze,
+            new ArchitectureV7AllocationConfiguration(4, 4, 0));
+        var configuration = new ArchitectureV7PhysicalSceneConfiguration(10, 20, 20, 10, 20, 20, 1, 0, 2, 1, 4, 4, 0);
+        var initial = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, allocation, configuration);
+        var endpointAllocation = new ArchitectureV7EndpointGeometryAllocationStage().Allocate(
+            placement, routeFreeze, allocation, initial.Rows, initial.Columns, initial.Nodes);
+        var fixedRun = endpointAllocation.EndpointLaneCoordinates.Single(item => item.PhysicalLinkId == "wide-fan-out" &&
+            item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture).RunId;
+        var forcedTerminals = endpointAllocation.Terminals.Select(item => item.PhysicalLinkId == "wide-fan-out" &&
+            item.EndpointKind == ArchitectureV7EndpointKind.SourceDeparture
+            ? item with { RelativeOffset = item.RelativeOffset + 20 }
+            : item).ToArray();
+        var forcedBoundary = endpointAllocation.WithEndpointGeometry(
+            forcedTerminals, endpointAllocation.Approaches, endpointAllocation.EndpointLaneCoordinates,
+            endpointAllocation.EndpointZBends.Append(new ArchitectureV7EndpointZBend(
+                "wide-fan-out", "wide-source", ArchitectureV7EndpointKind.SourceDeparture, fixedRun,
+                "synthetic-edge-to-lane-offset-reproduction")).ToArray());
+        var scene = new ArchitectureV7PhysicalSceneCompilationStage().Compile(placement, routeFreeze, forcedBoundary, configuration);
+
+        var boundary = scene.Routes.Single(route => route.PhysicalLinkId == "wide-fan-out");
+        Assert.NotEqual(boundary.Points[0].X, boundary.Points[2].X);
+        Assert.Contains(boundary.Points, point => point.Provenance.Contains("endpoint-z-bend", StringComparison.Ordinal));
+
+        var segments = scene.Routes.SelectMany(route => route.Segments.Select(segment => (route.PhysicalLinkId, segment))).ToArray();
+        var reproduced = false;
+        var overlaps = 0;
+        for (var left = 0; left < segments.Length; left++)
+        for (var right = left + 1; right < segments.Length; right++)
+        {
+            if (segments[left].PhysicalLinkId == segments[right].PhysicalLinkId) continue;
+            var a = segments[left].segment;
+            var b = segments[right].segment;
+            if (a.Start.Y != a.End.Y || b.Start.Y != b.End.Y || a.Start.Y != b.Start.Y) continue;
+            var overlap = Math.Min(Math.Max(a.Start.X, a.End.X), Math.Max(b.Start.X, b.End.X)) -
+                Math.Max(Math.Min(a.Start.X, a.End.X), Math.Min(b.Start.X, b.End.X));
+            if (overlap > 0 &&
+                (segments[left].PhysicalLinkId == "wide-fan-out" || segments[right].PhysicalLinkId == "wide-fan-out"))
+            {
+                reproduced = true;
+                overlaps++;
+            }
+        }
+        Assert.True(reproduced && overlaps > 0, "Synthetic fixture did not reproduce an endpoint-boundary overlap.");
+    }
+
     private static ArchitectureV7PhysicalSceneFreeze Compile(IReadOnlyList<ArchitectureV7LogicalRoute> routes,
         IReadOnlyList<ArchitectureV7FrozenNodePlacement> nodes, double spacing = 4, double baseCellWidth = 10)
     {
