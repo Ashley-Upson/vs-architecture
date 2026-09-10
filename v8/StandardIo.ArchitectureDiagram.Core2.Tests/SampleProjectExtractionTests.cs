@@ -24,6 +24,7 @@ public sealed partial class SampleProjectExtractionTests
         "Exposures.ClassStudentManager",
         "Exposures.SchoolImportManager",
         "Exposures.SchoolManager",
+        "Exposures.SchoolReportManager",
         "Exposures.StudentManager",
         "Exposures.TeacherManager",
         "IServiceCollectionExtensions"
@@ -97,9 +98,9 @@ public sealed partial class SampleProjectExtractionTests
         // When: exercise the operation under test.
         ProjectModel[] trees = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
         // Then: verify the resulting contract.
-        Assert.Equal(expected: 7, actual: trees.Length);
+        Assert.Equal(expected: 8, actual: trees.Length);
 
-        Assert.Equal(expected: expectedRootTypeNames.Select(selector: name => prefix + name), actual: trees.Take(count: 7)
+        Assert.Equal(expected: expectedRootTypeNames.Select(selector: name => prefix + name), actual: trees.Take(count: 8)
             .Select(selector: tree => tree.Types![0].Name));
 
         ProjectModel schoolManager = Assert.Single(collection: trees, predicate: tree => tree.Types![0].Name == prefix + "Exposures.SchoolManager");
@@ -151,8 +152,8 @@ public sealed partial class SampleProjectExtractionTests
             .ToArray();
         // Then: interface definitions become class labels; unique concrete type relationships remain exact.
 
-        Assert.Equal(expected: 7, actual: expectedTrees.Length);
-        Assert.Equal(expected: 9, actual: cells.Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
+        Assert.Equal(expected: 8, actual: expectedTrees.Length);
+        Assert.Equal(expected: 10, actual: cells.Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
 
         var allNames = cells.Where(cell => cell.Attribute("typeName") != null)
             .ToDictionary(cell => (string)cell.Attribute("id")!, cell => (string)cell.Attribute("typeName")!);
@@ -285,30 +286,30 @@ public sealed partial class SampleProjectExtractionTests
                 .OfType<string>()
                 .ToArray();
 
-            Assert.Equal(expected: 46, actual: typeNames.Length);
+            Assert.Equal(expected: 52, actual: typeNames.Length);
             Assert.Equal(expected: typeNames.Length, actual: typeNames.Distinct()
                 .Count());
         }
 
         if (format == "drawio")
         {
-            Assert.Equal(expected: noDuplicates ? 3 : 9, actual: document.Descendants(name: "mxCell")
+            Assert.Equal(expected: noDuplicates ? 3 : 10, actual: document.Descendants(name: "mxCell")
                 .Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
 
-            Assert.Equal(expected: noDuplicates ? 56 : 101, actual: document.Descendants(name: "mxCell")
+            Assert.Equal(expected: noDuplicates ? 62 : 107, actual: document.Descendants(name: "mxCell")
                 .Count(predicate: cell => (string? )cell.Attribute(name: "edge") == "1"));
         }
         else
         {
             System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
 
-            Assert.Equal(expected: noDuplicates ? 3 : 9, actual: document.Descendants(name: svg + "g")
+            Assert.Equal(expected: noDuplicates ? 3 : 10, actual: document.Descendants(name: svg + "g")
                 .Count(predicate: group => group.Attribute(name: "id")is not null));
 
-            Assert.Equal(expected: noDuplicates ? 46 : 81, actual: document.Descendants(name: svg + "g")
+            Assert.Equal(expected: noDuplicates ? 52 : 87, actual: document.Descendants(name: svg + "g")
                 .Count(predicate: group => group.Attribute(name: "data-type")is not null));
 
-            Assert.Equal(expected: noDuplicates ? 56 : 101, actual: document.Descendants(name: svg + "polyline")
+            Assert.Equal(expected: noDuplicates ? 62 : 107, actual: document.Descendants(name: svg + "polyline")
                 .Count());
 
             Assert.Single(collection: document.Descendants(name: "style"));

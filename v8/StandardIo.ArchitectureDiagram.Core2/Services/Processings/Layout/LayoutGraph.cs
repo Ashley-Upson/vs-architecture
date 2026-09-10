@@ -37,14 +37,21 @@ internal static class LayoutGraph
 
     internal static RenderNode[] OwnedBranch(RenderProject project, string rootId)
     {
-        var ids = new HashSet<string>();
+        // A shared descendant belongs to this branch when all its parents belong to it.
+        var ids = new HashSet<string> { rootId };
         var pending = new Queue<string>();
         pending.Enqueue(rootId);
         while (pending.Count > 0)
         {
             string id = pending.Dequeue();
-            if (!ids.Add(id)) continue;
-            foreach (var child in OwnedChildren(project, id)) pending.Enqueue(child.Id);
+            foreach (var child in Children(project, id))
+            {
+                if (!ids.Contains(child.Id) && Parents(project, child.Id).All(parent => ids.Contains(parent.Id)))
+                {
+                    ids.Add(child.Id);
+                    pending.Enqueue(child.Id);
+                }
+            }
         }
         return project.Nodes.Where(node => ids.Contains(node.Id)).ToArray();
     }
@@ -56,17 +63,49 @@ internal static class LayoutGraph
             var children = OwnedChildren(project, parent.Id);
             if (children.Length > 1) yield return children;
         }
-        // Shared nodes start independent branches; only vertically overlapping branches compete for horizontal space.
+        // Unrelated trees reserve their full bounds. Shared descendants compete at their own level, not against an ancestor's full bounds.
         var roots = project.Nodes.Where(node => Parents(project, node.Id).Length != 1)
             .Select(root => (Root: root, Branch: OwnedBranch(project, root.Id)))
             .OrderBy(pair => pair.Branch.Min(node => node.Y)).ToArray();
+        var outgoing = project.Connections.ToLookup(edge => edge.SourceId, edge => edge.TargetId);
+        var descendants = roots.ToDictionary(pair => pair.Root.Id, pair =>
+        {
+            var result = new HashSet<string>();
+            var pending = new Queue<string>(outgoing[pair.Root.Id]);
+            while (pending.Count > 0)
+            {
+                string id = pending.Dequeue();
+                if (!result.Add(id)) continue;
+                foreach (string child in outgoing[id]) pending.Enqueue(child);
+            }
+            return result;
+        });
         var seen = new HashSet<string>();
         foreach (double top in roots.Select(pair => pair.Branch.Min(node => node.Y)).Distinct())
         {
             var group = roots.Where(pair => pair.Branch.Min(node => node.Y) <= top && pair.Branch.Max(node => node.Y + node.Height) > top)
                 .Select(pair => pair.Root).ToArray();
             string key = string.Join("|", group.Select(root => root.Id).OrderBy(id => id, StringComparer.Ordinal));
-            if (group.Length > 1 && seen.Add(key)) yield return group;
+            if (group.Length <= 1 || !seen.Add(key)) continue;
+            bool Related(RenderNode a, RenderNode b) => descendants[a.Id].Contains(b.Id) || descendants[b.Id].Contains(a.Id);
+            if (!group.Any(a => group.Any(b => a.Id != b.Id && Related(a, b))))
+            {
+                yield return group;
+                continue;
+            }
+            for (int first = 0; first < group.Length; first++)
+            for (int second = first + 1; second < group.Length; second++)
+            {
+                var a = group[first]; var b = group[second];
+                if (!Related(a, b)) { yield return new[] { a, b }; continue; }
+                var ancestor = descendants[a.Id].Contains(b.Id) ? a : b;
+                var shared = ancestor.Id == a.Id ? b : a;
+                var sharedIds = OwnedBranch(project, shared.Id).Select(node => node.Id).ToHashSet();
+                var lower = OwnedBranch(project, ancestor.Id).Where(node => node.Y >= shared.Y && !sharedIds.Contains(node.Id)).ToArray();
+                var lowerIds = lower.Select(node => node.Id).ToHashSet();
+                foreach (var frontier in lower.Where(node => !Parents(project, node.Id).Any(parent => lowerIds.Contains(parent.Id))))
+                    yield return new[] { shared, frontier };
+            }
         }
     }
 
@@ -93,16 +132,8 @@ internal static class LayoutGraph
     }
     internal static void MoveSubtree(RenderProject project, string id, double delta)
     {
-        var pending = new Queue<string>();
-        var visited = new HashSet<string>();
-        pending.Enqueue(id);
-        while (pending.Count > 0)
-        {
-            string current = pending.Dequeue();
-            if (!visited.Add(current)) continue;
-            foreach (var child in OwnedChildren(project, current)) pending.Enqueue(child.Id);
-            Move(project, current, delta);
-        }
+        foreach (var node in OwnedBranch(project, id))
+            Move(project, node.Id, delta);
     }
     internal static IEnumerable<RenderNode[]> SharedGroups(RenderProject project) => project.Nodes
         .Where(node => Parents(project, node.Id).Length > 1)

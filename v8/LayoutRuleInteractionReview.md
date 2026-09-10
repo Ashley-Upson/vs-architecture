@@ -80,3 +80,30 @@ These checks establish compatibility for the tested graphs, including the existi
 or cycles. The runtime validator does not yet constitute a general edge-crossing
 or obstacle-avoidance solver. Shared dependency links are intentionally allowed to
 join branches; owned child branches must keep their reserved space.
+
+
+## ContentManagement investigation: shared descendants inside ancestor branches
+
+Checkpoint `4b1026e` was pushed before diagnostic work. The temporary test harness captured the extracted ContentManagement model, per-rule timings and coordinate changes outside the repository. It reduced a failing 124-node, 186-connection branch to an 18-node graph, then a six-node school report scenario reproduced the same contradictory spacing requirement.
+
+The old branch grouping classified a shared dependency as an independent tree even when its parents were inside another tree. When the ancestor tree had a deeper sibling branch, their vertical bounds overlapped. Branch spacing forced the shared dependency outside the entire ancestor tree; shared-parent centring pulled it back between parents inside that tree. The full diagnostic run grew to approximately 2.3e21 pixels wide within 30 iterations. Branch spacing was the largest measured rule cost in that trace. More iterations were amplifying the conflict.
+
+The permanent sample contains:
+
+```text
+SchoolReportManager
+  SchoolReportProcessingService -> SchoolReportBroker
+  StudentReportProcessingService -> SchoolReportBroker
+                                  -> StudentReportService -> StudentReportBroker
+```
+
+Each dependency is injected through its interface. The new acceptance test extracts the real sample, splits out this tree, and exercises the complete layout rule pipeline. On the checkpoint layout it failed after 100 iterations with an unresolved SchoolReportBroker shared-parent constraint.
+
+The correction keeps two ownership facts consistent:
+
+- When all parents of a shared descendant belong to a branch, its bounds and movement belong to that branch too. A consumer outside the branch still prevents exclusive ownership.
+- A shared descendant is separated from the ancestor's branches starting at its own level. It is not separated from the ancestor's entire enclosing rectangle. Unrelated trees retain full-branch separation.
+
+The test checks six rendered nodes, six connections, finite and compact bounds, shared-parent centring, root centring and row spacing. Existing sample acceptance tests exercise the report scenario beside the original trees and across the project pair. The reviewed extraction fixture adds twelve report types/interfaces and twelve relationships; existing extracted entries are unchanged.
+
+Temporary instrumentation was removed from the checkout. This resolves the reproduced ownership conflict; a successful sample test alone is not evidence that every constraint in the complete ContentManagement graph converges.

@@ -353,6 +353,18 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Read"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -370,6 +382,18 @@
         },
         {
           "Name": "UpdateStudent"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Read"
         }
       ]
     },
@@ -421,6 +445,18 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Read"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -443,6 +479,18 @@
         },
         {
           "Name": "UpdateStudent"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Read"
         }
       ]
     },
@@ -474,21 +522,21 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "FrameworkType": "Interface",
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": [],
-      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data"
+      "Methods": []
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "FrameworkType": "Class",
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": [],
-      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data"
+      "Methods": []
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
@@ -618,6 +666,18 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateReport"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager",
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -699,6 +759,18 @@
         },
         {
           "Name": "UpdateSchoolAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateReport"
         }
       ]
     },
@@ -1063,6 +1135,18 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Read"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -1200,6 +1284,18 @@
         },
         {
           "Name": "RaiseStudentUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Read"
         }
       ]
     },
@@ -1767,6 +1863,18 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateReport"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -1805,6 +1913,18 @@
         },
         {
           "Name": "UpdateStudent"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateReport"
         }
       ]
     },
@@ -1903,6 +2023,18 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateReport"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -1951,6 +2083,18 @@
         },
         {
           "Name": "UpdateStudent"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateReport"
         }
       ]
     },
@@ -2008,12 +2152,12 @@
     },
     {
       "Name": "cCoder.Eventing.IEventHub",
+      "AssemblyName": "cCoder.Eventing",
       "FrameworkType": "Interface",
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": [],
-      "AssemblyName": "cCoder.Eventing"
+      "Methods": []
     }
   ],
   "Dependencies": [
@@ -2320,6 +2464,13 @@
     },
     {
       "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
       "FromMethod": null,
@@ -2359,6 +2510,13 @@
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
       "FromMethod": "UpdateStudent",
       "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Inheritance",
@@ -2520,6 +2678,27 @@
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "FromMethod": "UpdateSchoolAsync",
       "ToMethod": "UpdateSchoolAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService",
+      "FromMethod": "CreateReport",
+      "ToMethod": "CreateReport"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "FromMethod": "CreateReport",
+      "ToMethod": "CreateReport"
     },
     {
       "DependencyType": "Inheritance",
@@ -2875,6 +3054,20 @@
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -3545,6 +3738,20 @@
     },
     {
       "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker",
+      "FromMethod": "CreateReport",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "FromMethod": "RaiseStudentCreatedAsync",
@@ -3610,6 +3817,27 @@
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker",
+      "FromMethod": "CreateReport",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService",
+      "FromMethod": "CreateReport",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService",
       "FromMethod": null,
       "ToMethod": null
     },
