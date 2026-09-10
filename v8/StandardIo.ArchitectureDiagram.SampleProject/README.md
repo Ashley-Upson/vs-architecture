@@ -11,8 +11,9 @@ EventHub; no database, HTTP or message transport is required. The sample and its
 project target .NET 10 because cCoder.Eventing 2026.9.9.847 targets .NET 10.
 
 Partials, validation layers and exception-handling infrastructure remain deliberately
-omitted. cCoder.CodeAnalysis is attached with diagnostics visible; this is not a
-claim of full standards compliance.
+omitted. The sample-local .editorconfig disables only the rules requiring that
+extra infrastructure, pass-through removal, flat storage DTOs or configuration
+layers. Compiler, formatting, naming and visibility diagnostics remain enabled.
 
 ## Data model
 
@@ -88,8 +89,8 @@ operations are intended for sequential use, not concurrent production traffic.
 
 [ExpectedModel.json](ExpectedModel.json) specifies the complete expected extraction:
 
-- 94 types: 48 internal classes, 41 internal interfaces and 5 external boundaries.
-- 235 dependencies: 41 interface implementation links and 194 explicit call links.
+- 95 types: 48 source classes, 41 source interfaces and 6 external boundaries.
+- 236 dependencies: 41 interface implementation links and 195 explicit call links.
 - External boundaries: List<T>, IEventHub, and the three DI/eventing registration
   extension classes. External members are not expanded.
 - Exact model properties, dependency fields and method names.
@@ -137,3 +138,7 @@ No Draw.io file is generated yet.
 
 ProjectModelSplitter acceptance now verifies six root models (five managers plus the DI registration helper) and a final model for
 the six leftover data/context types. See [Splitting.md](../Splitting.md).
+
+CRUD methods include their model name (for example, CreateSchoolAsync). Services
+and brokers are internal; public managers are registered through DI factories.
+The reviewed oracle includes the resulting GetRequiredService boundary link.

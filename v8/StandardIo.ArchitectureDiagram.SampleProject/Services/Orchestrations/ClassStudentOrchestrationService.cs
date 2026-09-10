@@ -1,51 +1,46 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations;
-
-public sealed class ClassStudentOrchestrationService : IClassStudentOrchestrationService
+internal sealed class ClassStudentOrchestrationService : IClassStudentOrchestrationService
 {
     private readonly IClassStudentProcessingService classStudentProcessingService;
     private readonly IClassStudentEventProcessingService classStudentEventProcessingService;
-
-    public ClassStudentOrchestrationService(
-        IClassStudentProcessingService classStudentProcessingService,
-        IClassStudentEventProcessingService classStudentEventProcessingService)
+    public ClassStudentOrchestrationService(IClassStudentProcessingService classStudentProcessingService, IClassStudentEventProcessingService classStudentEventProcessingService)
     {
         this.classStudentProcessingService = classStudentProcessingService;
         this.classStudentEventProcessingService = classStudentEventProcessingService;
     }
 
-    public async Task<ClassStudent> CreateAsync(ClassStudent model)
+    public async Task<ClassStudent> CreateClassStudentAsync(ClassStudent classStudent)
     {
-        ClassStudent result = classStudentProcessingService.Create(model: model);
-        await classStudentEventProcessingService.RaiseCreatedAsync(model: result);
+        ClassStudent result = classStudentProcessingService.CreateClassStudent(classStudent: classStudent);
+        await classStudentEventProcessingService.RaiseClassStudentCreatedAsync(classStudent: result);
         return result;
     }
 
-    public async Task<ClassStudent> ReadAsync(string id)
+    public async Task<ClassStudent> ReadClassStudentAsync(string classStudentId)
     {
-        ClassStudent result = classStudentProcessingService.Read(id: id);
-        await classStudentEventProcessingService.RaiseReadAsync(model: result);
+        ClassStudent result = classStudentProcessingService.ReadClassStudent(classStudentId: classStudentId);
+        await classStudentEventProcessingService.RaiseClassStudentReadAsync(classStudent: result);
         return result;
     }
 
-    public async Task<ClassStudent> UpdateAsync(ClassStudent model)
+    public async Task<ClassStudent> UpdateClassStudentAsync(ClassStudent updatedClassStudent)
     {
-        ClassStudent result = classStudentProcessingService.Update(model: model);
-        await classStudentEventProcessingService.RaiseUpdatedAsync(model: result);
+        ClassStudent result = classStudentProcessingService.UpdateClassStudent(updatedClassStudent: updatedClassStudent);
+        await classStudentEventProcessingService.RaiseClassStudentUpdatedAsync(classStudent: result);
         return result;
     }
 
-    public async Task DeleteAsync(string id)
+    public async Task DeleteClassStudentAsync(string classStudentId)
     {
-        ClassStudent model = classStudentProcessingService.Read(id: id);
-        classStudentProcessingService.Delete(id: id);
-        await classStudentEventProcessingService.RaiseDeletedAsync(model: model);
+        ClassStudent model = classStudentProcessingService.ReadClassStudent(classStudentId: classStudentId);
+        classStudentProcessingService.DeleteClassStudent(classStudentId: classStudentId);
+        await classStudentEventProcessingService.RaiseClassStudentDeletedAsync(classStudent: model);
     }
 }

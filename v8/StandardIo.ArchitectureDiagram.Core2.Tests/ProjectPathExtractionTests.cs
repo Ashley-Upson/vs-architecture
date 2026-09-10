@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using System.IO;
 using System.Linq;
@@ -15,11 +14,21 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Projects;
 using StandardIo.ArchitectureDiagram.Core2.Services.Processings.Projects;
 using Xunit;
+using StandardIo.ArchitectureDiagram.Core2.Exposures;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
-
-public sealed class ProjectPathExtractionTests
+public sealed partial class ProjectPathExtractionTests
 {
+    [Fact]
+    public async Task ShouldUseTheProjectsGeneratedGlobalUsings()
+    {
+        using var fixture = new ProjectFolder();
+        fixture.Write("Entry.cs", "public class Entry { public StringBuilder Builder { get; set; } }");
+        fixture.Write("obj/Debug/net10.0/ProvingGround.GlobalUsings.g.cs", "global using System.Text;");
+        var model = await TestServices.Get<ProjectModelBuilder>().BuildAsync(fixture.ProjectPath);
+        Assert.Equal("System.Text.StringBuilder", Assert.Single(Assert.Single(model.Types!).Properties!).Type);
+    }
+
     [Theory]
     [InlineData("project")]
     [InlineData("directory")]
@@ -27,62 +36,66 @@ public sealed class ProjectPathExtractionTests
     [InlineData("relative")]
     public async Task ShouldResolveInputsAndExcludeBuildOutputAsync(string inputKind)
     {
+        // Given: the fixture and inputs below.
         using var fixture = new ProjectFolder();
-        fixture.Write("Models/Entry.cs", "public class Entry { public List<string> Names { get; set; } }");
-        fixture.Write("bin/Invalid.cs", "This is not valid C#");
-        fixture.Write("obj/Invalid.cs", "This is not valid C#");
-        fixture.Write("Nested/bin/Invalid.cs", "This is not valid C#");
-        fixture.Write("Readme.txt", "source-folder input");
+        fixture.Write(relativePath: "Models/Entry.cs", text: "public class Entry { public List<string> Names { get; set; } }");
+        fixture.Write(relativePath: "bin/Invalid.cs", text: "This is not valid C#");
+        fixture.Write(relativePath: "obj/Invalid.cs", text: "This is not valid C#");
+        fixture.Write(relativePath: "Nested/bin/Invalid.cs", text: "This is not valid C#");
+        fixture.Write(relativePath: "Readme.txt", text: "source-folder input");
+
         string suppliedPath = inputKind switch
         {
             "directory" => fixture.DirectoryPath,
-            "source" => Path.Combine(fixture.DirectoryPath, "Readme.txt"),
-            "relative" => Path.GetRelativePath(Environment.CurrentDirectory, fixture.ProjectPath),
+            "source" => Path.Combine(path1: fixture.DirectoryPath, path2: "Readme.txt"),
+            "relative" => Path.GetRelativePath(relativeTo: Environment.CurrentDirectory, path: fixture.ProjectPath),
             _ => fixture.ProjectPath
         };
+        // When: exercise the operation under test.
 
-        ProjectModel model = await new ProjectModelBuilder().BuildAsync(suppliedPath);
-
-        Assert.Equal("ProvingGround", model.Name);
-        Assert.Equal(fixture.ProjectPath, model.Path);
-        DefinedType type = Assert.Single(model.Types!);
-        Assert.Equal("Entry", type.Name);
-        Assert.Equal("System.Collections.Generic.List<System.String>", Assert.Single(type.Properties!).Type);
-        Assert.Empty(model.Dependencies!);
-        string snapshot = JsonSerializer.Serialize(model);
-        Assert.Equal(snapshot, JsonSerializer.Serialize(JsonSerializer.Deserialize<ProjectModel>(snapshot)));
+        ProjectModel model = await TestServices.Get<ProjectModelBuilder>().BuildAsync(projectFilePath: suppliedPath);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: "ProvingGround", actual: model.Name);
+        Assert.Equal(expected: fixture.ProjectPath, actual: model.Path);
+        DefinedType type = Assert.Single(collection: model.Types!);
+        Assert.Equal(expected: "Entry", actual: type.Name);
+        Assert.Equal(expected: "System.Collections.Generic.List<System.String>", actual: Assert.Single(collection: type.Properties!).Type);
+        Assert.Empty(collection: model.Dependencies!);
+        string snapshot = JsonSerializer.Serialize(value: model);
+        Assert.Equal(expected: snapshot, actual: JsonSerializer.Serialize(value: JsonSerializer.Deserialize<ProjectModel>(json: snapshot)));
     }
 
     [Fact]
     public async Task ShouldUseDependencyAssembliesBesideTheLatestProjectBuildAsync()
     {
+        // Given: the fixture and inputs below.
         using var fixture = new ProjectFolder();
-        fixture.Write("Entry.cs", "public class Entry { public void Run() { External.Api.Run(); } }");
-        string output = Path.Combine(fixture.DirectoryPath, "bin", "Debug", "net10.0");
-        Directory.CreateDirectory(output);
-        EmitAssembly(Path.Combine(output, "External.dll"), "namespace External; public class Api { public static void Run() {} }");
-        EmitAssembly(Path.Combine(output, "ProvingGround.dll"), "public class OldBuild {}");
-
-        ProjectModel model = await new ProjectModelBuilder().BuildAsync(fixture.ProjectPath);
-
-        Assert.Equal("External.Api", Assert.Single(model.Dependencies!).ToType);
-        DefinedType external = Assert.Single(model.Types!.Where(type => !type.IsInternal));
-        Assert.Equal("External.Api", external.Name);
-        Assert.Empty(external.Methods!);
-        Assert.DoesNotContain(model.Types!, type => type.Name == "OldBuild");
+        fixture.Write(relativePath: "Entry.cs", text: "public class Entry { public void Run() { External.Api.Run(); } }");
+        string output = Path.Combine(path1: fixture.DirectoryPath, path2: "bin", path3: "Debug", path4: "net10.0");
+        Directory.CreateDirectory(path: output);
+        EmitAssembly(path: Path.Combine(path1: output, path2: "External.dll"), code: "namespace External; public class Api { public static void Run() {} }");
+        EmitAssembly(path: Path.Combine(path1: output, path2: "ProvingGround.dll"), code: "public class OldBuild {}");
+        // When: exercise the operation under test.
+        ProjectModel model = await TestServices.Get<ProjectModelBuilder>().BuildAsync(projectFilePath: fixture.ProjectPath);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: "External.Api", actual: Assert.Single(collection: model.Dependencies!).ToType);
+        DefinedType external = Assert.Single(collection: model.Types!, predicate: type => !type.IsInternal);
+        Assert.Equal(expected: "External.Api", actual: external.Name);
+        Assert.Empty(collection: external.Methods!);
+        Assert.DoesNotContain(collection: model.Types!, filter: type => type.Name == "OldBuild");
     }
 
     [Fact]
     public async Task ShouldReportMissingReferencesInsteadOfReturningPartialFactsAsync()
     {
+        // Given: the fixture and inputs below.
         using var fixture = new ProjectFolder();
-        fixture.Write("Entry.cs", "class Entry { void Run() { Unavailable.Api.Run(); } }");
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new ProjectModelBuilder().BuildAsync(fixture.ProjectPath));
-
-        Assert.Contains("compilation errors", exception.Message);
-        Assert.Contains("Unavailable", exception.Message);
+        fixture.Write(relativePath: "Entry.cs", text: "class Entry { void Run() { Unavailable.Api.Run(); } }");
+        // When: exercise the operation under test.
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(testCode: () => TestServices.Get<ProjectModelBuilder>().BuildAsync(projectFilePath: fixture.ProjectPath));
+        // Then: verify the resulting contract.
+        Assert.Contains(expectedSubstring: "compilation errors", actualString: exception.Message);
+        Assert.Contains(expectedSubstring: "Unavailable", actualString: exception.Message);
     }
 
     [Theory]
@@ -91,77 +104,101 @@ public sealed class ProjectPathExtractionTests
     [InlineData(" ")]
     public async Task ShouldRejectMissingPathsAsync(string? path)
     {
-        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-            new ProjectModelBuilder().BuildAsync(path!));
+        // Given
+        var builder = TestServices.Get<ProjectModelBuilder>();
+        // When
+        Func<Task> build = () => builder.BuildAsync(projectFilePath: path!);
+        // Then
+        await Assert.ThrowsAnyAsync<ArgumentException>(testCode: build);
     }
 
     [Fact]
     public async Task ShouldCancelBeforeResolvingThePathAsync()
     {
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new ProjectModelBuilder().BuildAsync("does-not-exist.csproj", new CancellationToken(canceled: true)));
+        // Given
+        var builder = TestServices.Get<ProjectModelBuilder>();
+        var token = new CancellationToken(canceled: true);
+        // When
+        Func<Task> build = () => builder.BuildAsync(projectFilePath: "does-not-exist.csproj", cancellationToken: token);
+        // Then
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(testCode: build);
     }
 
     [Fact]
     public void ShouldRejectAnUnknownPath()
     {
+        // Given: the fixture and inputs below.
         using var fixture = new ProjectFolder();
-        Assert.Throws<DirectoryNotFoundException>(() => CreateResolver().ResolveProjectFilePath(Path.Combine(fixture.DirectoryPath, "missing.csproj")));
+        // When: exercise the operation under test.
+        // Then: verify the resulting contract.
+
+        Assert.Throws<DirectoryNotFoundException>(testCode: () => CreateResolver()
+            .ResolveProjectFilePath(suppliedPath: Path.Combine(path1: fixture.DirectoryPath, path2: "missing.csproj")));
     }
 
     [Fact]
     public void ShouldRejectAFolderWithoutAProject()
     {
+        // Given: the fixture and inputs below.
         using var fixture = new ProjectFolder();
-        File.Delete(fixture.ProjectPath);
-        Assert.Throws<FileNotFoundException>(() => CreateResolver().ResolveProjectFilePath(fixture.DirectoryPath));
+        File.Delete(path: fixture.ProjectPath);
+        // When: exercise the operation under test.
+        // Then: verify the resulting contract.
+
+        Assert.Throws<FileNotFoundException>(testCode: () => CreateResolver()
+            .ResolveProjectFilePath(suppliedPath: fixture.DirectoryPath));
     }
 
     [Fact]
     public void ShouldRequireAnExplicitProjectWhenTheFolderIsAmbiguous()
     {
+        // Given: the fixture and inputs below.
         using var fixture = new ProjectFolder();
-        fixture.Write("Second.csproj", "<Project />");
-        fixture.Write("Entry.cs", "class Entry {}");
+        fixture.Write(relativePath: "Second.csproj", text: "<Project />");
+        fixture.Write(relativePath: "Entry.cs", text: "class Entry {}");
         ProjectProcessingService service = CreateResolver();
-        Assert.Throws<InvalidOperationException>(() => service.ResolveProjectFilePath(fixture.DirectoryPath));
-        Assert.Throws<InvalidOperationException>(() => service.ResolveProjectFilePath(Path.Combine(fixture.DirectoryPath, "Entry.cs")));
-        Assert.Equal(fixture.ProjectPath, service.ResolveProjectFilePath(fixture.ProjectPath));
+        // When: exercise the operation under test.
+        Assert.Throws<InvalidOperationException>(testCode: () => service.ResolveProjectFilePath(suppliedPath: fixture.DirectoryPath));
+        // Then: verify the resulting contract.
+        Assert.Throws<InvalidOperationException>(testCode: () => service.ResolveProjectFilePath(suppliedPath: Path.Combine(path1: fixture.DirectoryPath, path2: "Entry.cs")));
+        Assert.Equal(expected: fixture.ProjectPath, actual: service.ResolveProjectFilePath(suppliedPath: fixture.ProjectPath));
     }
 
-    private static ProjectProcessingService CreateResolver() => new(new ProjectService(new FileBroker()));
+    private static ProjectProcessingService CreateResolver() =>
+        new(new ProjectService(new FileBroker()));
 
     private static void EmitAssembly(string path, string code)
     {
-        var compilation = CSharpCompilation.Create(
-            assemblyName: Path.GetFileNameWithoutExtension(path),
-            syntaxTrees: new[] { CSharpSyntaxTree.ParseText(code) },
-            references: new[] { MetadataReference.CreateFromFile(typeof(object).Assembly.Location) },
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        var result = compilation.Emit(path);
-        Assert.True(result.Success, string.Join("\n", result.Diagnostics));
+        var compilation = CSharpCompilation.Create(assemblyName: Path.GetFileNameWithoutExtension(path: path), syntaxTrees: new[] { CSharpSyntaxTree.ParseText(text: code) }, references: new[] { MetadataReference.CreateFromFile(path: typeof(object).Assembly.Location) }, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var result = compilation.Emit(outputPath: path);
+        Assert.True(condition: result.Success, userMessage: string.Join(separator: "\n", values: result.Diagnostics));
     }
 
     private sealed class ProjectFolder : IDisposable
     {
-        public string DirectoryPath { get; } = Path.Combine(Path.GetTempPath(), "v8-project-model-tests", Guid.NewGuid().ToString("N"));
-        public string ProjectPath => Path.Combine(DirectoryPath, "ProvingGround.csproj");
+        public string DirectoryPath { get; } = Path.Combine(path1: Path.GetTempPath(), path2: "v8-project-model-tests", path3: Guid.NewGuid()
+            .ToString(format: "N"));
+        public string ProjectPath => Path.Combine(path1: DirectoryPath, path2: "ProvingGround.csproj");
 
-        public ProjectFolder() => Write("ProvingGround.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
-
+        public ProjectFolder() => Write(relativePath: "ProvingGround.csproj", text: "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
         public void Write(string relativePath, string text)
         {
-            string path = Path.Combine(DirectoryPath, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, text);
+            string path = Path.Combine(path1: DirectoryPath, path2: relativePath);
+            Directory.CreateDirectory(path: Path.GetDirectoryName(path: path)!);
+            File.WriteAllText(path: path, contents: text);
         }
 
         public void Dispose()
         {
-            string root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "v8-project-model-tests")) + Path.DirectorySeparatorChar;
-            string path = Path.GetFullPath(DirectoryPath);
-            if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Unexpected test folder.");
-            Directory.Delete(path, recursive: true);
+            string root = Path.GetFullPath(path: Path.Combine(path1: Path.GetTempPath(), path2: "v8-project-model-tests")) + Path.DirectorySeparatorChar;
+            string path = Path.GetFullPath(path: DirectoryPath);
+
+            if (!path.StartsWith(value: root, comparisonType: StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Unexpected test folder.");
+            }
+
+            Directory.Delete(path: path, recursive: true);
         }
     }
 }

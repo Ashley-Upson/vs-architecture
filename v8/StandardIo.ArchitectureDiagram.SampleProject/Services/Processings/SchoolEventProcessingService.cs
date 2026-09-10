@@ -1,31 +1,28 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public sealed class SchoolEventProcessingService : ISchoolEventProcessingService
+internal sealed class SchoolEventProcessingService : ISchoolEventProcessingService
 {
     private readonly ISchoolEventService schoolEventService;
-
     public SchoolEventProcessingService(ISchoolEventService schoolEventService)
     {
         this.schoolEventService = schoolEventService;
     }
 
-    public ValueTask RaiseCreatedAsync(School model) =>
-        schoolEventService.RaiseCreatedAsync(model: model);
+    public ValueTask RaiseSchoolCreatedAsync(School school) =>
+        schoolEventService.RaiseSchoolCreatedAsync(school: school);
 
-    public ValueTask RaiseReadAsync(School model) =>
-        schoolEventService.RaiseReadAsync(model: model);
+    public ValueTask RaiseSchoolReadAsync(School school) =>
+        schoolEventService.RaiseSchoolReadAsync(school: school);
 
-    public ValueTask RaiseUpdatedAsync(School model) =>
-        schoolEventService.RaiseUpdatedAsync(model: model);
+    public ValueTask RaiseSchoolUpdatedAsync(School school) =>
+        schoolEventService.RaiseSchoolUpdatedAsync(school: school);
 
-    public ValueTask RaiseDeletedAsync(School model) =>
-        schoolEventService.RaiseDeletedAsync(model: model);
+    public ValueTask RaiseSchoolDeletedAsync(School school) =>
+        schoolEventService.RaiseSchoolDeletedAsync(school: school);
 }

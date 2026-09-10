@@ -1,49 +1,46 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using StandardIo.ArchitectureDiagram.SampleProject.Exposures;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages;
-
-public sealed class SchoolBroker : ISchoolBroker
+internal sealed class SchoolBroker : ISchoolBroker
 {
     private readonly SchoolDataContext context;
-
     public SchoolBroker(ISchoolFactory schoolFactory)
     {
-        context = schoolFactory.Create();
+        context = schoolFactory.CreateSchoolDataContext();
     }
 
-    public School Create(School model)
+    public School CreateSchool(School school)
     {
-        context.Schools.Add(item: model);
-        return model;
+        context.Schools.Add(item: school);
+        return school;
     }
 
-    public School Read(string id)
+    public School ReadSchool(string schoolId)
     {
-        return context.Schools.Find(match: model => model.Id == id)
-            ?? throw new InvalidOperationException(message: "School was not found.");
+        return context.Schools.Find(match: model => model.Id == schoolId) ?? throw new InvalidOperationException(message: "School was not found.");
     }
 
-    public School Update(School model)
+    public School UpdateSchool(School updatedSchool)
     {
-        int index = context.Schools.FindIndex(match: existing => existing.Id == model.Id);
+        int index = context.Schools.FindIndex(match: existing => existing.Id == updatedSchool.Id);
 
         if (index < 0)
         {
             throw new InvalidOperationException(message: "School was not found.");
         }
 
-        context.Schools[index] = model;
-        return model;
+        context.Schools[index] = updatedSchool;
+        return updatedSchool;
     }
 
-    public void Delete(string id)
+    public void DeleteSchool(string schoolId)
     {
-        context.Schools.RemoveAll(match: model => model.Id == id);
+        context.Schools.RemoveAll(match: model => model.Id == schoolId);
     }
 }

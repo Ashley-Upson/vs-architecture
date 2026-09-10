@@ -1,26 +1,27 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
-
-public sealed class StudentService : IStudentService
+internal sealed class StudentService : IStudentService
 {
     private readonly IStudentBroker studentBroker;
-
     public StudentService(IStudentBroker studentBroker)
     {
         this.studentBroker = studentBroker;
     }
 
-    public Student Create(Student model) => studentBroker.Create(model: model);
+    public Student CreateStudent(Student student) =>
+        studentBroker.CreateStudent(student: student);
 
-    public Student Read(string id) => studentBroker.Read(id: id);
+    public Student ReadStudent(string studentId) =>
+        studentBroker.ReadStudent(studentId: studentId);
 
-    public Student Update(Student model) => studentBroker.Update(model: model);
+    public Student UpdateStudent(Student updatedStudent) =>
+        studentBroker.UpdateStudent(updatedStudent: updatedStudent);
 
-    public void Delete(string id) => studentBroker.Delete(id: id);
+    public void DeleteStudent(string studentId) =>
+        studentBroker.DeleteStudent(studentId: studentId);
 }

@@ -1,31 +1,28 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
-
-public sealed class TeacherEventService : ITeacherEventService
+internal sealed class TeacherEventService : ITeacherEventService
 {
     private readonly ITeacherEventBroker teacherEventBroker;
-
     public TeacherEventService(ITeacherEventBroker teacherEventBroker)
     {
         this.teacherEventBroker = teacherEventBroker;
     }
 
-    public ValueTask RaiseCreatedAsync(Teacher model) =>
-        teacherEventBroker.RaiseCreatedAsync(model: model);
+    public ValueTask RaiseTeacherCreatedAsync(Teacher teacher) =>
+        teacherEventBroker.RaiseTeacherCreatedAsync(teacher: teacher);
 
-    public ValueTask RaiseReadAsync(Teacher model) =>
-        teacherEventBroker.RaiseReadAsync(model: model);
+    public ValueTask RaiseTeacherReadAsync(Teacher teacher) =>
+        teacherEventBroker.RaiseTeacherReadAsync(teacher: teacher);
 
-    public ValueTask RaiseUpdatedAsync(Teacher model) =>
-        teacherEventBroker.RaiseUpdatedAsync(model: model);
+    public ValueTask RaiseTeacherUpdatedAsync(Teacher teacher) =>
+        teacherEventBroker.RaiseTeacherUpdatedAsync(teacher: teacher);
 
-    public ValueTask RaiseDeletedAsync(Teacher model) =>
-        teacherEventBroker.RaiseDeletedAsync(model: model);
+    public ValueTask RaiseTeacherDeletedAsync(Teacher teacher) =>
+        teacherEventBroker.RaiseTeacherDeletedAsync(teacher: teacher);
 }

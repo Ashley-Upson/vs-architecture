@@ -1,51 +1,46 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations;
-
-public sealed class TeacherOrchestrationService : ITeacherOrchestrationService
+internal sealed class TeacherOrchestrationService : ITeacherOrchestrationService
 {
     private readonly ITeacherProcessingService teacherProcessingService;
     private readonly ITeacherEventProcessingService teacherEventProcessingService;
-
-    public TeacherOrchestrationService(
-        ITeacherProcessingService teacherProcessingService,
-        ITeacherEventProcessingService teacherEventProcessingService)
+    public TeacherOrchestrationService(ITeacherProcessingService teacherProcessingService, ITeacherEventProcessingService teacherEventProcessingService)
     {
         this.teacherProcessingService = teacherProcessingService;
         this.teacherEventProcessingService = teacherEventProcessingService;
     }
 
-    public async Task<Teacher> CreateAsync(Teacher model)
+    public async Task<Teacher> CreateTeacherAsync(Teacher teacher)
     {
-        Teacher result = teacherProcessingService.Create(model: model);
-        await teacherEventProcessingService.RaiseCreatedAsync(model: result);
+        Teacher result = teacherProcessingService.CreateTeacher(teacher: teacher);
+        await teacherEventProcessingService.RaiseTeacherCreatedAsync(teacher: result);
         return result;
     }
 
-    public async Task<Teacher> ReadAsync(string id)
+    public async Task<Teacher> ReadTeacherAsync(string teacherId)
     {
-        Teacher result = teacherProcessingService.Read(id: id);
-        await teacherEventProcessingService.RaiseReadAsync(model: result);
+        Teacher result = teacherProcessingService.ReadTeacher(teacherId: teacherId);
+        await teacherEventProcessingService.RaiseTeacherReadAsync(teacher: result);
         return result;
     }
 
-    public async Task<Teacher> UpdateAsync(Teacher model)
+    public async Task<Teacher> UpdateTeacherAsync(Teacher updatedTeacher)
     {
-        Teacher result = teacherProcessingService.Update(model: model);
-        await teacherEventProcessingService.RaiseUpdatedAsync(model: result);
+        Teacher result = teacherProcessingService.UpdateTeacher(updatedTeacher: updatedTeacher);
+        await teacherEventProcessingService.RaiseTeacherUpdatedAsync(teacher: result);
         return result;
     }
 
-    public async Task DeleteAsync(string id)
+    public async Task DeleteTeacherAsync(string teacherId)
     {
-        Teacher model = teacherProcessingService.Read(id: id);
-        teacherProcessingService.Delete(id: id);
-        await teacherEventProcessingService.RaiseDeletedAsync(model: model);
+        Teacher model = teacherProcessingService.ReadTeacher(teacherId: teacherId);
+        teacherProcessingService.DeleteTeacher(teacherId: teacherId);
+        await teacherEventProcessingService.RaiseTeacherDeletedAsync(teacher: model);
     }
 }

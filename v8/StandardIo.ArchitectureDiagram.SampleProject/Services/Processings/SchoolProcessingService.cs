@@ -1,26 +1,27 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public sealed class SchoolProcessingService : ISchoolProcessingService
+internal sealed class SchoolProcessingService : ISchoolProcessingService
 {
     private readonly ISchoolService schoolService;
-
     public SchoolProcessingService(ISchoolService schoolService)
     {
         this.schoolService = schoolService;
     }
 
-    public School Create(School model) => schoolService.Create(model: model);
+    public School CreateSchool(School school) =>
+        schoolService.CreateSchool(school: school);
 
-    public School Read(string id) => schoolService.Read(id: id);
+    public School ReadSchool(string schoolId) =>
+        schoolService.ReadSchool(schoolId: schoolId);
 
-    public School Update(School model) => schoolService.Update(model: model);
+    public School UpdateSchool(School updatedSchool) =>
+        schoolService.UpdateSchool(updatedSchool: updatedSchool);
 
-    public void Delete(string id) => schoolService.Delete(id: id);
+    public void DeleteSchool(string schoolId) =>
+        schoolService.DeleteSchool(schoolId: schoolId);
 }

@@ -1,19 +1,15 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using System.IO;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Projects;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Projects;
-
 internal sealed class ProjectProcessingService : IProjectProcessingService
 {
     private readonly IProjectService projectService;
-
     public ProjectProcessingService(IProjectService projectService) => this.projectService = projectService;
-
     public string ResolveProjectFilePath(string suppliedPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(argument: suppliedPath);
@@ -38,7 +34,6 @@ internal sealed class ProjectProcessingService : IProjectProcessingService
         {
             1 => projectService.GetFullPath(path: projects[0]),
             0 => throw new FileNotFoundException(message: "The containing folder has no .csproj file.", fileName: directory),
-            _ => throw new InvalidOperationException(message: "The containing folder has multiple projects; supply a specific .csproj path.")
-        };
+            _ => throw new InvalidOperationException(message: "The containing folder has multiple projects; supply a specific .csproj path.")};
     }
 }

@@ -3,22 +3,6 @@
   "Path": "StandardIo.ArchitectureDiagram.SampleProject.csproj",
   "Types": [
     {
-      "Name": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
-      "FrameworkType": "Class",
-      "IsInternal": false,
-      "Fields": [],
-      "Properties": [],
-      "Methods": []
-    },
-    {
-      "Name": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
-      "FrameworkType": "Class",
-      "IsInternal": false,
-      "Fields": [],
-      "Properties": [],
-      "Methods": []
-    },
-    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -31,16 +15,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassUpdatedAsync"
         }
       ]
     },
@@ -57,16 +41,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassStudentUpdatedAsync"
         }
       ]
     },
@@ -78,16 +62,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassUpdatedAsync"
         }
       ]
     },
@@ -99,16 +83,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassStudentUpdatedAsync"
         }
       ]
     },
@@ -120,16 +104,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseSchoolCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseSchoolDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseSchoolReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseSchoolUpdatedAsync"
         }
       ]
     },
@@ -141,16 +125,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseStudentUpdatedAsync"
         }
       ]
     },
@@ -162,16 +146,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseTeacherCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseTeacherDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseTeacherReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseTeacherUpdatedAsync"
         }
       ]
     },
@@ -188,16 +172,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseSchoolCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseSchoolDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseSchoolReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseSchoolUpdatedAsync"
         }
       ]
     },
@@ -214,16 +198,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseStudentUpdatedAsync"
         }
       ]
     },
@@ -240,16 +224,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseTeacherCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseTeacherDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseTeacherReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseTeacherUpdatedAsync"
         }
       ]
     },
@@ -259,23 +243,23 @@
       "IsInternal": true,
       "Fields": [
         {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
           "Name": "context"
         }
       ],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClass"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClass"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClass"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClass"
         }
       ]
     },
@@ -285,23 +269,23 @@
       "IsInternal": true,
       "Fields": [
         {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
           "Name": "context"
         }
       ],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClassStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClassStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClassStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClassStudent"
         }
       ]
     },
@@ -313,16 +297,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClass"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClass"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClass"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClass"
         }
       ]
     },
@@ -334,16 +318,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClassStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClassStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClassStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClassStudent"
         }
       ]
     },
@@ -355,16 +339,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateSchool"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteSchool"
         },
         {
-          "Name": "Read"
+          "Name": "ReadSchool"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateSchool"
         }
       ]
     },
@@ -376,16 +360,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateStudent"
         }
       ]
     },
@@ -397,16 +381,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateTeacher"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteTeacher"
         },
         {
-          "Name": "Read"
+          "Name": "ReadTeacher"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateTeacher"
         }
       ]
     },
@@ -416,23 +400,23 @@
       "IsInternal": true,
       "Fields": [
         {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
           "Name": "context"
         }
       ],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateSchool"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteSchool"
         },
         {
-          "Name": "Read"
+          "Name": "ReadSchool"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateSchool"
         }
       ]
     },
@@ -442,23 +426,23 @@
       "IsInternal": true,
       "Fields": [
         {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
           "Name": "context"
         }
       ],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateStudent"
         }
       ]
     },
@@ -468,25 +452,43 @@
       "IsInternal": true,
       "Fields": [
         {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
           "Name": "context"
         }
       ],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateTeacher"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteTeacher"
         },
         {
-          "Name": "Read"
+          "Name": "ReadTeacher"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateTeacher"
         }
       ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "FrameworkType": "Interface",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [],
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data"
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [],
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data"
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
@@ -501,16 +503,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassAsync"
         }
       ]
     },
@@ -527,16 +529,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassStudentAsync"
         }
       ]
     },
@@ -548,16 +550,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassAsync"
         }
       ]
     },
@@ -569,28 +571,28 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassStudentAsync"
         }
       ]
     },
     {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolFactory",
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager",
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "ImportSchool"
         }
       ]
     },
@@ -602,16 +604,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateSchoolAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteSchoolAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadSchoolAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateSchoolAsync"
         }
       ]
     },
@@ -623,16 +625,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateStudentAsync"
         }
       ]
     },
@@ -644,28 +646,33 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateTeacherAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteTeacherAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadTeacherAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateTeacherAsync"
         }
       ]
     },
     {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
       "FrameworkType": "Class",
       "IsInternal": true,
-      "Fields": [],
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
+          "Name": "schoolImportAggregationService"
+        }
+      ],
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "ImportSchool"
         }
       ]
     },
@@ -682,16 +689,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateSchoolAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteSchoolAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadSchoolAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateSchoolAsync"
         }
       ]
     },
@@ -708,16 +715,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateStudentAsync"
         }
       ]
     },
@@ -734,171 +741,21 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateTeacherAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteTeacherAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadTeacherAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateTeacherAsync"
         }
       ]
     },
     {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.Class",
-      "FrameworkType": "Class",
-      "IsInternal": true,
-      "Fields": [],
-      "Properties": [
-        {
-          "Type": "System.String",
-          "Name": "Id"
-        },
-        {
-          "Type": "System.String",
-          "Name": "SchoolId"
-        },
-        {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.ClassStudent[]",
-          "Name": "Students"
-        },
-        {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher",
-          "Name": "Teacher"
-        },
-        {
-          "Type": "System.String",
-          "Name": "TeacherId"
-        }
-      ],
-      "Methods": []
-    },
-    {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.ClassStudent",
-      "FrameworkType": "Class",
-      "IsInternal": true,
-      "Fields": [],
-      "Properties": [
-        {
-          "Type": "System.String",
-          "Name": "ClassId"
-        },
-        {
-          "Type": "System.String",
-          "Name": "Id"
-        },
-        {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Student",
-          "Name": "Student"
-        },
-        {
-          "Type": "System.String",
-          "Name": "StudentId"
-        }
-      ],
-      "Methods": []
-    },
-    {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.School",
-      "FrameworkType": "Class",
-      "IsInternal": true,
-      "Fields": [],
-      "Properties": [
-        {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Class[]",
-          "Name": "Classes"
-        },
-        {
-          "Type": "System.String",
-          "Name": "Id"
-        },
-        {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Student[]",
-          "Name": "Students"
-        },
-        {
-          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher[]",
-          "Name": "Teachers"
-        }
-      ],
-      "Methods": []
-    },
-    {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
-      "FrameworkType": "Class",
-      "IsInternal": true,
-      "Fields": [],
-      "Properties": [
-        {
-          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.ClassStudent>",
-          "Name": "ClassStudents"
-        },
-        {
-          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.Class>",
-          "Name": "Classes"
-        },
-        {
-          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.School>",
-          "Name": "Schools"
-        },
-        {
-          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.Student>",
-          "Name": "Students"
-        },
-        {
-          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher>",
-          "Name": "Teachers"
-        }
-      ],
-      "Methods": []
-    },
-    {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.Student",
-      "FrameworkType": "Class",
-      "IsInternal": true,
-      "Fields": [],
-      "Properties": [
-        {
-          "Type": "System.String",
-          "Name": "Id"
-        },
-        {
-          "Type": "System.String",
-          "Name": "Name"
-        },
-        {
-          "Type": "System.String",
-          "Name": "SchoolId"
-        }
-      ],
-      "Methods": []
-    },
-    {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher",
-      "FrameworkType": "Class",
-      "IsInternal": true,
-      "Fields": [],
-      "Properties": [
-        {
-          "Type": "System.String",
-          "Name": "Id"
-        },
-        {
-          "Type": "System.String",
-          "Name": "Name"
-        },
-        {
-          "Type": "System.String",
-          "Name": "SchoolId"
-        }
-      ],
-      "Methods": []
-    },
-    {
-      "Name": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -906,6 +763,51 @@
       "Methods": [
         {
           "Name": "AddSchoolSample"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "ImportSchool"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+          "Name": "classOrchestrationService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+          "Name": "classStudentOrchestrationService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+          "Name": "schoolOrchestrationService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+          "Name": "studentOrchestrationService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+          "Name": "teacherOrchestrationService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "ImportSchool"
         }
       ]
     },
@@ -922,16 +824,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassUpdatedAsync"
         }
       ]
     },
@@ -948,16 +850,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClass"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClass"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClass"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClass"
         }
       ]
     },
@@ -974,16 +876,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassStudentUpdatedAsync"
         }
       ]
     },
@@ -1000,16 +902,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClassStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClassStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClassStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClassStudent"
         }
       ]
     },
@@ -1021,16 +923,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassUpdatedAsync"
         }
       ]
     },
@@ -1042,16 +944,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClass"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClass"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClass"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClass"
         }
       ]
     },
@@ -1063,16 +965,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassStudentUpdatedAsync"
         }
       ]
     },
@@ -1084,16 +986,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClassStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClassStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClassStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClassStudent"
         }
       ]
     },
@@ -1105,16 +1007,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseSchoolCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseSchoolDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseSchoolReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseSchoolUpdatedAsync"
         }
       ]
     },
@@ -1126,16 +1028,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateSchool"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteSchool"
         },
         {
-          "Name": "Read"
+          "Name": "ReadSchool"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateSchool"
         }
       ]
     },
@@ -1147,16 +1049,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseStudentUpdatedAsync"
         }
       ]
     },
@@ -1168,16 +1070,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateStudent"
         }
       ]
     },
@@ -1189,16 +1091,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseTeacherCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseTeacherDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseTeacherReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseTeacherUpdatedAsync"
         }
       ]
     },
@@ -1210,16 +1112,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateTeacher"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteTeacher"
         },
         {
-          "Name": "Read"
+          "Name": "ReadTeacher"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateTeacher"
         }
       ]
     },
@@ -1236,16 +1138,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseSchoolCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseSchoolDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseSchoolReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseSchoolUpdatedAsync"
         }
       ]
     },
@@ -1262,16 +1164,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateSchool"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteSchool"
         },
         {
-          "Name": "Read"
+          "Name": "ReadSchool"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateSchool"
         }
       ]
     },
@@ -1288,16 +1190,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseStudentUpdatedAsync"
         }
       ]
     },
@@ -1314,16 +1216,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateStudent"
         }
       ]
     },
@@ -1340,16 +1242,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseTeacherCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseTeacherDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseTeacherReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseTeacherUpdatedAsync"
         }
       ]
     },
@@ -1366,16 +1268,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateTeacher"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteTeacher"
         },
         {
-          "Name": "Read"
+          "Name": "ReadTeacher"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateTeacher"
         }
       ]
     },
@@ -1396,16 +1298,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassAsync"
         }
       ]
     },
@@ -1426,16 +1328,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassStudentAsync"
         }
       ]
     },
@@ -1447,16 +1349,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassAsync"
         }
       ]
     },
@@ -1468,16 +1370,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateClassStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteClassStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadClassStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateClassStudentAsync"
         }
       ]
     },
@@ -1489,16 +1391,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateSchoolAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteSchoolAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadSchoolAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateSchoolAsync"
         }
       ]
     },
@@ -1510,16 +1412,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateStudentAsync"
         }
       ]
     },
@@ -1531,16 +1433,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateTeacherAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteTeacherAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadTeacherAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateTeacherAsync"
         }
       ]
     },
@@ -1561,16 +1463,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateSchoolAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteSchoolAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadSchoolAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateSchoolAsync"
         }
       ]
     },
@@ -1591,16 +1493,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateStudentAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteStudentAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadStudentAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateStudentAsync"
         }
       ]
     },
@@ -1621,16 +1523,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "CreateAsync"
+          "Name": "CreateTeacherAsync"
         },
         {
-          "Name": "DeleteAsync"
+          "Name": "DeleteTeacherAsync"
         },
         {
-          "Name": "ReadAsync"
+          "Name": "ReadTeacherAsync"
         },
         {
-          "Name": "UpdateAsync"
+          "Name": "UpdateTeacherAsync"
         }
       ]
     },
@@ -1647,16 +1549,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassUpdatedAsync"
         }
       ]
     },
@@ -1673,16 +1575,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClass"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClass"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClass"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClass"
         }
       ]
     },
@@ -1699,16 +1601,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassStudentUpdatedAsync"
         }
       ]
     },
@@ -1725,16 +1627,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClassStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClassStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClassStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClassStudent"
         }
       ]
     },
@@ -1746,16 +1648,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassUpdatedAsync"
         }
       ]
     },
@@ -1767,16 +1669,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClass"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClass"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClass"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClass"
         }
       ]
     },
@@ -1788,16 +1690,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseClassStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseClassStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseClassStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseClassStudentUpdatedAsync"
         }
       ]
     },
@@ -1809,16 +1711,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateClassStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteClassStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadClassStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateClassStudent"
         }
       ]
     },
@@ -1830,16 +1732,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseSchoolCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseSchoolDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseSchoolReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseSchoolUpdatedAsync"
         }
       ]
     },
@@ -1851,16 +1753,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateSchool"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteSchool"
         },
         {
-          "Name": "Read"
+          "Name": "ReadSchool"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateSchool"
         }
       ]
     },
@@ -1872,16 +1774,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseStudentUpdatedAsync"
         }
       ]
     },
@@ -1893,16 +1795,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateStudent"
         }
       ]
     },
@@ -1914,16 +1816,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseTeacherCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseTeacherDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseTeacherReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseTeacherUpdatedAsync"
         }
       ]
     },
@@ -1935,16 +1837,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateTeacher"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteTeacher"
         },
         {
-          "Name": "Read"
+          "Name": "ReadTeacher"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateTeacher"
         }
       ]
     },
@@ -1961,16 +1863,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseSchoolCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseSchoolDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseSchoolReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseSchoolUpdatedAsync"
         }
       ]
     },
@@ -1987,16 +1889,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateSchool"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteSchool"
         },
         {
-          "Name": "Read"
+          "Name": "ReadSchool"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateSchool"
         }
       ]
     },
@@ -2013,16 +1915,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseStudentCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseStudentDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseStudentReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseStudentUpdatedAsync"
         }
       ]
     },
@@ -2039,16 +1941,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateStudent"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteStudent"
         },
         {
-          "Name": "Read"
+          "Name": "ReadStudent"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateStudent"
         }
       ]
     },
@@ -2065,16 +1967,16 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "RaiseCreatedAsync"
+          "Name": "RaiseTeacherCreatedAsync"
         },
         {
-          "Name": "RaiseDeletedAsync"
+          "Name": "RaiseTeacherDeletedAsync"
         },
         {
-          "Name": "RaiseReadAsync"
+          "Name": "RaiseTeacherReadAsync"
         },
         {
-          "Name": "RaiseUpdatedAsync"
+          "Name": "RaiseTeacherUpdatedAsync"
         }
       ]
     },
@@ -2091,26 +1993,18 @@
       "Properties": [],
       "Methods": [
         {
-          "Name": "Create"
+          "Name": "CreateTeacher"
         },
         {
-          "Name": "Delete"
+          "Name": "DeleteTeacher"
         },
         {
-          "Name": "Read"
+          "Name": "ReadTeacher"
         },
         {
-          "Name": "Update"
+          "Name": "UpdateTeacher"
         }
       ]
-    },
-    {
-      "Name": "System.Collections.Generic.List<T>",
-      "FrameworkType": "Class",
-      "IsInternal": false,
-      "Fields": [],
-      "Properties": [],
-      "Methods": []
     },
     {
       "Name": "cCoder.Eventing.IEventHub",
@@ -2118,15 +2012,8 @@
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": []
-    },
-    {
-      "Name": "cCoder.Eventing.IServiceCollectionExtensions",
-      "FrameworkType": "Class",
-      "IsInternal": false,
-      "Fields": [],
-      "Properties": [],
-      "Methods": []
+      "Methods": [],
+      "AssemblyName": "cCoder.Eventing"
     }
   ],
   "Dependencies": [
@@ -2141,28 +2028,28 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseCreatedAsync",
+      "FromMethod": "RaiseClassCreatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseDeletedAsync",
+      "FromMethod": "RaiseClassDeletedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseReadAsync",
+      "FromMethod": "RaiseClassReadAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseUpdatedAsync",
+      "FromMethod": "RaiseClassUpdatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
@@ -2176,28 +2063,28 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseCreatedAsync",
+      "FromMethod": "RaiseClassStudentCreatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseDeletedAsync",
+      "FromMethod": "RaiseClassStudentDeletedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseReadAsync",
+      "FromMethod": "RaiseClassStudentReadAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseUpdatedAsync",
+      "FromMethod": "RaiseClassStudentUpdatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
@@ -2211,28 +2098,28 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseCreatedAsync",
+      "FromMethod": "RaiseSchoolCreatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseDeletedAsync",
+      "FromMethod": "RaiseSchoolDeletedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseReadAsync",
+      "FromMethod": "RaiseSchoolReadAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseUpdatedAsync",
+      "FromMethod": "RaiseSchoolUpdatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
@@ -2246,28 +2133,28 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseCreatedAsync",
+      "FromMethod": "RaiseStudentCreatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseDeletedAsync",
+      "FromMethod": "RaiseStudentDeletedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseReadAsync",
+      "FromMethod": "RaiseStudentReadAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseUpdatedAsync",
+      "FromMethod": "RaiseStudentUpdatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
@@ -2281,28 +2168,28 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseCreatedAsync",
+      "FromMethod": "RaiseTeacherCreatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseDeletedAsync",
+      "FromMethod": "RaiseTeacherDeletedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseReadAsync",
+      "FromMethod": "RaiseTeacherReadAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "ToType": "cCoder.Eventing.IEventHub",
-      "FromMethod": "RaiseUpdatedAsync",
+      "FromMethod": "RaiseTeacherUpdatedAsync",
       "ToMethod": "RaiseEventAsync"
     },
     {
@@ -2315,36 +2202,36 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "FromMethod": ".ctor",
-      "ToMethod": "Create"
+      "ToMethod": "CreateSchoolDataContext"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Create",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "CreateClass",
       "ToMethod": "Add"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Delete",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "DeleteClass",
       "ToMethod": "RemoveAll"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Read",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "ReadClass",
       "ToMethod": "Find"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Update",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "UpdateClass",
       "ToMethod": "FindIndex"
     },
     {
@@ -2357,36 +2244,36 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "FromMethod": ".ctor",
-      "ToMethod": "Create"
+      "ToMethod": "CreateSchoolDataContext"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Create",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "CreateClassStudent",
       "ToMethod": "Add"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Delete",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "DeleteClassStudent",
       "ToMethod": "RemoveAll"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Read",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "ReadClassStudent",
       "ToMethod": "Find"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Update",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "UpdateClassStudent",
       "ToMethod": "FindIndex"
     },
     {
@@ -2399,36 +2286,36 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "FromMethod": ".ctor",
-      "ToMethod": "Create"
+      "ToMethod": "CreateSchoolDataContext"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Create",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "CreateSchool",
       "ToMethod": "Add"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Delete",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "DeleteSchool",
       "ToMethod": "RemoveAll"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Read",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "ReadSchool",
       "ToMethod": "Find"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Update",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "UpdateSchool",
       "ToMethod": "FindIndex"
     },
     {
@@ -2441,36 +2328,36 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "FromMethod": ".ctor",
-      "ToMethod": "Create"
+      "ToMethod": "CreateSchoolDataContext"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Create",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "CreateStudent",
       "ToMethod": "Add"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Delete",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "DeleteStudent",
       "ToMethod": "RemoveAll"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Read",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "ReadStudent",
       "ToMethod": "Find"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Update",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "UpdateStudent",
       "ToMethod": "FindIndex"
     },
     {
@@ -2483,36 +2370,36 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "FromMethod": ".ctor",
-      "ToMethod": "Create"
+      "ToMethod": "CreateSchoolDataContext"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Create",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "CreateTeacher",
       "ToMethod": "Add"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Delete",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "DeleteTeacher",
       "ToMethod": "RemoveAll"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Read",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "ReadTeacher",
       "ToMethod": "Find"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "ToType": "System.Collections.Generic.List<T>",
-      "FromMethod": "Update",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FromMethod": "UpdateTeacher",
       "ToMethod": "FindIndex"
     },
     {
@@ -2526,29 +2413,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "CreateAsync"
+      "FromMethod": "CreateClassAsync",
+      "ToMethod": "CreateClassAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "DeleteAsync"
+      "FromMethod": "DeleteClassAsync",
+      "ToMethod": "DeleteClassAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "ReadAsync"
+      "FromMethod": "ReadClassAsync",
+      "ToMethod": "ReadClassAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "UpdateAsync"
+      "FromMethod": "UpdateClassAsync",
+      "ToMethod": "UpdateClassAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2561,36 +2448,43 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "CreateAsync"
+      "FromMethod": "CreateClassStudentAsync",
+      "ToMethod": "CreateClassStudentAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "DeleteAsync"
+      "FromMethod": "DeleteClassStudentAsync",
+      "ToMethod": "DeleteClassStudentAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "ReadAsync"
+      "FromMethod": "ReadClassStudentAsync",
+      "ToMethod": "ReadClassStudentAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "UpdateAsync"
+      "FromMethod": "UpdateClassStudentAsync",
+      "ToMethod": "UpdateClassStudentAsync"
     },
     {
       "DependencyType": "Inheritance",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolFactory",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager",
       "FromMethod": null,
       "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "FromMethod": "ImportSchool",
+      "ToMethod": "ImportSchool"
     },
     {
       "DependencyType": "Inheritance",
@@ -2603,29 +2497,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "CreateAsync"
+      "FromMethod": "CreateSchoolAsync",
+      "ToMethod": "CreateSchoolAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "DeleteAsync"
+      "FromMethod": "DeleteSchoolAsync",
+      "ToMethod": "DeleteSchoolAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "ReadAsync"
+      "FromMethod": "ReadSchoolAsync",
+      "ToMethod": "ReadSchoolAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "UpdateAsync"
+      "FromMethod": "UpdateSchoolAsync",
+      "ToMethod": "UpdateSchoolAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2638,29 +2532,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "CreateAsync"
+      "FromMethod": "CreateStudentAsync",
+      "ToMethod": "CreateStudentAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "DeleteAsync"
+      "FromMethod": "DeleteStudentAsync",
+      "ToMethod": "DeleteStudentAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "ReadAsync"
+      "FromMethod": "ReadStudentAsync",
+      "ToMethod": "ReadStudentAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "UpdateAsync"
+      "FromMethod": "UpdateStudentAsync",
+      "ToMethod": "UpdateStudentAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2673,85 +2567,99 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "CreateAsync"
+      "FromMethod": "CreateTeacherAsync",
+      "ToMethod": "CreateTeacherAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "DeleteAsync"
+      "FromMethod": "DeleteTeacherAsync",
+      "ToMethod": "DeleteTeacherAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "ReadAsync"
+      "FromMethod": "ReadTeacherAsync",
+      "ToMethod": "ReadTeacherAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "UpdateAsync"
+      "FromMethod": "UpdateTeacherAsync",
+      "ToMethod": "UpdateTeacherAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
-      "ToType": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
-      "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddLogging"
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FromMethod": "ImportSchool",
+      "ToMethod": "CreateClassAsync"
     },
     {
       "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
-      "ToType": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
-      "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddSingleton"
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FromMethod": "ImportSchool",
+      "ToMethod": "CreateClassStudentAsync"
     },
     {
       "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
-      "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
-      "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddEventing"
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FromMethod": "ImportSchool",
+      "ToMethod": "CreateSchoolAsync"
     },
     {
       "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
-      "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
-      "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddEventingForType"
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FromMethod": "ImportSchool",
+      "ToMethod": "CreateStudentAsync"
     },
     {
       "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
-    },
-    {
-      "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
-    },
-    {
-      "DependencyType": "Consumed",
-      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FromMethod": "ImportSchool",
+      "ToMethod": "CreateTeacherAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseClassCreatedAsync",
+      "ToMethod": "RaiseClassCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseClassDeletedAsync",
+      "ToMethod": "RaiseClassDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseClassReadAsync",
+      "ToMethod": "RaiseClassReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseClassUpdatedAsync",
+      "ToMethod": "RaiseClassUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2764,29 +2672,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateClass",
+      "ToMethod": "CreateClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteClass",
+      "ToMethod": "DeleteClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadClass",
+      "ToMethod": "ReadClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateClass",
+      "ToMethod": "UpdateClass"
     },
     {
       "DependencyType": "Inheritance",
@@ -2799,29 +2707,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseClassStudentCreatedAsync",
+      "ToMethod": "RaiseClassStudentCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseClassStudentDeletedAsync",
+      "ToMethod": "RaiseClassStudentDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseClassStudentReadAsync",
+      "ToMethod": "RaiseClassStudentReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseClassStudentUpdatedAsync",
+      "ToMethod": "RaiseClassStudentUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2834,29 +2742,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateClassStudent",
+      "ToMethod": "CreateClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteClassStudent",
+      "ToMethod": "DeleteClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadClassStudent",
+      "ToMethod": "ReadClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateClassStudent",
+      "ToMethod": "UpdateClassStudent"
     },
     {
       "DependencyType": "Inheritance",
@@ -2869,29 +2777,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseSchoolCreatedAsync",
+      "ToMethod": "RaiseSchoolCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseSchoolDeletedAsync",
+      "ToMethod": "RaiseSchoolDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseSchoolReadAsync",
+      "ToMethod": "RaiseSchoolReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseSchoolUpdatedAsync",
+      "ToMethod": "RaiseSchoolUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2904,29 +2812,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateSchool",
+      "ToMethod": "CreateSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteSchool",
+      "ToMethod": "DeleteSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadSchool",
+      "ToMethod": "ReadSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateSchool",
+      "ToMethod": "UpdateSchool"
     },
     {
       "DependencyType": "Inheritance",
@@ -2939,29 +2847,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseStudentCreatedAsync",
+      "ToMethod": "RaiseStudentCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseStudentDeletedAsync",
+      "ToMethod": "RaiseStudentDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseStudentReadAsync",
+      "ToMethod": "RaiseStudentReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseStudentUpdatedAsync",
+      "ToMethod": "RaiseStudentUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -2974,29 +2882,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateStudent",
+      "ToMethod": "CreateStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteStudent",
+      "ToMethod": "DeleteStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadStudent",
+      "ToMethod": "ReadStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateStudent",
+      "ToMethod": "UpdateStudent"
     },
     {
       "DependencyType": "Inheritance",
@@ -3009,29 +2917,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseTeacherCreatedAsync",
+      "ToMethod": "RaiseTeacherCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseTeacherDeletedAsync",
+      "ToMethod": "RaiseTeacherDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseTeacherReadAsync",
+      "ToMethod": "RaiseTeacherReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseTeacherUpdatedAsync",
+      "ToMethod": "RaiseTeacherUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -3044,29 +2952,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateTeacher",
+      "ToMethod": "CreateTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteTeacher",
+      "ToMethod": "DeleteTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadTeacher",
+      "ToMethod": "ReadTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateTeacher",
+      "ToMethod": "UpdateTeacher"
     },
     {
       "DependencyType": "Inheritance",
@@ -3086,64 +2994,64 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "CreateClassAsync",
+      "ToMethod": "RaiseClassCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "DeleteClassAsync",
+      "ToMethod": "RaiseClassDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "ReadClassAsync",
+      "ToMethod": "RaiseClassReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "UpdateClassAsync",
+      "ToMethod": "RaiseClassUpdatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "Create"
+      "FromMethod": "CreateClassAsync",
+      "ToMethod": "CreateClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteClassAsync",
+      "ToMethod": "DeleteClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Read"
+      "FromMethod": "DeleteClassAsync",
+      "ToMethod": "ReadClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "Read"
+      "FromMethod": "ReadClassAsync",
+      "ToMethod": "ReadClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateClassAsync",
+      "ToMethod": "UpdateClass"
     },
     {
       "DependencyType": "Inheritance",
@@ -3156,64 +3064,64 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "CreateClassStudentAsync",
+      "ToMethod": "RaiseClassStudentCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "DeleteClassStudentAsync",
+      "ToMethod": "RaiseClassStudentDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "ReadClassStudentAsync",
+      "ToMethod": "RaiseClassStudentReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "UpdateClassStudentAsync",
+      "ToMethod": "RaiseClassStudentUpdatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "Create"
+      "FromMethod": "CreateClassStudentAsync",
+      "ToMethod": "CreateClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteClassStudentAsync",
+      "ToMethod": "DeleteClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Read"
+      "FromMethod": "DeleteClassStudentAsync",
+      "ToMethod": "ReadClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "Read"
+      "FromMethod": "ReadClassStudentAsync",
+      "ToMethod": "ReadClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateClassStudentAsync",
+      "ToMethod": "UpdateClassStudent"
     },
     {
       "DependencyType": "Inheritance",
@@ -3226,64 +3134,64 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "CreateSchoolAsync",
+      "ToMethod": "RaiseSchoolCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "DeleteSchoolAsync",
+      "ToMethod": "RaiseSchoolDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "ReadSchoolAsync",
+      "ToMethod": "RaiseSchoolReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "UpdateSchoolAsync",
+      "ToMethod": "RaiseSchoolUpdatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "Create"
+      "FromMethod": "CreateSchoolAsync",
+      "ToMethod": "CreateSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteSchoolAsync",
+      "ToMethod": "DeleteSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Read"
+      "FromMethod": "DeleteSchoolAsync",
+      "ToMethod": "ReadSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "Read"
+      "FromMethod": "ReadSchoolAsync",
+      "ToMethod": "ReadSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateSchoolAsync",
+      "ToMethod": "UpdateSchool"
     },
     {
       "DependencyType": "Inheritance",
@@ -3296,64 +3204,64 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "CreateStudentAsync",
+      "ToMethod": "RaiseStudentCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "DeleteStudentAsync",
+      "ToMethod": "RaiseStudentDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "ReadStudentAsync",
+      "ToMethod": "RaiseStudentReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "UpdateStudentAsync",
+      "ToMethod": "RaiseStudentUpdatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "Create"
+      "FromMethod": "CreateStudentAsync",
+      "ToMethod": "CreateStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteStudentAsync",
+      "ToMethod": "DeleteStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Read"
+      "FromMethod": "DeleteStudentAsync",
+      "ToMethod": "ReadStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "Read"
+      "FromMethod": "ReadStudentAsync",
+      "ToMethod": "ReadStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateStudentAsync",
+      "ToMethod": "UpdateStudent"
     },
     {
       "DependencyType": "Inheritance",
@@ -3366,92 +3274,92 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "CreateTeacherAsync",
+      "ToMethod": "RaiseTeacherCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "DeleteTeacherAsync",
+      "ToMethod": "RaiseTeacherDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "ReadTeacherAsync",
+      "ToMethod": "RaiseTeacherReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "UpdateTeacherAsync",
+      "ToMethod": "RaiseTeacherUpdatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
-      "FromMethod": "CreateAsync",
-      "ToMethod": "Create"
+      "FromMethod": "CreateTeacherAsync",
+      "ToMethod": "CreateTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteTeacherAsync",
+      "ToMethod": "DeleteTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
-      "FromMethod": "DeleteAsync",
-      "ToMethod": "Read"
+      "FromMethod": "DeleteTeacherAsync",
+      "ToMethod": "ReadTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
-      "FromMethod": "ReadAsync",
-      "ToMethod": "Read"
+      "FromMethod": "ReadTeacherAsync",
+      "ToMethod": "ReadTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
-      "FromMethod": "UpdateAsync",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateTeacherAsync",
+      "ToMethod": "UpdateTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseClassCreatedAsync",
+      "ToMethod": "RaiseClassCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseClassDeletedAsync",
+      "ToMethod": "RaiseClassDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseClassReadAsync",
+      "ToMethod": "RaiseClassReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseClassUpdatedAsync",
+      "ToMethod": "RaiseClassUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -3464,29 +3372,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateClass",
+      "ToMethod": "CreateClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteClass",
+      "ToMethod": "DeleteClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadClass",
+      "ToMethod": "ReadClass"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateClass",
+      "ToMethod": "UpdateClass"
     },
     {
       "DependencyType": "Inheritance",
@@ -3499,29 +3407,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseClassStudentCreatedAsync",
+      "ToMethod": "RaiseClassStudentCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseClassStudentDeletedAsync",
+      "ToMethod": "RaiseClassStudentDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseClassStudentReadAsync",
+      "ToMethod": "RaiseClassStudentReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseClassStudentUpdatedAsync",
+      "ToMethod": "RaiseClassStudentUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -3534,29 +3442,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateClassStudent",
+      "ToMethod": "CreateClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteClassStudent",
+      "ToMethod": "DeleteClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadClassStudent",
+      "ToMethod": "ReadClassStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateClassStudent",
+      "ToMethod": "UpdateClassStudent"
     },
     {
       "DependencyType": "Inheritance",
@@ -3569,29 +3477,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseSchoolCreatedAsync",
+      "ToMethod": "RaiseSchoolCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseSchoolDeletedAsync",
+      "ToMethod": "RaiseSchoolDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseSchoolReadAsync",
+      "ToMethod": "RaiseSchoolReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseSchoolUpdatedAsync",
+      "ToMethod": "RaiseSchoolUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -3604,29 +3512,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateSchool",
+      "ToMethod": "CreateSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteSchool",
+      "ToMethod": "DeleteSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadSchool",
+      "ToMethod": "ReadSchool"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateSchool",
+      "ToMethod": "UpdateSchool"
     },
     {
       "DependencyType": "Inheritance",
@@ -3639,29 +3547,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseStudentCreatedAsync",
+      "ToMethod": "RaiseStudentCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseStudentDeletedAsync",
+      "ToMethod": "RaiseStudentDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseStudentReadAsync",
+      "ToMethod": "RaiseStudentReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseStudentUpdatedAsync",
+      "ToMethod": "RaiseStudentUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -3674,29 +3582,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateStudent",
+      "ToMethod": "CreateStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteStudent",
+      "ToMethod": "DeleteStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadStudent",
+      "ToMethod": "ReadStudent"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateStudent",
+      "ToMethod": "UpdateStudent"
     },
     {
       "DependencyType": "Inheritance",
@@ -3709,29 +3617,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
-      "FromMethod": "RaiseCreatedAsync",
-      "ToMethod": "RaiseCreatedAsync"
+      "FromMethod": "RaiseTeacherCreatedAsync",
+      "ToMethod": "RaiseTeacherCreatedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
-      "FromMethod": "RaiseDeletedAsync",
-      "ToMethod": "RaiseDeletedAsync"
+      "FromMethod": "RaiseTeacherDeletedAsync",
+      "ToMethod": "RaiseTeacherDeletedAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
-      "FromMethod": "RaiseReadAsync",
-      "ToMethod": "RaiseReadAsync"
+      "FromMethod": "RaiseTeacherReadAsync",
+      "ToMethod": "RaiseTeacherReadAsync"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
-      "FromMethod": "RaiseUpdatedAsync",
-      "ToMethod": "RaiseUpdatedAsync"
+      "FromMethod": "RaiseTeacherUpdatedAsync",
+      "ToMethod": "RaiseTeacherUpdatedAsync"
     },
     {
       "DependencyType": "Inheritance",
@@ -3744,29 +3652,29 @@
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
-      "FromMethod": "Create",
-      "ToMethod": "Create"
+      "FromMethod": "CreateTeacher",
+      "ToMethod": "CreateTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
-      "FromMethod": "Delete",
-      "ToMethod": "Delete"
+      "FromMethod": "DeleteTeacher",
+      "ToMethod": "DeleteTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
-      "FromMethod": "Read",
-      "ToMethod": "Read"
+      "FromMethod": "ReadTeacher",
+      "ToMethod": "ReadTeacher"
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
-      "FromMethod": "Update",
-      "ToMethod": "Update"
+      "FromMethod": "UpdateTeacher",
+      "ToMethod": "UpdateTeacher"
     },
     {
       "DependencyType": "Inheritance",

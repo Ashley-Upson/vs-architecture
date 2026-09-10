@@ -1,26 +1,27 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
-
-public sealed class TeacherService : ITeacherService
+internal sealed class TeacherService : ITeacherService
 {
     private readonly ITeacherBroker teacherBroker;
-
     public TeacherService(ITeacherBroker teacherBroker)
     {
         this.teacherBroker = teacherBroker;
     }
 
-    public Teacher Create(Teacher model) => teacherBroker.Create(model: model);
+    public Teacher CreateTeacher(Teacher teacher) =>
+        teacherBroker.CreateTeacher(teacher: teacher);
 
-    public Teacher Read(string id) => teacherBroker.Read(id: id);
+    public Teacher ReadTeacher(string teacherId) =>
+        teacherBroker.ReadTeacher(teacherId: teacherId);
 
-    public Teacher Update(Teacher model) => teacherBroker.Update(model: model);
+    public Teacher UpdateTeacher(Teacher updatedTeacher) =>
+        teacherBroker.UpdateTeacher(updatedTeacher: updatedTeacher);
 
-    public void Delete(string id) => teacherBroker.Delete(id: id);
+    public void DeleteTeacher(string teacherId) =>
+        teacherBroker.DeleteTeacher(teacherId: teacherId);
 }

@@ -1,31 +1,28 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
-
-public sealed class StudentEventService : IStudentEventService
+internal sealed class StudentEventService : IStudentEventService
 {
     private readonly IStudentEventBroker studentEventBroker;
-
     public StudentEventService(IStudentEventBroker studentEventBroker)
     {
         this.studentEventBroker = studentEventBroker;
     }
 
-    public ValueTask RaiseCreatedAsync(Student model) =>
-        studentEventBroker.RaiseCreatedAsync(model: model);
+    public ValueTask RaiseStudentCreatedAsync(Student student) =>
+        studentEventBroker.RaiseStudentCreatedAsync(student: student);
 
-    public ValueTask RaiseReadAsync(Student model) =>
-        studentEventBroker.RaiseReadAsync(model: model);
+    public ValueTask RaiseStudentReadAsync(Student student) =>
+        studentEventBroker.RaiseStudentReadAsync(student: student);
 
-    public ValueTask RaiseUpdatedAsync(Student model) =>
-        studentEventBroker.RaiseUpdatedAsync(model: model);
+    public ValueTask RaiseStudentUpdatedAsync(Student student) =>
+        studentEventBroker.RaiseStudentUpdatedAsync(student: student);
 
-    public ValueTask RaiseDeletedAsync(Student model) =>
-        studentEventBroker.RaiseDeletedAsync(model: model);
+    public ValueTask RaiseStudentDeletedAsync(Student student) =>
+        studentEventBroker.RaiseStudentDeletedAsync(student: student);
 }

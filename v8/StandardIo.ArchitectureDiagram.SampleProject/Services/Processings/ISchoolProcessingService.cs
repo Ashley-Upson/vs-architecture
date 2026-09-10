@@ -1,15 +1,16 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public interface ISchoolProcessingService
+internal interface ISchoolProcessingService
 {
-    School Create(School model);
-    School Read(string id);
-    School Update(School model);
-    void Delete(string id);
+    School CreateSchool(School school);
+
+    School ReadSchool(string schoolId);
+
+    School UpdateSchool(School updatedSchool);
+
+    void DeleteSchool(string schoolId);
 }

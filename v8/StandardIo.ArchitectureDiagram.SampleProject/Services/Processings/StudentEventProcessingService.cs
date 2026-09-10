@@ -1,31 +1,28 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public sealed class StudentEventProcessingService : IStudentEventProcessingService
+internal sealed class StudentEventProcessingService : IStudentEventProcessingService
 {
     private readonly IStudentEventService studentEventService;
-
     public StudentEventProcessingService(IStudentEventService studentEventService)
     {
         this.studentEventService = studentEventService;
     }
 
-    public ValueTask RaiseCreatedAsync(Student model) =>
-        studentEventService.RaiseCreatedAsync(model: model);
+    public ValueTask RaiseStudentCreatedAsync(Student student) =>
+        studentEventService.RaiseStudentCreatedAsync(student: student);
 
-    public ValueTask RaiseReadAsync(Student model) =>
-        studentEventService.RaiseReadAsync(model: model);
+    public ValueTask RaiseStudentReadAsync(Student student) =>
+        studentEventService.RaiseStudentReadAsync(student: student);
 
-    public ValueTask RaiseUpdatedAsync(Student model) =>
-        studentEventService.RaiseUpdatedAsync(model: model);
+    public ValueTask RaiseStudentUpdatedAsync(Student student) =>
+        studentEventService.RaiseStudentUpdatedAsync(student: student);
 
-    public ValueTask RaiseDeletedAsync(Student model) =>
-        studentEventService.RaiseDeletedAsync(model: model);
+    public ValueTask RaiseStudentDeletedAsync(Student student) =>
+        studentEventService.RaiseStudentDeletedAsync(student: student);
 }

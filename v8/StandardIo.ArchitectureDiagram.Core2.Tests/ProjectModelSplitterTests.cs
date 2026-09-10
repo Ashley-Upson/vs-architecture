@@ -1,201 +1,331 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using System.Linq;
 using System.Text.Json;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using Xunit;
+using StandardIo.ArchitectureDiagram.Core2.Exposures;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
-
-public sealed class ProjectModelSplitterTests
+public sealed partial class ProjectModelSplitterTests
 {
+    private static readonly string[] firstSharedTreeNames = new[]
+    {
+        "A",
+        "Shared",
+        "Leaf"
+    };
+    private static readonly string[] secondSharedTreeNames = new[]
+    {
+        "B",
+        "Shared",
+        "Leaf"
+    };
+    private static readonly string[] rootAndChildNames = new[]
+    {
+        "Root",
+        "Child"
+    };
+    private static readonly string[] isolatedNames = new[]
+    {
+        "Isolated"
+    };
+    private static readonly string[] dataNames = new[]
+    {
+        "Data"
+    };
+    private static readonly string[] managerAndContractNames = new[]
+    {
+        "Manager",
+        "IService"
+    };
+    private static readonly string[] serviceAndContractNames = new[]
+    {
+        "Service",
+        "IService"
+    };
+    private static readonly string[] rootOnlyNames = new[]
+    {
+        "Root"
+    };
+    private static readonly string[] rootedCycleNames = new[]
+    {
+        "Root",
+        "B",
+        "C"
+    };
+    private static readonly string[] leftoverCycleNames = new[]
+    {
+        "B",
+        "C",
+        "Data"
+    };
+    private static readonly string[] sharedRootNames = new[]
+    {
+        "Root",
+        "Shared"
+    };
+    private static readonly string[] selfContainedLeftoverNames = new[]
+    {
+        "B",
+        "C",
+        "Shared"
+    };
+    private static readonly string[] distinctMethodNames = new[]
+    {
+        "Run",
+        "Other"
+    };
     [Fact]
     public void ShouldRepeatSharedDependenciesAndTheirDescendantsForEachRoot()
     {
-        var model = Model(new[] { Type("A"), Type("B"), Type("Shared"), Type("Leaf", hasMethods: false) },
-            Link("A", "Shared"), Link("A", "Leaf"), Link("B", "Shared"), Link("Shared", "Leaf"));
-        string before = JsonSerializer.Serialize(model);
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "A"), Type(name: "B"), Type(name: "Shared"), Type(name: "Leaf", hasMethods: false) }, dependencies: [Link(from: "A", to: "Shared"), Link(from: "A", to: "Leaf"), Link(from: "B", to: "Shared"), Link(from: "Shared", to: "Leaf")]);
+        string before = JsonSerializer.Serialize(value: model);
+        // When: exercise the operation under test.
+        ProjectModel[] result = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: 2, actual: result.Length);
+        Assert.Equal(expected: firstSharedTreeNames, actual: Names(model: result[0]));
+        Assert.Equal(expected: secondSharedTreeNames, actual: Names(model: result[1]));
+        Assert.Equal(expected: 3, actual: result[0].Dependencies!.Length);
+        Assert.Equal(expected: 2, actual: result[1].Dependencies!.Length);
 
-        ProjectModel[] result = new ProjectModelSplitter().Split(model);
+        Assert.All(collection: result, action: tree =>
+        {
+            Assert.Equal(expected: model.Name, actual: tree.Name);
+            Assert.Equal(expected: model.Path, actual: tree.Path);
+        });
 
-        Assert.Equal(2, result.Length);
-        Assert.Equal(new[] { "A", "Shared", "Leaf" }, Names(result[0]));
-        Assert.Equal(new[] { "B", "Shared", "Leaf" }, Names(result[1]));
-        Assert.Equal(3, result[0].Dependencies!.Length);
-        Assert.Equal(2, result[1].Dependencies!.Length);
-        Assert.All(result, tree => { Assert.Equal(model.Name, tree.Name); Assert.Equal(model.Path, tree.Path); });
-        Assert.Equal(before, JsonSerializer.Serialize(model));
-        AssertSelfContained(result);
+        Assert.Equal(expected: before, actual: JsonSerializer.Serialize(value: model));
+        AssertSelfContained(models: result);
     }
 
     [Fact]
     public void ShouldRequireMethodsForRootsButKeepMethodlessDependenciesAndLeftovers()
     {
-        var model = Model(new[] { Type("Root"), Type("Child", false), Type("Data", false), Type("Isolated") }, Link("Root", "Child"));
-
-        ProjectModel[] result = new ProjectModelSplitter().Split(model);
-
-        Assert.Equal(3, result.Length);
-        Assert.Equal(new[] { "Root", "Child" }, Names(result[0]));
-        Assert.Equal(new[] { "Isolated" }, Names(result[1]));
-        Assert.Equal(new[] { "Data" }, Names(result[2]));
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "Root"), Type(name: "Child", hasMethods: false), Type(name: "Data", hasMethods: false), Type(name: "Isolated") }, dependencies: [Link(from: "Root", to: "Child")]);
+        // When: exercise the operation under test.
+        ProjectModel[] result = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: 3, actual: result.Length);
+        Assert.Equal(expected: rootAndChildNames, actual: Names(model: result[0]));
+        Assert.Equal(expected: isolatedNames, actual: Names(model: result[1]));
+        Assert.Equal(expected: dataNames, actual: Names(model: result[2]));
     }
 
     [Fact]
     public void ShouldTreatInterfaceImplementationAndCallsAsDependenciesWithoutResolvingImplementations()
     {
-        var contract = Type("IService");
+        // Given: the fixture and inputs below.
+        var contract = Type(name: "IService");
         contract.FrameworkType = FrameworkType.Interface;
-        var implementationLink = Link("Service", "IService");
+        TypeRelationship implementationLink = Link(from: "Service", to: "IService");
         implementationLink.DependencyType = DependencyType.Inheritance;
         implementationLink.FromMethod = null;
         implementationLink.ToMethod = null;
-        var model = Model(new[] { Type("Manager"), contract, Type("Service") }, Link("Manager", "IService"), implementationLink);
-
-        ProjectModel[] result = new ProjectModelSplitter().Split(model);
-
-        Assert.Equal(2, result.Length);
-        Assert.Equal(new[] { "Manager", "IService" }, Names(result[0]));
-        Assert.Equal(new[] { "Service", "IService" }, Names(result[1]));
-        Assert.Equal(DependencyType.Inheritance, Assert.Single(result[1].Dependencies!).DependencyType);
-        Assert.Null(result[1].Dependencies![0].FromMethod);
-        Assert.Equal(FrameworkType.Interface, result[1].Types![1].FrameworkType);
+        var model = Model(types: new[] { Type(name: "Manager"), contract, Type(name: "Service") }, dependencies: [Link(from: "Manager", to: "IService"), implementationLink]);
+        // When: exercise the operation under test.
+        ProjectModel[] result = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: 2, actual: result.Length);
+        Assert.Equal(expected: managerAndContractNames, actual: Names(model: result[0]));
+        Assert.Equal(expected: serviceAndContractNames, actual: Names(model: result[1]));
+        Assert.Equal(expected: DependencyType.Inheritance, actual: Assert.Single(collection: result[1].Dependencies!).DependencyType);
+        Assert.Null(@object: result[1].Dependencies![0].FromMethod);
+        Assert.Equal(expected: FrameworkType.Interface, actual: result[1].Types![1].FrameworkType);
     }
 
     [Fact]
     public void ShouldKeepSelfReferencesWithoutDisqualifyingARoot()
     {
-        var model = Model(new[] { Type("Root") }, Link("Root", "Root"));
-
-        ProjectModel tree = Assert.Single(new ProjectModelSplitter().Split(model));
-
-        Assert.Equal(new[] { "Root" }, Names(tree));
-        Assert.Single(tree.Dependencies!);
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "Root") }, dependencies: [Link(from: "Root", to: "Root")]);
+        // When: exercise the operation under test.
+        ProjectModel tree = Assert.Single(collection: TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: rootOnlyNames, actual: Names(model: tree));
+        Assert.Single(collection: tree.Dependencies!);
     }
 
     [Fact]
     public void ShouldStopCyclesWhilePreservingEveryReachableEdge()
     {
-        var model = Model(new[] { Type("Root"), Type("B"), Type("C") }, Link("Root", "B"), Link("B", "C"), Link("C", "B"));
-
-        ProjectModel tree = Assert.Single(new ProjectModelSplitter().Split(model));
-
-        Assert.Equal(new[] { "Root", "B", "C" }, Names(tree));
-        Assert.Equal(3, tree.Dependencies!.Length);
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "Root"), Type(name: "B"), Type(name: "C") }, dependencies: [Link(from: "Root", to: "B"), Link(from: "B", to: "C"), Link(from: "C", to: "B")]);
+        // When: exercise the operation under test.
+        ProjectModel tree = Assert.Single(collection: TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: rootedCycleNames, actual: Names(model: tree));
+        Assert.Equal(expected: 3, actual: tree.Dependencies!.Length);
     }
 
     [Fact]
     public void ShouldGroupRootlessCyclesAndUnusedTypesIntoOneFinalModel()
     {
-        var model = Model(new[] { Type("B"), Type("C"), Type("Data", false) }, Link("B", "C"), Link("C", "B"));
-
-        ProjectModel remainder = Assert.Single(new ProjectModelSplitter().Split(model));
-
-        Assert.Equal(new[] { "B", "C", "Data" }, Names(remainder));
-        Assert.Equal(2, remainder.Dependencies!.Length);
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "B"), Type(name: "C"), Type(name: "Data", hasMethods: false) }, dependencies: [Link(from: "B", to: "C"), Link(from: "C", to: "B")]);
+        // When: exercise the operation under test.
+        ProjectModel remainder = Assert.Single(collection: TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: leftoverCycleNames, actual: Names(model: remainder));
+        Assert.Equal(expected: 2, actual: remainder.Dependencies!.Length);
     }
 
     [Fact]
     public void ShouldKeepLeftoverDependenciesSelfContainedWhenTheyPointIntoAnExistingTree()
     {
-        var model = Model(new[] { Type("Root"), Type("Shared"), Type("B"), Type("C") },
-            Link("Root", "Shared"), Link("B", "C"), Link("C", "B"), Link("C", "Shared"));
-
-        ProjectModel[] result = new ProjectModelSplitter().Split(model);
-
-        Assert.Equal(2, result.Length);
-        Assert.Equal(new[] { "Root", "Shared" }, Names(result[0]));
-        Assert.Equal(new[] { "B", "C", "Shared" }, Names(result[1]));
-        Assert.Equal(3, result[1].Dependencies!.Length);
-        AssertSelfContained(result);
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "Root"), Type(name: "Shared"), Type(name: "B"), Type(name: "C") }, dependencies: [Link(from: "Root", to: "Shared"), Link(from: "B", to: "C"), Link(from: "C", to: "B"), Link(from: "C", to: "Shared")]);
+        // When: exercise the operation under test.
+        ProjectModel[] result = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: 2, actual: result.Length);
+        Assert.Equal(expected: sharedRootNames, actual: Names(model: result[0]));
+        Assert.Equal(expected: selfContainedLeftoverNames, actual: Names(model: result[1]));
+        Assert.Equal(expected: 3, actual: result[1].Dependencies!.Length);
+        AssertSelfContained(models: result);
     }
 
     [Fact]
     public void ShouldCopyMemberAndDependencyDataWithoutSharingMutableObjects()
     {
-        var shared = Type("External", false);
+        // Given: the fixture and inputs below.
+        var shared = Type(name: "External", hasMethods: false);
         shared.IsInternal = false;
-        shared.Fields = new[] { new Field { Name = "field", Type = "System.String" } };
-        shared.Properties = new[] { new Property { Name = "property", Type = "System.Int32" } };
-        shared.Methods = new[] { new Method { Name = "Work" } };
-        var model = Model(new[] { Type("A"), Type("B"), shared }, Link("A", "External"), Link("B", "External"));
-        string before = JsonSerializer.Serialize(model);
 
-        ProjectModel[] result = new ProjectModelSplitter().Split(model);
+        shared.Fields = new[]
+        {
+            new Field
+            {
+                Name = "field",
+                Type = "System.String"
+            }
+        };
 
+        shared.Properties = new[]
+        {
+            new Property
+            {
+                Name = "property",
+                Type = "System.Int32"
+            }
+        };
+
+        shared.Methods = new[]
+        {
+            new Method
+            {
+                Name = "Work"
+            }
+        };
+
+        var model = Model(types: new[] { Type(name: "A"), Type(name: "B"), shared }, dependencies: [Link(from: "A", to: "External"), Link(from: "B", to: "External")]);
+        string before = JsonSerializer.Serialize(value: model);
+        // When: exercise the operation under test.
+        ProjectModel[] result = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
         DefinedType first = result[0].Types![1];
         DefinedType second = result[1].Types![1];
-        Assert.Equal(JsonSerializer.Serialize(shared), JsonSerializer.Serialize(first));
-        Assert.NotSame(shared, first);
-        Assert.NotSame(first, second);
-        Assert.NotSame(model.Dependencies![0], result[0].Dependencies![0]);
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: JsonSerializer.Serialize(value: shared), actual: JsonSerializer.Serialize(value: first));
+        Assert.NotSame(expected: shared, actual: first);
+        Assert.NotSame(expected: first, actual: second);
+        Assert.NotSame(expected: model.Dependencies![0], actual: result[0].Dependencies![0]);
         first.Fields![0].Name = "changed";
         first.Properties![0].Type = "changed";
         first.Methods![0].Name = "changed";
         result[0].Dependencies![0].ToMethod = "changed";
-        Assert.Equal(before, JsonSerializer.Serialize(model));
-        Assert.Equal("field", second.Fields![0].Name);
-        Assert.Equal("System.Int32", second.Properties![0].Type);
-        Assert.Equal("Work", second.Methods![0].Name);
+        Assert.Equal(expected: before, actual: JsonSerializer.Serialize(value: model));
+        Assert.Equal(expected: "field", actual: second.Fields![0].Name);
+        Assert.Equal(expected: "System.Int32", actual: second.Properties![0].Type);
+        Assert.Equal(expected: "Work", actual: second.Methods![0].Name);
     }
 
     [Fact]
     public void ShouldPreserveDifferentMethodLinksBetweenTheSameTypes()
     {
-        var first = Link("A", "B");
-        var second = Link("A", "B");
+        // Given: the fixture and inputs below.
+        TypeRelationship first = Link(from: "A", to: "B");
+        TypeRelationship second = Link(from: "A", to: "B");
         second.FromMethod = "Other";
-        var model = Model(new[] { Type("A"), Type("B") }, first, second);
-
-        ProjectModel tree = Assert.Single(new ProjectModelSplitter().Split(model));
-
-        Assert.Equal(2, tree.Types!.Length);
-        Assert.Equal(new[] { "Run", "Other" }, tree.Dependencies!.Select(link => link.FromMethod));
+        var model = Model(types: new[] { Type(name: "A"), Type(name: "B") }, dependencies: [first, second]);
+        // When: exercise the operation under test.
+        ProjectModel tree = Assert.Single(collection: TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
+        // Then: verify the resulting contract.
+        Assert.Equal(expected: 2, actual: tree.Types!.Length);
+        Assert.Equal(expected: distinctMethodNames, actual: tree.Dependencies!.Select(selector: link => link.FromMethod));
     }
 
     [Fact]
     public void ShouldReturnNoModelsForEmptyInputAndTreatMissingCollectionsAsEmpty()
     {
-        Assert.Empty(new ProjectModelSplitter().Split(new ProjectModel()));
-        var model = Model(new[] { new DefinedType { Name = "Data" } });
-        ProjectModel remainder = Assert.Single(new ProjectModelSplitter().Split(model));
-        Assert.Empty(remainder.Types![0].Methods!);
-        Assert.Empty(remainder.Types[0].Fields!);
-        Assert.Empty(remainder.Types[0].Properties!);
-        Assert.Empty(remainder.Dependencies!);
+        // Given: the fixture and inputs below.
+        // When: exercise the operation under test.
+        Assert.Empty(collection: TestServices.Get<ProjectModelSplitter>().Split(projectModel: new ProjectModel()));
+        var model = Model(types: new[] { new DefinedType { Name = "Data" } });
+        // Then: verify the resulting contract.
+        ProjectModel remainder = Assert.Single(collection: TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
+        Assert.Empty(collection: remainder.Types![0].Methods!);
+        Assert.Empty(collection: remainder.Types[0].Fields!);
+        Assert.Empty(collection: remainder.Types[0].Properties!);
+        Assert.Empty(collection: remainder.Dependencies!);
     }
 
     [Fact]
-    public void ShouldRejectNullInput() => Assert.Throws<ArgumentNullException>(() => new ProjectModelSplitter().Split(null!));
+    public void ShouldRejectNullInput()
+    {
+        // Given
+        var splitter = TestServices.Get<ProjectModelSplitter>();
+        // When
+        Action split = () => splitter.Split(projectModel: null !);
+        // Then
+        Assert.Throws<ArgumentNullException>(testCode: split);
+    }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void ShouldRejectDependenciesWithUnknownEndpoints(bool missingSource)
     {
-        var model = Model(new[] { Type("Known") }, missingSource ? Link("Missing", "Known") : Link("Known", "Missing"));
-        Assert.Throws<ArgumentException>(() => new ProjectModelSplitter().Split(model));
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "Known") }, dependencies: [missingSource ? Link(from: "Missing", to: "Known") : Link(from: "Known", to: "Missing")]);
+        // When: exercise the operation under test.
+        // Then: verify the resulting contract.
+        Assert.Throws<ArgumentException>(testCode: () => TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
     }
 
     [Fact]
     public void ShouldRejectAmbiguousTypeNames()
     {
-        var model = Model(new[] { Type("Duplicate"), Type("Duplicate") });
-        Assert.Throws<ArgumentException>(() => new ProjectModelSplitter().Split(model));
+        // Given: the fixture and inputs below.
+        var model = Model(types: new[] { Type(name: "Duplicate"), Type(name: "Duplicate") });
+        // When: exercise the operation under test.
+        // Then: verify the resulting contract.
+        Assert.Throws<ArgumentException>(testCode: () => TestServices.Get<ProjectModelSplitter>().Split(projectModel: model));
     }
 
-    private static DefinedType Type(string name, bool hasMethods = true) => new()
+    private static DefinedType Type(string name, bool hasMethods = true) =>
+        new()
     {
         Name = name,
         IsInternal = true,
         FrameworkType = FrameworkType.Class,
-        Methods = hasMethods ? new[] { new Method { Name = "Run" } } : Array.Empty<Method>()
+        Methods = hasMethods ? new[]
+        {
+            new Method
+            {
+                Name = "Run"
+            }
+        }
+
+        : Array.Empty<Method>()
     };
 
-    private static Dependency Link(string from, string to) => new()
+    private static TypeRelationship Link(string from, string to) =>
+        new()
     {
         DependencyType = DependencyType.Consumed,
         FromType = from,
@@ -204,19 +334,30 @@ public sealed class ProjectModelSplitterTests
         ToMethod = "Work"
     };
 
-    private static ProjectModel Model(DefinedType[] types, params Dependency[] dependencies) => new()
+    private static ProjectModel Model(DefinedType[] types, params TypeRelationship[] dependencies) =>
+        new()
     {
-        Name = "Example", Path = "Example.csproj", Types = types, Dependencies = dependencies
+        Name = "Example",
+        Path = "Example.csproj",
+        Types = types,
+        Dependencies = dependencies
     };
 
-    private static string[] Names(ProjectModel model) => model.Types!.Select(type => type.Name!).ToArray();
+    private static string[] Names(ProjectModel model) =>
+        model.Types!.Select(selector: type => type.Name!)
+        .ToArray();
 
     private static void AssertSelfContained(ProjectModel[] models)
     {
         foreach (ProjectModel model in models)
         {
-            string[] names = Names(model);
-            Assert.All(model.Dependencies!, link => { Assert.Contains(link.FromType, names); Assert.Contains(link.ToType, names); });
+            string[] names = Names(model: model);
+
+            Assert.All(collection: model.Dependencies!, action: link =>
+            {
+                Assert.Contains(expected: link.FromType, collection: names);
+                Assert.Contains(expected: link.ToType, collection: names);
+            });
         }
     }
 }

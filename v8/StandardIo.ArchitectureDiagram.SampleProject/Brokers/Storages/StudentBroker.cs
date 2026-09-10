@@ -1,49 +1,46 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using StandardIo.ArchitectureDiagram.SampleProject.Exposures;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages;
-
-public sealed class StudentBroker : IStudentBroker
+internal sealed class StudentBroker : IStudentBroker
 {
     private readonly SchoolDataContext context;
-
     public StudentBroker(ISchoolFactory schoolFactory)
     {
-        context = schoolFactory.Create();
+        context = schoolFactory.CreateSchoolDataContext();
     }
 
-    public Student Create(Student model)
+    public Student CreateStudent(Student student)
     {
-        context.Students.Add(item: model);
-        return model;
+        context.Students.Add(item: student);
+        return student;
     }
 
-    public Student Read(string id)
+    public Student ReadStudent(string studentId)
     {
-        return context.Students.Find(match: model => model.Id == id)
-            ?? throw new InvalidOperationException(message: "Student was not found.");
+        return context.Students.Find(match: model => model.Id == studentId) ?? throw new InvalidOperationException(message: "Student was not found.");
     }
 
-    public Student Update(Student model)
+    public Student UpdateStudent(Student updatedStudent)
     {
-        int index = context.Students.FindIndex(match: existing => existing.Id == model.Id);
+        int index = context.Students.FindIndex(match: existing => existing.Id == updatedStudent.Id);
 
         if (index < 0)
         {
             throw new InvalidOperationException(message: "Student was not found.");
         }
 
-        context.Students[index] = model;
-        return model;
+        context.Students[index] = updatedStudent;
+        return updatedStudent;
     }
 
-    public void Delete(string id)
+    public void DeleteStudent(string studentId)
     {
-        context.Students.RemoveAll(match: model => model.Id == id);
+        context.Students.RemoveAll(match: model => model.Id == studentId);
     }
 }

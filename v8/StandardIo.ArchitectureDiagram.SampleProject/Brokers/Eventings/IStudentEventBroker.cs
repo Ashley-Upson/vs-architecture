@@ -1,16 +1,17 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings;
-
-public interface IStudentEventBroker
+internal interface IStudentEventBroker
 {
-    ValueTask RaiseCreatedAsync(Student model);
-    ValueTask RaiseReadAsync(Student model);
-    ValueTask RaiseUpdatedAsync(Student model);
-    ValueTask RaiseDeletedAsync(Student model);
+    ValueTask RaiseStudentCreatedAsync(Student student);
+
+    ValueTask RaiseStudentReadAsync(Student student);
+
+    ValueTask RaiseStudentUpdatedAsync(Student student);
+
+    ValueTask RaiseStudentDeletedAsync(Student student);
 }

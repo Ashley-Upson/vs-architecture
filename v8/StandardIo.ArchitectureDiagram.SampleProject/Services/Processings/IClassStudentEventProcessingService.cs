@@ -1,16 +1,17 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public interface IClassStudentEventProcessingService
+internal interface IClassStudentEventProcessingService
 {
-    ValueTask RaiseCreatedAsync(ClassStudent model);
-    ValueTask RaiseReadAsync(ClassStudent model);
-    ValueTask RaiseUpdatedAsync(ClassStudent model);
-    ValueTask RaiseDeletedAsync(ClassStudent model);
+    ValueTask RaiseClassStudentCreatedAsync(ClassStudent classStudent);
+
+    ValueTask RaiseClassStudentReadAsync(ClassStudent classStudent);
+
+    ValueTask RaiseClassStudentUpdatedAsync(ClassStudent classStudent);
+
+    ValueTask RaiseClassStudentDeletedAsync(ClassStudent classStudent);
 }

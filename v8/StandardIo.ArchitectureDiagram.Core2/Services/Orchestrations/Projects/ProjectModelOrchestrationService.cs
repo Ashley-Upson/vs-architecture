@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using System.IO;
 using System.Threading;
@@ -12,17 +11,12 @@ using StandardIo.ArchitectureDiagram.Core2.Services.Processings.Dependencies;
 using StandardIo.ArchitectureDiagram.Core2.Services.Processings.Projects;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Orchestrations.Projects;
-
 internal sealed class ProjectModelOrchestrationService : IProjectModelOrchestrationService
 {
     private readonly IProjectTypesProcessingService projectTypesProcessingService;
     private readonly IProjectDependenciesProcessingService projectDependenciesProcessingService;
     private readonly IProjectProcessingService projectProcessingService;
-
-    public ProjectModelOrchestrationService(
-        IProjectProcessingService projectProcessingService,
-        IProjectTypesProcessingService projectTypesProcessingService,
-        IProjectDependenciesProcessingService projectDependenciesProcessingService)
+    public ProjectModelOrchestrationService(IProjectProcessingService projectProcessingService, IProjectTypesProcessingService projectTypesProcessingService, IProjectDependenciesProcessingService projectDependenciesProcessingService)
     {
         this.projectProcessingService = projectProcessingService;
         this.projectTypesProcessingService = projectTypesProcessingService;
@@ -33,12 +27,13 @@ internal sealed class ProjectModelOrchestrationService : IProjectModelOrchestrat
     {
         cancellationToken.ThrowIfCancellationRequested();
         string resolvedPath = projectProcessingService.ResolveProjectFilePath(suppliedPath: projectFilePath);
+
         var project = new ProjectModel
         {
             Name = Path.GetFileNameWithoutExtension(path: resolvedPath),
             Path = resolvedPath,
             Types = Array.Empty<DefinedType>(),
-            Dependencies = Array.Empty<Dependency>()
+            Dependencies = Array.Empty<TypeRelationship>()
         };
 
         await projectTypesProcessingService.PopulateTypesAsync(project: project, cancellationToken: cancellationToken);

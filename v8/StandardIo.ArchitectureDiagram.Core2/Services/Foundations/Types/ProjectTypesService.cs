@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,33 +11,34 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Brokers.Roslyn;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Types;
-
 internal sealed class ProjectTypesService : IProjectTypesService
 {
     private readonly IRoslynBroker roslynBroker;
-
     public ProjectTypesService(IRoslynBroker roslynBroker) => this.roslynBroker = roslynBroker;
-
     public async Task PopulateTypesAsync(ProjectModel project, CancellationToken cancellationToken)
     {
         Compilation compilation = await roslynBroker.LoadCompilationAsync(projectFilePath: project.Path!, cancellationToken: cancellationToken);
+
         var errors = roslynBroker.GetDiagnostics(compilation: compilation, cancellationToken: cancellationToken)
-            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+            .Where(predicate: diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
 
         if (errors.Length > 0)
         {
-            throw new InvalidOperationException(message: $"Project {project.Name} has compilation errors:\n{string.Join("\n", errors.Select(error => error.ToString()))}");
+            throw new InvalidOperationException(message: $"Project {project.Name} has compilation errors:\n{string.Join(separator: "\n", values: errors.Select(selector: error => error.ToString()))}");
         }
 
-        INamedTypeSymbol[] definitions = roslynBroker.GetDefinedTypes(compilation: compilation).ToArray();
-        IEnumerable<INamedTypeSymbol> targets = definitions.SelectMany(type =>
-            roslynBroker.GetBaseTypes(type: type).Concat(
-                roslynBroker.GetCalls(compilation: compilation, type: type, cancellationToken: cancellationToken)
-                    .Select(call => call.Target.ContainingType.OriginalDefinition)));
+        INamedTypeSymbol[] definitions = roslynBroker.GetDefinedTypes(compilation: compilation)
+            .ToArray();
+
+        IEnumerable<INamedTypeSymbol> targets = definitions.SelectMany(selector: type => roslynBroker.GetBaseTypes(type: type)
+            .Concat(second: roslynBroker.GetCalls(compilation: compilation, type: type, cancellationToken: cancellationToken)
+            .Select(selector: call => call.DependencyType.OriginalDefinition)));
+
         var identities = new Dictionary<string, string>(comparer: StringComparer.Ordinal);
         var types = new List<DefinedType>();
 
-        foreach (INamedTypeSymbol type in definitions.Concat(targets))
+        foreach (INamedTypeSymbol type in definitions.Concat(second: targets))
         {
             cancellationToken.ThrowIfCancellationRequested();
             string name = roslynBroker.GetTypeName(type: type.OriginalDefinition);
@@ -46,12 +46,16 @@ internal sealed class ProjectTypesService : IProjectTypesService
 
             if (identities.TryGetValue(key: name, value: out string? existing))
             {
-                if (existing != identity) throw new NotSupportedException(message: $"Type name {name} occurs in different assemblies; the model cannot distinguish these dependency endpoints.");
+                if (existing != identity)
+                {
+                    throw new NotSupportedException(message: $"Type name {name} occurs in different assemblies; the model cannot distinguish these dependency endpoints.");
+                }
+
                 continue;
             }
 
             identities.Add(key: name, value: identity);
-            bool isInternal = SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly);
+            bool isInternal = SymbolEqualityComparer.Default.Equals(x: type.ContainingAssembly, y: compilation.Assembly);
             types.Add(item: CreateType(type: type, isInternal: isInternal));
         }
 
@@ -68,6 +72,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
         return new DefinedType
         {
             Name = roslynBroker.GetTypeName(type: type.OriginalDefinition),
+            AssemblyName = isInternal ? null : type.ContainingAssembly.Identity.Name,
             FrameworkType = type.TypeKind == TypeKind.Interface ? FrameworkType.Interface : FrameworkType.Class,
             IsInternal = isInternal,
             Fields = isInternal ? roslynBroker.GetMembers(type: type)
@@ -84,9 +89,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
                 .ToArray() : Array.Empty<Property>(),
             Methods = isInternal ? roslynBroker.GetMembers(type: type)
                 .OfType<IMethodSymbol>()
-                .Where(predicate: method => !method.IsImplicitlyDeclared
-                    && (method.MethodKind == MethodKind.Ordinary && method.DeclaredAccessibility == Accessibility.Public
-                        || method.MethodKind == MethodKind.ExplicitInterfaceImplementation))
+                .Where(predicate: method => !method.IsImplicitlyDeclared && (method.MethodKind == MethodKind.Ordinary && method.DeclaredAccessibility == Accessibility.Public || method.MethodKind == MethodKind.ExplicitInterfaceImplementation))
                 .OrderBy(keySelector: method => method.Name, comparer: StringComparer.Ordinal)
                 .Select(selector: method => new Method { Name = method.Name })
                 .ToArray() : Array.Empty<Method>()

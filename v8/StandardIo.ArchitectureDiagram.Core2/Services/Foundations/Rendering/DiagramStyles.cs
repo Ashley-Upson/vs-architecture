@@ -1,14 +1,37 @@
+// ---------------------------------------------------------------
+// Copyright (c) Paul.Ward@ccoder.co.uk
+// ---------------------------------------------------------------
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal static class DiagramStyles
 {
-    internal static string GetRoleColour(string name)
+    internal static string GetRoleColour(string name, bool isInternal = true, string[]? layerColours = null)
     {
-        if (name.Contains(".Orchestrations.") || name.EndsWith("OrchestrationService")) return "#00506b";
-        if (name.Contains(".Processings.") || name.EndsWith("ProcessingService")) return "#5100aa";
-        if (name.Contains(".Foundations.")) return "#005000";
-        if (name.Contains(".Brokers.") || name.EndsWith("Broker")) return "#335600";
-        if (name.Contains(".Exposures.") || name.EndsWith("Controller") || name.EndsWith("Manager")) return "#003b99";
-        return "#374151";
-    }
+        layerColours ??= new StandardIo.ArchitectureDiagram.Core2.Models.ArchitectureRenderConfiguration().LayerColours;
+        if (name.Contains(value: ".Orchestrations.") || name.EndsWith(value: "OrchestrationService"))
+        {
+            return layerColours[0];
+        }
 
+        if (name.Contains(value: ".Processings.") || name.EndsWith(value: "ProcessingService"))
+        {
+            return layerColours[1];
+        }
+
+        if (name.Contains(value: ".Foundations."))
+        {
+            return layerColours[2];
+        }
+
+        if (name.Contains(value: ".Brokers.") || name.EndsWith(value: "Broker"))
+        {
+            return layerColours[3];
+        }
+
+        if (name.Contains(value: ".Exposures.") || name.EndsWith(value: "Controller") || name.EndsWith(value: "Manager"))
+        {
+            return layerColours[4];
+        }
+
+        return isInternal ? layerColours[5] : layerColours[6];
+    }
 }

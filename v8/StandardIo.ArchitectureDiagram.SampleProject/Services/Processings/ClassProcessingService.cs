@@ -1,26 +1,27 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public sealed class ClassProcessingService : IClassProcessingService
+internal sealed class ClassProcessingService : IClassProcessingService
 {
     private readonly IClassService classService;
-
     public ClassProcessingService(IClassService classService)
     {
         this.classService = classService;
     }
 
-    public Class Create(Class model) => classService.Create(model: model);
+    public Class CreateClass(Class @class) =>
+        classService.CreateClass(@class: @class);
 
-    public Class Read(string id) => classService.Read(id: id);
+    public Class ReadClass(string classId) =>
+        classService.ReadClass(classId: classId);
 
-    public Class Update(Class model) => classService.Update(model: model);
+    public Class UpdateClass(Class updatedClass) =>
+        classService.UpdateClass(updatedClass: updatedClass);
 
-    public void Delete(string id) => classService.Delete(id: id);
+    public void DeleteClass(string classId) =>
+        classService.DeleteClass(classId: classId);
 }

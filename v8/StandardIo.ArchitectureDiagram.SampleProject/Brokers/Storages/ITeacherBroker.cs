@@ -1,15 +1,16 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages;
-
-public interface ITeacherBroker
+internal interface ITeacherBroker
 {
-    Teacher Create(Teacher model);
-    Teacher Read(string id);
-    Teacher Update(Teacher model);
-    void Delete(string id);
+    Teacher CreateTeacher(Teacher teacher);
+
+    Teacher ReadTeacher(string teacherId);
+
+    Teacher UpdateTeacher(Teacher updatedTeacher);
+
+    void DeleteTeacher(string teacherId);
 }

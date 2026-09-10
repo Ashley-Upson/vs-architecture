@@ -1,49 +1,46 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using StandardIo.ArchitectureDiagram.SampleProject.Exposures;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages;
-
-public sealed class ClassBroker : IClassBroker
+internal sealed class ClassBroker : IClassBroker
 {
     private readonly SchoolDataContext context;
-
     public ClassBroker(ISchoolFactory schoolFactory)
     {
-        context = schoolFactory.Create();
+        context = schoolFactory.CreateSchoolDataContext();
     }
 
-    public Class Create(Class model)
+    public Class CreateClass(Class @class)
     {
-        context.Classes.Add(item: model);
-        return model;
+        context.Classes.Add(item: @class);
+        return @class;
     }
 
-    public Class Read(string id)
+    public Class ReadClass(string classId)
     {
-        return context.Classes.Find(match: model => model.Id == id)
-            ?? throw new InvalidOperationException(message: "Class was not found.");
+        return context.Classes.Find(match: model => model.Id == classId) ?? throw new InvalidOperationException(message: "Class was not found.");
     }
 
-    public Class Update(Class model)
+    public Class UpdateClass(Class updatedClass)
     {
-        int index = context.Classes.FindIndex(match: existing => existing.Id == model.Id);
+        int index = context.Classes.FindIndex(match: existing => existing.Id == updatedClass.Id);
 
         if (index < 0)
         {
             throw new InvalidOperationException(message: "Class was not found.");
         }
 
-        context.Classes[index] = model;
-        return model;
+        context.Classes[index] = updatedClass;
+        return updatedClass;
     }
 
-    public void Delete(string id)
+    public void DeleteClass(string classId)
     {
-        context.Classes.RemoveAll(match: model => model.Id == id);
+        context.Classes.RemoveAll(match: model => model.Id == classId);
     }
 }

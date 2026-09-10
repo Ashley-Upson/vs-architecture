@@ -1,16 +1,17 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations;
-
-public interface IClassStudentOrchestrationService
+internal interface IClassStudentOrchestrationService
 {
-    Task<ClassStudent> CreateAsync(ClassStudent model);
-    Task<ClassStudent> ReadAsync(string id);
-    Task<ClassStudent> UpdateAsync(ClassStudent model);
-    Task DeleteAsync(string id);
+    Task<ClassStudent> CreateClassStudentAsync(ClassStudent classStudent);
+
+    Task<ClassStudent> ReadClassStudentAsync(string classStudentId);
+
+    Task<ClassStudent> UpdateClassStudentAsync(ClassStudent updatedClassStudent);
+
+    Task DeleteClassStudentAsync(string classStudentId);
 }

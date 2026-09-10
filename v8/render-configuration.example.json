@@ -1,0 +1,23 @@
+{
+  "NoDuplicates": false,
+  "HorizontalOffset": 10,
+  "ColourLines": false,
+  "MaxLayoutIterations": 1000,
+  "Architecture": {
+    "RowDepth": 160,
+    "NodeWidth": 180,
+    "NodeSpacing": 60,
+    "LayerColours": [
+      "#046079",
+      "#6420b0",
+      "#176538",
+      "#415f19",
+      "#2057a0",
+      "#7e4a16",
+      "#963918"
+    ],
+    "ProjectSpacing": 100
+  },
+  "CallChain": {},
+  "DataModel": {}
+}

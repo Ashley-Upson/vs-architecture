@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System;
 using System.Linq;
 using System.Threading;
@@ -10,23 +9,20 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Dependencies;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Dependencies;
-
 internal sealed class ProjectDependenciesProcessingService : IProjectDependenciesProcessingService
 {
     private readonly IProjectDependenciesService projectDependenciesService;
-
     public ProjectDependenciesProcessingService(IProjectDependenciesService projectDependenciesService) => this.projectDependenciesService = projectDependenciesService;
-
     public async Task PopulateDependenciesAsync(ProjectModel project, CancellationToken cancellationToken)
     {
         await projectDependenciesService.PopulateDependenciesAsync(project: project, cancellationToken: cancellationToken);
-        project.Dependencies = project.Dependencies!
-            .DistinctBy(link => (link.DependencyType, link.FromType, link.ToType, link.FromMethod, link.ToMethod))
-            .OrderBy(link => link.FromType, StringComparer.Ordinal)
-            .ThenBy(link => link.ToType, StringComparer.Ordinal)
-            .ThenBy(link => link.DependencyType)
-            .ThenBy(link => link.FromMethod, StringComparer.Ordinal)
-            .ThenBy(link => link.ToMethod, StringComparer.Ordinal)
+
+        project.Dependencies = project.Dependencies!.DistinctBy(keySelector: link => (link.DependencyType, link.FromType, link.ToType, link.FromMethod, link.ToMethod))
+            .OrderBy(keySelector: link => link.FromType, comparer: StringComparer.Ordinal)
+            .ThenBy(keySelector: link => link.ToType, comparer: StringComparer.Ordinal)
+            .ThenBy(keySelector: link => link.DependencyType)
+            .ThenBy(keySelector: link => link.FromMethod, comparer: StringComparer.Ordinal)
+            .ThenBy(keySelector: link => link.ToMethod, comparer: StringComparer.Ordinal)
             .ToArray();
     }
 }

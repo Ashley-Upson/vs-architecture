@@ -1,31 +1,28 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
-
-public sealed class TeacherEventProcessingService : ITeacherEventProcessingService
+internal sealed class TeacherEventProcessingService : ITeacherEventProcessingService
 {
     private readonly ITeacherEventService teacherEventService;
-
     public TeacherEventProcessingService(ITeacherEventService teacherEventService)
     {
         this.teacherEventService = teacherEventService;
     }
 
-    public ValueTask RaiseCreatedAsync(Teacher model) =>
-        teacherEventService.RaiseCreatedAsync(model: model);
+    public ValueTask RaiseTeacherCreatedAsync(Teacher teacher) =>
+        teacherEventService.RaiseTeacherCreatedAsync(teacher: teacher);
 
-    public ValueTask RaiseReadAsync(Teacher model) =>
-        teacherEventService.RaiseReadAsync(model: model);
+    public ValueTask RaiseTeacherReadAsync(Teacher teacher) =>
+        teacherEventService.RaiseTeacherReadAsync(teacher: teacher);
 
-    public ValueTask RaiseUpdatedAsync(Teacher model) =>
-        teacherEventService.RaiseUpdatedAsync(model: model);
+    public ValueTask RaiseTeacherUpdatedAsync(Teacher teacher) =>
+        teacherEventService.RaiseTeacherUpdatedAsync(teacher: teacher);
 
-    public ValueTask RaiseDeletedAsync(Teacher model) =>
-        teacherEventService.RaiseDeletedAsync(model: model);
+    public ValueTask RaiseTeacherDeletedAsync(Teacher teacher) =>
+        teacherEventService.RaiseTeacherDeletedAsync(teacher: teacher);
 }

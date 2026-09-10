@@ -1,27 +1,28 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Exposures;
-
 public sealed class StudentManager : IStudentManager
 {
     private readonly IStudentOrchestrationService studentOrchestrationService;
-
-    public StudentManager(IStudentOrchestrationService studentOrchestrationService)
+    internal StudentManager(IStudentOrchestrationService studentOrchestrationService)
     {
         this.studentOrchestrationService = studentOrchestrationService;
     }
 
-    public Task<Student> CreateAsync(Student model) => studentOrchestrationService.CreateAsync(model: model);
+    public Task<Student> CreateStudentAsync(Student student) =>
+        studentOrchestrationService.CreateStudentAsync(student: student);
 
-    public Task<Student> ReadAsync(string id) => studentOrchestrationService.ReadAsync(id: id);
+    public Task<Student> ReadStudentAsync(string studentId) =>
+        studentOrchestrationService.ReadStudentAsync(studentId: studentId);
 
-    public Task<Student> UpdateAsync(Student model) => studentOrchestrationService.UpdateAsync(model: model);
+    public Task<Student> UpdateStudentAsync(Student updatedStudent) =>
+        studentOrchestrationService.UpdateStudentAsync(updatedStudent: updatedStudent);
 
-    public Task DeleteAsync(string id) => studentOrchestrationService.DeleteAsync(id: id);
+    public Task DeleteStudentAsync(string studentId) =>
+        studentOrchestrationService.DeleteStudentAsync(studentId: studentId);
 }

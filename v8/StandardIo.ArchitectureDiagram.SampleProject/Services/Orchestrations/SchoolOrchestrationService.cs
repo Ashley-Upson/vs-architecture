@@ -1,51 +1,46 @@
 // ---------------------------------------------------------------
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
-
 using System.Threading.Tasks;
-using StandardIo.ArchitectureDiagram.SampleProject.Models;
+using StandardIo.ArchitectureDiagram.SampleProject.Data.Models;
 using StandardIo.ArchitectureDiagram.SampleProject.Services.Processings;
 
 namespace StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations;
-
-public sealed class SchoolOrchestrationService : ISchoolOrchestrationService
+internal sealed class SchoolOrchestrationService : ISchoolOrchestrationService
 {
     private readonly ISchoolProcessingService schoolProcessingService;
     private readonly ISchoolEventProcessingService schoolEventProcessingService;
-
-    public SchoolOrchestrationService(
-        ISchoolProcessingService schoolProcessingService,
-        ISchoolEventProcessingService schoolEventProcessingService)
+    public SchoolOrchestrationService(ISchoolProcessingService schoolProcessingService, ISchoolEventProcessingService schoolEventProcessingService)
     {
         this.schoolProcessingService = schoolProcessingService;
         this.schoolEventProcessingService = schoolEventProcessingService;
     }
 
-    public async Task<School> CreateAsync(School model)
+    public async Task<School> CreateSchoolAsync(School school)
     {
-        School result = schoolProcessingService.Create(model: model);
-        await schoolEventProcessingService.RaiseCreatedAsync(model: result);
+        School result = schoolProcessingService.CreateSchool(school: school);
+        await schoolEventProcessingService.RaiseSchoolCreatedAsync(school: result);
         return result;
     }
 
-    public async Task<School> ReadAsync(string id)
+    public async Task<School> ReadSchoolAsync(string schoolId)
     {
-        School result = schoolProcessingService.Read(id: id);
-        await schoolEventProcessingService.RaiseReadAsync(model: result);
+        School result = schoolProcessingService.ReadSchool(schoolId: schoolId);
+        await schoolEventProcessingService.RaiseSchoolReadAsync(school: result);
         return result;
     }
 
-    public async Task<School> UpdateAsync(School model)
+    public async Task<School> UpdateSchoolAsync(School updatedSchool)
     {
-        School result = schoolProcessingService.Update(model: model);
-        await schoolEventProcessingService.RaiseUpdatedAsync(model: result);
+        School result = schoolProcessingService.UpdateSchool(updatedSchool: updatedSchool);
+        await schoolEventProcessingService.RaiseSchoolUpdatedAsync(school: result);
         return result;
     }
 
-    public async Task DeleteAsync(string id)
+    public async Task DeleteSchoolAsync(string schoolId)
     {
-        School model = schoolProcessingService.Read(id: id);
-        schoolProcessingService.Delete(id: id);
-        await schoolEventProcessingService.RaiseDeletedAsync(model: model);
+        School model = schoolProcessingService.ReadSchool(schoolId: schoolId);
+        schoolProcessingService.DeleteSchool(schoolId: schoolId);
+        await schoolEventProcessingService.RaiseSchoolDeletedAsync(school: model);
     }
 }
