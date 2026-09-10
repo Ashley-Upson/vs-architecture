@@ -1,0 +1,3779 @@
+{
+  "Name": "StandardIo.ArchitectureDiagram.SampleProject",
+  "Path": "StandardIo.ArchitectureDiagram.SampleProject.csproj",
+  "Types": [
+    {
+      "Name": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "cCoder.Eventing.IEventHub",
+          "Name": "eventHub"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "cCoder.Eventing.IEventHub",
+          "Name": "eventHub"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "cCoder.Eventing.IEventHub",
+          "Name": "eventHub"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "cCoder.Eventing.IEventHub",
+          "Name": "eventHub"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "cCoder.Eventing.IEventHub",
+          "Name": "eventHub"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Name": "context"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Name": "context"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Name": "context"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Name": "context"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+          "Name": "context"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+          "Name": "classOrchestrationService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+          "Name": "classStudentOrchestrationService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolFactory",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+          "Name": "schoolOrchestrationService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+          "Name": "studentOrchestrationService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+          "Name": "teacherOrchestrationService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.Class",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "System.String",
+          "Name": "SchoolId"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.ClassStudent[]",
+          "Name": "Students"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher",
+          "Name": "Teacher"
+        },
+        {
+          "Type": "System.String",
+          "Name": "TeacherId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.ClassStudent",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "ClassId"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Student",
+          "Name": "Student"
+        },
+        {
+          "Type": "System.String",
+          "Name": "StudentId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.School",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Class[]",
+          "Name": "Classes"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Student[]",
+          "Name": "Students"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher[]",
+          "Name": "Teachers"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.SchoolDataContext",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.ClassStudent>",
+          "Name": "ClassStudents"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.Class>",
+          "Name": "Classes"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.School>",
+          "Name": "Schools"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.Student>",
+          "Name": "Students"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher>",
+          "Name": "Teachers"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.Student",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Name"
+        },
+        {
+          "Type": "System.String",
+          "Name": "SchoolId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Models.Teacher",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Name"
+        },
+        {
+          "Type": "System.String",
+          "Name": "SchoolId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "AddSchoolSample"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+          "Name": "classEventBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+          "Name": "classBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+          "Name": "classStudentEventBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+          "Name": "classStudentBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+          "Name": "schoolEventBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+          "Name": "schoolBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+          "Name": "studentEventBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+          "Name": "studentBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+          "Name": "teacherEventBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+          "Name": "teacherBroker"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+          "Name": "classEventProcessingService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+          "Name": "classProcessingService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+          "Name": "classStudentEventProcessingService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+          "Name": "classStudentProcessingService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+          "Name": "schoolEventProcessingService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+          "Name": "schoolProcessingService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+          "Name": "studentEventProcessingService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+          "Name": "studentProcessingService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+          "Name": "teacherEventProcessingService"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+          "Name": "teacherProcessingService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsync"
+        },
+        {
+          "Name": "DeleteAsync"
+        },
+        {
+          "Name": "ReadAsync"
+        },
+        {
+          "Name": "UpdateAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+          "Name": "classEventService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+          "Name": "classService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+          "Name": "classStudentEventService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+          "Name": "classStudentService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+          "Name": "schoolEventService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+          "Name": "schoolService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+          "Name": "studentEventService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+          "Name": "studentService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+          "Name": "teacherEventService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "RaiseCreatedAsync"
+        },
+        {
+          "Name": "RaiseDeletedAsync"
+        },
+        {
+          "Name": "RaiseReadAsync"
+        },
+        {
+          "Name": "RaiseUpdatedAsync"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+          "Name": "teacherService"
+        }
+      ],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "Create"
+        },
+        {
+          "Name": "Delete"
+        },
+        {
+          "Name": "Read"
+        },
+        {
+          "Name": "Update"
+        }
+      ]
+    },
+    {
+      "Name": "System.Collections.Generic.List<T>",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "cCoder.Eventing.IEventHub",
+      "FrameworkType": "Interface",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "cCoder.Eventing.IServiceCollectionExtensions",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    }
+  ],
+  "Dependencies": [
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "cCoder.Eventing.IEventHub",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "FromMethod": ".ctor",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Create",
+      "ToMethod": "Add"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Delete",
+      "ToMethod": "RemoveAll"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Read",
+      "ToMethod": "Find"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Update",
+      "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "FromMethod": ".ctor",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Create",
+      "ToMethod": "Add"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Delete",
+      "ToMethod": "RemoveAll"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Read",
+      "ToMethod": "Find"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Update",
+      "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "FromMethod": ".ctor",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Create",
+      "ToMethod": "Add"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Delete",
+      "ToMethod": "RemoveAll"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Read",
+      "ToMethod": "Find"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Update",
+      "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "FromMethod": ".ctor",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Create",
+      "ToMethod": "Add"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Delete",
+      "ToMethod": "RemoveAll"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Read",
+      "ToMethod": "Find"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Update",
+      "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "FromMethod": ".ctor",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Create",
+      "ToMethod": "Add"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Delete",
+      "ToMethod": "RemoveAll"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Read",
+      "ToMethod": "Find"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "System.Collections.Generic.List<T>",
+      "FromMethod": "Update",
+      "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "CreateAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "DeleteAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "ReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "UpdateAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "CreateAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "DeleteAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "ReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "UpdateAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolFactory",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "CreateAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "DeleteAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "ReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "UpdateAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "CreateAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "DeleteAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "ReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "UpdateAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "CreateAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "DeleteAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "ReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "UpdateAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
+      "ToType": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddLogging"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
+      "ToType": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddSingleton"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
+      "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddEventing"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.SchoolServiceCollectionExtensions",
+      "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddEventingForType"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FromMethod": "CreateAsync",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FromMethod": "DeleteAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FromMethod": "ReadAsync",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FromMethod": "UpdateAsync",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "FromMethod": "RaiseCreatedAsync",
+      "ToMethod": "RaiseCreatedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "FromMethod": "RaiseDeletedAsync",
+      "ToMethod": "RaiseDeletedAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "FromMethod": "RaiseReadAsync",
+      "ToMethod": "RaiseReadAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "FromMethod": "RaiseUpdatedAsync",
+      "ToMethod": "RaiseUpdatedAsync"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "FromMethod": "Create",
+      "ToMethod": "Create"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "FromMethod": "Delete",
+      "ToMethod": "Delete"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "FromMethod": "Read",
+      "ToMethod": "Read"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "FromMethod": "Update",
+      "ToMethod": "Update"
+    },
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    }
+  ]
+}
