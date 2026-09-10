@@ -54,7 +54,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ILayoutRuleProcessingService, DepthLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, TreeSpacingLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, SharedParentCentringLayoutRuleProcessingService>();
-        services.AddTransient<ILayoutRuleProcessingService, CrossProjectClearanceLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, BranchSpacingLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, ParentCentringLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, BoundsLayoutRuleProcessingService>();

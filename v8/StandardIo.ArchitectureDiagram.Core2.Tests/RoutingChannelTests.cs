@@ -118,9 +118,10 @@ public sealed partial class RoutingChannelTests
         // When
         var routes = DiagramRouting.CreateRoutes(drawing: drawing with { Nodes = nodes });
         // Then
-        Assert.Equal(expected: routes[0].Points[1].Y, actual: routes[1].Points[1].Y);
-        Assert.Equal(expected: routes[0].Points[2], actual: routes[1].Points[2]);
-        Assert.Equal(expected: 110, actual: routes[0].Points[1].Y);
+        // An obstructed source may need an earlier detour; the final horizontal segment is the destination bus.
+        Assert.Equal(expected: routes[0].Points[^3].Y, actual: routes[1].Points[^3].Y);
+        Assert.Equal(expected: routes[0].Points[^2], actual: routes[1].Points[^2]);
+        Assert.Equal(expected: 110, actual: routes[0].Points[^3].Y);
     }
 
     [Theory]

@@ -54,6 +54,25 @@ internal static class DiagramRouting
             double sourceX = sourceExits[link];
             double targetX = to.X + to.Width / 2;
             double busY = busHeights[link.ToType!];
+            var obstacles = drawing.Nodes.Where(node => node.Id != from.Id && node.Id != to.Id
+                && node.Y < busY && node.Y + node.Height > from.Y + from.Height).ToArray();
+            if (obstacles.Any(node => sourceX > node.X && sourceX < node.X + node.Width))
+            {
+                double clearance = horizontalOffset + Math.Abs(sourceX - from.X - from.Width / 2);
+                double column = obstacles.SelectMany(node => new[] { node.X - clearance, node.X + node.Width + clearance })
+                    .Where(x => obstacles.All(node => x <= node.X - clearance || x >= node.X + node.Width + clearance))
+                    .OrderBy(x => Math.Abs(x - sourceX)).ThenBy(x => Math.Abs(x - targetX)).First();
+                double departure = (from.Y + from.Height + obstacles.Min(node => node.Y)) / 2;
+                return new DrawingRoute(link, new[]
+                {
+                    new DrawingPoint(sourceX, from.Y + from.Height),
+                    new DrawingPoint(sourceX, departure),
+                    new DrawingPoint(column, departure),
+                    new DrawingPoint(column, busY),
+                    new DrawingPoint(targetX, busY),
+                    new DrawingPoint(targetX, to.Y)
+                });
+            }
             return new DrawingRoute(link, new[]
             {
                 new DrawingPoint(sourceX, from.Y + from.Height),

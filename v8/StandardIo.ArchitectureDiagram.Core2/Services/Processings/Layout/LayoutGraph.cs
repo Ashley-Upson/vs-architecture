@@ -4,10 +4,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
 internal static class LayoutGraph
 {
+    private static readonly ConditionalWeakTable<RenderConnection[], LayoutTopology> Topologies = new();
+    private static readonly ConditionalWeakTable<RenderNode[], Dictionary<string, int>> NodeIndices = new();
+    private static LayoutTopology Topology(RenderProject project) => Topologies.GetValue(project.Connections, connections => new LayoutTopology(connections));
+    private static int Index(RenderProject project, string id) => NodeIndices.GetValue(project.Nodes,
+        nodes => nodes.Select((node, index) => (node.Id, index)).ToDictionary(pair => pair.Id, pair => pair.index))[id];
     internal static RenderProject ProjectGraph(RenderModel model)
     {
         var owners = model.Projects.SelectMany(project => project.Nodes.Select(node => (node.Id, Owner: project.Id)))
@@ -58,6 +64,12 @@ internal static class LayoutGraph
 
     internal static IEnumerable<RenderNode[]> BranchGroups(RenderProject project)
     {
+        var branchCache = new Dictionary<string, RenderNode[]>();
+        RenderNode[] Branch(string id)
+        {
+            if (!branchCache.TryGetValue(id, out var branch)) branchCache[id] = branch = OwnedBranch(project, id);
+            return branch;
+        }
         foreach (var parent in project.Nodes.OrderByDescending(node => node.Y))
         {
             var children = OwnedChildren(project, parent.Id);
@@ -65,7 +77,7 @@ internal static class LayoutGraph
         }
         // Unrelated trees reserve their full bounds. Shared descendants compete at their own level, not against an ancestor's full bounds.
         var roots = project.Nodes.Where(node => Parents(project, node.Id).Length != 1)
-            .Select(root => (Root: root, Branch: OwnedBranch(project, root.Id)))
+            .Select(root => (Root: root, Branch: Branch(root.Id)))
             .OrderBy(pair => pair.Branch.Min(node => node.Y)).ToArray();
         var outgoing = project.Connections.ToLookup(edge => edge.SourceId, edge => edge.TargetId);
         var descendants = roots.ToDictionary(pair => pair.Root.Id, pair =>
@@ -100,13 +112,39 @@ internal static class LayoutGraph
                 if (!Related(a, b)) { yield return new[] { a, b }; continue; }
                 var ancestor = descendants[a.Id].Contains(b.Id) ? a : b;
                 var shared = ancestor.Id == a.Id ? b : a;
-                var sharedIds = OwnedBranch(project, shared.Id).Select(node => node.Id).ToHashSet();
-                var lower = OwnedBranch(project, ancestor.Id).Where(node => node.Y >= shared.Y && !sharedIds.Contains(node.Id)).ToArray();
+                var sharedIds = Branch(shared.Id).Select(node => node.Id).ToHashSet();
+                var lower = Branch(ancestor.Id).Where(node => node.Y >= shared.Y && !sharedIds.Contains(node.Id)).ToArray();
                 var lowerIds = lower.Select(node => node.Id).ToHashSet();
                 foreach (var frontier in lower.Where(node => !Parents(project, node.Id).Any(parent => lowerIds.Contains(parent.Id))))
                     yield return new[] { shared, frontier };
             }
         }
+    }
+
+    internal static Dictionary<string, int> BranchOrder(RenderProject project, out Dictionary<string, string> treeOwners)
+    {
+        var branches = project.Nodes.ToDictionary(node => node.Id,
+            node => OwnedBranch(project, node.Id).Select(member => member.Id).ToHashSet());
+        // A shared descendant belongs beneath its smallest containing branch, even when it
+        // has several direct parents. Its order against other trees must follow that owner.
+        var owners = project.Nodes.ToDictionary(node => node.Id, node => branches
+            .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
+            .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
+        var children = project.Nodes.ToLookup(node => owners[node.Id] ?? string.Empty);
+        var order = new Dictionary<string, int>();
+        var trees = new Dictionary<string, string>();
+        void Visit(string owner, string? tree)
+        {
+            foreach (var node in children[owner].OrderBy(node => node.X).ThenBy(node => node.Id, StringComparer.Ordinal))
+            {
+                order.Add(node.Id, order.Count);
+                trees.Add(node.Id, tree ?? node.Id);
+                Visit(node.Id, tree ?? node.Id);
+            }
+        }
+        Visit(string.Empty, null);
+        treeOwners = trees;
+        return order;
     }
 
     internal const double Tolerance = 0.01;
@@ -117,17 +155,15 @@ internal static class LayoutGraph
         Types = project.Nodes.Select(node => new DefinedType { Name = node.TypeName }).ToArray(),
         Dependencies = project.Connections.Select(edge => new TypeRelationship { FromType = edge.FromType, ToType = edge.ToType, DependencyType = edge.Inheritance ? DependencyType.Inheritance : DependencyType.Consumed }).ToArray()
     };
-    internal static RenderNode[] Parents(RenderProject project, string id) => project.Connections
-        .Where(edge => edge.TargetId == id && edge.SourceId != id)
-        .Select(edge => project.Nodes.Single(node => node.Id == edge.SourceId)).DistinctBy(node => node.Id).ToArray();
-    internal static RenderNode[] Children(RenderProject project, string id) => project.Connections
-        .Where(edge => edge.SourceId == id && edge.TargetId != id)
-        .Select(edge => project.Nodes.Single(node => node.Id == edge.TargetId)).Where(node => node.Y > project.Nodes.Single(parent => parent.Id == id).Y).DistinctBy(node => node.Id).ToArray();
+    internal static RenderNode[] Parents(RenderProject project, string id) => Topology(project).Parents.TryGetValue(id, out var parents)
+        ? parents.Select(parent => project.Nodes[Index(project, parent)]).ToArray() : Array.Empty<RenderNode>();
+    internal static RenderNode[] Children(RenderProject project, string id) => Topology(project).Children.TryGetValue(id, out var children)
+        ? children.Select(child => project.Nodes[Index(project, child)]).Where(node => node.Y > project.Nodes[Index(project, id)].Y).ToArray() : Array.Empty<RenderNode>();
     internal static RenderNode[] OwnedChildren(RenderProject project, string id) => Children(project, id).Where(node => Parents(project, node.Id).Length == 1).ToArray();
     internal static double Midpoint(IEnumerable<RenderNode> nodes) => (nodes.Min(node => node.X) + nodes.Max(node => node.X + node.Width)) / 2;
     internal static void Move(RenderProject project, string id, double delta)
     {
-        int index = Array.FindIndex(project.Nodes, node => node.Id == id);
+        int index = Index(project, id);
         project.Nodes[index] = project.Nodes[index] with { X = project.Nodes[index].X + delta };
     }
     internal static void MoveSubtree(RenderProject project, string id, double delta)
