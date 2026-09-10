@@ -9,6 +9,44 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class BranchOrderingTests
 {
     [Fact]
+    public void ShouldFinishDescendantSpacingBeforePlacingNeighbouringTrees()
+    {
+        // Given: many consumers each own a deep branch and share another dependency.
+        var nodes = Enumerable.Range(0, 40).SelectMany(index => new[]
+        {
+            new RenderNode($"parent-{index}", $"Parent{index}", "", "#123456", 0, 0, 180, 60, []),
+            new RenderNode($"child-{index}", $"Child{index}", "", "#123456", 0, 160, 180, 60, []),
+            new RenderNode($"shared-{index}", $"Shared{index}", "", "#123456", 0, 160, 180, 60, [])
+        }).ToArray();
+        var edges = Enumerable.Range(0, 40).SelectMany(index => new[]
+        {
+            ($"parent-{index}", $"child-{index}"),
+            ($"parent-{index}", $"shared-{index}"),
+            ($"parent-{(index + 1) % 40}", $"shared-{index}")
+        }).Select((pair, index) => new RenderConnection($"edge-{index}", pair.Item1, pair.Item2, nodes.Single(node => node.Id == pair.Item1).TypeName, nodes.Single(node => node.Id == pair.Item2).TypeName, false, [])).ToArray();
+        var model = new RenderModel(0, 0, [new RenderProject("project", "Project", 0, 0, 100, 100, nodes, edges)]);
+        model.Configuration.MaxLayoutIterations = 5;
+
+        // When: use the complete rule pipeline with a small bounded pass budget.
+        TestServices.Get<StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering.IProjectModelLayoutService>().Layout(model);
+
+        // Then: each owned child remains centred and every row has the configured clearance.
+        foreach (var parent in model.Projects[0].Nodes.Where(node => node.Id.StartsWith("parent-")))
+        {
+            var child = model.Projects[0].Nodes.Single(node => node.Id == parent.Id.Replace("parent-", "child-"));
+            Assert.Equal(parent.X, child.X);
+        }
+        foreach (var row in model.Projects[0].Nodes.GroupBy(node => node.Y))
+        {
+            var ordered = row.OrderBy(node => node.X).ToArray();
+            for (int index = 1; index < ordered.Length; index++)
+                Assert.True(ordered[index].X - ordered[index - 1].X - ordered[index - 1].Width >= 60 - 0.01);
+        }
+        Assert.Equal(120, model.Projects[0].Nodes.Length);
+        Assert.Equal(120, model.Projects[0].Connections.Length);
+    }
+
+    [Fact]
     public void ShouldOrderAnInternalSharedBranchWithItsOwningTree()
     {
         // Given: A owns a diamond ending at Shared; B owns an independent chain.

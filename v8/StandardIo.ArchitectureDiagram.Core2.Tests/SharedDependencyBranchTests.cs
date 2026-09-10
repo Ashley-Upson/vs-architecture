@@ -28,7 +28,10 @@ public sealed partial class SampleProjectExtractionTests
         var broker = box.Nodes.Single(node => node.TypeName.EndsWith(".SchoolReportBroker"));
         var parents = box.Connections.Where(edge => edge.TargetId == broker.Id).Select(edge => box.Nodes.Single(node => node.Id == edge.SourceId)).ToArray();
         Assert.Equal(2, parents.Length);
-        Assert.InRange(Math.Abs((parents.Min(node => node.X) + parents.Max(node => node.X + node.Width)) / 2 - broker.X - broker.Width / 2), 0, 0.01);
+        // Shared centring is now a preference: keep this broker between its consumers,
+        // while the ordinary root/child centring and spacing assertions remain strict.
+        Assert.InRange(broker.X + broker.Width / 2,
+            parents.Min(node => node.X + node.Width / 2), parents.Max(node => node.X + node.Width / 2));
         foreach (var row in box.Nodes.GroupBy(node => node.Y))
         {
             var nodes = row.OrderBy(node => node.X).ToArray();

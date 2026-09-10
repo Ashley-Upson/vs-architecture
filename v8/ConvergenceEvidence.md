@@ -100,3 +100,83 @@ An experimental neighbour-based row-ordering pass made the fourteen-node test pa
 The outstanding design decision is whether to continue preserving exact shared-parent centring through coordinated constraint solving, or make shared centring a preference subordinate to non-overlapping branches and reasonably direct connections. The latter changes an agreed requirement and has not been implemented.
 
 Further temporary C# harnesses are preserved in `%TEMP%/v8-placement-retained-evidence`; graph reductions and independent diagnostic scripts are in `%TEMP%/v8-layout-investigation`. They have been removed from the checkout. Production changes, sample artifacts and active regression tests remain reviewable in the shared branch.
+
+
+## Shared centring may yield — 11 September 2026
+
+The user authorised shared-parent centring to yield to spacing, provided ordinary
+parent/child centring remains enforced and the outputs can be compared. This is
+now implemented. No async or parallel mutation of the layout was introduced.
+
+Shared centring is an initial placement preference, applied once to each node or
+project graph. Branch spacing then completes descendants before positioning
+neighbouring branches, translating each completed branch as a unit. A shared
+node belongs to the smallest containing branch when such an owner exists.
+Otherwise it is independently positioned. Parent centring is computed after its
+children have their final spacing. This replaces the repeated pairwise balancing
+that propagated small corrections through many neighbours.
+
+Validation still enforces ordinary parent centring, row and branch clearance,
+container bounds, finite coordinates and depth (with the existing cycle rule).
+Exact shared-parent centring is no longer a convergence condition. The maximum
+iteration limit remains available for validation and additional injected rules.
+
+The unchanged fourteen-node ContentManagement regression now passes. A new
+120-node/120-link regression failed with the preceding spacing implementation
+within its five-pass budget, then passed with bottom-up placement. It asserts
+centred owned children, row clearance and preservation of nodes/connections.
+The six-node report-broker test's exact shared-midpoint assertion was updated to
+require that broker to remain between its consumers, matching the authorised
+preference. Its ordinary root-centre, compactness, node and spacing assertions
+remain. Simple shared-centre presentation tests still pass unchanged.
+
+### Measurements and artifacts
+
+The saved extracted ContentManagement model was laid out with all registered
+rules, including project positioning and both routing rules. The deduplicated
+300-node/756-link graph (22 containers) and duplicated 936-node/2,613-link graph
+(47 containers) both passed validation after one pass. Instrumented rule times
+were approximately 98ms and 2.01s respectively. Of the latter, 1.94s was
+cross-project routing; branch spacing took 33ms. These timings exclude Roslyn
+extraction and validation overhead and are single observations, not a benchmark
+median. Earlier strict runs did not converge, so this is a successful completion
+comparison, not a claimed speedup ratio between two successful renders.
+
+The actual CLI, including extraction and writing files, completed:
+
+| Output | Mode | Seconds | Exit code |
+| --- | --- | ---: | ---: |
+| HTML | Deduplicated, first run | 23.37 | 0 |
+| HTML | Duplicated, subsequent run | 10.16 | 0 |
+| Draw.io | Deduplicated, subsequent run | 7.31 | 0 |
+| Draw.io | Duplicated, subsequent run | 9.70 | 0 |
+
+Run order and filesystem/package caching differ; these numbers should not be
+used to infer that duplicated extraction is faster. All four ContentManagement
+exports are available locally in the repository root and are not included in the
+source commit.
+
+The immediate strict sample baseline was preserved in
+`%TEMP%/v8-strict-before-yielding`. `LayoutComparison.html` embeds both before and
+after sample variants, with a variant selector and zoom controls, without
+requiring the temporary backup directory.
+
+| Sample mode | Before width | After width | Height | Nodes | Links | Total connector length before/after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Deduplicated | 5,619.94px | 3,220px | 1,300px | 52 | 62 | 36,250 / 29,379px |
+| Duplicated | 7,863.53px | 7,860px | 1,300px | 87 | 107 | 68,070 / 69,080px |
+
+Dependency multisets are identical in each before/after pair. An independent
+SVG segment/rectangle check detected no connectors crossing unrelated nodes in
+either sample baseline or result. This is not a claim that every connection
+crossing has disappeared. The standalone report broker is now 60px from its
+consumers' exact midpoint; that is an intentional shared-centre preference yield.
+Browser inspection remains blocked by the local-file URL policy, so visual
+acceptance is left to reviewing the supplied comparison rather than claimed here.
+
+Temporary trace code was removed from the checkout. Its retained source is
+`%TEMP%/v8-placement-retained-evidence/TemporaryYieldingEvidenceTests.cs`; final
+trace data is in `%TEMP%/v8-yield-once-trace` (the directory name predates the
+bottom-up spacing implementation; the final records contain the one-pass result).
+
+Final permanent suite: **231 passed, zero failed, zero skipped**, approximately 13 seconds, with analyzers enabled. Existing analyzer warnings remain. HTML and Draw.io exports agree on node/link counts in all four scenarios; the comparison artifact's four embedded SVG payloads were also parsed successfully.

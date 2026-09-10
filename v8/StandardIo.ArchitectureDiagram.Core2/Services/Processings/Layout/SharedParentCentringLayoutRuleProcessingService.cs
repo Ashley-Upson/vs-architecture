@@ -10,6 +10,10 @@ internal sealed class SharedParentCentringLayoutRuleProcessingService : ILayoutR
 {
     public void ApplyRule(RenderModel renderModel)
     {
+        // Shared centring seeds the layout. Reapplying it after branch packing can undo
+        // required clearance, so subsequent passes retain the packed positions.
+        if (renderModel.SharedParentLayoutInitialized) return;
+        renderModel.SharedParentLayoutInitialized = true;
         foreach (var project in renderModel.Projects)
         foreach (var groupIds in LayoutGraph.SharedGroups(project).Select(group => group.Select(node => node.Id).ToArray()).ToArray())
         {

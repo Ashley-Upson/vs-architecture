@@ -42,12 +42,6 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
                 if (children.Length > 0 && Math.Abs(LayoutGraph.Centre(parent) - LayoutGraph.Midpoint(children)) > LayoutGraph.Tolerance)
                     yield return $"Parent centring: {parent.TypeName}";
             }
-            foreach (var group in LayoutGraph.SharedGroups(project))
-            {
-                var parents = LayoutGraph.Parents(project, group[0].Id);
-                if (Math.Abs(LayoutGraph.Midpoint(group) - LayoutGraph.Midpoint(parents)) > LayoutGraph.Tolerance)
-                    yield return $"Shared parent centring: {group[0].TypeName}";
-            }
             foreach (var group in LayoutGraph.BranchGroups(project))
             {
                 var branches = group.OrderBy(root => root.X).ThenBy(root => root.Id, StringComparer.Ordinal)

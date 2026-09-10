@@ -12,38 +12,40 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
     {
         foreach (var project in renderModel.Projects)
         {
-            var order = LayoutGraph.BranchOrder(project, out var treeOwners);
-            foreach (var group in LayoutGraph.BranchGroups(project).ToArray())
+            // Finish descendants before reserving their entire branch bounds. Shared nodes
+            // belong to the smallest branch containing all their consumers, when one exists.
+            var branches = project.Nodes.ToDictionary(node => node.Id,
+                node => LayoutGraph.OwnedBranch(project, node.Id).Select(member => member.Id).ToHashSet());
+            var owners = project.Nodes.ToDictionary(node => node.Id, node => branches
+                .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
+                .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
+            var children = project.Nodes.ToLookup(node => owners[node.Id] ?? string.Empty, node => node.Id);
+            double spacing = renderModel.IsProjectGraph ? renderModel.Configuration.Architecture.ProjectSpacing : renderModel.Configuration.Architecture.NodeSpacing;
+            RenderNode Current(string id) => project.Nodes.Single(node => node.Id == id);
+            void Arrange(string owner)
             {
-                var trees = group.Select(root => treeOwners[root.Id]).Distinct().ToArray();
-                // Space independent trees as units. Moving just a frontier node would undo its
-                // parent's centring and repeatedly stretch an otherwise correctly arranged tree.
-                var roots = trees.Length > 1 ? trees.Select(id => project.Nodes.Single(node => node.Id == id)) : group;
-                var branches = roots.OrderBy(root => order[root.Id]).Select(root =>
+                var roots = children[owner].OrderBy(id => Current(id).X).ThenBy(id => id, StringComparer.Ordinal).ToArray();
+                foreach (string root in roots) Arrange(root);
+                // Translate completed branches as units; later placement cannot undo
+                // their internal spacing or parent centring.
+                var placed = new List<(double Left, double Right, double Top, double Bottom)>();
+                foreach (string root in roots)
                 {
-                    var nodes = LayoutGraph.OwnedBranch(project, root.Id);
-                    return (Root: root, Left: nodes.Min(node => node.X), Right: nodes.Max(node => node.X + node.Width));
-                }).ToArray();
-                var distances = new double[branches.Length];
-                var blocks = new List<(int Start, int Count, double Sum)>();
-                for (int index = 0; index < branches.Length; index++)
-                {
-                    if (index > 0) distances[index] = distances[index - 1] + branches[index - 1].Right - branches[index - 1].Left + (renderModel.IsProjectGraph ? renderModel.Configuration.Architecture.ProjectSpacing : renderModel.Configuration.Architecture.NodeSpacing);
-                    blocks.Add((index, 1, branches[index].Left - distances[index]));
-                    while (blocks.Count > 1 && blocks[^2].Sum / blocks[^2].Count > blocks[^1].Sum / blocks[^1].Count)
-                    {
-                        var last = blocks[^1]; var previous = blocks[^2];
-                        blocks.RemoveAt(blocks.Count - 1);
-                        blocks[^1] = (previous.Start, previous.Count + last.Count, previous.Sum + last.Sum);
-                    }
+                    var nodes = branches[root].Select(Current).ToArray();
+                    double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
+                    double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
+                    double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top)
+                        .Select(branch => branch.Right + spacing).DefaultIfEmpty(left).Max();
+                    double delta = Math.Max(0, next - left);
+                    foreach (string id in branches[root]) LayoutGraph.Move(project, id, delta);
+                    placed.Add((left + delta, right + delta, top, bottom));
                 }
-                foreach (var block in blocks)
-                for (int offset = 0; offset < block.Count; offset++)
-                {
-                    int index = block.Start + offset;
-                    LayoutGraph.MoveSubtree(project, branches[index].Root.Id, block.Sum / block.Count + distances[index] - branches[index].Left);
-                }
-        }
+                if (owner.Length == 0) return;
+                var ownedChildren = LayoutGraph.OwnedChildren(project, owner);
+                if (ownedChildren.Length > 0)
+                    LayoutGraph.Move(project, owner, LayoutGraph.Midpoint(ownedChildren) - LayoutGraph.Centre(Current(owner)));
+            }
+            Arrange(string.Empty);
         }
     }
 }

@@ -10,6 +10,7 @@ public sealed record RenderModel(double Width, double Height, RenderProject[] Pr
     internal int LayoutIterations { get; set; }
     internal bool ProjectLayoutInitialized { get; set; }
     internal bool LayoutInitialized { get; set; }
+    internal bool SharedParentLayoutInitialized { get; set; }
     public RenderConfiguration Configuration { get; set; } = new();
     public ProjectModel[] ProjectModels { get; set; } = [];
     public DiagramTypes DiagramType { get; set; } = DiagramTypes.Architecture;

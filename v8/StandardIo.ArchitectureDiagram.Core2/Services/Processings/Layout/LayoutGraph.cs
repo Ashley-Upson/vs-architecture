@@ -121,32 +121,6 @@ internal static class LayoutGraph
         }
     }
 
-    internal static Dictionary<string, int> BranchOrder(RenderProject project, out Dictionary<string, string> treeOwners)
-    {
-        var branches = project.Nodes.ToDictionary(node => node.Id,
-            node => OwnedBranch(project, node.Id).Select(member => member.Id).ToHashSet());
-        // A shared descendant belongs beneath its smallest containing branch, even when it
-        // has several direct parents. Its order against other trees must follow that owner.
-        var owners = project.Nodes.ToDictionary(node => node.Id, node => branches
-            .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
-            .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
-        var children = project.Nodes.ToLookup(node => owners[node.Id] ?? string.Empty);
-        var order = new Dictionary<string, int>();
-        var trees = new Dictionary<string, string>();
-        void Visit(string owner, string? tree)
-        {
-            foreach (var node in children[owner].OrderBy(node => node.X).ThenBy(node => node.Id, StringComparer.Ordinal))
-            {
-                order.Add(node.Id, order.Count);
-                trees.Add(node.Id, tree ?? node.Id);
-                Visit(node.Id, tree ?? node.Id);
-            }
-        }
-        Visit(string.Empty, null);
-        treeOwners = trees;
-        return order;
-    }
-
     internal const double Tolerance = 0.01;
     internal static double Centre(RenderNode node) => node.X + node.Width / 2;
     internal static ProjectModel ToProjectModel(RenderProject project) => new()

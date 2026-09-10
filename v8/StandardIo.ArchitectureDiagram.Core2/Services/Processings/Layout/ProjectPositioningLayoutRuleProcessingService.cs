@@ -15,7 +15,7 @@ internal sealed class ProjectPositioningLayoutRuleProcessingService(
     {
         if (renderModel.CrossProjectConnections.Length == 0) return;
         var graph = LayoutGraph.ProjectGraph(renderModel);
-        var model = new RenderModel(graph.Width, graph.Height, new[] { graph }) { Configuration = renderModel.Configuration, IsProjectGraph = true };
+        var model = new RenderModel(graph.Width, graph.Height, new[] { graph }) { Configuration = renderModel.Configuration, IsProjectGraph = true, SharedParentLayoutInitialized = renderModel.ProjectLayoutInitialized };
         depthRule.ApplyRule(model);
         // Project rows need their actual heights, rather than the fixed node height.
         double top = 40;
