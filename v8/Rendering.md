@@ -408,8 +408,11 @@ Configuration loading uses an injected file broker and foundation service. Parsi
 ## Inline external boundaries and type labels
 
 Both architecture views use a bold short type name, normal interface names and a
-smaller base-type name. Up to two distinct interface names are shown; larger sets
-display `<multiple interfaces>` while the raw model retains every interface.
+smaller base-type name. Only interfaces declared directly on the type are labelled;
+interfaces inherited through its base class or another interface are excluded.
+Up to two direct interface names are shown; larger sets display `<multiple interfaces>`
+while the raw model retains all direct declarations. Inherited contracts still participate
+in dependency resolution.
 Missing lines and System.Object are omitted. Inheritance
 is label information, not a dependency line. Declared-method and data-type
 classification is described in [Models.md](Models.md).

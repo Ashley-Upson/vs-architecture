@@ -9,6 +9,24 @@ using Xunit;
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ArchitectureTypePresentationTests
 {
+    [Fact]
+    public void ShouldUseOnlyDirectContractsForLabelsWhenInterfaceMetadataIsAbsent()
+    {
+        // Given
+        var project = RenderConfigurationTests.Project("Example", "Child", "Base", "IDirect", "IInherited", "IParent");
+        foreach (var type in project.Types!.Skip(2)) type.FrameworkType = FrameworkType.Interface;
+        project.Dependencies = [
+            new() { FromType = "Child", ToType = "Base", DependencyType = DependencyType.Inheritance },
+            new() { FromType = "Child", ToType = "IDirect", DependencyType = DependencyType.Inheritance },
+            new() { FromType = "Base", ToType = "IInherited", DependencyType = DependencyType.Inheritance },
+            new() { FromType = "IDirect", ToType = "IParent", DependencyType = DependencyType.Inheritance }];
+        // When
+        var result = TestServices.Get<IProjectModelPresentationService>().Prepare(project);
+        // Then
+        Assert.Equal("Child\nIDirect\nBase", result.Labels["Child"]);
+        Assert.Equal("Base\nIInherited", result.Labels["Base"]);
+    }
+
     [Theory]
     [InlineData(false, 2, "IContract0, IContract1")]
     [InlineData(true, 2, "IContract0, IContract1")]

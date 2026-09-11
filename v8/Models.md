@@ -21,7 +21,7 @@ DefinedType
   bool IsInternal
   bool IsDataType
   string BaseTypeName            Optional; System.Object is omitted
-  string[] InterfaceNames        Implemented interface names
+  string[] InterfaceNames        Directly declared interface names
   Field[] Fields                 Type, Name
   Property[] Properties          Type, Name
   Method[] Methods               Name

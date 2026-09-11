@@ -11,6 +11,31 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed partial class ProjectModelPopulationTests
 {
     [Fact]
+    public async Task ShouldListOnlyDirectlyDeclaredInterfacesAsync()
+    {
+        // Given
+        var library = CreateCompilation("Library", """
+            public interface IBase {}
+            public interface IParent {}
+            public interface IDirect : IParent {}
+            public class Base : IBase { public void Run() {} }
+            public class ExternalChild : Base, IDirect { public void Execute() {} }
+            """);
+        var broker = new CompilationBroker(() => CreateCompilation("Example", """
+            public class Child : Base, IDirect { public void Execute() {} }
+            public class InheritedOnly : Base { public void Execute() {} }
+            public class Entry { public void Run(ExternalChild child) { child.Execute(); } }
+            """).AddReferences(library.ToMetadataReference()));
+        var project = new ProjectModel { Name = "Example", Path = "Example.csproj" };
+        // When
+        await new ProjectTypesService(broker).PopulateTypesAsync(project, CancellationToken.None);
+        // Then
+        Assert.Equal(new[] { "IDirect" }, Assert.Single(project.Types!, type => type.Name == "Child").InterfaceNames);
+        Assert.Equal(new[] { "IDirect" }, Assert.Single(project.Types!, type => type.Name == "ExternalChild").InterfaceNames);
+        Assert.Empty(Assert.Single(project.Types!, type => type.Name == "InheritedOnly").InterfaceNames ?? []);
+    }
+
+    [Fact]
     public async Task ShouldRetainValueTypesAsDataEvenWhenTheyDeclareMethodsAsync()
     {
         // Given

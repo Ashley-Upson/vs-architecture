@@ -75,7 +75,8 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
         var labels = visible.ToDictionary(type => type.Name!, type =>
         {
             var parts = new List<string> { ShortName(type.Name!) };
-            var interfaces = (type.InterfaceNames ?? (contracts.TryGetValue(type.Name!, out var implemented) ? implemented : Array.Empty<string>()))
+            var interfaces = (type.InterfaceNames ?? inheritance[type.Name!]
+                .Select(link => link.ToType!).Where(name => byName[name].FrameworkType == FrameworkType.Interface))
                 .Distinct().OrderBy(name => name, StringComparer.Ordinal).ToArray();
             if (interfaces.Length > 0) parts.Add(interfaces.Length > 2
                 ? "<multiple interfaces>" : string.Join(", ", interfaces.Select(ShortName)));

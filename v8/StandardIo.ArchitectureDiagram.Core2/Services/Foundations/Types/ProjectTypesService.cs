@@ -80,7 +80,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
                  (type.SpecialType == SpecialType.System_Collections_IEnumerable || type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T ||
                   type.AllInterfaces.Any(contract => contract.SpecialType == SpecialType.System_Collections_IEnumerable))),
             BaseTypeName = type.BaseType is { SpecialType: not SpecialType.System_Object } parent ? GetMemberTypeName(parent) : null,
-            InterfaceNames = type.AllInterfaces.Length == 0 ? null : type.AllInterfaces.Select(GetMemberTypeName).OrderBy(name => name, StringComparer.Ordinal).ToArray(),
+            InterfaceNames = type.Interfaces.Length == 0 ? null : type.Interfaces.Select(GetMemberTypeName).OrderBy(name => name, StringComparer.Ordinal).ToArray(),
             Fields = isInternal ? roslynBroker.GetMembers(type: type)
                 .OfType<IFieldSymbol>()
                 .Where(predicate: field => !field.IsImplicitlyDeclared)

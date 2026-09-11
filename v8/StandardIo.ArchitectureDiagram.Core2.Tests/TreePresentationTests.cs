@@ -136,7 +136,7 @@ public sealed partial class TreePresentationTests
         // Then
         Assert.DoesNotContain(collection: cells, filter: cell => (string? )cell.Attribute(name: "typeName")is "Example.IWorker" or "Example.IBase");
 
-        Assert.Equal(expected: "Worker\nIBase, IWorker", actual: (string? )Node(cells: cells, name: "Example.Worker")
+        Assert.Equal(expected: "Worker\nIWorker", actual: (string? )Node(cells: cells, name: "Example.Worker")
             .Attribute(name: "value"));
 
         Assert.NotNull(@object: Node(cells: cells, name: "External.IHub"));
@@ -291,10 +291,10 @@ public sealed partial class TreePresentationTests
         XElement[] cells = Render(model: model);
         // Then
 
-        Assert.Equal(expected: "Derived\nIChild, IParent\nBase", actual: (string? )Node(cells: cells, name: "Derived")
+        Assert.Equal(expected: "Derived\nBase", actual: (string? )Node(cells: cells, name: "Derived")
             .Attribute(name: "value"));
 
-        Assert.Equal(expected: "Base\nIChild, IParent", actual: (string? )Node(cells: cells, name: "Base")
+        Assert.Equal(expected: "Base\nIChild", actual: (string? )Node(cells: cells, name: "Base")
             .Attribute(name: "value"));
 
         Assert.Empty(cells.Where(cell => (string?)cell.Attribute("edge") == "1"));
