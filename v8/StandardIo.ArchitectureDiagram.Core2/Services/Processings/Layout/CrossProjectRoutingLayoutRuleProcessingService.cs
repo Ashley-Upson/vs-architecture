@@ -23,7 +23,9 @@ internal sealed class CrossProjectRoutingLayoutRuleProcessingService : ILayoutRu
             }).ToArray()
         };
         var drawing = new ProjectModelDrawing("cross-project", projectModel, 0, renderModel.Width, renderModel.Height, nodes);
-        var routes = DiagramRouting.CreateRoutes(drawing, renderModel.Configuration);
+        var reservedRoutes = renderModel.Projects.SelectMany(project => project.Connections.Select(edge =>
+            (edge.TargetId, edge.Points.Select(point => new DrawingPoint(project.X + point.X, project.Y + point.Y)).ToArray())));
+        var routes = DiagramRouting.CreateRoutes(drawing, renderModel.Configuration, reservedRoutes);
         for (int index = 0; index < routes.Length; index++)
             renderModel.CrossProjectConnections[index] = renderModel.CrossProjectConnections[index] with { Points = routes[index].Points };
     }

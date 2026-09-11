@@ -9,7 +9,8 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal static class DiagramRouting
 {
-    internal static DrawingRoute[] CreateRoutes(ProjectModelDrawing drawing, RenderConfiguration? configuration = null)
+    internal static DrawingRoute[] CreateRoutes(ProjectModelDrawing drawing, RenderConfiguration? configuration = null,
+        IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes = null)
     {
         double horizontalOffset = (configuration ?? new()).HorizontalOffset;
         if (!double.IsFinite(horizontalOffset) || horizontalOffset <= 0)
@@ -48,7 +49,7 @@ internal static class DiagramRouting
 
         var busHeights = AssignBusHeights(drawing, nodes, links, sourceExits, horizontalOffset);
 
-        return links.Select(selector: link =>
+        var routes = links.Select(selector: link =>
         {
             DrawingNode from = nodes[link.FromType!], to = nodes[link.ToType!];
             double sourceX = sourceExits[link];
@@ -81,6 +82,63 @@ internal static class DiagramRouting
                 new DrawingPoint(targetX, to.Y)
             });
         }).ToArray();
+        SeparateHorizontalSegments(routes, nodes, horizontalOffset, reservedRoutes);
+        return routes;
+    }
+
+    private static void SeparateHorizontalSegments(DrawingRoute[] routes, Dictionary<string, DrawingNode> nodes,
+        double horizontalOffset, IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes)
+    {
+        var occupied = new List<(string TargetId, double Left, double Right, double Y)>();
+        foreach (var route in reservedRoutes ?? [])
+        {
+            for (int index = 1; index < route.Points.Length; index++)
+            {
+                var a = route.Points[index - 1];
+                var b = route.Points[index];
+                if (a.Y == b.Y && Math.Abs(a.X - b.X) > 0.001)
+                    occupied.Add((route.TargetId, Math.Min(a.X, b.X), Math.Max(a.X, b.X), a.Y));
+            }
+        }
+
+        // Reserve completed bus spans first, then the detours that were added around obstacles.
+        // A destination shares its bus; unrelated destinations must not share an overlapping segment.
+        var segments = routes.SelectMany(route => Enumerable.Range(1, route.Points.Length - 1)
+            .Where(index => route.Points[index - 1].Y == route.Points[index].Y
+                && Math.Abs(route.Points[index - 1].X - route.Points[index].X) > 0.001)
+            .Select(index => (Route: route, Index: index, TargetId: nodes[route.Relationship.ToType!].Id,
+                Y: route.Points[index].Y,
+                Left: Math.Min(route.Points[index - 1].X, route.Points[index].X),
+                Right: Math.Max(route.Points[index - 1].X, route.Points[index].X))))
+            .GroupBy(segment => (segment.TargetId, segment.Y))
+            .OrderByDescending(group => group.Any(segment => segment.Index == segment.Route.Points.Length - 2))
+            .ThenBy(group => group.Key.Y)
+            .ThenByDescending(group => group.Max(segment => segment.Right) - group.Min(segment => segment.Left))
+            .ThenBy(group => group.Key.TargetId, StringComparer.Ordinal).ToArray();
+
+        foreach (var group in segments)
+        {
+            double left = group.Min(segment => segment.Left), right = group.Max(segment => segment.Right);
+            double preferred = group.Key.Y;
+            double top = nodes.Values.Select(node => node.Y + node.Height)
+                .Where(y => y < preferred).DefaultIfEmpty(preferred - horizontalOffset * 2).Max();
+            double bottom = nodes.Values.Select(node => node.Y)
+                .Where(y => y > preferred).DefaultIfEmpty(preferred + horizontalOffset * 2).Min();
+            var boundaries = occupied.Where(run => run.TargetId != group.Key.TargetId
+                    && run.Right >= left && right >= run.Left && run.Y > top && run.Y < bottom)
+                .Select(run => run.Y).Append(top).Append(bottom).Distinct().OrderBy(y => y).ToArray();
+            var gaps = boundaries.Zip(boundaries.Skip(1)).ToArray();
+            double spacing = Math.Min(horizontalOffset, gaps.Max(gap => gap.Second - gap.First) / 2);
+            double height = gaps.Where(gap => gap.Second - gap.First >= spacing * 2 - 0.000001)
+                .Select(gap => Math.Clamp(preferred, gap.First + spacing, Math.Max(gap.First + spacing, gap.Second - spacing)))
+                .OrderBy(y => Math.Abs(y - preferred)).ThenBy(y => y).First();
+            foreach (var segment in group)
+            {
+                segment.Route.Points[segment.Index - 1] = segment.Route.Points[segment.Index - 1] with { Y = height };
+                segment.Route.Points[segment.Index] = segment.Route.Points[segment.Index] with { Y = height };
+            }
+            occupied.Add((group.Key.TargetId, left, right, height));
+        }
     }
 
     private static Dictionary<string, double> AssignBusHeights(
