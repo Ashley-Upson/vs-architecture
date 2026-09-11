@@ -5,5 +5,6 @@ namespace StandardIo.ArchitectureDiagram.Core2.Models;
 public enum DiagramFormats
 {
     DrawIO,
-    Html
+    Html,
+    Json
 }

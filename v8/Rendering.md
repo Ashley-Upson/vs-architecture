@@ -7,6 +7,7 @@ dotnet build v8/DiagramCLI
 dotnet build v8/StandardIo.ArchitectureDiagram.SampleProject
 dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture v8/StandardIo.ArchitectureDiagram.SampleProject/StandardIo.ArchitectureDiagram.SampleProject.csproj --output Test.drawio
 dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture v8/StandardIo.ArchitectureDiagram.SampleProject/StandardIo.ArchitectureDiagram.SampleProject.csproj --output Test.html --format html
+dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture Json v8/StandardIo.ArchitectureDiagram.SampleProject/StandardIo.ArchitectureDiagram.SampleProject.csproj
 ```
 
 The two architecture views serve different purposes:
@@ -26,6 +27,10 @@ that source project; they are not treated as external assembly copies.
 
 Multiple csproj paths are supported. `-o` aliases `--output`; `-f` aliases `--format`.
 Without an explicit format, Draw.io is used. Pass `--format html` for HTML output.
+The positional `Json` format exports the deterministic extracted project models to
+`Architecture.json` by default; an explicit `--output` path still takes precedence.
+JSON export retains method-level dependency evidence and bypasses splitting, layout,
+presentation and rendering.
 The supplied output path is independent of renderer selection and its extension is
 neither inferred nor checked by the rendering library.
 Both Architecture and Data requests use their registered renderer keys.
@@ -48,10 +53,13 @@ DiagramRenderCommand (public exposure)
             IProjectModelBuilderService -> ProjectModelBroker -> ProjectModelBuilder
             IProjectModelTreeService -> ProjectModelSplitterBroker -> ProjectModelSplitter
             IDiagramRenderer (constructor-injected using format/type key)
+    IRawJsonExportProcessingService (Json only)
+      IProjectModelBuilderService -> unsplit ProjectModel
+      IRawJsonExportService -> deterministic UTF-8 JSON
 ```
 
 The parser validates command syntax and normalises paths without loading source.
-The parser converts trimmed, case-insensitive names into DiagramFormats (DrawIO, Html)
+The parser converts trimmed, case-insensitive names into DiagramFormats (DrawIO, Html, Json)
 and DiagramTypes (Architecture, Data), rejecting unknown or numeric names. DrawIO is
 the default format. The request processing service delegates to the foundation, which
 validates the request and project paths. The request processing and foundation methods are named RenderDiagramRenderRequestAsync and take DiagramRenderRequest diagramRenderRequest. The foundation passes the typed request and cancellation
@@ -60,9 +68,10 @@ token to the broker, leaving the paths unchanged. The broker interpolates
 The factory resolves the shared builder/tree services and the keyed renderer, then
 constructs the generation orchestration. The broker calls its
 GenerateAsync(request, cancellationToken) method.
-Generation builds each project once and optionally splits it, then calls its
+Generation builds each rendered project once and optionally splits it, then calls its
 injected renderer once, returning raw bytes. No renderer is passed into a service
-method. The command orchestration depends only on its two processing services.
+method. JSON requests instead build each raw project once and serialize it directly;
+the renderer factory is not resolved.
 Cancellation and errors propagate.
 DiagramRenderResult carries OutputPath and Content so the console owns persistence;
 its null OutputPath denotes help text rather than an output file.

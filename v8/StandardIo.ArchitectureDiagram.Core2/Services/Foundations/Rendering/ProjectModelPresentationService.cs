@@ -90,6 +90,11 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
 
         foreach (TypeRelationship link in links)
         {
+            if (string.Equals(a: link.FromType, b: link.ToType, comparisonType: StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             if (diagramType == DiagramTypes.Architecture && link.DependencyType == DependencyType.Inheritance) continue;
             if (dataTypes.Contains(link.FromType!) || dataTypes.Contains(link.ToType!) || hidden.Contains(item: link.FromType!))
             {

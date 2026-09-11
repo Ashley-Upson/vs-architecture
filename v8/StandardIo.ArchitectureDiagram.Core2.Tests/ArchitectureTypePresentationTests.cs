@@ -7,8 +7,43 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 using Xunit;
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
-public sealed class ArchitectureTypePresentationTests
+public sealed partial class ArchitectureTypePresentationTests
 {
+    [Fact]
+    public void ShouldSuppressTypeLevelSelfDependenciesWithoutChangingMethodCallEvidence()
+    {
+        // Given
+        ProjectModel project = RenderConfigurationTests.Project(
+            "Example",
+            "Example.Worker");
+
+        project.Dependencies =
+        [
+            new TypeRelationship
+            {
+                FromType = "Example.Worker",
+                ToType = "Example.Worker",
+                FromMethod = "Run",
+                ToMethod = "Continue",
+                DependencyType = DependencyType.Consumed,
+            },
+        ];
+
+        TypeRelationship methodCall = Assert.Single(
+            collection: project.Dependencies);
+
+        // When
+        ProjectModelPresentation presentation = TestServices
+            .Get<IProjectModelPresentationService>()
+            .Prepare(model: project);
+
+        // Then
+        Assert.Empty(collection: presentation.Model.Dependencies!);
+        Assert.Same(expected: methodCall, actual: Assert.Single(project.Dependencies));
+        Assert.Equal(expected: "Run", actual: methodCall.FromMethod);
+        Assert.Equal(expected: "Continue", actual: methodCall.ToMethod);
+    }
+
     [Fact]
     public void ShouldUseOnlyDirectContractsForLabelsWhenInterfaceMetadataIsAbsent()
     {

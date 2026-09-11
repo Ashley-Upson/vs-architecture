@@ -38,11 +38,21 @@ internal sealed class CommandParserProcessingService(StandardIo.ArchitectureDiag
         string? configPath = null;
         var overrides = new HashSet<string>();
         var projects = new List<string>();
+        bool positionalFormat = false;
 
         for (int index = 1; index < command.Length; index++)
         {
             string argument = command[index];
             overrides.Add(argument);
+
+            if (index == 1 && Enum.TryParse(value: argument, ignoreCase: true, result: out DiagramFormats parsedFormat) &&
+                Enum.IsDefined(value: parsedFormat))
+            {
+                format = parsedFormat;
+                positionalFormat = true;
+                continue;
+            }
+
             if (argument is "--config" or "-c")
             {
                 if (++index >= command.Length || string.IsNullOrWhiteSpace(command[index]) || command[index].StartsWith('-')) throw new ArgumentException("Missing configuration file path.");
@@ -120,6 +130,19 @@ internal sealed class CommandParserProcessingService(StandardIo.ArchitectureDiag
 
                 projects.Add(item: Path.GetFullPath(path: argument));
             }
+        }
+
+        if (output is null && positionalFormat)
+        {
+            string extension = format switch
+            {
+                DiagramFormats.DrawIO => ".drawio",
+                DiagramFormats.Html => ".html",
+                DiagramFormats.Json => ".json",
+                _ => throw new ArgumentOutOfRangeException(nameof(format))
+            };
+
+            output = Path.GetFullPath(path: diagramType + extension);
         }
 
         if (output is null || projects.Count == 0)

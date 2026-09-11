@@ -20,7 +20,7 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed partial class KeyedGenerationTests
 {
     [Fact]
-    public void ShouldKeepCommandOrchestrationAboveTwoProcessingServices()
+    public void ShouldKeepCommandOrchestrationAboveItsParsingRenderingAndExportProcessingServices()
     {
         // Given
         var type = typeof(StandardIo.ArchitectureDiagram.Core2.Services.Orchestrations.Commands.DiagramRenderOrchestrationService);
@@ -30,7 +30,14 @@ public sealed partial class KeyedGenerationTests
             .Select(selector: parameter => parameter.ParameterType.Name)
             .ToArray();
         // Then
-        Assert.Equal(expected: new[] { "ICommandParserProcessingService", "IDiagramRequestProcessingService" }, actual: dependencies);
+        Assert.Equal(
+            expected: new[]
+            {
+                "ICommandParserProcessingService",
+                "IDiagramRequestProcessingService",
+                "IRawJsonExportProcessingService",
+            },
+            actual: dependencies);
     }
 
     [Fact]
