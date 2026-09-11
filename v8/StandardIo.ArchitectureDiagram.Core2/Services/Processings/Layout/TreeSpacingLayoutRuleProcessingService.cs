@@ -13,12 +13,12 @@ internal sealed class TreeSpacingLayoutRuleProcessingService : ILayoutRuleProces
         if (renderModel.LayoutInitialized) return;
         foreach (var project in renderModel.Projects)
         {
-            var drawing = Layout(new ProjectModelPresentation(LayoutGraph.ToProjectModel(project), project.Nodes.ToDictionary(node => node.TypeName, node => node.Label)), 0, 0, project.Nodes.ToDictionary(node => node.TypeName, node => (int)Math.Round((node.Y - 60) / renderModel.Configuration.Architecture.RowDepth)), renderModel.Configuration.Architecture);
+            var drawing = Layout(new ProjectModelPresentation(LayoutGraph.ToProjectModel(project), project.Nodes.ToDictionary(node => LayoutGraph.LayoutName(node), node => node.Label)), 0, 0, project.Nodes.ToDictionary(node => LayoutGraph.LayoutName(node), node => (int)Math.Round((node.Y - 60) / renderModel.Configuration.Architecture.RowDepth)), renderModel.Configuration.Architecture);
             var byName = drawing.Nodes.ToDictionary(node => node.Type.Name!);
             for (int index = 0; index < project.Nodes.Length; index++)
             {
                 var node = project.Nodes[index];
-                var position = byName[node.TypeName];
+                var position = byName[LayoutGraph.LayoutName(node)];
                 project.Nodes[index] = node with { X = position.X, Y = position.Y };
             }
         }

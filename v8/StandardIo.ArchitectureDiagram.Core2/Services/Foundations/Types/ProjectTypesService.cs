@@ -33,7 +33,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
 
         IEnumerable<INamedTypeSymbol> targets = definitions.SelectMany(selector: type => roslynBroker.GetBaseTypes(type: type)
             .Concat(second: roslynBroker.GetCalls(compilation: compilation, type: type, cancellationToken: cancellationToken)
-            .Select(selector: call => call.DependencyType.OriginalDefinition)));
+            .SelectMany(call => call.ExecutorType is null ? new[] { call.DependencyType.OriginalDefinition } : new[] { call.DependencyType.OriginalDefinition, call.ExecutorType.OriginalDefinition })));
 
         var identities = new Dictionary<string, string>(comparer: StringComparer.Ordinal);
         var types = new List<DefinedType>();

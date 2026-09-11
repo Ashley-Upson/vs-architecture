@@ -123,11 +123,12 @@ internal static class LayoutGraph
 
     internal const double Tolerance = 0.01;
     internal static double Centre(RenderNode node) => node.X + node.Width / 2;
+    internal static string LayoutName(RenderNode node) => node.CommunicationRole is null ? node.TypeName : node.Id;
     internal static ProjectModel ToProjectModel(RenderProject project) => new()
     {
         Name = project.Name,
-        Types = project.Nodes.Select(node => new DefinedType { Name = node.TypeName }).ToArray(),
-        Dependencies = project.Connections.Select(edge => new TypeRelationship { FromType = edge.FromType, ToType = edge.ToType, DependencyType = edge.Inheritance ? DependencyType.Inheritance : DependencyType.Consumed }).ToArray()
+        Types = project.Nodes.Select(node => new DefinedType { Name = LayoutName(node) }).ToArray(),
+        Dependencies = project.Connections.Select(edge => new TypeRelationship { FromType = LayoutName(project.Nodes[Index(project, edge.SourceId)]), ToType = LayoutName(project.Nodes[Index(project, edge.TargetId)]), DependencyType = edge.Inheritance ? DependencyType.Inheritance : DependencyType.Consumed }).ToArray()
     };
     internal static RenderNode[] Parents(RenderProject project, string id) => Topology(project).Parents.TryGetValue(id, out var parents)
         ? parents.Select(parent => project.Nodes[Index(project, parent)]).ToArray() : Array.Empty<RenderNode>();

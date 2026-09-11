@@ -76,6 +76,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IProjectProcessingService, ProjectProcessingService>();
         services.AddTransient<IProjectModelCompositionProcessingService, ProjectModelCompositionProcessingService>();
         services.AddTransient<IRenderModelProcessingService, RenderModelProcessingService>();
+        services.AddTransient<IDeferredExecutionRenderModelProcessingService, DeferredExecutionRenderModelProcessingService>();
         services.AddTransient<ILayoutOrchestrationService, LayoutOrchestrationService>();
         services.AddTransient(implementationFactory: provider => new LayoutModelBuilder(provider.GetRequiredService<ILayoutOrchestrationService>()));
         services.AddTransient<IHtmlModelPreparationBroker, HtmlModelPreparationBroker>();

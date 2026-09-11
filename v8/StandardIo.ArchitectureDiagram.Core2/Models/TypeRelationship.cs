@@ -4,6 +4,12 @@
 namespace StandardIo.ArchitectureDiagram.Core2.Models;
 public sealed class TypeRelationship
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutorType { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? RegistrationType { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsInjected { get; set; }
     public DependencyType DependencyType { get; set; }
     /// <summary>Full .NET name of the dependent type, without assembly qualification.</summary>
     public string? FromType { get; set; }

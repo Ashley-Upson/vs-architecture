@@ -17,7 +17,7 @@ internal sealed class ProjectDependenciesProcessingService : IProjectDependencie
     {
         await projectDependenciesService.PopulateDependenciesAsync(project: project, cancellationToken: cancellationToken);
 
-        project.Dependencies = project.Dependencies!.DistinctBy(keySelector: link => (link.DependencyType, link.FromType, link.ToType, link.FromMethod, link.ToMethod))
+        project.Dependencies = project.Dependencies!.DistinctBy(keySelector: link => (link.DependencyType, link.FromType, link.ToType, link.FromMethod, link.ToMethod, link.ExecutorType, link.RegistrationType, link.IsInjected))
             .OrderBy(keySelector: link => link.FromType, comparer: StringComparer.Ordinal)
             .ThenBy(keySelector: link => link.ToType, comparer: StringComparer.Ordinal)
             .ThenBy(keySelector: link => link.DependencyType)

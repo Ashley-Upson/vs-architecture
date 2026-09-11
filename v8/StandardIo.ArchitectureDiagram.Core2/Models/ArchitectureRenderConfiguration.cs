@@ -4,6 +4,7 @@
 namespace StandardIo.ArchitectureDiagram.Core2.Models;
 public sealed class ArchitectureRenderConfiguration
 {
+    public bool DeferredExecutionSupport { get; set; }
     public bool InlineExternals { get; set; }
     public double RowDepth { get; set; } = 160;
     public double NodeWidth { get; set; } = 180;

@@ -27,7 +27,7 @@ internal sealed class HtmlDocumentService : IHtmlDocumentService
             {
                 string points = string.Join(separator: " ", values: route.Points.Select(point => $"{Number(value: point.X)},{Number(value: point.Y)}"));
                 bool inherited = route.Inheritance;
-                group.Add(content: new XElement(svg + "polyline", new XAttribute("points", points), new XAttribute("stroke", route.Stroke), new XAttribute("class", inherited ? "link inherited" : "link"), new XAttribute("data-from", route.FromType), new XAttribute("data-to", route.ToType), new XAttribute("marker-end", inherited ? "url(#inheritance)" : "url(#arrow)")));
+                group.Add(content: new XElement(svg + "polyline", new XAttribute("points", points), new XAttribute("stroke", route.Stroke), new XAttribute("class", inherited ? "link inherited" : route.IsDeferred ? "link deferred" : "link"), new XAttribute("data-from", route.FromType), new XAttribute("data-to", route.ToType), new XAttribute("marker-end", inherited ? "url(#inheritance)" : "url(#arrow)")));
             }
 
             foreach (RenderNode node in drawing.Nodes)
@@ -50,12 +50,12 @@ internal sealed class HtmlDocumentService : IHtmlDocumentService
         foreach (RenderConnection route in renderModel.CrossProjectConnections)
         {
             canvas.Add(new XElement(svg + "polyline", new XAttribute("points", string.Join(" ", route.Points.Select(point => $"{Number(point.X)},{Number(point.Y)}"))),
-                new XAttribute("stroke", route.Stroke), new XAttribute("class", route.Inheritance ? "link inherited" : "link"),
+                new XAttribute("stroke", route.Stroke), new XAttribute("class", route.Inheritance ? "link inherited" : route.IsDeferred ? "link deferred" : "link"),
                 new XAttribute("data-from", route.FromType), new XAttribute("data-to", route.ToType),
                 new XAttribute("marker-end", route.Inheritance ? "url(#inheritance)" : "url(#arrow)")));
         }
 
-        const string css = "html,body{margin:0;background:#111827;color:#fff;font-family:Arial,sans-serif}main{overflow:auto;min-height:100vh}svg{display:block}.scope{fill:#263242;stroke:#6b7280}.node{stroke:#111827}.heading{fill:#fff;font-size:16px}.label{fill:#fff;font-size:12px;text-anchor:middle;dominant-baseline:middle}.link{fill:none;stroke-width:1.5}.inherited{stroke-dasharray:5 4}";
+        const string css = "html,body{margin:0;background:#111827;color:#fff;font-family:Arial,sans-serif}main{overflow:auto;min-height:100vh}svg{display:block}.scope{fill:#263242;stroke:#6b7280}.node{stroke:#111827}.heading{fill:#fff;font-size:16px}.label{fill:#fff;font-size:12px;text-anchor:middle;dominant-baseline:middle}.link{fill:none;stroke-width:1.5}.inherited,.deferred{stroke-dasharray:5 4}";
         var document = new XDocument(new XDocumentType("html", null, null, null), new XElement("html", new XAttribute("lang", "en"), new XElement("head", new XElement("meta", new XAttribute("charset", "utf-8")), new XElement("meta", new XAttribute("name", "viewport"), new XAttribute("content", "width=device-width,initial-scale=1")), new XElement("title", "Architecture diagram"), new XElement("style", css)), new XElement("body", new XElement("main", canvas))));
         return Encoding.UTF8.GetBytes(s: document.ToString(options: SaveOptions.DisableFormatting));
     }
