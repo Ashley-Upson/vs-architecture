@@ -60,19 +60,33 @@ internal static class DiagramRouting
             if (obstacles.Any(node => sourceX > node.X && sourceX < node.X + node.Width))
             {
                 double clearance = horizontalOffset + Math.Abs(sourceX - from.X - from.Width / 2);
-                double column = obstacles.SelectMany(node => new[] { node.X - clearance, node.X + node.Width + clearance })
-                    .Where(x => obstacles.All(node => x <= node.X - clearance || x >= node.X + node.Width + clearance))
-                    .OrderBy(x => Math.Abs(x - sourceX)).ThenBy(x => Math.Abs(x - targetX)).First();
-                double departure = (from.Y + from.Height + obstacles.Min(node => node.Y)) / 2;
-                return new DrawingRoute(link, new[]
+                var points = new List<DrawingPoint> { new(sourceX, from.Y + from.Height) };
+                double column = sourceX, previousBottom = from.Y + from.Height;
+                var bands = new List<List<DrawingNode>>();
+                foreach (var obstacle in obstacles.OrderBy(node => node.Y))
                 {
-                    new DrawingPoint(sourceX, from.Y + from.Height),
-                    new DrawingPoint(sourceX, departure),
-                    new DrawingPoint(column, departure),
-                    new DrawingPoint(column, busY),
-                    new DrawingPoint(targetX, busY),
-                    new DrawingPoint(targetX, to.Y)
-                });
+                    if (bands.Count == 0 || obstacle.Y >= bands[^1].Max(node => node.Y + node.Height))
+                        bands.Add([]);
+                    bands[^1].Add(obstacle);
+                }
+                foreach (var band in bands)
+                {
+                    if (band.Any(node => column > node.X - clearance && column < node.X + node.Width + clearance))
+                    {
+                        double nextColumn = band.SelectMany(node => new[] { node.X - clearance, node.X + node.Width + clearance })
+                            .Where(x => band.All(node => x <= node.X - clearance || x >= node.X + node.Width + clearance))
+                            .OrderBy(x => Math.Abs(x - column)).ThenBy(x => Math.Abs(x - targetX)).First();
+                        double departure = (previousBottom + band.Min(node => node.Y)) / 2;
+                        points.Add(new(column, departure));
+                        points.Add(new(nextColumn, departure));
+                        column = nextColumn;
+                    }
+                    previousBottom = band.Max(node => node.Y + node.Height);
+                }
+                points.Add(new(column, busY));
+                points.Add(new(targetX, busY));
+                points.Add(new(targetX, to.Y));
+                return new DrawingRoute(link, points.ToArray());
             }
             return new DrawingRoute(link, new[]
             {
