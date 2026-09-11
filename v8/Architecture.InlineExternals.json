@@ -1,0 +1,6 @@
+{
+  "ColourLines": true,
+  "Architecture": {
+    "InlineExternals": true
+  }
+}

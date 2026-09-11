@@ -91,6 +91,11 @@ public sealed class DiagramOptionsPage : DialogPage
         catch (Exception ex)
         {
             DiagnosticLog.Write("DiagramOptionsPage.SaveSettingsToStorage failed.", ex);
+            MessageBox.Show(
+                $"The architecture diagram settings could not be saved.{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                "Architecture Diagram Settings",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
             // Avoid Visual Studio replacing the whole page with "An error occurred".
         }
     }
@@ -131,15 +136,19 @@ internal sealed class DiagramOptionsControl : UserControl
     private readonly NumericUpDown _dataModelRelationshipStubLength = NumberBox(0, 500);
     private readonly TextBox _baselineAlignmentPattern = TextBox();
     private readonly CheckBox _showProjectContainers = new() { Text = "Show project containers", AutoSize = true };
+    private readonly CheckBox _allowDuplicateNodes = new() { Text = "Allow duplicate render nodes", AutoSize = true };
+    private readonly TextBox _duplicationExceptionPatterns = MultilineTextBox();
     private readonly TextBox _connectorColor = TextBox();
     private readonly NumericUpDown _connectorWidth = NumberBox(1, 20);
     private readonly CheckBox _connectorRounded = new() { Text = "Rounded connectors", AutoSize = true };
     private readonly TextBox _excludedNamespaces = MultilineTextBox();
     private readonly TextBox _excludedNames = MultilineTextBox();
+    private readonly TextBox _rootDiscoveryPatterns = MultilineTextBox();
     private readonly DataGridView _styleRules = StyleGrid(includeMatcher: true);
     private readonly DataGridView _overrides = StyleGrid(includeMatcher: false);
     private readonly StyleEditor _projectStyle = new("Project Container Style");
     private readonly StyleEditor _externalStyle = new("External Dependency Style");
+    private List<NodeLayerGroupRule> _nodeLayerGroups = new();
 
     public DiagramOptionsControl()
     {
@@ -196,12 +205,20 @@ internal sealed class DiagramOptionsControl : UserControl
         _dataModelRelationshipSideOffset.Value = Clamp(settings.Layout.DataModelRelationshipSideOffset, _dataModelRelationshipSideOffset);
         _dataModelRelationshipStubLength.Value = Clamp(settings.Layout.DataModelRelationshipStubLength, _dataModelRelationshipStubLength);
         _baselineAlignmentPattern.Text = settings.Layout.BaselineAlignmentPattern;
+        _nodeLayerGroups = settings.Layout.NodeLayerGroups.Select(rule => new NodeLayerGroupRule
+        {
+            Name = rule.Name,
+            Pattern = rule.Pattern
+        }).ToList();
         _showProjectContainers.Checked = settings.ShowProjectContainers;
+        _allowDuplicateNodes.Checked = settings.NodeDuplication.AllowDuplicateNodes;
+        _duplicationExceptionPatterns.Text = string.Join(Environment.NewLine, settings.NodeDuplication.DuplicationExceptionPatterns);
         _connectorColor.Text = settings.Connector.StrokeColor;
         _connectorWidth.Value = Clamp(settings.Connector.StrokeWidth, _connectorWidth);
         _connectorRounded.Checked = settings.Connector.Rounded;
         _excludedNamespaces.Text = string.Join(Environment.NewLine, settings.ExcludedNamespaces);
         _excludedNames.Text = string.Join(Environment.NewLine, settings.ExcludedNames);
+        _rootDiscoveryPatterns.Text = settings.RootDiscoveryPatternsText;
         LoadRules(settings.StyleRules);
         LoadOverrides(settings.Overrides);
         _projectStyle.LoadStyle(settings.ProjectContainerStyle);
@@ -253,7 +270,12 @@ internal sealed class DiagramOptionsControl : UserControl
                 DataModelRelationshipStubLength = (int)_dataModelRelationshipStubLength.Value,
                 BaselineAlignmentPattern = string.IsNullOrWhiteSpace(_baselineAlignmentPattern.Text)
                     ? StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings.DefaultBaselineAlignmentPattern
-                    : _baselineAlignmentPattern.Text.Trim()
+                    : _baselineAlignmentPattern.Text.Trim(),
+                NodeLayerGroups = _nodeLayerGroups.Select(rule => new NodeLayerGroupRule
+                {
+                    Name = rule.Name,
+                    Pattern = rule.Pattern
+                }).ToList()
             },
             Connector = new ConnectorStyle
             {
@@ -263,9 +285,15 @@ internal sealed class DiagramOptionsControl : UserControl
             },
             ExcludedNamespaces = Lines(_excludedNamespaces),
             ExcludedNames = Lines(_excludedNames),
+            RootDiscoveryPatternsText = _rootDiscoveryPatterns.Text,
             StyleRules = ReadRules(),
             Overrides = ReadOverrides(),
             ShowProjectContainers = _showProjectContainers.Checked,
+            NodeDuplication = new NodeDuplicationSettings
+            {
+                AllowDuplicateNodes = _allowDuplicateNodes.Checked,
+                DuplicationExceptionPatterns = Lines(_duplicationExceptionPatterns)
+            },
             ProjectContainerStyle = _projectStyle.ToStyle(),
             ExternalDependencyStyle = _externalStyle.ToStyle()
         };
@@ -280,15 +308,20 @@ internal sealed class DiagramOptionsControl : UserControl
         settings.Layout.BaselineAlignmentPattern = string.IsNullOrWhiteSpace(settings.Layout.BaselineAlignmentPattern)
             ? StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings.DefaultBaselineAlignmentPattern
             : settings.Layout.BaselineAlignmentPattern.Trim();
+        settings.Layout.NodeLayerGroups ??= StandardIo.ArchitectureDiagram.Core.Models.LayoutSettings
+            .CreateDefaultNodeLayerGroups();
         settings.OutputRenderer = string.IsNullOrWhiteSpace(settings.OutputRenderer)
             ? DiagramRendererIds.Drawio
             : settings.OutputRenderer.Trim();
         settings.ExcludedNamespaces ??= new();
         settings.ExcludedNames ??= new();
+        settings.RootDiscoveryPatternsText ??= string.Empty;
         settings.StyleRules ??= new();
         settings.Overrides ??= new();
         settings.ProjectContainerStyle ??= NodeStyle.ProjectContainer();
         settings.ExternalDependencyStyle ??= NodeStyle.External();
+        settings.NodeDuplication ??= new NodeDuplicationSettings();
+        settings.NodeDuplication.DuplicationExceptionPatterns ??= new();
         return settings;
     }
 
@@ -311,11 +344,14 @@ internal sealed class DiagramOptionsControl : UserControl
         AddRow(panel, "Container padding", _containerPadding);
         AddRow(panel, "Baseline regex", _baselineAlignmentPattern);
         AddRow(panel, string.Empty, _showProjectContainers);
+        AddRow(panel, string.Empty, _allowDuplicateNodes);
+        AddRow(panel, "Duplication exception regexes", _duplicationExceptionPatterns, 90);
         AddRow(panel, "Connector color", _connectorColor);
         AddRow(panel, "Connector width", _connectorWidth);
         AddRow(panel, string.Empty, _connectorRounded);
         AddRow(panel, "Excluded namespaces", _excludedNamespaces, 90);
         AddRow(panel, "Excluded names", _excludedNames, 90);
+        AddRow(panel, "Root discovery regexes", _rootDiscoveryPatterns, 110);
         page.Controls.Add(panel);
         return page;
     }

@@ -6,6 +6,171 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class SettingsTests
 {
     [Fact]
+    public void Default_semantic_layer_groups_are_ordered_from_controller_to_broker()
+    {
+        Assert.Equal(new[]
+        {
+            "Controller", "Manager", "AggregationService", "ManagementService",
+            "CoordinationService", "OrchestrationService", "ProcessingService", "Service", "Broker"
+        }, DiagramSettings.CreateDefault().Layout.NodeLayerGroups.Select(rule => rule.Name));
+    }
+
+    [Fact]
+    public void Sparse_overlay_preserves_default_layer_groups_and_explicit_empty_list_disables_them()
+    {
+        var baseline = DiagramSettings.CreateDefault();
+        var preserved = SettingsSerializer.ApplyOverlay(baseline, "{ \"layout\": { \"verticalSpacing\": 90 } }");
+        var disabled = SettingsSerializer.ApplyOverlay(baseline, "{ \"layout\": { \"nodeLayerGroups\": [] } }");
+
+        Assert.Equal(9, preserved.Layout.NodeLayerGroups.Count);
+        Assert.Empty(disabled.Layout.NodeLayerGroups);
+    }
+
+    [Theory]
+    [InlineData("", "Service$")]
+    [InlineData("Service", "")]
+    [InlineData("Service", "[")]
+    public void Invalid_semantic_layer_group_is_rejected(string name, string pattern)
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.NodeLayerGroups = [new NodeLayerGroupRule { Name = name, Pattern = pattern }];
+
+        var exception = Assert.Throws<InvalidDataException>(() => SettingsSerializer.Export(settings));
+
+        Assert.Contains(string.IsNullOrWhiteSpace(name) ? "blank name" : name, exception.Message);
+    }
+
+    [Fact]
+    public void Duplicate_semantic_layer_group_names_are_rejected()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.Layout.NodeLayerGroups =
+        [
+            new NodeLayerGroupRule { Name = "Service", Pattern = "Service$" },
+            new NodeLayerGroupRule { Name = "service", Pattern = "Broker$" }
+        ];
+
+        Assert.Throws<InvalidDataException>(() => SettingsSerializer.Export(settings));
+    }
+    [Fact]
+    public void Sparse_overlay_preserves_product_style_rules()
+    {
+        var settings = SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "rootDiscoveryPatternsText": "" }""");
+
+        Assert.NotEmpty(settings.StyleRules);
+        Assert.Contains(settings.StyleRules, rule => rule.Match == "*Controller");
+    }
+
+    [Fact]
+    public void Explicit_empty_overlay_lists_clear_product_defaults()
+    {
+        var settings = SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "styleRules": [], "overrides": [] }""");
+
+        Assert.Empty(settings.StyleRules);
+        Assert.Empty(settings.Overrides);
+    }
+
+    [Fact]
+    public void Nested_overlay_retains_omitted_sibling_properties()
+    {
+        var baseline = DiagramSettings.CreateDefault();
+        var settings = SettingsSerializer.ApplyOverlay(
+            baseline,
+            """{ "version": 2, "layout": { "verticalSpacing": 123 } }""");
+
+        Assert.Equal(123, settings.Layout.VerticalSpacing);
+        Assert.Equal(baseline.Layout.HorizontalSpacing, settings.Layout.HorizontalSpacing);
+        Assert.Equal(baseline.Layout.NodeWidth, settings.Layout.NodeWidth);
+    }
+
+    [Fact]
+    public void Explicit_null_overlay_value_fails_with_property_path()
+    {
+        var exception = Assert.Throws<InvalidDataException>(() => SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "layout": { "verticalSpacing": null } }"""));
+
+        Assert.Contains("layout.verticalSpacing", exception.Message);
+    }
+
+    [Fact]
+    public void Nullable_style_overlay_values_can_remain_null()
+    {
+        var settings = SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 2, "styleRules": [{ "match": "*Service", "style": { "extraStyle": null } }] }""");
+
+        Assert.Null(settings.StyleRules.Single(rule => rule.Match == "*Service").Style.ExtraStyle);
+    }
+
+    [Fact]
+    public void Unsupported_overlay_version_fails()
+    {
+        Assert.Throws<NotSupportedException>(() => SettingsSerializer.ApplyOverlay(
+            DiagramSettings.CreateDefault(),
+            """{ "version": 999 }"""));
+    }
+    [Fact]
+    public void Import_migrates_unversioned_settings_without_changing_existing_choices()
+    {
+        var settings = SettingsSerializer.Import("""
+            {
+              "showProjectContainers": false,
+              "outputRenderer": "json",
+              "layout": { "parallelLaneSpacing": 23 },
+              "unknownLegacyField": "retained-by-source-but-ignored-by-current-policy"
+            }
+            """);
+
+        Assert.Equal(SettingsSchemaVersion.Current, settings.Version);
+        Assert.False(settings.ShowProjectContainers);
+        Assert.Equal("json", settings.OutputRenderer);
+        Assert.Equal(23, settings.Layout.ParallelLaneSpacing);
+    }
+
+    [Fact]
+    public void Import_migrates_version_one_and_export_writes_current_schema_version()
+    {
+        var settings = SettingsSerializer.Import("""
+            {
+              "version": 1,
+              "externalDependencyTag": "[Outside]",
+              "nodeDuplication": { "allowDuplicateNodes": false }
+            }
+            """);
+
+        var exported = SettingsSerializer.Export(settings);
+        var reloaded = SettingsSerializer.Import(exported);
+
+        Assert.Contains($"\"version\": {SettingsSchemaVersion.Current}", exported);
+        Assert.Equal("[Outside]", reloaded.ExternalDependencyTag);
+        Assert.False(reloaded.NodeDuplication.AllowDuplicateNodes);
+    }
+
+    [Fact]
+    public void Import_applies_defaults_for_fields_missing_from_legacy_settings()
+    {
+        var settings = SettingsSerializer.Import("{ \"version\": 1 }");
+
+        Assert.NotNull(settings.Canvas);
+        Assert.NotNull(settings.Layout);
+        Assert.NotNull(settings.Connector);
+        Assert.NotNull(settings.NodeDuplication);
+        Assert.Equal("drawio", settings.OutputRenderer);
+    }
+
+    [Fact]
+    public void Import_rejects_unknown_future_schema_version()
+    {
+        Assert.Throws<NotSupportedException>(() =>
+            SettingsSerializer.Import($"{{ \"version\": {SettingsSchemaVersion.Current + 1} }}"));
+    }
+
+    [Fact]
     public void Default_settings_export_and_import_without_data_loss()
     {
         var settings = DiagramSettings.CreateDefault();
@@ -20,6 +185,8 @@ public sealed class SettingsTests
         Assert.Equal(settings.Layout.BaselineAlignmentPattern, imported.Layout.BaselineAlignmentPattern);
         Assert.Equal(settings.Layout.EdgePortSpacing, imported.Layout.EdgePortSpacing);
         Assert.Equal(settings.ExternalDependencyStyle.Shape, imported.ExternalDependencyStyle.Shape);
+        Assert.True(imported.NodeDuplication.AllowDuplicateNodes);
+        Assert.Empty(imported.NodeDuplication.DuplicationExceptionPatterns);
     }
 
     [Fact]
@@ -134,5 +301,37 @@ public sealed class SettingsTests
         var settings = SettingsSerializer.Import(json);
 
         Assert.Equal(LayoutSettings.DefaultBaselineAlignmentPattern, settings.Layout.BaselineAlignmentPattern);
+    }
+
+    [Fact]
+    public void Node_duplication_settings_round_trip()
+    {
+        var settings = DiagramSettings.CreateDefault();
+        settings.NodeDuplication.AllowDuplicateNodes = false;
+        settings.NodeDuplication.DuplicationExceptionPatterns.Add("Microsoft\\.Extensions\\.Logging\\.ILogger$");
+
+        var imported = SettingsSerializer.Import(SettingsSerializer.Export(settings));
+
+        Assert.False(imported.NodeDuplication.AllowDuplicateNodes);
+        Assert.Equal(settings.NodeDuplication.DuplicationExceptionPatterns, imported.NodeDuplication.DuplicationExceptionPatterns);
+    }
+
+    [Fact]
+    public void Import_rejects_invalid_node_duplication_regex()
+    {
+        var json = """
+            {
+              "version": 1,
+              "nodeDuplication": {
+                "allowDuplicateNodes": false,
+                "duplicationExceptionPatterns": [ "[invalid" ]
+              }
+            }
+            """;
+
+        var exception = Assert.Throws<InvalidDataException>(() => SettingsSerializer.Import(json));
+
+        Assert.Contains("index 0", exception.Message);
+        Assert.Contains("[invalid", exception.Message);
     }
 }

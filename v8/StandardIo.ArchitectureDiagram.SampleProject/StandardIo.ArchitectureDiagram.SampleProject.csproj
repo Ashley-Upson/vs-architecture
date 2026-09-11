@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\StandardIo.ArchitectureDiagram.SampleProject.Data\StandardIo.ArchitectureDiagram.SampleProject.Data.csproj" />
+    <PackageReference Include="cCoder.CodeAnalysis" Version="2026.9.10.1034" PrivateAssets="all" />
+    <PackageReference Include="cCoder.Eventing" Version="2026.9.9.847" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Brokers\Https\" />
+  </ItemGroup>
+</Project>

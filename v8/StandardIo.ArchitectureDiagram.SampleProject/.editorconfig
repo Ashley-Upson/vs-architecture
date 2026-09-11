@@ -1,0 +1,26 @@
+# This project is a deliberately small, executable diagramming fixture.
+# Keep its CRUD/event call chains visible without production validation layers.
+# These exceptions apply only below this sample-project directory.
+[*.cs]
+# Retain the processing layers that demonstrate the intended service stack.
+dotnet_diagnostic.STX0003.severity = none
+# Omit validation/exception partials and TryCatch scaffolding in the fixture.
+dotnet_diagnostic.STX0008.severity = none
+dotnet_diagnostic.STX0009.severity = none
+dotnet_diagnostic.STX0010.severity = none
+dotnet_diagnostic.STX0011.severity = none
+dotnet_diagnostic.STX0012.severity = none
+dotnet_diagnostic.STX0023.severity = none
+dotnet_diagnostic.STXEX001.severity = none
+dotnet_diagnostic.STXEX002.severity = none
+dotnet_diagnostic.STXEX003.severity = none
+# The fake storage broker performs the small in-memory lookup itself.
+dotnet_diagnostic.STXB002.severity = none
+# Keep the requested navigable school model instead of adding storage-row DTOs.
+dotnet_diagnostic.STXF003.severity = none
+# Empty lists/arrays make the fake context and sample models usable directly.
+dotnet_diagnostic.STXM002.severity = none
+# A single registration method needs no configuration callback or layer helpers.
+dotnet_diagnostic.STXAPP002.severity = none
+dotnet_diagnostic.STXAPP009.severity = none
+dotnet_diagnostic.STXAPP011.severity = none

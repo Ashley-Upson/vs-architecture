@@ -6,48 +6,77 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Architectures;
+using ArchitectureDiagramModel = StandardIo.ArchitectureDiagram.Core.Models.Architectures.ArchitectureDiagram;
 
 namespace StandardIo.ArchitectureDiagram.Core.Services.Foundations.Analyses;
 
-public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
+public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer, IArchitectureAnalyser
 {
+    public async Task<ArchitectureDiagramModel> AnalyseAsync(
+        IEnumerable<Project> selectedProjects,
+        ArchitectureAnalysisSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        settings ??= new ArchitectureAnalysisSettings();
+        var model = await AnalyzeCoreAsync(selectedProjects, settings, cancellationToken).ConfigureAwait(false);
+        return ToArchitectureDiagram(model);
+    }
+
     public async Task<DiagramModel> AnalyzeAsync(
         Project selectedProject,
         DiagramSettings settings,
         CancellationToken cancellationToken = default)
     {
-        return await AnalyzeAsync(new[] { selectedProject }, settings, cancellationToken).ConfigureAwait(false);
+        return await AnalyzeCoreAsync(new[] { selectedProject }, ToArchitectureSettings(settings), cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<DiagramModel> AnalyzeAsync(
+    public Task<DiagramModel> AnalyzeAsync(
         IEnumerable<Project> selectedProjects,
         DiagramSettings settings,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        AnalyzeCoreAsync(selectedProjects, ToArchitectureSettings(settings), cancellationToken);
+
+    private async Task<DiagramModel> AnalyzeCoreAsync(
+        IEnumerable<Project> selectedProjects,
+        ArchitectureAnalysisSettings settings,
+        CancellationToken cancellationToken)
     {
         var projects = selectedProjects?.Where(project => project is not null)
             .OrderBy(StableProjectKey, System.StringComparer.OrdinalIgnoreCase)
             .ThenBy(project => project.Name, System.StringComparer.Ordinal)
             .ToList()
             ?? new List<Project>();
-        var resolver = new StyleResolver(settings);
         var typeBySymbol = new Dictionary<ISymbol, TypeNode>(SymbolEqualityComparer.Default);
         var typeByFullName = new Dictionary<string, TypeNode>();
-        var registeredImplementationByService = new Dictionary<ISymbol, INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var registrationsByService = new Dictionary<string, Dictionary<string, INamedTypeSymbol>>(System.StringComparer.Ordinal);
         var projectTypes = new List<(Project Project, string ProjectId, List<TypeNode> Types)>();
+        var projectCompilations = new List<(Project Project, Compilation Compilation)>();
 
         foreach (var project in projects)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            Compilation? compilation;
+            using (PerformanceAudit.Measure("Roslyn compilation acquisition"))
+            {
+                PerformanceAudit.Increment("Roslyn compilation requests");
+                compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            }
             if (compilation is null)
             {
                 continue;
             }
 
+            projectCompilations.Add((project, compilation));
+        }
+
+        foreach (var (project, compilation) in projectCompilations)
+        {
             var types = new List<TypeNode>();
             foreach (var type in GetNamedTypes(compilation.Assembly.GlobalNamespace)
                 .OrderBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), System.StringComparer.Ordinal))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                PerformanceAudit.Increment("symbols inspected");
 
                 if (type.TypeKind is not TypeKind.Class and not TypeKind.Interface)
                 {
@@ -57,7 +86,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 var fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                     .Replace("global::", string.Empty);
 
-                if (resolver.IsExcluded(type.Name, fullName))
+                if (IsExcluded(type.Name, fullName, settings))
                 {
                     continue;
                 }
@@ -73,9 +102,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                     type.Interfaces
                         .Select(item => item.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat))
                         .OrderBy(name => name)
-                        .ToImmutableArray(),
-                    CollectProperties(type, typeByFullName),
-                    CountMethods(type));
+                        .ToImmutableArray());
 
                 types.Add(node);
                 typeBySymbol[type.OriginalDefinition] = node;
@@ -85,23 +112,27 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             projectTypes.Add((project, StableId.From("project", StableProjectKey(project)), types));
         }
 
-        foreach (var project in projects)
+        foreach (var (project, compilation) in projectCompilations)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            if (compilation is null)
-            {
-                continue;
-            }
-
             foreach (var registration in await CollectServiceRegistrationsAsync(project, compilation, cancellationToken).ConfigureAwait(false))
             {
-                if (!SymbolEqualityComparer.Default.Equals(registration.Service.OriginalDefinition, registration.Implementation.OriginalDefinition) &&
-                    !registeredImplementationByService.ContainsKey(registration.Service.OriginalDefinition))
+                if (SymbolEqualityComparer.Default.Equals(
+                    registration.Service.OriginalDefinition,
+                    registration.Implementation.OriginalDefinition))
                 {
-                    registeredImplementationByService[registration.Service.OriginalDefinition] = registration.Implementation.OriginalDefinition;
+                    continue;
                 }
+
+                var serviceIdentity = TypeIdentity(registration.Service);
+                var implementationIdentity = TypeIdentity(registration.Implementation);
+                if (!registrationsByService.TryGetValue(serviceIdentity, out var implementations))
+                    registrationsByService[serviceIdentity] = implementations =
+                        new Dictionary<string, INamedTypeSymbol>(System.StringComparer.Ordinal);
+                implementations[implementationIdentity] = registration.Implementation.OriginalDefinition;
             }
         }
+
+        ApplyInterfaceResolution(projectTypes, typeBySymbol, typeByFullName, registrationsByService);
 
         var projectContainers = projectTypes
             .Select(p => new ProjectContainer(
@@ -116,24 +147,20 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         var edgeIds = new HashSet<string>();
         var edges = new List<DependencyEdge>();
 
-        foreach (var project in projects)
+        foreach (var (project, compilation) in projectCompilations)
         {
-            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            if (compilation is null)
-            {
-                continue;
-            }
-
             foreach (var document in project.Documents.Where(d => d.SupportsSyntaxTree)
                 .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
                 .ThenBy(document => document.Name, System.StringComparer.Ordinal))
             {
+                PerformanceAudit.Increment("syntax trees visited");
                 var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
                 if (root is null)
                 {
                     continue;
                 }
 
+                PerformanceAudit.Increment("semantic models requested");
                 var model = compilation.GetSemanticModel(root.SyntaxTree);
                 var usingNamespaces = root.DescendantNodes()
                     .OfType<UsingDirectiveSyntax>()
@@ -145,6 +172,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    PerformanceAudit.Increment("symbols inspected");
 
                     if (model.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol sourceSymbol)
                     {
@@ -158,7 +186,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
 
                     foreach (var dependency in CollectConstructorDependencies(declaration, model, cancellationToken))
                     {
-                        var resolvedDependency = ResolveRegisteredImplementation(dependency, registeredImplementationByService);
+                        var resolvedDependency = ResolveRegisteredImplementation(dependency, registrationsByService);
                         if (SymbolEqualityComparer.Default.Equals(resolvedDependency, sourceSymbol))
                         {
                             continue;
@@ -180,11 +208,64 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             }
         }
 
-        return new DiagramModel(
-            projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
-            orderedExternalDependencies.ToImmutableArray(),
-            edges.ToImmutableArray(),
-            new DiagramMetadata());
+        using (PerformanceAudit.Measure(
+            "DiagramModel construction",
+            inputNodes: projectContainers.Sum(project => project.Types.Count),
+            inputRoutes: edges.Count,
+            outputObjects: 1))
+        {
+            var discovered = new DiagramModel(
+                projectContainers.Where(p => p.Types.Count > 0).ToImmutableArray(),
+                orderedExternalDependencies.ToImmutableArray(),
+                edges.ToImmutableArray(),
+                new DiagramMetadata());
+            return SemanticScopeSelector.Select(discovered, settings);
+        }
+    }
+
+    private static ArchitectureAnalysisSettings ToArchitectureSettings(DiagramSettings settings) => new()
+    {
+        ExcludedNamespaces = settings.ExcludedNamespaces.ToList(),
+        ExcludedNames = settings.ExcludedNames.ToList(),
+        RootDiscoveryPatternsText = settings.RootDiscoveryPatternsText,
+        ExternalDependencyTag = settings.ExternalDependencyTag
+    };
+
+    private static bool IsExcluded(string name, string fullName, ArchitectureAnalysisSettings settings)
+    {
+        var index = fullName.LastIndexOf('.');
+        var @namespace = index <= 0 ? string.Empty : fullName.Substring(0, index);
+        return settings.ExcludedNames.Any(pattern => GlobMatcher.IsMatch(name, pattern)) ||
+               settings.ExcludedNames.Any(pattern => GlobMatcher.IsMatch(fullName, pattern)) ||
+               settings.ExcludedNamespaces.Any(pattern => GlobMatcher.IsMatch(@namespace, pattern));
+    }
+
+    private static ArchitectureDiagramModel ToArchitectureDiagram(DiagramModel model)
+    {
+        var selection = model.Metadata?.SemanticSelection;
+        return new ArchitectureDiagramModel(
+            model.Projects.Select(project => new ArchitectureProject(
+                project.Id,
+                project.Name,
+                project.Types.Select(type => new ArchitectureNode(
+                    type.Id, type.ProjectId, type.Name, type.FullName, type.Kind, type.UniqueId,
+                    type.Interfaces ?? System.Array.Empty<string>(), type.SemanticTypeIdentity,
+                    type.InterfaceIdentity, type.ImplementationIdentity, type.ImplementationCount,
+                    type.InterfaceResolution)).ToArray(),
+                project.UniqueId)).ToArray(),
+            model.ExternalDependencies.Select(node => new ArchitectureExternalNode(
+                node.Id, node.Name, node.AssemblyName, node.UniqueId, node.FullName, node.Tag)).ToArray(),
+            model.Edges.Select((edge, index) => new ArchitectureLink(edge.Id, edge.SourceId, edge.TargetId, edge.Kind, index)).ToArray(),
+            selection is null ? null : new ArchitectureSelectionDiagnostic(
+                selection.ScopePolicy,
+                selection.Roots.Select(root => new ArchitectureRoot(
+                    root.SemanticNodeId, root.MatchedCanonicalValue, root.PatternIndex,
+                    root.SourceLine, root.PatternText)).ToArray(),
+                selection.SelectedNodeIds,
+                selection.OmittedNodeIds,
+                selection.SelectedLinkIds,
+                selection.OmittedLinkIds,
+                selection.UnmatchedPatternIndexes));
     }
 
     private static string StableProjectKey(Project project) =>
@@ -219,12 +300,14 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
             .OrderBy(document => document.FilePath ?? document.Name, System.StringComparer.OrdinalIgnoreCase)
             .ThenBy(document => document.Name, System.StringComparer.Ordinal))
         {
+            PerformanceAudit.Increment("syntax trees visited");
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
             if (root is null)
             {
                 continue;
             }
 
+            PerformanceAudit.Increment("semantic models requested");
             var model = compilation.GetSemanticModel(root.SyntaxTree);
             foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
@@ -235,7 +318,8 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
                 }
 
                 if (model.GetTypeInfo(serviceType, cancellationToken).Type is INamedTypeSymbol service &&
-                    model.GetTypeInfo(implementationType, cancellationToken).Type is INamedTypeSymbol implementation)
+                    ResolveRegistrationImplementation(invocation, implementationType, model, cancellationToken) is
+                        INamedTypeSymbol implementation)
                 {
                     registrations.Add(new ServiceRegistration(service.OriginalDefinition, implementation.OriginalDefinition));
                 }
@@ -248,21 +332,26 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
     private static bool TryGetServiceRegistrationTypeSyntax(
         InvocationExpressionSyntax invocation,
         out TypeSyntax serviceType,
-        out TypeSyntax implementationType)
+        out TypeSyntax? implementationType)
     {
         serviceType = null!;
-        implementationType = null!;
+        implementationType = null;
 
         if (GetInvokedName(invocation.Expression) is not GenericNameSyntax genericName ||
-            genericName.TypeArgumentList.Arguments.Count != 2 ||
-            genericName.Identifier.ValueText is not ("AddScoped" or "AddTransient" or "AddSingleton"))
+            !IsRegistrationMethod(genericName.Identifier.ValueText) ||
+            genericName.TypeArgumentList.Arguments.Count is < 1 or > 2)
         {
             return false;
         }
 
         serviceType = genericName.TypeArgumentList.Arguments[0];
-        implementationType = genericName.TypeArgumentList.Arguments[1];
+        if (genericName.TypeArgumentList.Arguments.Count == 2)
+            implementationType = genericName.TypeArgumentList.Arguments[1];
         return true;
+
+        static bool IsRegistrationMethod(string name) => name is
+            "AddScoped" or "AddTransient" or "AddSingleton" or
+            "TryAddScoped" or "TryAddTransient" or "TryAddSingleton";
 
         static SimpleNameSyntax? GetInvokedName(ExpressionSyntax expression)
         {
@@ -278,12 +367,138 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
 
     private static INamedTypeSymbol ResolveRegisteredImplementation(
         INamedTypeSymbol dependency,
-        Dictionary<ISymbol, INamedTypeSymbol> registeredImplementationByService)
+        Dictionary<string, Dictionary<string, INamedTypeSymbol>> registrationsByService)
     {
-        return registeredImplementationByService.TryGetValue(dependency.OriginalDefinition, out var implementation)
-            ? implementation
+        return registrationsByService.TryGetValue(TypeIdentity(dependency), out var implementations) &&
+               implementations.Count == 1
+            ? implementations.Values.Single()
             : dependency;
     }
+
+    private static INamedTypeSymbol? ResolveRegistrationImplementation(
+        InvocationExpressionSyntax invocation,
+        TypeSyntax? implementationType,
+        SemanticModel model,
+        CancellationToken cancellationToken)
+    {
+        if (implementationType is not null)
+            return model.GetTypeInfo(implementationType, cancellationToken).Type as INamedTypeSymbol;
+
+        foreach (var argument in invocation.ArgumentList.Arguments.Reverse())
+        {
+            var expression = argument.Expression switch
+            {
+                SimpleLambdaExpressionSyntax simple when simple.Body is ExpressionSyntax body => body,
+                ParenthesizedLambdaExpressionSyntax parenthesized when parenthesized.Body is ExpressionSyntax body => body,
+                _ => argument.Expression
+            };
+            if (model.GetTypeInfo(expression, cancellationToken).Type is INamedTypeSymbol implementation &&
+                implementation.TypeKind == TypeKind.Class)
+                return implementation;
+        }
+
+        return null;
+    }
+
+    private static void ApplyInterfaceResolution(
+        IList<(Project Project, string ProjectId, List<TypeNode> Types)> projectTypes,
+        Dictionary<ISymbol, TypeNode> typeBySymbol,
+        Dictionary<string, TypeNode> typeByFullName,
+        Dictionary<string, Dictionary<string, INamedTypeSymbol>> registrationsByService)
+    {
+        var replacements = new Dictionary<string, TypeNode>(System.StringComparer.Ordinal);
+        var removed = new HashSet<string>(System.StringComparer.Ordinal);
+        var uniqueInterfacesByImplementation = new Dictionary<string, List<INamedTypeSymbol>>(System.StringComparer.Ordinal);
+
+        foreach (var entry in typeBySymbol.ToArray())
+        {
+            if (entry.Key is not INamedTypeSymbol symbol || symbol.TypeKind != TypeKind.Interface)
+                continue;
+
+            var node = entry.Value;
+            if (!registrationsByService.TryGetValue(TypeIdentity(symbol), out var implementations) ||
+                implementations.Count == 0)
+            {
+                replacements[node.Id] = node with
+                {
+                    SemanticTypeIdentity = node.FullName,
+                    InterfaceIdentity = node.FullName,
+                    ImplementationCount = 0,
+                    InterfaceResolution = InterfaceResolutionStatus.Unresolved
+                };
+                continue;
+            }
+
+            if (implementations.Count > 1)
+            {
+                replacements[node.Id] = node with
+                {
+                    Name = $"{node.Name}\n({implementations.Count} implementations)",
+                    SemanticTypeIdentity = node.FullName,
+                    InterfaceIdentity = node.FullName,
+                    ImplementationCount = implementations.Count,
+                    InterfaceResolution = InterfaceResolutionStatus.Multiple
+                };
+                continue;
+            }
+
+            var implementation = implementations.Values.Single();
+            var implementationIdentity = TypeIdentity(implementation);
+            if (!uniqueInterfacesByImplementation.TryGetValue(implementationIdentity, out var services))
+                uniqueInterfacesByImplementation[implementationIdentity] = services = new List<INamedTypeSymbol>();
+            services.Add(symbol);
+            removed.Add(node.Id);
+        }
+
+        foreach (var entry in typeBySymbol.ToArray())
+        {
+            if (entry.Key is not INamedTypeSymbol symbol || symbol.TypeKind != TypeKind.Class)
+                continue;
+
+            var node = entry.Value;
+            if (!uniqueInterfacesByImplementation.TryGetValue(TypeIdentity(symbol), out var services))
+            {
+                replacements[node.Id] = node with { SemanticTypeIdentity = node.FullName };
+                continue;
+            }
+
+            var ordered = services
+                .OrderBy(service => service.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), System.StringComparer.Ordinal)
+                .ToArray();
+            var interfaceNames = string.Join(", ", ordered.Select(service => service.Name));
+            var interfaceIdentities = string.Join(";", ordered.Select(service => service
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)));
+            replacements[node.Id] = node with
+            {
+                Name = $"{node.Name} : {interfaceNames}",
+                SemanticTypeIdentity = node.FullName,
+                InterfaceIdentity = interfaceIdentities,
+                ImplementationIdentity = node.FullName,
+                ImplementationCount = 1,
+                InterfaceResolution = InterfaceResolutionStatus.Unique
+            };
+        }
+
+        foreach (var project in projectTypes)
+        {
+            var updated = project.Types.Where(node => !removed.Contains(node.Id))
+                .Select(node => replacements.TryGetValue(node.Id, out var replacement) ? replacement : node)
+                .ToList();
+            project.Types.Clear();
+            project.Types.AddRange(updated);
+        }
+
+        foreach (var key in typeBySymbol.Keys.ToArray())
+            if (removed.Contains(typeBySymbol[key].Id)) typeBySymbol.Remove(key);
+            else if (replacements.TryGetValue(typeBySymbol[key].Id, out var replacement)) typeBySymbol[key] = replacement;
+        foreach (var key in typeByFullName.Keys.ToArray())
+            if (removed.Contains(typeByFullName[key].Id)) typeByFullName.Remove(key);
+            else if (replacements.TryGetValue(typeByFullName[key].Id, out var replacement)) typeByFullName[key] = replacement;
+    }
+
+    private static string TypeIdentity(INamedTypeSymbol symbol) =>
+        symbol.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            .Replace("global::", string.Empty);
 
     private static IEnumerable<INamedTypeSymbol> CollectConstructorDependencies(
         TypeDeclarationSyntax declaration,
@@ -361,58 +576,6 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         }
     }
 
-    private static IReadOnlyList<TypeProperty> CollectProperties(
-        INamedTypeSymbol type,
-        Dictionary<string, TypeNode> typeByFullName)
-    {
-        return type.GetMembers()
-            .OfType<IPropertySymbol>()
-            .Where(property => !property.IsStatic && property.DeclaredAccessibility == Accessibility.Public)
-            .Select(property =>
-            {
-                var propertyType = UnwrapPropertyType(property.Type);
-                var fullName = propertyType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                    .Replace("global::", string.Empty);
-                var typeName = propertyType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) ??
-                    property.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                var typeId = fullName is not null && typeByFullName.TryGetValue(fullName, out var node)
-                    ? node.Id
-                    : null;
-
-                return new TypeProperty(property.Name, typeName, fullName, typeId);
-            })
-            .OrderBy(property => property.Name)
-            .ToImmutableArray();
-    }
-
-    private static INamedTypeSymbol? UnwrapPropertyType(ITypeSymbol type)
-    {
-        if (type is IArrayTypeSymbol array)
-        {
-            return UnwrapPropertyType(array.ElementType);
-        }
-
-        if (type is INamedTypeSymbol named &&
-            named.TypeArguments.Length == 1 &&
-            named.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic" &&
-            named.Name is "IEnumerable" or "IReadOnlyList" or "IList" or "List" or "ICollection" or "Collection")
-        {
-            return UnwrapPropertyType(named.TypeArguments[0]);
-        }
-
-        return type as INamedTypeSymbol;
-    }
-
-    private static int CountMethods(INamedTypeSymbol type)
-    {
-        return type.GetMembers()
-            .OfType<IMethodSymbol>()
-            .Count(method =>
-                method.MethodKind == MethodKind.Ordinary &&
-                method.DeclaredAccessibility == Accessibility.Public &&
-                !method.IsStatic);
-    }
-
     private static bool TryFindInternalNode(
         INamedTypeSymbol symbol,
         Dictionary<ISymbol, TypeNode> typeBySymbol,
@@ -450,7 +613,7 @@ public sealed class RoslynDependencyAnalyzer : IRoslynDependencyAnalyzer
         Dictionary<string, ExternalDependencyNode> externalDependencies,
         List<ExternalDependencyNode> orderedExternalDependencies,
         IReadOnlyList<string> usingNamespaces,
-        DiagramSettings settings)
+        ArchitectureAnalysisSettings settings)
     {
         var assemblyName = symbol.ContainingAssembly?.Identity.Name;
         if (string.IsNullOrWhiteSpace(assemblyName) || IsImplicitFrameworkDependency(symbol, assemblyName!, usingNamespaces))

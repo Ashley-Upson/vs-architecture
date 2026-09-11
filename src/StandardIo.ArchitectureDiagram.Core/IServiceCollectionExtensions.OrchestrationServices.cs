@@ -6,5 +6,8 @@ namespace StandardIo.ArchitectureDiagram.Core;
 public static partial class IServiceCollectionExtensions
 {
     private static void AddArchitectureDiagramOrchestrationServices(IServiceCollection services) =>
-        services.AddTransient<IDiagramGenerationOrchestrationService, DiagramGenerationOrchestrationService>();
+        services
+            .AddTransient<IArchitectureGenerationService, ArchitectureV7ProductionGenerationService>()
+            .AddTransient<ITypedDiagramGenerationOrchestrator, TypedDiagramGenerationOrchestrator>()
+            .AddTransient<IDiagramGenerationOrchestrationService, DiagramGenerationOrchestrationService>();
 }

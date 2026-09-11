@@ -6,6 +6,8 @@ using StandardIo.ArchitectureDiagram.Core.Models;
 using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Coordinations.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using Xunit;
 
 namespace StandardIo.ArchitectureDiagram.Core.Tests;
@@ -23,14 +25,35 @@ public sealed class DiagramGenerationOrchestrationServiceTests
             new DiagramMetadata());
         var analysisProcessingService = new FakeAnalysisProcessingService(graph);
         var renderingProcessingService = new FakeRenderingProcessingService("drawio");
-        var service = new DiagramGenerationOrchestrationService(analysisProcessingService, renderingProcessingService);
+        var typed = new FakeTypedOrchestrator("drawio");
+        var service = new DiagramGenerationOrchestrationService(analysisProcessingService, renderingProcessingService, typed);
 
         var result = await service.GenerateAsync(System.Array.Empty<Project>(), settings);
 
         Assert.Equal("drawio", result);
-        Assert.Same(settings, analysisProcessingService.Settings);
-        Assert.Same(graph, renderingProcessingService.Graph);
-        Assert.Same(settings, renderingProcessingService.Settings);
+        Assert.Null(analysisProcessingService.Settings);
+        Assert.Null(renderingProcessingService.Graph);
+        Assert.NotNull(typed.Request);
+        Assert.Collection(typed.Request!.Jobs,
+            job => Assert.IsType<ArchitectureGenerationJob>(job),
+            job => Assert.IsType<DataModelGenerationJob>(job));
+    }
+
+    private sealed class FakeTypedOrchestrator : ITypedDiagramGenerationOrchestrator
+    {
+        private readonly string _content;
+        public FakeTypedOrchestrator(string content) => _content = content;
+        public DiagramGenerationRequest? Request { get; private set; }
+
+        public Task<TypedDiagramGenerationResult> GenerateAsync(
+            IEnumerable<Project> selectedProjects,
+            DiagramGenerationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Request = request;
+            return Task.FromResult(new TypedDiagramGenerationResult(
+                new DrawioDocument(_content, [], []), [], []));
+        }
     }
 
     private sealed class FakeAnalysisProcessingService : IDiagramAnalysisProcessingService

@@ -4,11 +4,12 @@ namespace StandardIo.ArchitectureDiagram.Core.Models;
 
 public sealed class DiagramSettings
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = SettingsSchemaVersion.Current;
     public CanvasSettings Canvas { get; set; } = new();
     public LayoutSettings Layout { get; set; } = new();
     public List<string> ExcludedNamespaces { get; set; } = new();
     public List<string> ExcludedNames { get; set; } = new();
+    public string RootDiscoveryPatternsText { get; set; } = string.Empty;
     public List<StyleRule> StyleRules { get; set; } = new();
     public List<StyleOverride> Overrides { get; set; } = new();
     public string OutputRenderer { get; set; } = "drawio";
@@ -17,9 +18,16 @@ public sealed class DiagramSettings
     public NodeStyle ProjectContainerStyle { get; set; } = NodeStyle.ProjectContainer();
     public NodeStyle ExternalDependencyStyle { get; set; } = NodeStyle.External();
     public ConnectorStyle Connector { get; set; } = new();
+    public NodeDuplicationSettings NodeDuplication { get; set; } = new();
 
     public static DiagramSettings CreateDefault()
     {
         return DiagramSettingsFactory.CreateDefault();
     }
+}
+
+public static class SettingsSchemaVersion
+{
+    public const int LegacyUnversioned = 1;
+    public const int Current = 2;
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
@@ -19,7 +20,12 @@ using StandardIo.ArchitectureDiagram.Core;
 using StandardIo.ArchitectureDiagram.Core.Brokers.Files;
 using StandardIo.ArchitectureDiagram.Core.Exposures.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Renderers;
+using StandardIo.ArchitectureDiagram.Core.Services.Processings.Diagrams;
+using StandardIo.ArchitectureDiagram.Core.Services.Foundations.Settings;
+using StandardIo.ArchitectureDiagram.Core.Services.Orchestrations.Diagrams;
 using StandardIo.ArchitectureDiagram.Core.Models;
+using StandardIo.ArchitectureDiagram.Core.Models.Drawios;
+using StandardIo.ArchitectureDiagram.Core.Models.Generation;
 using RoslynProject = Microsoft.CodeAnalysis.Project;
 using Task = System.Threading.Tasks.Task;
 
@@ -34,6 +40,8 @@ internal sealed class DiagramCommands
     {
         _package = package;
         commandService.AddCommand(new OleMenuCommand(GenerateDiagram, new CommandID(Guids.CommandSet, CommandIds.GenerateDiagram)));
+        commandService.AddCommand(new OleMenuCommand(GenerateArchitectureDiagram, new CommandID(Guids.CommandSet, CommandIds.GenerateArchitectureDiagram)));
+        commandService.AddCommand(new OleMenuCommand(GenerateDataModelDiagram, new CommandID(Guids.CommandSet, CommandIds.GenerateDataModelDiagram)));
         commandService.AddCommand(new OleMenuCommand(OpenSettings, new CommandID(Guids.CommandSet, CommandIds.OpenSettings)));
         commandService.AddCommand(new OleMenuCommand(ExportSettings, new CommandID(Guids.CommandSet, CommandIds.ExportSettings)));
         commandService.AddCommand(new OleMenuCommand(ImportSettings, new CommandID(Guids.CommandSet, CommandIds.ImportSettings)));
@@ -48,47 +56,108 @@ internal sealed class DiagramCommands
     }
 
     private void GenerateDiagram(object sender, EventArgs e)
+        => Generate(DiagramCommandSelection.Combined);
+
+    private void GenerateArchitectureDiagram(object sender, EventArgs e)
+        => Generate(DiagramCommandSelection.Architecture);
+
+    private void GenerateDataModelDiagram(object sender, EventArgs e)
+        => Generate(DiagramCommandSelection.DataModel);
+
+    private void Generate(DiagramCommandSelection selection)
     {
         _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            using var threadTelemetry = IsThreadTelemetryEnabled()
+                ? GenerationThreadTelemetrySession.Start(() => ThreadHelper.CheckAccess())
+                : null;
+            threadTelemetry?.Mark("command entry");
 
             try
             {
-                var target = await GetSelectedDiagramTargetAsync();
+                DiagramTarget? target;
+                using (threadTelemetry?.Measure("selection operation"))
+                {
+                    target = await GetSelectedDiagramTargetAsync();
+                }
                 if (target is null)
                 {
                     ShowMessage("Select a C# project or solution node before generating a diagram.", OLEMSGICON.OLEMSGICON_WARNING);
                     return;
                 }
 
-                var settings = SettingsStore.Load();
+                DiagramSettings settings;
+                string? outputPath;
+                using (threadTelemetry?.Measure("settings and save-dialog operations"))
+                {
+                    settings = SettingsStore.Load();
+                }
                 using var provider = new ServiceCollection()
                     .AddArchitectureDiagram()
                     .BuildServiceProvider();
-                var renderer = provider
-                    .GetRequiredService<IDiagramRendererRegistry>()
-                    .Resolve(settings.OutputRenderer);
-                var outputPath = PromptForSavePath(target.Name, renderer);
+                using (threadTelemetry?.Measure("settings and save-dialog operations"))
+                {
+                    outputPath = PromptForSavePath(target.Name, selection);
+                }
                 if (string.IsNullOrWhiteSpace(outputPath))
                 {
                     return;
                 }
 
-                var output = await provider
-                    .GetRequiredService<IDiagramGenerationExposure>()
-                    .GenerateAsync(target.Projects, settings);
-                await provider
-                    .GetRequiredService<IDiagramFileBroker>()
-                    .WriteTextAsync(outputPath!, output);
-                ShowMessage($"{renderer.DisplayName} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
+                using var cancellation = new CancellationTokenSource();
+                using var progress = new DiagramGenerationProgressDialog(cancellation);
+                progress.Show();
+                progress.SetStage("Analyzing the selected project graph...");
+
+                var request = CreateRequest(settings, selection);
+                progress.SetStage("Analyzing and rendering the selected diagram jobs...");
+                TypedDiagramGenerationResult result;
+                using (threadTelemetry?.Measure("renderer background execution"))
+                {
+                    result = await provider.GetRequiredService<ITypedDiagramGenerationOrchestrator>()
+                        .GenerateAsync(target.Projects, request, cancellation.Token);
+                }
+
+                cancellation.Token.ThrowIfCancellationRequested();
+                progress.SetStage("Writing the generated diagram...");
+                using (threadTelemetry?.Measure("file writing"))
+                {
+                    await provider.GetRequiredService<IDiagramFileBroker>()
+                        .WriteTextAsync(outputPath!, result.Document.Content, cancellation.Token);
+                }
+                progress.Complete();
+                using (threadTelemetry?.Measure("completion notification"))
+                {
+                    ShowMessage($"Draw.io {DisplayName(selection)} generated:\n{outputPath}", OLEMSGICON.OLEMSGICON_INFO);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                ShowMessage("Diagram generation was cancelled.", OLEMSGICON.OLEMSGICON_INFO);
             }
             catch (Exception ex)
             {
                 ShowMessage(ex.Message, OLEMSGICON.OLEMSGICON_CRITICAL);
             }
+            finally
+            {
+                foreach (var metric in threadTelemetry?.Snapshot() ?? Array.Empty<GenerationThreadMetric>())
+                {
+                    DiagnosticLog.Write(
+                        $"Generation thread telemetry: stage={metric.Stage}; startThread={metric.StartManagedThreadId}; " +
+                        $"endThread={metric.EndManagedThreadId}; startMain={metric.StartIsMainThread}; " +
+                        $"endMain={metric.EndIsMainThread}; start={metric.StartedAt:O}; end={metric.EndedAt:O}");
+                }
+            }
         });
     }
+
+    private static bool IsThreadTelemetryEnabled() =>
+        string.Equals(
+            Environment.GetEnvironmentVariable("STANDARDIO_THREAD_TELEMETRY"),
+            "1",
+            StringComparison.Ordinal);
 
     private void OpenSettings(object sender, EventArgs e)
     {
@@ -426,18 +495,38 @@ internal sealed class DiagramCommands
             : Path.GetFileNameWithoutExtension(solutionPath);
     }
 
-    private static string? PromptForSavePath(string projectName, IDiagramRenderer renderer)
+    private static DiagramGenerationRequest CreateRequest(DiagramSettings settings, DiagramCommandSelection selection)
+        => selection switch
+        {
+            DiagramCommandSelection.Architecture => LegacyDiagramSettingsAdapter.ArchitectureRequest(settings),
+            DiagramCommandSelection.DataModel => LegacyDiagramSettingsAdapter.DataModelRequest(settings),
+            _ => LegacyDiagramSettingsAdapter.CombinedRequest(settings)
+        };
+
+    private static string DisplayName(DiagramCommandSelection selection) => selection switch
+    {
+        DiagramCommandSelection.Architecture => "Architecture diagram",
+        DiagramCommandSelection.DataModel => "Data Model diagram",
+        _ => "diagrams"
+    };
+
+    private static string? PromptForSavePath(string projectName, DiagramCommandSelection selection)
     {
         ThreadHelper.ThrowIfNotOnUIThread();
-        renderer ??= new DrawioDiagramRenderer();
+        var suffix = selection switch
+        {
+            DiagramCommandSelection.Architecture => "architecture",
+            DiagramCommandSelection.DataModel => "data-model",
+            _ => "diagrams"
+        };
 
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Title = $"Save {renderer.DisplayName}",
-            FileName = $"{projectName}.architecture{renderer.FileExtension}",
-            Filter = renderer.FileFilter,
+            Title = $"Save Draw.io {DisplayName(selection)}",
+            FileName = $"{projectName}.{suffix}.drawio",
+            Filter = "Draw.io diagram (*.drawio)|*.drawio|All files (*.*)|*.*",
             AddExtension = true,
-            DefaultExt = renderer.FileExtension
+            DefaultExt = ".drawio"
         };
 
         return dialog.ShowDialog() == true ? dialog.FileName : null;
@@ -498,4 +587,6 @@ internal sealed class DiagramCommands
 
         public IReadOnlyList<RoslynProject> Projects { get; }
     }
+
+    private enum DiagramCommandSelection { Architecture, DataModel, Combined }
 }

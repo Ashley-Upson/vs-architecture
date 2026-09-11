@@ -1,0 +1,33 @@
+// ---------------------------------------------------------------
+// Copyright (c) Paul.Ward@ccoder.co.uk
+// ---------------------------------------------------------------
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using StandardIo.ArchitectureDiagram.Core2.Models;
+namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
+internal sealed class BoundsLayoutRuleProcessingService : ILayoutRuleProcessingService
+{
+    public void ApplyRule(RenderModel renderModel)
+    {
+        double left = 40;
+        for (int projectIndex = 0; projectIndex < renderModel.Projects.Length; projectIndex++)
+        {
+            var project = renderModel.Projects[projectIndex];
+            double shift = 40 - project.Nodes.Select(node => node.X).DefaultIfEmpty(40).Min();
+            for (int index = 0; index < project.Nodes.Length; index++)
+            {
+                var node = project.Nodes[index];
+                double x = node.X + shift;
+                string[] lines = node.Label.Split('\n');
+                project.Nodes[index] = node with { X = x, TextLines = lines.Select((line, row) => new RenderText(line, x + node.Width / 2, node.Y + node.Height / 2 + (row - (lines.Length - 1) / 2d) * 16, row == 0, row < node.TextLines.Length ? node.TextLines[row].FontSize : 12)).ToArray() };
+            }
+            double width = Math.Max(300, project.Nodes.Select(node => node.X + node.Width + 40).DefaultIfEmpty(300).Max());
+            double height = project.Nodes.Select(node => node.Y + node.Height + 40).DefaultIfEmpty(120).Max();
+            renderModel.Projects[projectIndex] = project with { X = renderModel.CrossProjectConnections.Length == 0 ? left : project.X, Y = renderModel.CrossProjectConnections.Length == 0 ? 40 : project.Y, Width = width, Height = height };
+            left += width + renderModel.Configuration.Architecture.ProjectSpacing;
+        }
+        renderModel.Width = renderModel.Projects.Select(project => project.X + project.Width + 40).DefaultIfEmpty(300).Max();
+        renderModel.Height = renderModel.Projects.Select(project => project.Y + project.Height + 40).DefaultIfEmpty(200).Max();
+    }
+}

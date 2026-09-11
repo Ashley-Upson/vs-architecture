@@ -10,6 +10,31 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class RoslynDependencyAnalyzerTests
 {
     [Fact]
+    public async Task Analyze_requests_one_compilation_per_project()
+    {
+        using var workspace = new AdhocWorkspace();
+        var solution = workspace.CurrentSolution;
+        var firstId = ProjectId.CreateNewId();
+        var secondId = ProjectId.CreateNewId();
+        solution = solution
+            .AddProject(firstId, "First", "First", LanguageNames.CSharp)
+            .AddMetadataReference(firstId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
+            .AddDocument(DocumentId.CreateNewId(firstId), "First.cs", "public class First { }")
+            .AddProject(secondId, "Second", "Second", LanguageNames.CSharp)
+            .AddMetadataReference(secondId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
+            .AddDocument(DocumentId.CreateNewId(secondId), "Second.cs", "public class Second { }");
+        using var session = GenerationPerformanceSession.Start();
+
+        await new RoslynDependencyAnalyzer().AnalyzeAsync(
+            new[] { solution.GetProject(secondId)!, solution.GetProject(firstId)! },
+            DiagramSettings.CreateDefault());
+        var report = session.Snapshot();
+
+        Assert.Equal(2, report.Counters.Single(item => item.Name == "Roslyn compilation requests").Value);
+        Assert.Equal(2, report.Phases.Single(item => item.Phase == "Roslyn compilation acquisition").InvocationCount);
+    }
+
+    [Fact]
     public async Task Analyze_emits_external_boundary_node_for_unselected_project_reference()
     {
         using var workspace = new AdhocWorkspace();
@@ -377,11 +402,11 @@ public sealed class RoslynDependencyAnalyzerTests
         var graph = await new RoslynDependencyAnalyzer().AnalyzeAsync(solution.GetProject(projectId)!, DiagramSettings.CreateDefault());
         var project = Assert.Single(graph.Projects);
         var processing = project.Types.Single(t => t.Name == "CultureProcessingService");
-        var serviceInterface = project.Types.Single(t => t.Name == "ICultureService");
-        var serviceImplementation = project.Types.Single(t => t.Name == "CultureService");
+        var serviceImplementation = project.Types.Single(t => t.Name == "CultureService : ICultureService");
 
         Assert.Contains(graph.Edges, e => e.SourceId == processing.Id && e.TargetId == serviceImplementation.Id);
-        Assert.DoesNotContain(graph.Edges, e => e.SourceId == processing.Id && e.TargetId == serviceInterface.Id);
+        Assert.DoesNotContain(project.Types, t => t.FullName == "Api.ICultureService");
+        Assert.Equal(InterfaceResolutionStatus.Unique, serviceImplementation.InterfaceResolution);
     }
 
     [Fact]

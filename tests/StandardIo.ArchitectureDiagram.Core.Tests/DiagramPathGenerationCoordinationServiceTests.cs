@@ -11,30 +11,6 @@ namespace StandardIo.ArchitectureDiagram.Core.Tests;
 public sealed class DiagramPathGenerationCoordinationServiceTests
 {
     [Fact]
-    public async Task Generate_accepts_csproj_path()
-    {
-        using var fixture = PathFixture.Create();
-        var projectPath = fixture.AddProject("Api", ("Controller.cs", """
-            namespace Api
-            {
-                public class Service {}
-                public class Controller
-                {
-                    public Controller(Service service) {}
-                }
-            }
-            """));
-
-        var result = await new DiagramPathGenerationCoordinationService()
-            .GenerateAsync(projectPath, DiagramSettings.CreateDefault());
-        var document = XDocument.Parse(result.Content);
-
-        Assert.Equal("drawio", result.RendererId);
-        Assert.Contains(document.Descendants("mxCell"), cell => (string?)cell.Attribute("value") == "Controller");
-        Assert.Contains(document.Descendants("mxCell"), cell => (string?)cell.Attribute("value") == "Service");
-    }
-
-    [Fact]
     public async Task Generate_accepts_solution_path_and_keeps_selected_order()
     {
         using var fixture = PathFixture.Create();

@@ -1,0 +1,196 @@
+{
+  "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+  "Path": "",
+  "Types": [
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "FrameworkType": "Interface",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateSchoolDataContext"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateSchoolDataContext"
+        }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "System.String",
+          "Name": "SchoolId"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent[]",
+          "Name": "Students"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+          "Name": "Teacher"
+        },
+        {
+          "Type": "System.String",
+          "Name": "TeacherId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "ClassId"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+          "Name": "Student"
+        },
+        {
+          "Type": "System.String",
+          "Name": "StudentId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class[]",
+          "Name": "Classes"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student[]",
+          "Name": "Students"
+        },
+        {
+          "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher[]",
+          "Name": "Teachers"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent>",
+          "Name": "ClassStudents"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class>",
+          "Name": "Classes"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School>",
+          "Name": "Schools"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student>",
+          "Name": "Students"
+        },
+        {
+          "Type": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher>",
+          "Name": "Teachers"
+        }
+      ],
+      "Methods": [
+        {
+          "Name": "OnModelCreating"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Name"
+        },
+        {
+          "Type": "System.String",
+          "Name": "SchoolId"
+        }
+      ],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+      "FrameworkType": "Class",
+      "IsInternal": true,
+      "Fields": [],
+      "Properties": [
+        {
+          "Type": "System.String",
+          "Name": "Id"
+        },
+        {
+          "Type": "System.String",
+          "Name": "Name"
+        },
+        {
+          "Type": "System.String",
+          "Name": "SchoolId"
+        }
+      ],
+      "Methods": []
+    }
+  ],
+  "Dependencies": [
+    {
+      "DependencyType": "Inheritance",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "FromMethod": null,
+      "ToMethod": null
+    }
+  ]
+}

@@ -24,7 +24,19 @@
       <Button guid="guidArchitectureDiagramCommandSet" id="GenerateDiagramCommand" priority="0x0100" type="Button">
         <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramProjectGroup" />
         <Strings>
-          <ButtonText>Generate Draw.io Architecture Diagram</ButtonText>
+          <ButtonText>Generate Diagrams</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidArchitectureDiagramCommandSet" id="GenerateArchitectureDiagramCommand" priority="0x00e0" type="Button">
+        <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramProjectGroup" />
+        <Strings>
+          <ButtonText>Generate Architecture Diagram</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidArchitectureDiagramCommandSet" id="GenerateDataModelDiagramCommand" priority="0x00f0" type="Button">
+        <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramProjectGroup" />
+        <Strings>
+          <ButtonText>Generate Data Model Diagram</ButtonText>
         </Strings>
       </Button>
       <Button guid="guidArchitectureDiagramCommandSet" id="OpenSettingsCommand" priority="0x0100" type="Button">
@@ -51,6 +63,24 @@
     <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateDiagramCommand" priority="0x0100">
       <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramSolutionGroup" />
     </CommandPlacement>
+    <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateArchitectureDiagramCommand" priority="0x00e0">
+      <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramSolutionGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateArchitectureDiagramCommand" priority="0x00e0">
+      <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramSolutionFolderGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateArchitectureDiagramCommand" priority="0x00e0">
+      <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramFolderGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateDataModelDiagramCommand" priority="0x00f0">
+      <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramSolutionGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateDataModelDiagramCommand" priority="0x00f0">
+      <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramSolutionFolderGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateDataModelDiagramCommand" priority="0x00f0">
+      <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramFolderGroup" />
+    </CommandPlacement>
     <CommandPlacement guid="guidArchitectureDiagramCommandSet" id="GenerateDiagramCommand" priority="0x0100">
       <Parent guid="guidArchitectureDiagramCommandSet" id="ArchitectureDiagramSolutionFolderGroup" />
     </CommandPlacement>
@@ -70,6 +100,8 @@
       <IDSymbol name="OpenSettingsCommand" value="0x0101" />
       <IDSymbol name="ExportSettingsCommand" value="0x0102" />
       <IDSymbol name="ImportSettingsCommand" value="0x0103" />
+      <IDSymbol name="GenerateArchitectureDiagramCommand" value="0x0104" />
+      <IDSymbol name="GenerateDataModelDiagramCommand" value="0x0105" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>
