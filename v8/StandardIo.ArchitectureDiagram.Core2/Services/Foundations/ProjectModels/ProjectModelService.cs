@@ -18,7 +18,7 @@ internal sealed class ProjectModelService : IProjectModelService
             .ToArray(), Methods = (type.Methods ?? Array.Empty<Method>()).Select(selector: method => new Method { Name = method.Name })
             .ToArray() })
             .ToArray(),
-        Dependencies = dependencies.Select(selector: dependency => new TypeRelationship { DependencyType = dependency.DependencyType, FromType = dependency.FromType, ToType = dependency.ToType, FromMethod = dependency.FromMethod, ToMethod = dependency.ToMethod, ExecutorType = dependency.ExecutorType, RegistrationType = dependency.RegistrationType, IsInjected = dependency.IsInjected })
+        Dependencies = dependencies.Select(selector: dependency => new TypeRelationship { DependencyType = dependency.DependencyType, FromType = dependency.FromType, ToType = dependency.ToType, FromMethod = dependency.FromMethod, ToMethod = dependency.ToMethod })
             .ToArray()
     };
 }

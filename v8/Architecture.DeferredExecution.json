@@ -1,7 +1,0 @@
-{
-  "ColourLines": true,
-  "Architecture": {
-    "InlineExternals": true,
-    "DeferredExecutionSupport": true
-  }
-}

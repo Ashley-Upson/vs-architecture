@@ -85,7 +85,7 @@ public sealed partial class TreePresentationTests
         var model = Model("First", "Second", "Hub", "Context");
         model.Dependencies = new[] { Link("First", "Hub"), Link("First", "Context"), Link("Second", "Hub"), Link("Second", "Context") };
         var cells = Render(model);
-        Assert.Equal(240, Math.Abs(Centre(Node(cells, "Second")) - Centre(Node(cells, "First"))));
+        Assert.Equal(270, Math.Abs(Centre(Node(cells, "Second")) - Centre(Node(cells, "First"))));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed partial class TreePresentationTests
         double parentCentre = (Centre(Node(cells, "First")) + Centre(Node(cells, "Second"))) / 2;
         double hub = Centre(Node(cells, "Hub")), context = Centre(Node(cells, "Context"));
         Assert.Equal(parentCentre, (hub + context) / 2);
-        Assert.True(Math.Abs(hub - context) >= 240);
+        Assert.True(Math.Abs(hub - context) >= 270);
     }
 
     [Fact]
@@ -215,11 +215,11 @@ public sealed partial class TreePresentationTests
         XElement[] cells = Render(model: model);
         // Then
         Assert.Equal(expected: Centre(node: Node(cells: cells, name: "Root")), actual: (Centre(node: Node(cells: cells, name: "A")) + Centre(node: Node(cells: cells, name: "C"))) / 2);
-        Assert.Equal(expected: 240, actual: Centre(node: Node(cells: cells, name: "C")) - Centre(node: Node(cells: cells, name: "B")));
+        Assert.Equal(expected: 270, actual: Centre(node: Node(cells: cells, name: "C")) - Centre(node: Node(cells: cells, name: "B")));
         Assert.Equal(expected: Centre(node: Node(cells: cells, name: "A")), actual: (Centre(node: Node(cells: cells, name: "A1")) + Centre(node: Node(cells: cells, name: "A3"))) / 2);
         Assert.Equal(expected: Centre(node: Node(cells: cells, name: "B")), actual: Centre(node: Node(cells: cells, name: "B1")));
-        Assert.True(condition: Centre(node: Node(cells: cells, name: "A3")) + 240 <= Centre(node: Node(cells: cells, name: "B1")));
-        Assert.True(condition: Centre(node: Node(cells: cells, name: "B")) - Centre(node: Node(cells: cells, name: "A")) > 240);
+        Assert.True(condition: Centre(node: Node(cells: cells, name: "A3")) + 270 <= Centre(node: Node(cells: cells, name: "B1")));
+        Assert.True(condition: Centre(node: Node(cells: cells, name: "B")) - Centre(node: Node(cells: cells, name: "A")) > 270);
     }
 
     [Fact]

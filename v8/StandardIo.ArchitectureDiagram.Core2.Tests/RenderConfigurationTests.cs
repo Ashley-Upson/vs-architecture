@@ -23,9 +23,9 @@ public sealed class RenderConfigurationTests
         Assert.Equal(10, first.HorizontalOffset);
         Assert.Equal(1000, first.MaxLayoutIterations);
         Assert.Equal(160, first.Architecture.RowDepth);
-        Assert.Equal(180, first.Architecture.NodeWidth);
+        Assert.Equal(210, first.Architecture.NodeWidth);
         Assert.Equal(60, first.Architecture.NodeSpacing);
-        Assert.Equal(100, first.Architecture.ProjectSpacing);
+        Assert.Equal(150, first.Architecture.ProjectSpacing);
         Assert.False(first.ColourLines);
         Assert.False(first.NoDuplicates);
         Assert.NotNull(first.CallChain);

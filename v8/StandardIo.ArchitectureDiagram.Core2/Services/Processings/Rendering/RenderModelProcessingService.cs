@@ -7,7 +7,7 @@ using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Rendering;
-internal sealed class RenderModelProcessingService(IProjectModelCompositionProcessingService compositionService, IDeferredExecutionRenderModelProcessingService deferredExecutionService) : IRenderModelProcessingService
+internal sealed class RenderModelProcessingService(IProjectModelCompositionProcessingService compositionService) : IRenderModelProcessingService
 {
     public RenderModel PrepareRenderModel(RenderModel renderModel)
     {
@@ -67,8 +67,6 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
             index < renderModel.ProjectModels.Length && (renderModel.ProjectModels[index].Types?.Length ?? 0) == 0).ToArray();
         renderModel.Projects = projects;
         renderModel.CrossProjectConnections = crossProjectConnections.ToArray();
-        deferredExecutionService.Apply(renderModel);
-        projects = renderModel.Projects;
         renderModel.Width = projects.Select(project => project.X + project.Width + 40).DefaultIfEmpty(300).Max();
         renderModel.Height = projects.Select(project => project.Y + project.Height + 40).DefaultIfEmpty(200).Max();
         return renderModel;

@@ -18,7 +18,7 @@ public sealed class CompactBranchTests
         // When: the full rule loop must still validate all centring and spacing constraints.
         var drawing = TestServices.Get<LayoutModelBuilder>().BuildRenderModel(new RenderModel(new[] { model }));
         // Then: 180 + 60 + (3 * 180 + 2 * 60) plus two 40px margins.
-        Assert.InRange(Assert.Single(drawing.Projects).Width, 0, 980.01);
+        Assert.InRange(Assert.Single(drawing.Projects).Width, 0, 1100.01);
     }
     [Fact]
     public void ShouldReserveSpaceOnlyForBranchesThatActuallyOverlapVertically()

@@ -63,7 +63,7 @@ internal partial class RoslynBroker
         }
     }
 
-    public IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType, INamedTypeSymbol? ExecutorType, INamedTypeSymbol? RegistrationType)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
+    public IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
     {
         var calls = GetRawCalls(compilation: compilation, type: type, cancellationToken: cancellationToken)
             .ToArray();
@@ -78,8 +78,8 @@ internal partial class RoslynBroker
 
         foreach (IMethodSymbol? entry in entries)
         {
-            var pending = new Queue<(IMethodSymbol Target, INamedTypeSymbol DependencyType, INamedTypeSymbol? ExecutorType, INamedTypeSymbol? RegistrationType)>(collection: calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller, y: entry))
-                .Select(selector: call => (call.Target, call.DependencyType, call.ExecutorType, call.RegistrationType)));
+            var pending = new Queue<(IMethodSymbol Target, INamedTypeSymbol DependencyType)>(collection: calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller, y: entry))
+                .Select(selector: call => (call.Target, call.DependencyType)));
 
             var visitedHelpers = new HashSet<IMethodSymbol>(comparer: SymbolEqualityComparer.Default);
 
@@ -105,7 +105,7 @@ internal partial class RoslynBroker
 
                     foreach (var helperCall in calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller?.OriginalDefinition, y: target.OriginalDefinition)))
                     {
-                        pending.Enqueue(item: (helperCall.Target, helperCall.DependencyType, helperCall.ExecutorType ?? call.ExecutorType, helperCall.RegistrationType ?? call.RegistrationType));
+                        pending.Enqueue(item: (helperCall.Target, helperCall.DependencyType));
                     }
 
                     continue;
@@ -116,13 +116,13 @@ internal partial class RoslynBroker
 
                 if (resolved.Length == 0)
                 {
-                    yield return (entry, target.OriginalDefinition, call.DependencyType.OriginalDefinition, call.ExecutorType, call.RegistrationType);
+                    yield return (entry, target.OriginalDefinition, call.DependencyType.OriginalDefinition);
                 }
                 else
                 {
                     foreach (IMethodSymbol implementation in resolved)
                     {
-                        yield return (entry, implementation.OriginalDefinition, implementation.ContainingType.OriginalDefinition, call.ExecutorType, call.RegistrationType);
+                        yield return (entry, implementation.OriginalDefinition, implementation.ContainingType.OriginalDefinition);
                     }
                 }
             }
@@ -177,7 +177,7 @@ internal partial class RoslynBroker
         return implementation;
     }
 
-    private IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType, INamedTypeSymbol? ExecutorType, INamedTypeSymbol? RegistrationType)> GetRawCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
+    private IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType)> GetRawCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
     {
         foreach (var declaration in type.DeclaringSyntaxReferences)
         {
@@ -226,8 +226,7 @@ internal partial class RoslynBroker
                     };
                 var receiverType = !target.IsStatic && target.ContainingType.TypeKind == TypeKind.Class
                     && receiver is INamedTypeSymbol { TypeKind: TypeKind.Class } namedReceiver ? namedReceiver : null;
-                foreach (var executor in GetCallbackExecutors(compilation, type, invocation, semanticModel, cancellationToken).DefaultIfEmpty())
-                    yield return (caller, target, GetCollectionOwner(invocation, semanticModel) ?? receiverType ?? target.ContainingType, executor.Executor, executor.Registration);
+                yield return (caller, target, GetCollectionOwner(invocation, semanticModel) ?? receiverType ?? target.ContainingType);
             }
         }
     }

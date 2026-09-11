@@ -14,7 +14,7 @@ internal interface IRoslynBroker
 
     IEnumerable<INamedTypeSymbol> GetBaseTypes(INamedTypeSymbol type);
 
-    IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType, INamedTypeSymbol? ExecutorType, INamedTypeSymbol? RegistrationType)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken);
+    IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken);
 
     Task<Compilation> LoadCompilationAsync(string projectFilePath, CancellationToken cancellationToken);
 

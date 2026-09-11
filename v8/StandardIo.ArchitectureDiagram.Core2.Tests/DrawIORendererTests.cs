@@ -301,7 +301,7 @@ public sealed partial class DrawIORendererTests
             .Last()), actual: nodes.Select(selector: node => (string? )node.Attribute(name: "value")));
 
         Assert.Equal(expected: names, actual: nodes.Select(selector: node => (string? )node.Attribute(name: "typeName")));
-        Assert.All(collection: nodes, action: node => Assert.Equal(expected: 180, actual: Number(cell: node, name: "width")));
+        Assert.All(collection: nodes, action: node => Assert.Equal(expected: 210, actual: Number(cell: node, name: "width")));
 
         Assert.Equal(expected: 5, actual: nodes.Select(selector: node => ((string)node.Attribute(name: "style")!).Split(separator: ';')
             .Single(predicate: part => part.StartsWith(value: "fillColor=")))

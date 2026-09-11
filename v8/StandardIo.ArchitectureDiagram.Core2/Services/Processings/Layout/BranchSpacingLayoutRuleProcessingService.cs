@@ -10,6 +10,11 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
 {
     public void ApplyRule(RenderModel renderModel)
     {
+        ArrangeBranches(renderModel, reclaimSpace: false);
+    }
+
+    internal static void ArrangeBranches(RenderModel renderModel, bool reclaimSpace)
+    {
         foreach (var project in renderModel.Projects)
         {
             // Finish descendants before reserving their entire branch bounds. Shared nodes
@@ -36,7 +41,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top)
                         .Select(branch => branch.Right + spacing).DefaultIfEmpty(left).Max();
-                    double delta = Math.Max(0, next - left);
+                    double delta = reclaimSpace ? next - left : Math.Max(0, next - left);
                     foreach (string id in branches[root]) LayoutGraph.Move(project, id, delta);
                     placed.Add((left + delta, right + delta, top, bottom));
                 }

@@ -42,7 +42,7 @@ internal sealed class ProjectDependenciesService : IProjectDependenciesService
 
             foreach (var call in roslynBroker.GetCalls(compilation: compilation, type: type, cancellationToken: cancellationToken))
             {
-                dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = fromType, ToType = roslynBroker.GetTypeName(type: call.DependencyType.OriginalDefinition), FromMethod = call.Caller?.Name, ToMethod = call.Target.Name, ExecutorType = call.ExecutorType is null ? null : roslynBroker.GetTypeName(call.ExecutorType.OriginalDefinition), RegistrationType = call.RegistrationType is null ? null : roslynBroker.GetTypeName(call.RegistrationType.OriginalDefinition), IsInjected = call.ExecutorType is not null && type.InstanceConstructors.SelectMany(constructor => constructor.Parameters).Any(parameter => SymbolEqualityComparer.Default.Equals(parameter.Type.OriginalDefinition, call.DependencyType.OriginalDefinition) || call.DependencyType.AllInterfaces.Any(contract => SymbolEqualityComparer.Default.Equals(contract.OriginalDefinition, parameter.Type.OriginalDefinition))) });
+                dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = fromType, ToType = roslynBroker.GetTypeName(type: call.DependencyType.OriginalDefinition), FromMethod = call.Caller?.Name, ToMethod = call.Target.Name });
             }
         }
 

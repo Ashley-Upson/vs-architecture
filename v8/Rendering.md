@@ -160,7 +160,7 @@ The shared layout stages are:
    nodes at the midpoint of their full parent span and carries their descendants with
    them. Neighbours whose preferred positions conflict are spaced around those positions;
    minimum spacing takes precedence over exact centring when both cannot be satisfied.
-   Container bounds expand when needed. Nodes are 180 by 60 units, with minimum
+   Container bounds expand when needed. Nodes are 210 by 60 units, with minimum
    horizontal gaps of 60 and vertical gutters of 100.
 4. Place trees side by side, with 80-unit container gaps and a shared top edge. Containers
    have grey fills and top-left white labels. Full names remain identity metadata;
@@ -373,9 +373,9 @@ Shared configuration contains `NoDuplicates`, `HorizontalOffset` (10px), `Colour
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | RowDepth | 160 | Top-to-top distance between node rows; node height remains 60px. |
-| NodeWidth | 180 | Width of every type node. |
+| NodeWidth | 210 | Width of every type node. |
 | NodeSpacing | 60 | Minimum horizontal gap between nodes and their owned branches. Descendant space and shared parents can require larger gaps. |
-| ProjectSpacing | 100 | Minimum gap between project boxes, horizontally or vertically. Previously independent boxes used 80px and project siblings used 60px; this now consistently uses the existing 100px project-row gap. |
+| ProjectSpacing | 150 | Minimum gap between project boxes, horizontally or vertically. |
 | LayerColours | Current seven colours | Ordered palette: orchestration, processing, foundation, broker, exposure, other internal, external. |
 
 `CallChain` and `DataModel` have their own empty configuration objects ready for their future specialised layouts. Enum names are `Architecture`, `CallChain`, `DataModel`; the CLI also accepts the previous `Data` spelling. This change does not add those specialised diagram implementations.
@@ -434,3 +434,7 @@ dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture "path/to/proj
 
 Set InlineExternals to false to restore the per-tree external boxes. Data-only
 source trees and empty external containers do not create empty architecture boxes.
+
+### Layout cleanup and built-in types
+
+After branch placement and parent centring, the cleanup rule packs completed branches using the same ownership and clearance constraints. It reclaims excess horizontal gaps before bounds and routes are computed. Architecture views omit `System.*` nodes and their connections; raw extraction remains available for other diagram types. Draw.io output disables grid and page view. Deferred-execution rendering has been rolled back.

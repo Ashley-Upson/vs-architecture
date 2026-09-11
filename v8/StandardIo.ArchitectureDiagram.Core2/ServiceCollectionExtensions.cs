@@ -56,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ILayoutRuleProcessingService, SharedParentCentringLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, BranchSpacingLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, ParentCentringLayoutRuleProcessingService>();
+        services.AddTransient<ILayoutRuleProcessingService, LayoutCleanupRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, BoundsLayoutRuleProcessingService>();
         services.AddTransient<DepthLayoutRuleProcessingService>();
         services.AddTransient<ParentCentringLayoutRuleProcessingService>();
@@ -76,7 +77,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IProjectProcessingService, ProjectProcessingService>();
         services.AddTransient<IProjectModelCompositionProcessingService, ProjectModelCompositionProcessingService>();
         services.AddTransient<IRenderModelProcessingService, RenderModelProcessingService>();
-        services.AddTransient<IDeferredExecutionRenderModelProcessingService, DeferredExecutionRenderModelProcessingService>();
         services.AddTransient<ILayoutOrchestrationService, LayoutOrchestrationService>();
         services.AddTransient(implementationFactory: provider => new LayoutModelBuilder(provider.GetRequiredService<ILayoutOrchestrationService>()));
         services.AddTransient<IHtmlModelPreparationBroker, HtmlModelPreparationBroker>();

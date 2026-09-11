@@ -15,7 +15,7 @@ internal sealed class RoutingLayoutRuleProcessingService : ILayoutRuleProcessing
         {
             var model = LayoutGraph.ToProjectModel(project);
             var drawing = new ProjectModelDrawing(project.Id, model, project.X, project.Width, project.Height,
-                project.Nodes.Select(node => new DrawingNode(node.Id, new DefinedType { Name = LayoutGraph.LayoutName(node) }, node.Label, node.X, node.Y, node.Width, node.Height)).ToArray());
+                project.Nodes.Select(node => new DrawingNode(node.Id, new DefinedType { Name = node.TypeName }, node.Label, node.X, node.Y, node.Width, node.Height)).ToArray());
             var routes = DiagramRouting.CreateRoutes(drawing, renderModel.Configuration);
             for (int index = 0; index < routes.Length; index++)
                 project.Connections[index] = project.Connections[index] with { Points = routes[index].Points };

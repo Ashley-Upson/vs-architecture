@@ -17,7 +17,7 @@ internal sealed class DepthLayoutRuleProcessingService : ILayoutRuleProcessingSe
             for (int index = 0; index < project.Nodes.Length; index++)
             {
                 var node = project.Nodes[index];
-                project.Nodes[index] = node with { Y = 60 + depths[LayoutGraph.LayoutName(node)] * renderModel.Configuration.Architecture.RowDepth };
+                project.Nodes[index] = node with { Y = 60 + depths[node.TypeName] * renderModel.Configuration.Architecture.RowDepth };
             }
         }
     }
