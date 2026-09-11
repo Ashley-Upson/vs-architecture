@@ -15,7 +15,8 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
         renderModel.ProjectLayoutInitialized = false;
         var drawings = new List<ProjectModelDrawing>();
         double x = 40;
-        foreach (var presentation in compositionService.Prepare(renderModel.ProjectModels, renderModel.DiagramType))
+        var presentations = compositionService.Prepare(renderModel);
+        foreach (var presentation in presentations)
         {
             string id = "tree-" + drawings.Count;
             var drawing = new ProjectModelDrawing(id, presentation.Model, x, 300, 120,
@@ -46,7 +47,9 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
             {
                 var source = local[link.FromType!];
                 var target = local.TryGetValue(link.ToType!, out var localTarget) ? localTarget
-                    : projects.SelectMany(candidate => candidate.Nodes).First(node => node.TypeName == link.ToType);
+                    : projects.Where((candidate, index) => presentations[index].SourceTreeIndex is null
+                        || presentations[index].SourceTreeIndex == projectIndex)
+                        .SelectMany(candidate => candidate.Nodes).First(node => node.TypeName == link.ToType);
                 var connection = new RenderConnection(project.Id + "-edge-" + (connections.Count + crossProjectConnections.Count),
                     source.Id, target.Id, source.TypeName, target.TypeName, link.DependencyType == DependencyType.Inheritance,
                     Array.Empty<DrawingPoint>(), configuration.ColourLines ? target.Fill : "#d1d5db");

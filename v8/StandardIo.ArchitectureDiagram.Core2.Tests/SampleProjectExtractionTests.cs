@@ -153,15 +153,22 @@ public sealed partial class SampleProjectExtractionTests
         // Then: interface definitions become class labels; unique concrete type relationships remain exact.
 
         Assert.Equal(expected: 8, actual: expectedTrees.Length);
-        Assert.Equal(expected: 10, actual: cells.Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
+        Assert.Equal(expected: 20, actual: cells.Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
 
         var allNames = cells.Where(cell => cell.Attribute("typeName") != null)
             .ToDictionary(cell => (string)cell.Attribute("id")!, cell => (string)cell.Attribute("typeName")!);
         foreach (var boundary in expected.Types!.Where(type => !type.IsInternal))
         {
-            var node = Assert.Single(cells, cell => (string?)cell.Attribute("typeName") == boundary.Name);
-            var container = Assert.Single(cells, cell => (string?)cell.Attribute("id") == (string?)node.Attribute("parent"));
-            Assert.Equal(boundary.AssemblyName + " (external)", (string?)container.Attribute("value"));
+            var copies = cells.Where(cell => (string?)cell.Attribute("typeName") == boundary.Name).ToArray();
+            int consumers = expectedTrees.Count(tree => tree.Dependencies!.Any(link =>
+                link.DependencyType == DependencyType.Consumed && link.ToType == boundary.Name));
+            Assert.Equal(consumers, copies.Length);
+            Assert.Equal(copies.Length, copies.Select(node => (string?)node.Attribute("parent")).Distinct().Count());
+            foreach (var node in copies)
+            {
+                var container = Assert.Single(cells, cell => (string?)cell.Attribute("id") == (string?)node.Attribute("parent"));
+                Assert.Equal(boundary.AssemblyName + " (external)", (string?)container.Attribute("value"));
+            }
         }
 
         for (int index = 0; index < expectedTrees.Length; index++)
@@ -293,7 +300,7 @@ public sealed partial class SampleProjectExtractionTests
 
         if (format == "drawio")
         {
-            Assert.Equal(expected: noDuplicates ? 3 : 10, actual: document.Descendants(name: "mxCell")
+            Assert.Equal(expected: noDuplicates ? 3 : 20, actual: document.Descendants(name: "mxCell")
                 .Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
 
             Assert.Equal(expected: noDuplicates ? 62 : 107, actual: document.Descendants(name: "mxCell")
@@ -303,10 +310,10 @@ public sealed partial class SampleProjectExtractionTests
         {
             System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
 
-            Assert.Equal(expected: noDuplicates ? 3 : 10, actual: document.Descendants(name: svg + "g")
+            Assert.Equal(expected: noDuplicates ? 3 : 20, actual: document.Descendants(name: svg + "g")
                 .Count(predicate: group => group.Attribute(name: "id")is not null));
 
-            Assert.Equal(expected: noDuplicates ? 52 : 87, actual: document.Descendants(name: svg + "g")
+            Assert.Equal(expected: noDuplicates ? 52 : 102, actual: document.Descendants(name: svg + "g")
                 .Count(predicate: group => group.Attribute(name: "data-type")is not null));
 
             Assert.Equal(expected: noDuplicates ? 62 : 107, actual: document.Descendants(name: svg + "polyline")

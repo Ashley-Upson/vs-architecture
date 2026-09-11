@@ -9,11 +9,20 @@ dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture v8/StandardIo
 dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture v8/StandardIo.ArchitectureDiagram.SampleProject/StandardIo.ArchitectureDiagram.SampleProject.csproj --output Test.html --format html
 ```
 
-Use `--noduplicates` to bypass the splitter: each original project model goes directly
-to rendering, with one box per project and one occurrence of each type within that project.
-Without the flag, splitting remains enabled and shared dependencies can appear in multiple
-tree boxes. The layout service already arranges multiple roots inside a project box.
-This does not deduplicate shared types across separate project models.
+The two architecture views serve different purposes:
+
+- With `--noduplicates`, splitting is bypassed. The combined project graph shows
+  shared dependencies across the mapped codebase, including one global external
+  box per assembly.
+- Without the flag, each identified root is expanded into its own tree. Each tree
+  receives its own external assembly boxes, containing only the external types
+  that tree uses. A type appears once per tree, and links resolve to that tree's
+  external copy. This supports examining one execution tree in isolation.
+
+External scoping happens during shared rendering preparation, so HTML and Draw.io
+use identical ownership and link endpoints. It does not change extraction or the
+splitter's models. Types defined in another mapped source project still belong to
+that source project; they are not treated as external assembly copies.
 
 Multiple csproj paths are supported. `-o` aliases `--output`; `-f` aliases `--format`.
 Without an explicit format, Draw.io is used. Pass `--format html` for HTML output.

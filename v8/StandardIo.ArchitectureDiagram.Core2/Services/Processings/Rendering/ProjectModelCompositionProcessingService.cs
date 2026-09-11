@@ -8,7 +8,28 @@ using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Rendering;
 internal sealed class ProjectModelCompositionProcessingService(IProjectModelPresentationService presentationService) : IProjectModelCompositionProcessingService
 {
-    public ProjectModelPresentation[] Prepare(ProjectModel[] projectModels, DiagramTypes diagramType)
+    public ProjectModelPresentation[] Prepare(RenderModel renderModel)
+    {
+        var presentations = PrepareProjects(renderModel.ProjectModels, renderModel.DiagramType);
+        if (renderModel.Configuration.NoDuplicates) return presentations;
+
+        var sources = presentations.Take(renderModel.ProjectModels.Length).ToArray();
+        var externalProjects = presentations.Skip(renderModel.ProjectModels.Length).ToArray();
+        var scopedExternals = sources.SelectMany((source, index) =>
+        {
+            var destinations = source.Model.Dependencies!.Select(link => link.ToType!).ToHashSet(StringComparer.Ordinal);
+            return externalProjects.Select(external => new ProjectModelPresentation(new ProjectModel
+            {
+                Name = external.Model.Name,
+                Path = external.Model.Path,
+                Types = external.Model.Types!.Where(type => destinations.Contains(type.Name!)).ToArray(),
+                Dependencies = Array.Empty<TypeRelationship>()
+            }, external.Labels) { SourceTreeIndex = index }).Where(external => external.Model.Types!.Length > 0);
+        });
+        return sources.Concat(scopedExternals).ToArray();
+    }
+
+    private ProjectModelPresentation[] PrepareProjects(ProjectModel[] projectModels, DiagramTypes diagramType)
     {
         foreach (var model in projectModels) ArgumentNullException.ThrowIfNull(model);
         var sourceNames = projectModels.SelectMany(model => model.Types ?? Array.Empty<DefinedType>())
