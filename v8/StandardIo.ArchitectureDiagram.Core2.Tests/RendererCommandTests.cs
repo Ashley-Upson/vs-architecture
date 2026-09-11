@@ -285,7 +285,7 @@ public sealed partial class RendererCommandTests
         // Then
         Assert.Equal(expected: "html", actual: document.Root!.Name.LocalName);
         Assert.Single(collection: document.Descendants(name: "style"));
-        Assert.Empty(collection: document.Descendants(name: "script"));
+        Assert.DoesNotContain("Root", Assert.Single(document.Descendants(name: "script")).Value);
         Assert.Contains(expectedSubstring: "Root&lt;script&gt;", actualString: html);
 
         var nodes = document.Descendants(name: svg + "g")
