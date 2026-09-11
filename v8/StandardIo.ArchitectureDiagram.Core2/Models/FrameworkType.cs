@@ -5,5 +5,7 @@ namespace StandardIo.ArchitectureDiagram.Core2.Models;
 public enum FrameworkType
 {
     Class,
-    Interface
+    Interface,
+    Struct,
+    Enum
 }

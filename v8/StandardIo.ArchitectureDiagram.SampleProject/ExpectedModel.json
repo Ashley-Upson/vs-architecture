@@ -26,6 +26,9 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker"
       ]
     },
     {
@@ -52,6 +55,9 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker"
       ]
     },
     {
@@ -183,6 +189,9 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker"
       ]
     },
     {
@@ -209,6 +218,9 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker"
       ]
     },
     {
@@ -235,6 +247,9 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker"
       ]
     },
     {
@@ -261,6 +276,9 @@
         {
           "Name": "UpdateClass"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker"
       ]
     },
     {
@@ -287,6 +305,9 @@
         {
           "Name": "UpdateClassStudent"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker"
       ]
     },
     {
@@ -442,6 +463,9 @@
         {
           "Name": "UpdateSchool"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker"
       ]
     },
     {
@@ -454,6 +478,9 @@
         {
           "Name": "Read"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker"
       ]
     },
     {
@@ -480,6 +507,9 @@
         {
           "Name": "UpdateStudent"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker"
       ]
     },
     {
@@ -492,6 +522,9 @@
         {
           "Name": "Read"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker"
       ]
     },
     {
@@ -518,6 +551,9 @@
         {
           "Name": "UpdateTeacher"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker"
       ]
     },
     {
@@ -527,7 +563,11 @@
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": []
+      "Methods": [
+        {
+          "Name": "CreateSchoolDataContext"
+        }
+      ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
@@ -536,7 +576,11 @@
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": []
+      "Methods": [
+        {
+          "Name": "OnModelCreating"
+        }
+      ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
@@ -562,6 +606,9 @@
         {
           "Name": "UpdateClassAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager"
       ]
     },
     {
@@ -588,6 +635,9 @@
         {
           "Name": "UpdateClassStudentAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager"
       ]
     },
     {
@@ -734,6 +784,9 @@
         {
           "Name": "ImportSchool"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager"
       ]
     },
     {
@@ -760,6 +813,9 @@
         {
           "Name": "UpdateSchoolAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager"
       ]
     },
     {
@@ -772,6 +828,9 @@
         {
           "Name": "CreateReport"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager"
       ]
     },
     {
@@ -798,6 +857,9 @@
         {
           "Name": "UpdateStudentAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager"
       ]
     },
     {
@@ -824,6 +886,9 @@
         {
           "Name": "UpdateTeacherAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager"
       ]
     },
     {
@@ -881,6 +946,9 @@
         {
           "Name": "ImportSchool"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService"
       ]
     },
     {
@@ -907,6 +975,9 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService"
       ]
     },
     {
@@ -933,6 +1004,9 @@
         {
           "Name": "UpdateClass"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService"
       ]
     },
     {
@@ -959,6 +1033,9 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService"
       ]
     },
     {
@@ -985,6 +1062,9 @@
         {
           "Name": "UpdateClassStudent"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService"
       ]
     },
     {
@@ -1233,6 +1313,9 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService"
       ]
     },
     {
@@ -1259,6 +1342,9 @@
         {
           "Name": "UpdateSchool"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService"
       ]
     },
     {
@@ -1285,6 +1371,9 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService"
       ]
     },
     {
@@ -1297,6 +1386,9 @@
         {
           "Name": "Read"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService"
       ]
     },
     {
@@ -1323,6 +1415,9 @@
         {
           "Name": "UpdateStudent"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService"
       ]
     },
     {
@@ -1349,6 +1444,9 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService"
       ]
     },
     {
@@ -1375,6 +1473,9 @@
         {
           "Name": "UpdateTeacher"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService"
       ]
     },
     {
@@ -1405,6 +1506,9 @@
         {
           "Name": "UpdateClassAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService"
       ]
     },
     {
@@ -1435,6 +1539,9 @@
         {
           "Name": "UpdateClassStudentAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService"
       ]
     },
     {
@@ -1570,6 +1677,9 @@
         {
           "Name": "UpdateSchoolAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService"
       ]
     },
     {
@@ -1600,6 +1710,9 @@
         {
           "Name": "UpdateStudentAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService"
       ]
     },
     {
@@ -1630,6 +1743,9 @@
         {
           "Name": "UpdateTeacherAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
       ]
     },
     {
@@ -1656,6 +1772,9 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService"
       ]
     },
     {
@@ -1682,6 +1801,9 @@
         {
           "Name": "UpdateClass"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService"
       ]
     },
     {
@@ -1708,6 +1830,9 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService"
       ]
     },
     {
@@ -1734,6 +1859,9 @@
         {
           "Name": "UpdateClassStudent"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService"
       ]
     },
     {
@@ -1994,6 +2122,9 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService"
       ]
     },
     {
@@ -2020,6 +2151,9 @@
         {
           "Name": "UpdateSchool"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService"
       ]
     },
     {
@@ -2032,6 +2166,9 @@
         {
           "Name": "CreateReport"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService"
       ]
     },
     {
@@ -2058,6 +2195,9 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService"
       ]
     },
     {
@@ -2084,6 +2224,9 @@
         {
           "Name": "UpdateStudent"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService"
       ]
     },
     {
@@ -2096,6 +2239,9 @@
         {
           "Name": "CreateReport"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService"
       ]
     },
     {
@@ -2122,6 +2268,9 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService"
       ]
     },
     {
@@ -2148,6 +2297,9 @@
         {
           "Name": "UpdateTeacher"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService"
       ]
     },
     {
@@ -2157,7 +2309,17 @@
       "IsInternal": false,
       "Fields": [],
       "Properties": [],
-      "Methods": []
+      "Methods": [
+        {
+          "Name": "ListenToEvent"
+        },
+        {
+          "Name": "RaiseEventAsync"
+        },
+        {
+          "Name": "RaiseEventsAsync"
+        }
+      ]
     }
   ],
   "Dependencies": [

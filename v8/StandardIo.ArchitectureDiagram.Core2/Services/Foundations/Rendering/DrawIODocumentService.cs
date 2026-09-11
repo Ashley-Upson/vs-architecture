@@ -22,7 +22,7 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
             foreach (RenderNode node in drawing.Nodes)
             {
                 string fill = node.Fill;
-                root.Add(content: new XElement("mxCell", new XAttribute("id", node.Id), new XAttribute("parent", drawing.Id), new XAttribute("value", node.Label), new XAttribute("typeName", node.TypeName), new XAttribute("vertex", "1"), new XAttribute("style", "rounded=0;html=0;whiteSpace=wrap;fontColor=#ffffff;fontSize=12;fillColor=" + fill + ";"), Geometry(x: node.X, y: node.Y, width: node.Width, height: node.Height)));
+                root.Add(content: new XElement("mxCell", new XAttribute("id", node.Id), new XAttribute("parent", drawing.Id), new XAttribute("value", string.Join("<br>", node.TextLines.Select(line => "<span style=\"font-size:" + line.FontSize.ToString(CultureInfo.InvariantCulture) + "px;font-weight:" + (line.Bold ? "bold" : "normal") + "\">" + System.Net.WebUtility.HtmlEncode(line.Text) + "</span>"))), new XAttribute("typeName", node.TypeName), new XAttribute("vertex", "1"), new XAttribute("style", "rounded=0;html=1;whiteSpace=wrap;fontColor=#ffffff;fontSize=12;fillColor=" + fill + ";"), Geometry(x: node.X, y: node.Y, width: node.Width, height: node.Height)));
             }
 
 

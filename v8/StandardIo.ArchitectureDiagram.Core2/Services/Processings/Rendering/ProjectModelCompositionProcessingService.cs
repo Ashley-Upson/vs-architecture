@@ -11,10 +11,25 @@ internal sealed class ProjectModelCompositionProcessingService(IProjectModelPres
     public ProjectModelPresentation[] Prepare(RenderModel renderModel)
     {
         var presentations = PrepareProjects(renderModel.ProjectModels, renderModel.DiagramType);
-        if (renderModel.Configuration.NoDuplicates) return presentations;
+        if (renderModel.Configuration.NoDuplicates) return presentations.Take(renderModel.ProjectModels.Length)
+            .Concat(presentations.Skip(renderModel.ProjectModels.Length).Where(external => external.Model.Types!.Length > 0)).ToArray();
 
         var sources = presentations.Take(renderModel.ProjectModels.Length).ToArray();
         var externalProjects = presentations.Skip(renderModel.ProjectModels.Length).ToArray();
+        if (renderModel.Configuration.Architecture.InlineExternals && renderModel.DiagramType == DiagramTypes.Architecture)
+        {
+            return sources.Select(source =>
+            {
+                var destinations = source.Model.Dependencies!.Select(link => link.ToType!).ToHashSet(StringComparer.Ordinal);
+                var externalTypes = externalProjects.SelectMany(external => external.Model.Types!)
+                    .Where(type => destinations.Contains(type.Name!)).DistinctBy(type => type.Name).ToArray();
+                return new ProjectModelPresentation(new ProjectModel
+                {
+                    Name = source.Model.Name, Path = source.Model.Path,
+                    Types = source.Model.Types!.Concat(externalTypes).ToArray(), Dependencies = source.Model.Dependencies
+                }, source.Labels);
+            }).ToArray();
+        }
         var scopedExternals = sources.SelectMany((source, index) =>
         {
             var destinations = source.Model.Dependencies!.Select(link => link.ToType!).ToHashSet(StringComparer.Ordinal);

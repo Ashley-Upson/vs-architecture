@@ -130,7 +130,7 @@ public sealed partial class DrawIORendererTests
     }
 
     [Fact]
-    public void ShouldKeepCyclesInheritanceAndDisconnectedNodes()
+    public void ShouldKeepConsumedCyclesAndDescribeInheritanceInLabels()
     {
         // Given
         ProjectModel model = Model();
@@ -143,8 +143,9 @@ public sealed partial class DrawIORendererTests
         model.Dependencies[1] = new TypeRelationship
         {
             FromType = "Child",
-            ToType = "Parent<T>"
+            ToType = "Parent<T>", DependencyType = DependencyType.Consumed
         };
+        model.Dependencies = model.Dependencies.Append(new TypeRelationship { FromType = "Parent<T>", ToType = "Child", DependencyType = DependencyType.Consumed }).ToArray();
         // When
 
         XElement[] cells = Parse(bytes: TestServices.Get<DrawIODiagramRenderer>().Render(new RenderModel(new[] { model })))
@@ -154,7 +155,8 @@ public sealed partial class DrawIORendererTests
 
         Assert.Equal(expected: 2, actual: cells.Count(predicate: c => (string? )c.Attribute(name: "edge") == "1"));
         Assert.Contains(collection: cells, filter: c => (string? )c.Attribute(name: "value") == "Unused");
-        Assert.Contains(collection: cells, filter: c => ((string? )c.Attribute(name: "style"))?.Contains(value: "endArrow=block") == true);
+        Assert.DoesNotContain(cells, c => ((string?)c.Attribute("style"))?.Contains("endArrow=block") == true);
+        Assert.Contains(cells, c => (string?)c.Attribute("value") == "Parent<T>\nChild");
     }
 
     [Fact]
@@ -314,7 +316,7 @@ public sealed partial class DrawIORendererTests
     }
 
     private static XDocument Parse(byte[] bytes) =>
-        XDocument.Parse(text: Encoding.UTF8.GetString(bytes: bytes));
+        DiagramTestDocument.Parse(bytes);
 
     private static double Number(XElement cell, string name) =>
         (double)cell.Element(name: "mxGeometry")!.Attribute(name: name)!;

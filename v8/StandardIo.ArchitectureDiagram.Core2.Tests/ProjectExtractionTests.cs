@@ -194,7 +194,7 @@ public sealed partial class ProjectExtractionTests
         Assert.False(condition: boundary.IsInternal);
         Assert.Empty(collection: boundary.Fields!);
         Assert.Empty(collection: boundary.Properties!);
-        Assert.Empty(collection: boundary.Methods!);
+        Assert.Equal("Run", Assert.Single(boundary.Methods!).Name);
         Assert.DoesNotContain(collection: model.Types!, filter: type => type.Name == "Library.Further");
         Assert.Single(collection: model.Dependencies!);
     }
@@ -210,7 +210,7 @@ public sealed partial class ProjectExtractionTests
         // Then
         var boundary = model.Types!.Single(predicate: type => type.Name == "System.String");
         Assert.False(condition: boundary.IsInternal);
-        Assert.Empty(collection: boundary.Methods!);
+        Assert.Contains(boundary.Methods!, method => method.Name == "IsNullOrEmpty");
         Assert.Equal(expected: 2, actual: model.Types!.Length);
         Assert.Equal(expected: "IsNullOrEmpty", actual: Assert.Single(collection: model.Dependencies!).ToMethod);
     }
@@ -338,7 +338,7 @@ public sealed partial class ProjectExtractionTests
     }
 
     [Fact]
-    public async Task ShouldIgnoreValueTypeCallTargetsThatTheModelCannotRepresentAsync()
+    public async Task ShouldRetainValueTypeCallTargetsAsDataAsync()
     {
         // Given
         using var workspace = new AdhocWorkspace();
@@ -346,12 +346,16 @@ public sealed partial class ProjectExtractionTests
         // When
         var model = await ProjectModelTestFactory.ExtractAsync(project: project);
         // Then
-        Assert.DoesNotContain(model.Types!, type => type.Name == "System.Int32");
-        Assert.Empty(model.Dependencies!);
+        var value = Assert.Single(model.Types!, type => type.Name == "System.Int32");
+        Assert.True(value.IsDataType);
+        Assert.Equal(FrameworkType.Struct, value.FrameworkType);
+        var call = Assert.Single(model.Dependencies!);
+        Assert.Equal("System.Int32", call.ToType);
+        Assert.Equal("ToString", call.ToMethod);
     }
 
     [Fact]
-    public async Task ShouldIgnoreDelegateAndStructTargetsAndPreserveSupportedCallsAsync()
+    public async Task ShouldIgnoreDelegatesAndRetainValueTypeCallsAsDataAsync()
     {
         // Given: callback invocation is not a class/interface dependency; its concrete calls still are.
         using var workspace = new AdhocWorkspace();
@@ -378,9 +382,10 @@ public sealed partial class ProjectExtractionTests
         // When
         var model = await ProjectModelTestFactory.ExtractAsync(project);
         // Then: unsupported nodes and links are omitted together, with no dangling endpoints.
-        Assert.DoesNotContain(model.Types!, type => type.Name is "System.Action<T>" or "System.Action" or "Callback" or "Value");
+        Assert.DoesNotContain(model.Types!, type => type.Name is "System.Action<T>" or "System.Action" or "Callback");
+        Assert.True(Assert.Single(model.Types!, type => type.Name == "Value").IsDataType);
         var calls = model.Dependencies!.Where(link => link.DependencyType == DependencyType.Consumed).ToArray();
-        Assert.Equal(new[] { "IExternal", "Target", "Value.Nested" }, calls.Select(link => link.ToType).Distinct().OrderBy(name => name).ToArray());
+        Assert.Equal(new[] { "IExternal", "Target", "Value", "Value.Nested" }, calls.Select(link => link.ToType).Distinct().OrderBy(name => name).ToArray());
         Assert.All(calls, link => Assert.Equal("Run", link.FromMethod));
         Assert.All(model.Dependencies!, link =>
         {
@@ -431,7 +436,9 @@ public sealed partial class ProjectExtractionTests
         Assert.Contains(collection: type.Fields!, filter: field => field.Name == "Pointer" && field.Type == "System.Int32*");
         Assert.Contains(collection: type.Fields!, filter: field => field.Name == "Items" && field.Type == "Generic<T>.Nested<System.String>[,]");
         Assert.Contains(collection: model.Types!, filter: type => type.Name == "Container.Nested");
-        Assert.DoesNotContain(collection: model.Types!, filter: type => type.Name == "Values" || type.Name == "Container");
+        Assert.All(model.Types!.Where(type => type.Name == "Values" || type.Name == "Container"), type => Assert.True(type.IsDataType));
+        Assert.Contains(model.Types!, type => type.Name == "Values" && type.FrameworkType == FrameworkType.Enum);
+        Assert.Contains(model.Types!, type => type.Name == "Container" && type.FrameworkType == FrameworkType.Struct);
     }
 
     [Fact]

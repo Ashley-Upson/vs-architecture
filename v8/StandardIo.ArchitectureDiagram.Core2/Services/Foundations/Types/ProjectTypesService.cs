@@ -64,17 +64,23 @@ internal sealed class ProjectTypesService : IProjectTypesService
 
     private DefinedType CreateType(INamedTypeSymbol type, bool isInternal)
     {
-        if (type.TypeKind != TypeKind.Class && type.TypeKind != TypeKind.Interface)
+        if (type.TypeKind is not (TypeKind.Class or TypeKind.Interface or TypeKind.Struct or TypeKind.Enum))
         {
-            throw new NotSupportedException(message: $"Dependency target {roslynBroker.GetTypeName(type: type)} is {type.TypeKind}; the model supports Class and Interface only.");
+            throw new NotSupportedException(message: $"Dependency target {roslynBroker.GetTypeName(type: type)} is {type.TypeKind}; the model supports Class, Interface, Struct and Enum.");
         }
 
         return new DefinedType
         {
             Name = roslynBroker.GetTypeName(type: type.OriginalDefinition),
             AssemblyName = isInternal ? null : type.ContainingAssembly.Identity.Name,
-            FrameworkType = type.TypeKind == TypeKind.Interface ? FrameworkType.Interface : FrameworkType.Class,
+            FrameworkType = type.TypeKind switch { TypeKind.Interface => FrameworkType.Interface, TypeKind.Struct => FrameworkType.Struct, TypeKind.Enum => FrameworkType.Enum, _ => FrameworkType.Class },
             IsInternal = isInternal,
+            IsDataType = type.IsValueType || type.SpecialType is SpecialType.System_String or SpecialType.System_Array or SpecialType.System_Enum or SpecialType.System_ValueType ||
+                (!isInternal && type.ContainingNamespace.ToDisplayString().StartsWith("System.Collections", StringComparison.Ordinal) &&
+                 (type.SpecialType == SpecialType.System_Collections_IEnumerable || type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T ||
+                  type.AllInterfaces.Any(contract => contract.SpecialType == SpecialType.System_Collections_IEnumerable))),
+            BaseTypeName = type.BaseType is { SpecialType: not SpecialType.System_Object } parent ? GetMemberTypeName(parent) : null,
+            InterfaceNames = type.AllInterfaces.Length == 0 ? null : type.AllInterfaces.Select(GetMemberTypeName).OrderBy(name => name, StringComparer.Ordinal).ToArray(),
             Fields = isInternal ? roslynBroker.GetMembers(type: type)
                 .OfType<IFieldSymbol>()
                 .Where(predicate: field => !field.IsImplicitlyDeclared)
@@ -87,12 +93,12 @@ internal sealed class ProjectTypesService : IProjectTypesService
                 .OrderBy(keySelector: property => property.Name, comparer: StringComparer.Ordinal)
                 .Select(selector: property => new Property { Name = property.Name, Type = GetMemberTypeName(type: property.Type) })
                 .ToArray() : Array.Empty<Property>(),
-            Methods = isInternal ? roslynBroker.GetMembers(type: type)
+            Methods = roslynBroker.GetMembers(type: type)
                 .OfType<IMethodSymbol>()
                 .Where(predicate: method => !method.IsImplicitlyDeclared && (method.MethodKind == MethodKind.Ordinary && method.DeclaredAccessibility == Accessibility.Public || method.MethodKind == MethodKind.ExplicitInterfaceImplementation))
                 .OrderBy(keySelector: method => method.Name, comparer: StringComparer.Ordinal)
                 .Select(selector: method => new Method { Name = method.Name })
-                .ToArray() : Array.Empty<Method>()
+                .ToArray()
         };
     }
 

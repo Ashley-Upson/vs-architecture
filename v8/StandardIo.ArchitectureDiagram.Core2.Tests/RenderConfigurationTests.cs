@@ -147,7 +147,7 @@ public sealed class RenderConfigurationTests
         Types = types.Select(type => new DefinedType { Name = type, IsInternal = true, Methods = [new Method { Name = "Run" }] }).ToArray(),
         Dependencies = []
     };
-    internal static TypeRelationship Link(string from, string to) => new() { FromType = from, ToType = to };
+    internal static TypeRelationship Link(string from, string to) => new() { FromType = from, ToType = to, DependencyType = DependencyType.Consumed };
     private sealed class ConfigurationBroker(string json) : IRenderConfigurationBroker
     {
         public string? Path { get; private set; }

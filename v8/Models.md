@@ -17,8 +17,11 @@ ProjectModel
 
 DefinedType
   string Name
-  FrameworkType FrameworkType     Class | Interface
+  FrameworkType FrameworkType     Class | Interface | Struct | Enum
   bool IsInternal
+  bool IsDataType
+  string BaseTypeName            Optional; System.Object is omitted
+  string[] InterfaceNames        Implemented interface names
   Field[] Fields                 Type, Name
   Property[] Properties          Type, Name
   Method[] Methods               Name
@@ -33,7 +36,7 @@ Dependency
 
 ## Extraction expectations
 
-- List classes and interfaces defined by each selected project in its Types array.
+- List classes, interfaces, structs and enums defined by each selected project in its Types array.
 - IsInternal means the type is defined in any selected project, not that it has the
   C# internal access modifier. A public type in a selected project is internal to
   this dataset; a type outside the selected projects is external to it.
@@ -41,8 +44,9 @@ Dependency
   project boundaries. Expand internal types, keeping a visited set so shared
   dependencies and cycles do not cause repeated expansion or infinite recursion.
 - Retain each reached external type with IsInternal = false and the incoming link,
-  then stop at that type. Do not inspect its members or follow its dependencies;
-  its Fields, Properties and Methods arrays are empty boundary information.
+  then stop traversal. Read its declared public/explicit-contract method names,
+  base type and interface names for presentation, without following dependencies
+  or expanding its method bodies. External Fields and Properties remain empty.
 - Internal types remain in their defining ProjectModel, including those reached
   from another selected project. External boundary entries belong in each referring
   project's Types array, deduplicated within that project. Such entries describe
@@ -77,9 +81,9 @@ Dependency
   source compilation; unresolved interfaces remain boundaries. Reachable private
   helper calls are attributed to their public or explicit-contract entry method.
   This is a set of possible targets, not proof of runtime dependency injection.
-- The enum intentionally includes only Class and Interface. Extraction includes only classes and interfaces as definitions, omits automatic
-  System.Object inheritance, and rejects method-call targets of unsupported kinds
-  (such as structs) rather than labeling them Class.
+- FrameworkType includes Class, Interface, Struct and Enum. Value types are retained
+  as data in the raw model; delegates and other unsupported kinds remain omitted.
+
 - Distinct types with the same full name in different projects can be defined in
   separate models, but the string dependency endpoints alone cannot disambiguate
   references between them. No assembly/project identity has been added to this model.
@@ -110,3 +114,17 @@ Calls in constructors/accessors retain Roslyn method names such as .ctor and
 get_Property. Calls in field/property initializers have no FromMethod. Lambda and
 local-function bodies are attributed to the containing declared method. The model
 still lists only explicitly declared ordinary methods and interface implementations.
+
+## Architecture classification and labels
+
+Strings, arrays, value types and framework collection types in System.Collections
+that implement IEnumerable are marked IsDataType. Custom enumerable components are
+not classified as data merely because they implement an enumeration contract.
+The architecture view excludes data types and types with no locally declared
+public or explicit-contract methods. Roslyn supplies these method lists for both
+source and external types; inherited methods do not populate the lists.
+Legacy hand-built external entries with a null method list have unknown method
+information; an explicitly empty list denotes no declared methods.
+
+Inheritance relationships remain in the raw model. Architecture presentation
+uses them for interface/base labels and draws only consumed relationships.

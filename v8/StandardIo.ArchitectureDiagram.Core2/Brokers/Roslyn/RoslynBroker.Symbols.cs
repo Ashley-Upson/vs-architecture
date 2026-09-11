@@ -35,7 +35,7 @@ internal partial class RoslynBroker
 
     private IEnumerable<INamedTypeSymbol> GetTypeDefinitions(INamedTypeSymbol type)
     {
-        if (!type.IsImplicitlyDeclared && (type.TypeKind == TypeKind.Class || type.TypeKind == TypeKind.Interface))
+        if (!type.IsImplicitlyDeclared && (type.TypeKind is TypeKind.Class or TypeKind.Interface or TypeKind.Struct or TypeKind.Enum))
         {
             yield return type;
         }
@@ -88,7 +88,7 @@ internal partial class RoslynBroker
                 var call = pending.Dequeue();
                 IMethodSymbol target = call.Target;
                 // Dependency endpoints use the same classifications as defined types.
-                if (call.DependencyType.TypeKind is not (TypeKind.Class or TypeKind.Interface))
+                if (call.DependencyType.TypeKind is not (TypeKind.Class or TypeKind.Interface or TypeKind.Struct or TypeKind.Enum))
                 {
                     continue;
                 }

@@ -11,6 +11,12 @@ public sealed class DefinedType
     /// <summary>Declaring assembly for an external boundary; source types are owned by their ProjectModel.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? AssemblyName { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsDataType { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BaseTypeName { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? InterfaceNames { get; set; }
     public FrameworkType FrameworkType { get; set; }
     /// <summary>Defined in a selected project, regardless of C# accessibility; false marks a traversal boundary.</summary>
     public bool IsInternal { get; set; }

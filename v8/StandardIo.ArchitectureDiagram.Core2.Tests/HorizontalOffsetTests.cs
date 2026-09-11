@@ -22,7 +22,7 @@ public class HorizontalOffsetTests
         var model = new ProjectModel
         {
             Types = new[] { "Root", "A", "B", "C", "D" }.Select(name => new DefinedType { Name = name }).ToArray(),
-            Dependencies = new[] { "A", "B", "C", "D" }.Select(name => new TypeRelationship { FromType = "Root", ToType = name }).ToArray()
+            Dependencies = new[] { "A", "B", "C", "D" }.Select(name => new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = "Root", ToType = name }).ToArray()
         };
         var html = XDocument.Parse(Encoding.UTF8.GetString(TestServices.Get<HtmlDiagramRenderer>().Render(new RenderModel(new[] { model }, new RenderConfiguration { HorizontalOffset = request.RenderConfiguration.HorizontalOffset }))));
         var xml = XDocument.Parse(Encoding.UTF8.GetString(TestServices.Get<DrawIODiagramRenderer>().Render(new RenderModel(new[] { model }, new RenderConfiguration { HorizontalOffset = request.RenderConfiguration.HorizontalOffset }))));

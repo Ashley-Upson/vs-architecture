@@ -21,7 +21,7 @@ public class ColourLinesTests
         var model = new ProjectModel
         {
             Types = new[] { "Parent", "Other", "Example.Services.Foundations.WorkerService" }.Select(name => new DefinedType { Name = name }).ToArray(),
-            Dependencies = new[] { "Parent", "Other" }.Select(name => new TypeRelationship { FromType = name, ToType = "Example.Services.Foundations.WorkerService" }).ToArray()
+            Dependencies = new[] { "Parent", "Other" }.Select(name => new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = name, ToType = "Example.Services.Foundations.WorkerService" }).ToArray()
         };
         var html = XDocument.Parse(Encoding.UTF8.GetString(TestServices.Get<HtmlDiagramRenderer>().Render(new RenderModel(new[] { model }, new RenderConfiguration { ColourLines = request.RenderConfiguration.ColourLines }))));
         var xml = XDocument.Parse(Encoding.UTF8.GetString(TestServices.Get<DrawIODiagramRenderer>().Render(new RenderModel(new[] { model }, new RenderConfiguration { ColourLines = request.RenderConfiguration.ColourLines }))));

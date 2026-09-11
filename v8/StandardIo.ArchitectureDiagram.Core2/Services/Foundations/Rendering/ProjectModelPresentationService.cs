@@ -65,20 +65,30 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
         var hidden = owners.Select(selector: group => group.Key)
             .ToHashSet(comparer: StringComparer.Ordinal);
 
-        var dataTypes = types.Where(type => diagramType == DiagramTypes.Architecture && type.IsInternal && (type.Methods?.Length ?? 0) == 0)
+        var dataTypes = types.Where(type => diagramType == DiagramTypes.Architecture && (type.IsDataType || (type.IsInternal || type.Methods is not null) && (type.Methods?.Length ?? 0) == 0))
             .Select(type => type.Name!).ToHashSet(StringComparer.Ordinal);
 
         DefinedType[] visible = types.Where(predicate: type => !hidden.Contains(item: type.Name!) && !dataTypes.Contains(type.Name!))
             .ToArray();
 
-        var labels = visible.ToDictionary(keySelector: type => type.Name!, elementSelector: type => type.Name!.Split(separator: '.')
-            .Last() + (contracts.TryGetValue(key: type.Name!, value: out string[]? implemented) && implemented.Length > 0 ? "\n" + string.Join(separator: ", ", values: implemented.Select(selector: name => name.Split(separator: '.')
-            .Last())) : ""), comparer: StringComparer.Ordinal);
+        string ShortName(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
+        var labels = visible.ToDictionary(type => type.Name!, type =>
+        {
+            var parts = new List<string> { ShortName(type.Name!) };
+            var interfaces = (type.InterfaceNames ?? (contracts.TryGetValue(type.Name!, out var implemented) ? implemented : Array.Empty<string>()))
+                .Distinct().OrderBy(name => name, StringComparer.Ordinal).ToArray();
+            if (interfaces.Length > 0) parts.Add(string.Join(", ", interfaces.Select(ShortName)));
+            string? baseName = type.BaseTypeName ?? inheritance[type.Name!]
+                .Select(link => link.ToType!).FirstOrDefault(name => byName[name].FrameworkType == FrameworkType.Class);
+            if (baseName is not null) parts.Add(ShortName(baseName));
+            return string.Join("\n", parts);
+        }, StringComparer.Ordinal);
 
         var dependencies = new List<TypeRelationship>();
 
         foreach (TypeRelationship link in links)
         {
+            if (diagramType == DiagramTypes.Architecture && link.DependencyType == DependencyType.Inheritance) continue;
             if (dataTypes.Contains(link.FromType!) || dataTypes.Contains(link.ToType!) || hidden.Contains(item: link.FromType!))
             {
                 continue;
@@ -101,7 +111,7 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
             }
         }
 
-        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible, Dependencies = dependencies.DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType))
+        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => type.AssemblyName is null || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType))
             .Select(selector: link => new TypeRelationship { FromType = link.FromType, ToType = link.ToType, DependencyType = link.DependencyType })
             .ToArray() }, labels);
     }

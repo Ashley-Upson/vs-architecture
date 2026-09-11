@@ -38,7 +38,7 @@ internal sealed class HtmlDocumentService : IHtmlDocumentService
 
                 foreach (RenderText line in node.TextLines)
                 {
-                    text.Add(content: new XElement(svg + "tspan", new XAttribute("x", line.X), new XAttribute("y", line.Y), line.Text));
+                    text.Add(content: new XElement(svg + "tspan", new XAttribute("x", line.X), new XAttribute("y", line.Y), new XAttribute("font-weight", line.Bold ? "bold" : "normal"), new XAttribute("font-size", line.FontSize), line.Text));
                 }
 
                 group.Add(content: new XElement(svg + "g", new XAttribute("data-type", node.TypeName), new XElement(svg + "title", node.TypeName), rectangle, text));

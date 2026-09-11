@@ -24,6 +24,9 @@
         {
           "Name": "CreateSchoolDataContext"
         }
+      ],
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
       ]
     },
     {

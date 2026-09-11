@@ -13,7 +13,7 @@ public sealed class CompactBranchTests
         {
             Types = new[] { "Root", "Short", "Wide", "A", "B", "C" }.Select(name => new DefinedType { Name = name }).ToArray(),
             Dependencies = new[] { ("Root", "Short"), ("Root", "Wide"), ("Wide", "A"), ("Wide", "B"), ("Wide", "C") }
-                .Select(pair => new TypeRelationship { FromType = pair.Item1, ToType = pair.Item2 }).ToArray()
+                .Select(pair => new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = pair.Item1, ToType = pair.Item2 }).ToArray()
         };
         // When: the full rule loop must still validate all centring and spacing constraints.
         var drawing = TestServices.Get<LayoutModelBuilder>().BuildRenderModel(new RenderModel(new[] { model }));

@@ -20,7 +20,7 @@ internal sealed class BoundsLayoutRuleProcessingService : ILayoutRuleProcessingS
                 var node = project.Nodes[index];
                 double x = node.X + shift;
                 string[] lines = node.Label.Split('\n');
-                project.Nodes[index] = node with { X = x, TextLines = lines.Select((line, row) => new RenderText(line, x + node.Width / 2, node.Y + node.Height / 2 + (row - (lines.Length - 1) / 2d) * 16)).ToArray() };
+                project.Nodes[index] = node with { X = x, TextLines = lines.Select((line, row) => new RenderText(line, x + node.Width / 2, node.Y + node.Height / 2 + (row - (lines.Length - 1) / 2d) * 16, row == 0, row < node.TextLines.Length ? node.TextLines[row].FontSize : 12)).ToArray() };
             }
             double width = Math.Max(300, project.Nodes.Select(node => node.X + node.Width + 40).DefaultIfEmpty(300).Max());
             double height = project.Nodes.Select(node => node.Y + node.Height + 40).DefaultIfEmpty(120).Max();

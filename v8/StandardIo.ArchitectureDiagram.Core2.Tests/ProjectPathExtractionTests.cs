@@ -81,7 +81,7 @@ public sealed partial class ProjectPathExtractionTests
         Assert.Equal(expected: "External.Api", actual: Assert.Single(collection: model.Dependencies!).ToType);
         DefinedType external = Assert.Single(collection: model.Types!, predicate: type => !type.IsInternal);
         Assert.Equal(expected: "External.Api", actual: external.Name);
-        Assert.Empty(collection: external.Methods!);
+        Assert.Equal("Run", Assert.Single(external.Methods!).Name);
         Assert.DoesNotContain(collection: model.Types!, filter: type => type.Name == "OldBuild");
     }
 

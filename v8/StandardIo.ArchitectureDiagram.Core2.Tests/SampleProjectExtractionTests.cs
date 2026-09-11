@@ -146,7 +146,7 @@ public sealed partial class SampleProjectExtractionTests
         ProjectModel[] expectedTrees = TestServices.Get<ProjectModelSplitter>().Split(projectModel: expected);
         // When: use the public generator and every production service and broker.
         byte[] bytes = await TestServices.Get<DiagramGenerator>().GenerateAsync(request: new DiagramGenerationRequest { ProjectPaths = new[] { projectPath }, DiagramType = DiagramTypes.Architecture });
-        var document = System.Xml.Linq.XDocument.Parse(text: System.Text.Encoding.UTF8.GetString(bytes: bytes));
+        var document = DiagramTestDocument.Parse(bytes);
 
         var cells = document.Descendants(name: "mxCell")
             .ToArray();

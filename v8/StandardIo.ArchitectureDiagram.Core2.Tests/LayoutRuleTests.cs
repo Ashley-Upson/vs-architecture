@@ -66,8 +66,8 @@ public class LayoutRuleTests(Xunit.Abstractions.ITestOutputHelper output)
     {
         var types = Enumerable.Range(0, 400).Select(index => new DefinedType { Name = "Node" + index }).ToArray();
         var links = Enumerable.Range(0, 399).Where(index => index % 20 != 19)
-            .Select(index => new TypeRelationship { FromType = "Node" + index, ToType = "Node" + (index + 1) }).ToList();
-        links.AddRange(Enumerable.Range(0, 19).Select(index => new TypeRelationship { FromType = "Node" + (index * 20 + 19), ToType = "Node399" }));
+            .Select(index => new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = "Node" + index, ToType = "Node" + (index + 1) }).ToList();
+        links.AddRange(Enumerable.Range(0, 19).Select(index => new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = "Node" + (index * 20 + 19), ToType = "Node399" }));
         var watch = Stopwatch.StartNew();
         var model = TestServices.Get<LayoutModelBuilder>().BuildRenderModel(new RenderModel(new[] { new ProjectModel { Types = types, Dependencies = links.ToArray() } }));
         var project = Assert.Single(model.Projects);

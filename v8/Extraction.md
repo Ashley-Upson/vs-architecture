@@ -68,14 +68,18 @@ The orchestration awaits ProjectTypesProcessingService.PopulateTypesAsync(projec
   - Exclude the project's own DLL and deduplicate dependency filenames.
   - Create a CSharpCompilation directly; no MSBuild workspace is used.
 - The foundation rejects compilation errors before changing project.Types.
-- RoslynBroker queries the defined classes/interfaces, including nested types, and
+- RoslynBroker queries the defined classes, interfaces, structs and enums, including nested types, and
   the base types and method-call targets needed to discover external boundaries.
 - For each distinct type, the foundation checks its assembly/type identity and maps
   it to DefinedType.
   - Local definitions include declared fields and properties, public ordinary methods,
     and explicit interface implementations (public contract methods). Private, protected
     and internal ordinary methods are not listed.
-  - External targets retain name and kind with empty member arrays.
+  - External targets retain declared public/contract method names, base-type and
+    interface names. Their fields and properties remain empty; extraction does not
+    traverse their method bodies or dependencies.
+  - Data classification is recorded separately so architecture presentation can
+    omit data types without discarding them from the extracted model.
   - Conflicting full names fail before assigning the completed array.
 - The foundation assigns project.Types; the processing sorts those domain objects.
 - project.Dependencies, Name and Path are unchanged.

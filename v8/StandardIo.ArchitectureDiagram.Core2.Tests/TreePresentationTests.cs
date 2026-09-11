@@ -273,7 +273,7 @@ public sealed partial class TreePresentationTests
     }
 
     [Fact]
-    public void ShouldRetainClassInheritanceAndInheritedContractsWithoutLooping()
+    public void ShouldDescribeClassInheritanceAndInheritedContractsWithoutLooping()
     {
         // Given
         ProjectModel model = Model(names: ["Derived", "Base", "IChild", "IParent"]);
@@ -291,13 +291,13 @@ public sealed partial class TreePresentationTests
         XElement[] cells = Render(model: model);
         // Then
 
-        Assert.Equal(expected: "Derived\nIChild, IParent", actual: (string? )Node(cells: cells, name: "Derived")
+        Assert.Equal(expected: "Derived\nIChild, IParent\nBase", actual: (string? )Node(cells: cells, name: "Derived")
             .Attribute(name: "value"));
 
         Assert.Equal(expected: "Base\nIChild, IParent", actual: (string? )Node(cells: cells, name: "Base")
             .Attribute(name: "value"));
 
-        Assert.Single(collection: cells, predicate: cell => (string? )cell.Attribute(name: "edge") == "1");
+        Assert.Empty(cells.Where(cell => (string?)cell.Attribute("edge") == "1"));
     }
 
     private static ProjectModel Model(params string[] names) =>
@@ -316,7 +316,7 @@ public sealed partial class TreePresentationTests
     };
 
     private static XElement[] Render(ProjectModel model) =>
-        XDocument.Parse(text: Encoding.UTF8.GetString(bytes: TestServices.Get<DrawIODiagramRenderer>().Render(new RenderModel(new[] { model }))))
+        DiagramTestDocument.Parse(TestServices.Get<DrawIODiagramRenderer>().Render(new RenderModel(new[] { model })))
         .Descendants(name: "mxCell")
         .ToArray();
 

@@ -187,7 +187,7 @@ public sealed partial class RendererCommandTests
     }
 
     [Fact]
-    public void ShouldRenderEmptyHtmlAndHollowInheritanceArrows()
+    public void ShouldRenderEmptyHtmlAndPutInheritanceInNodeLabels()
     {
         // Given: the fixture and inputs below.
         var renderer = TestServices.Get<HtmlDiagramRenderer>();
@@ -223,8 +223,8 @@ public sealed partial class RendererCommandTests
 
         var document = XDocument.Parse(text: Encoding.UTF8.GetString(bytes: renderer.Render(new RenderModel(new[] { model }))));
 
-        Assert.Equal(expected: "url(#inheritance)", actual: (string? )Assert.Single(collection: document.Descendants(name: svg + "polyline"))
-            .Attribute(name: "marker-end"));
+        Assert.Empty(document.Descendants(svg + "polyline"));
+        Assert.Contains(document.Descendants(svg + "g"), node => (string?)node.Attribute("data-type") == "Derived" && node.Descendants(svg + "tspan").Last().Value == "Base");
 
         Assert.Contains(collection: document.Descendants(name: svg + "text"), filter: text => text.Value == "Project");
     }

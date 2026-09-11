@@ -72,7 +72,7 @@ its null OutputPath denotes help text rather than an output file.
 ```csharp
 public interface IDiagramRenderer
 {
-    byte[] Render(ProjectModel[] projectModels, double horizontalOffset = 10, DiagramTypes diagramType = DiagramTypes.Architecture, bool colourLines = false, int maxLayoutIterations = 1000);
+    byte[] Render(RenderModel renderModel);
 }
 ```
 
@@ -404,3 +404,28 @@ A partial file can be as small as:
 ```
 
 Configuration loading uses an injected file broker and foundation service. Parsing validates configuration before dispatch; layout also validates direct library calls. Dimensions must be finite and positive, `RowDepth` must exceed the 60px node height, `NodeWidth` must exceed the 10px port margin, and `LayerColours` must contain seven `#RRGGBB` values. Invalid JSON and unknown property names are reported rather than silently ignoring misspelled settings. Users supplying a custom palette control its contrast.
+
+## Inline external boundaries and type labels
+
+Both architecture views use a bold short type name, normal interface names and a
+smaller base-type name. Missing lines and System.Object are omitted. Inheritance
+is label information, not a dependency line. Declared-method and data-type
+classification is described in [Models.md](Models.md).
+
+`Architecture.InlineExternals` defaults to false. Enable it in a render config
+file to place external terminal nodes inside each split tree, rather than in
+external assembly boxes. The combined `--noduplicates` view ignores this option.
+A consumed connection to an inline external is red when its source also consumes
+a different internal component. This flags a boundary for architectural review;
+it does not claim every such use is wrong. Other links retain their configured
+colours. No absolute row number is used for this decision.
+
+The supplied [Architecture.InlineExternals.json](Architecture.InlineExternals.json)
+enables this option and coloured connections:
+
+```powershell
+dotnet v8/DiagramCLI/bin/Debug/net10.0/DiagramCLI.dll Architecture "path/to/project.csproj" --format Html --output Diagram.html --config v8/Architecture.InlineExternals.json
+```
+
+Set InlineExternals to false to restore the per-tree external boxes. Data-only
+source trees and empty external containers do not create empty architecture boxes.
