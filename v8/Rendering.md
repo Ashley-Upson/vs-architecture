@@ -408,7 +408,9 @@ Configuration loading uses an injected file broker and foundation service. Parsi
 ## Inline external boundaries and type labels
 
 Both architecture views use a bold short type name, normal interface names and a
-smaller base-type name. Missing lines and System.Object are omitted. Inheritance
+smaller base-type name. Up to two distinct interface names are shown; larger sets
+display `<multiple interfaces>` while the raw model retains every interface.
+Missing lines and System.Object are omitted. Inheritance
 is label information, not a dependency line. Declared-method and data-type
 classification is described in [Models.md](Models.md).
 

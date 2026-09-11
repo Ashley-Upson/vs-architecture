@@ -96,6 +96,11 @@ with that same model instance.
   resolved explicit method calls.
 - The foundation maps those facts directly to Dependency records.
   - Inheritance includes interface implementation but omits automatic System.Object.
+  - Inherited class instance calls use the statically typed receiver as the consumed
+    dependency. For example, `CoreDataContext.SaveChangesAsync()` consumes
+    `CoreDataContext`, with `DbContext` recorded as its base-type metadata. An explicit
+    base-type reference or cast consumes that base type; static calls retain their
+    declaring type. Collection calls still use their containing object.
   - Start each call chain from a public method or explicit interface implementation.
   - Follow reachable non-public helpers on the same type, attributing their outgoing
     calls to the entry method; a visited set stops helper cycles. Uncalled helpers

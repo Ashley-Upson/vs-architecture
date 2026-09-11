@@ -77,7 +77,8 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
             var parts = new List<string> { ShortName(type.Name!) };
             var interfaces = (type.InterfaceNames ?? (contracts.TryGetValue(type.Name!, out var implemented) ? implemented : Array.Empty<string>()))
                 .Distinct().OrderBy(name => name, StringComparer.Ordinal).ToArray();
-            if (interfaces.Length > 0) parts.Add(string.Join(", ", interfaces.Select(ShortName)));
+            if (interfaces.Length > 0) parts.Add(interfaces.Length > 2
+                ? "<multiple interfaces>" : string.Join(", ", interfaces.Select(ShortName)));
             string? baseName = type.BaseTypeName ?? inheritance[type.Name!]
                 .Select(link => link.ToType!).FirstOrDefault(name => byName[name].FrameworkType == FrameworkType.Class);
             if (baseName is not null) parts.Add(ShortName(baseName));

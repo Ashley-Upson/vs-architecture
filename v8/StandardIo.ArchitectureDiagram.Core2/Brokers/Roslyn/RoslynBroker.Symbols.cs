@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Brokers.Roslyn;
 internal partial class RoslynBroker
@@ -214,7 +215,12 @@ internal partial class RoslynBroker
                     caller = caller.ContainingSymbol as IMethodSymbol;
                 }
 
-                yield return (caller, target, GetCollectionOwner(invocation, semanticModel) ?? target.ContainingType);
+                // An inherited instance method consumes the receiver, not a separate instance of its base type.
+                var receiverType = !target.IsStatic && target.ContainingType.TypeKind == TypeKind.Class
+                    && semanticModel.GetOperation(invocation, cancellationToken) is IInvocationOperation
+                    { Instance.Type: INamedTypeSymbol { TypeKind: TypeKind.Class } receiver }
+                        ? receiver : null;
+                yield return (caller, target, GetCollectionOwner(invocation, semanticModel) ?? receiverType ?? target.ContainingType);
             }
         }
     }

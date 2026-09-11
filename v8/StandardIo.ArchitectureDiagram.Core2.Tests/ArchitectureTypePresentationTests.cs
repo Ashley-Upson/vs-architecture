@@ -10,6 +10,36 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ArchitectureTypePresentationTests
 {
     [Theory]
+    [InlineData(false, 2, "IContract0, IContract1")]
+    [InlineData(true, 2, "IContract0, IContract1")]
+    [InlineData(false, 3, "<multiple interfaces>")]
+    [InlineData(true, 3, "<multiple interfaces>")]
+    public void ShouldLimitInterfaceLabelsWithoutDiscardingContracts(bool html, int count, string expected)
+    {
+        // Given
+        var project = RenderConfigurationTests.Project("Example", "Example.Service");
+        project.Types![0].InterfaceNames = Enumerable.Range(0, count).Select(index => $"Example.IContract{index}").ToArray();
+        IDiagramRenderer renderer = html ? TestServices.Get<HtmlDiagramRenderer>() : TestServices.Get<DrawIODiagramRenderer>();
+        // When
+        var document = System.Xml.Linq.XDocument.Parse(System.Text.Encoding.UTF8.GetString(renderer.Render(new RenderModel([project]))));
+        // Then
+        string label;
+        if (html)
+        {
+            System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
+            label = document.Descendants(svg + "tspan").ElementAt(1).Value;
+        }
+        else
+        {
+            var node = Assert.Single(document.Descendants("mxCell"), cell => cell.Attribute("typeName") is not null);
+            var spans = System.Xml.Linq.XElement.Parse("<label>" + ((string)node.Attribute("value")!).Replace("<br>", "<br/>") + "</label>");
+            label = spans.Elements("span").ElementAt(1).Value;
+        }
+        Assert.Equal(expected, label);
+        Assert.Equal(count, project.Types[0].InterfaceNames!.Length);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void ShouldStyleTheTypeContractAndBaseLabelsInBothFormats(bool html)
