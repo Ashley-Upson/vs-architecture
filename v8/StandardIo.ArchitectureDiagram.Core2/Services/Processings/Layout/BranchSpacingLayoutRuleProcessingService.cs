@@ -51,6 +51,32 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     LayoutGraph.Move(project, owner, LayoutGraph.Midpoint(ownedChildren) - LayoutGraph.Centre(Current(owner)));
             }
             Arrange(string.Empty);
+
+            foreach (RenderNode[] group in LayoutGraph.BranchGroups(project))
+            {
+                RenderNode[][] groupBranches = group
+                    .OrderBy(root => root.X)
+                    .ThenBy(root => root.Id, StringComparer.Ordinal)
+                    .Select(root => LayoutGraph.OwnedBranch(project, root.Id))
+                    .ToArray();
+
+                for (int index = 1; index < groupBranches.Length; index++)
+                {
+                    double previousRight = groupBranches[index - 1]
+                        .Max(node => node.X + node.Width);
+                    double currentLeft = groupBranches[index]
+                        .Min(node => node.X);
+                    double delta = previousRight + spacing - currentLeft;
+
+                    if (delta > LayoutGraph.Tolerance)
+                    {
+                        foreach (RenderNode node in groupBranches[index])
+                        {
+                            LayoutGraph.Move(project, node.Id, delta);
+                        }
+                    }
+                }
+            }
         }
     }
 }

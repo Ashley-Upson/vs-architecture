@@ -9,6 +9,38 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class InterleavedSharedBranchesTests
 {
     [Fact]
+    public void SharedBranches_WhenTheyHaveDifferentParents_DoNotOverlap()
+    {
+        // Given: two shared branches own descendants and are pulled towards different parent groups.
+        string[] names = ["Root", "LeftParent", "RightParent", "FarParent", "CommonReader", "MetadataReader", "CommonCache", "Storage", "MetadataCache"];
+        double[] x = [0, 0, 0, 0, 827, 1005, 827, 827, 1005];
+        double[] y = [0, 120, 120, 120, 480, 240, 600, 720, 360];
+        RenderNode[] nodes = names.Select((name, index) =>
+            new RenderNode("node-" + index, name, name, "#123456", x[index], y[index], 180, 60, [])).ToArray();
+        (int From, int To)[] links = [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 5), (4, 6), (6, 7), (5, 8), (8, 4)];
+        RenderConnection[] edges = links.Select((link, index) =>
+            new RenderConnection("edge-" + index, nodes[link.From].Id, nodes[link.To].Id,
+                nodes[link.From].TypeName, nodes[link.To].TypeName, false, [])).ToArray();
+        var model = new RenderModel(0, 0, [new RenderProject("project", "Project", 0, 0, 300, 200, nodes, edges)]);
+        model.Configuration.MaxLayoutIterations = 100;
+
+        // When: the branch-spacing rule arranges the related shared branches.
+        new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.BranchSpacingLayoutRuleProcessingService()
+            .ApplyRule(model);
+
+        // Then: the complete branch bounds settle with the configured clearance.
+        RenderProject project = Assert.Single(model.Projects);
+        RenderNode commonReader = project.Nodes.Single(node => node.TypeName == "CommonReader");
+        RenderNode metadataReader = project.Nodes.Single(node => node.TypeName == "MetadataReader");
+        RenderNode[][] branches = [
+            StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.LayoutGraph.OwnedBranch(project, commonReader.Id),
+            StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.LayoutGraph.OwnedBranch(project, metadataReader.Id)];
+        branches = branches.OrderBy(branch => branch.Min(node => node.X)).ToArray();
+        Assert.True(branches[1].Min(node => node.X) - branches[0].Max(node => node.X + node.Width) >=
+            model.Configuration.Architecture.NodeSpacing - 0.01);
+    }
+
+    [Fact]
     public void ShouldSettleInterleavedSharedBranchesWithoutExpandingIndefinitely()
     {
         // Given: seventeen nodes reduced from the failing ContentManagement layout.
