@@ -216,10 +216,16 @@ internal partial class RoslynBroker
                 }
 
                 // An inherited instance method consumes the receiver, not a separate instance of its base type.
+                ITypeSymbol? receiver = semanticModel.GetOperation(invocation, cancellationToken) is IInvocationOperation operation
+                    ? operation.Instance?.Type
+                    : invocation.Expression switch
+                    {
+                        MemberAccessExpressionSyntax member => semanticModel.GetTypeInfo(member.Expression, cancellationToken).Type,
+                        SimpleNameSyntax => type,
+                        _ => null
+                    };
                 var receiverType = !target.IsStatic && target.ContainingType.TypeKind == TypeKind.Class
-                    && semanticModel.GetOperation(invocation, cancellationToken) is IInvocationOperation
-                    { Instance.Type: INamedTypeSymbol { TypeKind: TypeKind.Class } receiver }
-                        ? receiver : null;
+                    && receiver is INamedTypeSymbol { TypeKind: TypeKind.Class } namedReceiver ? namedReceiver : null;
                 yield return (caller, target, GetCollectionOwner(invocation, semanticModel) ?? receiverType ?? target.ContainingType);
             }
         }

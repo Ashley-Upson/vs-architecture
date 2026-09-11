@@ -13,6 +13,33 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed partial class ProjectModelPopulationTests
 {
     [Theory]
+    [InlineData("Content(value, \"text/plain\");")]
+    [InlineData("this.Content(value, \"text/plain\");")]
+    public async Task ShouldNotExposeAnExternalAncestorForInheritedCallsWithDynamicArgumentsAsync(string call)
+    {
+        // Given: a local controller inherits through an external boundary, and supplies a dynamic argument.
+        var library = CreateCompilation("Library", """
+            public class ControllerBase { public void Content(object value, string contentType) {} }
+            public class ODataController : ControllerBase { public void Configure() {} }
+            """);
+        var broker = new CompilationBroker(() => CreateCompilation("Example",
+            "public class AppController : ODataController { public void Render(dynamic value) { " + call + " } }")
+            .AddReferences(library.ToMetadataReference(), Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(
+                typeof(System.Runtime.CompilerServices.DynamicAttribute).Assembly.Location)));
+        var project = new ProjectModel { Name = "Example", Path = "Example.csproj" };
+        // When
+        await new ProjectTypesService(broker).PopulateTypesAsync(project, CancellationToken.None);
+        await new ProjectDependenciesService(broker).PopulateDependenciesAsync(project, CancellationToken.None);
+        // Then
+        Assert.DoesNotContain(project.Types!, type => type.Name == "ControllerBase");
+        Assert.DoesNotContain(project.Dependencies!, link => link.ToType == "ControllerBase");
+        Assert.Equal("ODataController", Assert.Single(project.Types!, type => type.Name == "AppController").BaseTypeName);
+        var callDependency = Assert.Single(project.Dependencies!, link => link.DependencyType == DependencyType.Consumed);
+        Assert.Equal("AppController", callDependency.ToType);
+        Assert.Equal("Content", callDependency.ToMethod);
+    }
+
+    [Theory]
     [InlineData("context.Save();", "CoreContext")]
     [InlineData("context?.Save();", "CoreContext")]
     [InlineData("((BaseContext)context).Save();", "BaseContext")]
