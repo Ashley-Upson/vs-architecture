@@ -2,8 +2,10 @@
 // Copyright (c) Paul.Ward@ccoder.co.uk
 // ---------------------------------------------------------------
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -69,9 +71,101 @@ internal partial class RoslynBroker
 
         return trustedAssemblies.Split(separator: Path.PathSeparator)
             .Concat(second: buildAssemblies)
+            .Concat(second: GetRestoredPackageAssemblies(directory: directory))
             .Where(predicate: path => !string.Equals(a: Path.GetFileNameWithoutExtension(path: path), b: projectName, comparisonType: StringComparison.OrdinalIgnoreCase))
             .DistinctBy(keySelector: path => Path.GetFileName(path: path), comparer: StringComparer.OrdinalIgnoreCase)
             .Select(selector: path => MetadataReference.CreateFromFile(path: path))
             .ToArray();
+    }
+
+    private static IEnumerable<string> GetRestoredPackageAssemblies(
+        string directory)
+    {
+        string assetsPath = Path.Combine(
+            path1: directory,
+            path2: "obj",
+            path3: "project.assets.json");
+
+        if (!File.Exists(path: assetsPath))
+        {
+            return [];
+        }
+
+        using JsonDocument document = JsonDocument.Parse(
+            json: File.ReadAllText(path: assetsPath));
+
+        JsonElement root = document.RootElement;
+
+        if (!root.TryGetProperty(propertyName: "targets", value: out JsonElement targets)
+            || !root.TryGetProperty(propertyName: "libraries", value: out JsonElement libraries)
+            || !root.TryGetProperty(propertyName: "packageFolders", value: out JsonElement packageFolders))
+        {
+            return [];
+        }
+
+        string[] roots = packageFolders
+            .EnumerateObject()
+            .Select(selector: packageFolder => packageFolder.Name)
+            .ToArray();
+
+        var assemblies = new List<string>();
+
+        foreach (JsonProperty target in targets.EnumerateObject())
+        {
+            foreach (JsonProperty libraryTarget in target.Value.EnumerateObject())
+            {
+                if (!libraryTarget.Value.TryGetProperty(
+                    propertyName: "type",
+                    value: out JsonElement targetType)
+                    || targetType.GetString() != "package"
+                    || !libraryTarget.Value.TryGetProperty(
+                        propertyName: "compile",
+                        value: out JsonElement compileAssets)
+                    || !libraries.TryGetProperty(
+                        propertyName: libraryTarget.Name,
+                        value: out JsonElement library)
+                    || !library.TryGetProperty(
+                        propertyName: "path",
+                        value: out JsonElement libraryPathElement))
+                {
+                    continue;
+                }
+
+                string? libraryPath = libraryPathElement.GetString();
+
+                if (string.IsNullOrWhiteSpace(value: libraryPath))
+                {
+                    continue;
+                }
+
+                foreach (JsonProperty compileAsset in compileAssets.EnumerateObject())
+                {
+                    if (!compileAsset.Name.EndsWith(
+                        value: ".dll",
+                        comparisonType: StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    string? assembly = roots
+                        .Select(rootPath => Path.Combine(
+                            path1: rootPath,
+                            path2: libraryPath.Replace(
+                                oldChar: '/',
+                                newChar: Path.DirectorySeparatorChar),
+                            path3: compileAsset.Name.Replace(
+                                oldChar: '/',
+                                newChar: Path.DirectorySeparatorChar)))
+                        .FirstOrDefault(predicate: File.Exists);
+
+                    if (assembly is not null)
+                    {
+                        assemblies.Add(item: assembly);
+                    }
+                }
+            }
+        }
+
+        return assemblies;
     }
 }

@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -83,6 +84,81 @@ public sealed partial class ProjectPathExtractionTests
         Assert.Equal(expected: "External.Api", actual: external.Name);
         Assert.Equal("Run", Assert.Single(external.Methods!).Name);
         Assert.DoesNotContain(collection: model.Types!, filter: type => type.Name == "OldBuild");
+    }
+
+    [Fact]
+    public async Task ShouldUseCompileAssembliesFromRestoredProjectAssetsAsync()
+    {
+        // Given
+        using var fixture = new ProjectFolder();
+        fixture.Write(
+            relativePath: "Entry.cs",
+            text: "public class Entry { public void Run() { External.Api.Run(); } }");
+
+        string packageRoot = Path.Combine(
+            path1: fixture.DirectoryPath,
+            path2: "packages");
+
+        string packageAssembly = Path.Combine(
+            paths:
+            [
+                packageRoot,
+                "external",
+                "1.0.0",
+                "lib",
+                "net10.0",
+                "External.dll",
+            ]);
+
+        Directory.CreateDirectory(path: Path.GetDirectoryName(path: packageAssembly)!);
+        EmitAssembly(
+            path: packageAssembly,
+            code: "namespace External; public class Api { public static void Run() {} }");
+
+        var assets = new JsonObject
+        {
+            ["version"] = 4,
+            ["targets"] = new JsonObject
+            {
+                ["net10.0"] = new JsonObject
+                {
+                    ["External/1.0.0"] = new JsonObject
+                    {
+                        ["type"] = "package",
+                        ["compile"] = new JsonObject
+                        {
+                            ["lib/net10.0/External.dll"] = new JsonObject(),
+                        },
+                    },
+                },
+            },
+            ["libraries"] = new JsonObject
+            {
+                ["External/1.0.0"] = new JsonObject
+                {
+                    ["type"] = "package",
+                    ["path"] = "external/1.0.0",
+                },
+            },
+            ["packageFolders"] = new JsonObject
+            {
+                [packageRoot + Path.DirectorySeparatorChar] = new JsonObject(),
+            },
+        };
+
+        fixture.Write(
+            relativePath: "obj/project.assets.json",
+            text: assets.ToJsonString());
+
+        // When
+        ProjectModel model = await TestServices
+            .Get<ProjectModelBuilder>()
+            .BuildAsync(projectFilePath: fixture.ProjectPath);
+
+        // Then
+        Assert.Equal(
+            expected: "External.Api",
+            actual: Assert.Single(collection: model.Dependencies!).ToType);
     }
 
     [Fact]
