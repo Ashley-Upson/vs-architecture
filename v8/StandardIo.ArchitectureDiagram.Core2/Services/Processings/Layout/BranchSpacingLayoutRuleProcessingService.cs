@@ -25,6 +25,17 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
                 .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
             var children = project.Nodes.ToLookup(node => owners[node.Id] ?? string.Empty, node => node.Id);
+            var separation = new Dictionary<string, HashSet<string>>();
+            foreach (var group in LayoutGraph.BranchGroups(project))
+            foreach (var first in group)
+            foreach (var second in group)
+            {
+                if (first.Id == second.Id) continue;
+                if (!separation.TryGetValue(first.Id, out var peers)) separation[first.Id] = peers = [];
+                peers.Add(second.Id);
+            }
+            bool MustSeparate(string first, string second) => branches[first].Any(id =>
+                separation.TryGetValue(id, out var peers) && peers.Overlaps(branches[second]));
             double spacing = renderModel.IsProjectGraph ? renderModel.Configuration.Architecture.ProjectSpacing : renderModel.Configuration.Architecture.NodeSpacing;
             RenderNode Current(string id) => project.Nodes.Single(node => node.Id == id);
             void Arrange(string owner)
@@ -33,17 +44,17 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 foreach (string root in roots) Arrange(root);
                 // Translate completed branches as units; later placement cannot undo
                 // their internal spacing or parent centring.
-                var placed = new List<(double Left, double Right, double Top, double Bottom)>();
+                var placed = new List<(string Root, double Left, double Right, double Top, double Bottom)>();
                 foreach (string root in roots)
                 {
                     var nodes = branches[root].Select(Current).ToArray();
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
-                    double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top)
+                    double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
                         .Select(branch => branch.Right + spacing).DefaultIfEmpty(left).Max();
                     double delta = reclaimSpace ? next - left : Math.Max(0, next - left);
                     foreach (string id in branches[root]) LayoutGraph.Move(project, id, delta);
-                    placed.Add((left + delta, right + delta, top, bottom));
+                    placed.Add((root, left + delta, right + delta, top, bottom));
                 }
                 if (owner.Length == 0) return;
                 var ownedChildren = LayoutGraph.OwnedChildren(project, owner);

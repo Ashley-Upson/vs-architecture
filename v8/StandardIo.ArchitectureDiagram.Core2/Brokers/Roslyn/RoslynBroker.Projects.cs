@@ -67,7 +67,8 @@ internal partial class RoslynBroker
 
         string[] buildAssemblies = projectAssembly is null ? Array.Empty<string>() : Directory.GetFiles(path: Path.GetDirectoryName(path: projectAssembly)!, searchPattern: "*.dll");
 
-        return trustedAssemblies.Split(separator: Path.PathSeparator)
+        return GetRestoredReferences(directory)
+            .Concat(trustedAssemblies.Split(separator: Path.PathSeparator))
             .Concat(second: buildAssemblies)
             .Where(predicate: path => !string.Equals(a: Path.GetFileNameWithoutExtension(path: path), b: projectName, comparisonType: StringComparison.OrdinalIgnoreCase))
             .DistinctBy(keySelector: path => Path.GetFileName(path: path), comparer: StringComparer.OrdinalIgnoreCase)
