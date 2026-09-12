@@ -53,56 +53,47 @@ internal sealed class InferredRowLayoutRuleProcessingService(DepthLayoutRuleProc
             }
         }
         var membership = nodes.Values.ToDictionary(n => n.Id,
-            n => namedGroups.GetValueOrDefault(n.TypeName) ?? "node:" + n.Id);
-
-        string[] Order(Dictionary<string, string> groups)
+            n => namedGroups.GetValueOrDefault(n.TypeName) ?? "unmatched");
+        var outgoing = links.ToLookup(e => e.SourceId, e => e.TargetId);
+        var incoming = links.ToLookup(e => e.TargetId, e => e.SourceId);
+        var pending = nodes.Keys.ToHashSet(StringComparer.Ordinal);
+        var counts = nodes.Keys.ToDictionary(id => id, id => incoming[id].Count());
+        var rows = new Dictionary<string, int>();
+        var rowCategories = new Dictionary<int, string>();
+        int row = 0;
+        while (pending.Count > 0)
         {
-            var keys = groups.Values.Distinct().OrderBy(k => k, StringComparer.Ordinal).ToArray();
-            var edges = links.Select(e => (From: groups[e.SourceId], To: groups[e.TargetId]))
-                .Where(e => e.From != e.To).Distinct().ToArray();
-            var counts = keys.ToDictionary(k => k, k => edges.Count(e => e.To == k));
-            var pending = new Queue<string>(keys.Where(k => counts[k] == 0));
-            var order = new List<string>();
-            var outgoing = edges.ToLookup(e => e.From, e => e.To);
-            while (pending.TryDequeue(out string? key))
+            var ready = pending.Where(id => counts[id] == 0).ToArray();
+            // The depth rule already removed cycle-closing links, so ready cannot be empty.
+            var groups = ready.GroupBy(id => membership[id]).ToArray();
+            string category = groups.OrderBy(g => pending.Where(id => membership[id] == g.Key)
+                    .Any(id => incoming[id].Any(parent => pending.Contains(parent) && membership[parent] != g.Key)))
+                .ThenBy(g => g.Min(id => nodes[id].Y)).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
+            // Consume a category as one band where the dependency graph permits it.
+            // If another category must intervene, retain the category on a later exclusive row.
+            while (true)
             {
-                order.Add(key);
-                foreach (string child in outgoing[key]) if (--counts[child] == 0) pending.Enqueue(child);
+                var occupants = pending.Where(id => membership[id] == category && counts[id] == 0).ToArray();
+                if (occupants.Length == 0) break;
+                rowCategories[row] = category;
+                foreach (string id in occupants) { rows[id] = row; pending.Remove(id); }
+                foreach (string id in occupants)
+                    foreach (string child in outgoing[id]) counts[child]--;
+                row++;
             }
-            return order.ToArray();
         }
-
-        var ordered = Order(membership);
-        var ambiguous = membership.Values.Except(ordered).ToHashSet();
-        // Contradictory naming groups must not force contradictory dependency depths.
-        foreach (string id in membership.Keys.ToArray())
-            if (ambiguous.Contains(membership[id])) membership[id] = "node:" + id;
-        ordered = Order(membership);
-        var offset = nodes.Keys.ToDictionary(id => id, _ => 0);
-        var outgoingLinks = links.ToLookup(e => e.SourceId);
-        foreach (var node in nodes.Values.OrderBy(n => projectRows[nodeProjects[n.Id]]).ThenBy(n => n.Y))
-            foreach (var edge in outgoingLinks[node.Id])
-                if (membership[node.Id] == membership[edge.TargetId])
-                    offset[edge.TargetId] = Math.Max(offset[edge.TargetId], offset[node.Id] + 1);
-        double depth = model.Configuration.Architecture.RowDepth;
-        var members = membership.ToLookup(p => p.Value, p => p.Key);
-        var starts = members.ToDictionary(g => g.Key, g => g.Max(id => (int)Math.Round((nodes[id].Y - 60) / depth) - offset[id]));
-        var heights = members.ToDictionary(g => g.Key, g => g.Max(id => offset[id]));
-        var groupEdges = links.Select(e => (From: membership[e.SourceId], To: membership[e.TargetId]))
-            .Where(e => e.From != e.To).Distinct().ToLookup(e => e.From, e => e.To);
-        foreach (string key in ordered)
-            foreach (string child in groupEdges[key]) starts[child] = Math.Max(starts[child], starts[key] + heights[key] + 1);
-        model.Rows = members.Where(g => !g.Key.StartsWith("node:", StringComparison.Ordinal))
-            .ToDictionary(g => g.Key, g => new RenderRowGroup(starts[g.Key], g.ToArray()));
-        // Only side-by-side project groups share vertical slots. A downstream project
-        // starts a fresh set of rows instead of repeating its parent's empty bands.
-        var origins = model.Projects.GroupBy(p => projectRows[p.Id]).ToDictionary(g => g.Key,
-            g => g.SelectMany(p => p.Nodes).Select(n => starts[membership[n.Id]] + offset[n.Id]).DefaultIfEmpty(0).Min());
+        model.Rows = rows.GroupBy(p => p.Value).ToDictionary(g => rowCategories[g.Key] + ":" + g.Key,
+            g => new RenderRowGroup(g.Key, g.Select(p => p.Key).ToArray()));
+        // Neighbouring projects use the same slots; downstream tiers start fresh and
+        // omit bands absent from every project in that tier.
+        var tierRows = model.Projects.GroupBy(p => projectRows[p.Id]).ToDictionary(g => g.Key,
+            g => g.SelectMany(p => p.Nodes).Select(n => rows[n.Id]).Distinct().OrderBy(r => r)
+                .Select((value, index) => (value, index)).ToDictionary(p => p.value, p => p.index));
         foreach (var project in model.Projects)
             for (int i = 0; i < project.Nodes.Length; i++)
             {
                 var node = project.Nodes[i];
-                project.Nodes[i] = node with { Y = 60 + (starts[membership[node.Id]] + offset[node.Id] - origins[projectRows[project.Id]]) * depth };
+                project.Nodes[i] = node with { Y = 60 + tierRows[projectRows[project.Id]][rows[node.Id]] * model.Configuration.Architecture.RowDepth };
             }
     }
 }

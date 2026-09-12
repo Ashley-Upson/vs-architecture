@@ -8,6 +8,19 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class InferredRowTests
 {
     [Fact]
+    public void ShouldReserveExclusiveRowsForInferredCategories()
+    {
+        var project = RenderConfigurationTests.Project("Example", "Entry", "AlphaQuartz", "BetaQuartz", "AlphaMarble", "BetaMarble", "Oddity");
+        project.Dependencies = [RenderConfigurationTests.Link("Entry", "AlphaQuartz"),
+            RenderConfigurationTests.Link("Entry", "AlphaMarble"), RenderConfigurationTests.Link("Entry", "Oddity")];
+        var result = TestServices.Get<LayoutModelBuilder>().BuildRenderModel(new RenderModel([project]));
+        var nodes = result.Projects.SelectMany(p => p.Nodes).ToArray();
+        var quartzRows = nodes.Where(n => n.TypeName.EndsWith("Quartz")).Select(n => n.Y).ToHashSet();
+        Assert.All(nodes.Where(n => !n.TypeName.EndsWith("Quartz")), n => Assert.DoesNotContain(n.Y, quartzRows));
+        Assert.Single(quartzRows);
+    }
+
+    [Fact]
     public void ShouldRetainDepthInsideAGroupAndFallBackForContradictoryGroups()
     {
         var project = RenderConfigurationTests.Project("Example", "AlphaQuartz", "BetaQuartz", "GammaQuartz", "AlphaMarble", "BetaMarble");
