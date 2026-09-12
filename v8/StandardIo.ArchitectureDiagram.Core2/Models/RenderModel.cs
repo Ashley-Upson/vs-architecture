@@ -16,6 +16,7 @@ public sealed record RenderModel(double Width, double Height, RenderProject[] Pr
     public DiagramTypes DiagramType { get; set; } = DiagramTypes.Architecture;
     public RenderProject[] Projects { get; set; } = Projects;
     internal bool IsProjectGraph { get; set; }
+    public System.Collections.Generic.Dictionary<string, RenderRowGroup> Rows { get; set; } = new();
     public RenderModel(ProjectModel[] projectModels, RenderConfiguration? configuration = null, DiagramTypes diagramType = DiagramTypes.Architecture)
         : this(0, 0, [])
     {

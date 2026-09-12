@@ -438,3 +438,11 @@ source trees and empty external containers do not create empty architecture boxe
 ### Layout cleanup and built-in types
 
 After branch placement and parent centring, the cleanup rule packs completed branches using the same ownership and clearance constraints. It reclaims excess horizontal gaps before bounds and routes are computed. Architecture views omit `System.*` nodes and their connections; raw extraction remains available for other diagram types. Draw.io output disables grid and page view. Deferred-execution rendering has been rolled back.
+
+### Inferred naming rows
+
+`InferredRowLayoutRuleProcessingService` runs after dependency depth and before horizontal placement. It splits short type names into words and discovers repeated prefixes and suffixes across distinct types in the selected diagram. It contains no architectural vocabulary. Peer patterns are preferred over patterns containing direct calls between their members; longer patterns win next, with suffixes as a deterministic tie breaker. After assigning a group, candidates are reconsidered using remaining types, so a general suffix can describe the residual peer set.
+
+`RenderModel.Rows` records inferred group keys, starting logical rows, and node IDs. Dependencies within a group create additional subrows. Dependencies between groups establish their ordering, including forward cross-project references. Groups that make the ordering contradictory fall back to individual dependency-based placement. Real cycle handling stays with the existing depth rule.
+
+Projects at the same dependency tier share row positions. Each downstream tier starts fresh rather than reserving empty rows for its upstream projects. Matching is a layout heuristic, not a declaration that a type complies with an architectural standard. Unmatched types retain dependency constraints. More spacing may be required to align groups; branch clearance, centring, compaction, and routing still run afterwards.
