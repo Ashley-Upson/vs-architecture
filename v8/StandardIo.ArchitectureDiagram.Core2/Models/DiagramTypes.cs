@@ -6,5 +6,7 @@ public enum DiagramTypes
 {
     Architecture,
     DataModel,
-    CallChain
+    CallChain,
+    Composition,
+    All
 }

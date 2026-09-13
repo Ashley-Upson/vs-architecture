@@ -27,6 +27,9 @@ internal sealed class RenderConfigurationService(IRenderConfigurationBroker brok
         ArgumentNullException.ThrowIfNull(configuration.Architecture);
         ArgumentNullException.ThrowIfNull(configuration.CallChain);
         ArgumentNullException.ThrowIfNull(configuration.DataModel);
+        ArgumentNullException.ThrowIfNull(configuration.Composition);
+        foreach (double size in new[] { configuration.Composition.NodeWidth, configuration.Composition.NodeSpacing, configuration.Composition.RowSpacing, configuration.Composition.ProjectSpacing,
+            configuration.DataModel.NodeWidth, configuration.DataModel.NodeSpacing, configuration.DataModel.RowSpacing, configuration.DataModel.ProjectSpacing }) Positive(size, "Contextual diagram spacing");
         Positive(configuration.HorizontalOffset, nameof(configuration.HorizontalOffset));
         if (configuration.MaxLayoutIterations <= 0) throw new ArgumentOutOfRangeException(nameof(configuration.MaxLayoutIterations));
         var architecture = configuration.Architecture;

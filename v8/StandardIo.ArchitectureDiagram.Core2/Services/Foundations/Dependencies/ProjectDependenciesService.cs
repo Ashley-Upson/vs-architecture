@@ -40,14 +40,19 @@ internal sealed class ProjectDependenciesService : IProjectDependenciesService
                 dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Inheritance, FromType = fromType, ToType = roslynBroker.GetTypeName(type: target.OriginalDefinition) });
             }
 
-            bool isComposition = roslynBroker.IsCompositionRoot(type);
             var calls = roslynBroker.GetCalls(compilation, type, cancellationToken).ToArray();
-            foreach (var target in roslynBroker.GetReferencedTypes(compilation, type, cancellationToken).Where(target => !calls.Any(call => SymbolEqualityComparer.Default.Equals(call.DependencyType.OriginalDefinition, target.OriginalDefinition))))
-                dependencies.Add(new TypeRelationship { DependencyType = DependencyType.Consumed, IsComposition = isComposition, FromType = fromType, ToType = roslynBroker.GetTypeName(target.OriginalDefinition) });
+            foreach (bool referenceOnly in new[] { false, true })
+            foreach (var target in roslynBroker.GetReferencedTypes(compilation, type, cancellationToken, referenceOnly).Where(target => referenceOnly || !calls.Any(call => !call.IsResultExtension && SymbolEqualityComparer.Default.Equals(call.DependencyType.OriginalDefinition, target.OriginalDefinition))))
+                dependencies.Add(new TypeRelationship { DependencyType = DependencyType.Consumed, IsComposition = referenceOnly, FromType = fromType, ToType = roslynBroker.GetTypeName(target.OriginalDefinition) });
 
             foreach (var call in calls)
             {
-                dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Consumed, IsComposition = isComposition, FromType = fromType, ToType = roslynBroker.GetTypeName(type: call.DependencyType.OriginalDefinition), FromMethod = call.Caller?.Name, ToMethod = call.Target.Name, IsResultExtension = call.IsResultExtension && !isComposition });
+                var method = call.Target.ReducedFrom ?? call.Target;
+                bool isComposition = roslynBroker.IsCompositionRoot(call.DependencyType) || method.ContainingNamespace.ToDisplayString() is "Microsoft.Extensions.DependencyInjection" or "Microsoft.Extensions.Hosting" || method.IsExtensionMethod && method.Parameters.Any(parameter =>
+                    parameter.Type.ContainingNamespace?.ToDisplayString() is "Microsoft.Extensions.DependencyInjection" or "Microsoft.Extensions.Hosting");
+                dependencies.Add(new TypeRelationship { DependencyType = DependencyType.Consumed, IsComposition = isComposition,
+                    FromType = fromType, ToType = roslynBroker.GetTypeName(call.DependencyType.OriginalDefinition),
+                    FromMethod = call.Caller?.Name, ToMethod = call.Target.Name, IsResultExtension = call.IsResultExtension && !isComposition });
             }
         }
 

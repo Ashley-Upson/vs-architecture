@@ -53,12 +53,14 @@ public sealed class ArchitecturalLinkReviewTests
         Assert.All(projects.SelectMany(project => project.Types!), type => Assert.Equal(p.Types!.Single(original => original.Name == type.Name).HasDeclaredBehaviour, type.HasDeclaredBehaviour));
         var drawing = TestServices.Get<LayoutModelBuilder>().BuildRenderModel(new RenderModel(projects));
         var registrations = drawing.Projects.SelectMany(p => p.Connections).Where(e => e.FromType == "Bootstrap").ToArray();
-        Assert.NotEmpty(registrations);
+        Assert.Empty(registrations);
+        var composition = TestServices.Get<StandardIo.ArchitectureDiagram.Core2.Exposures.IRenderModelBuilderFactory>().CreateRenderModelBuilder("Composition").BuildRenderModel(new RenderModel(projects, diagramType: DiagramTypes.Composition));
+        Assert.NotEmpty(composition.Projects.SelectMany(p => p.Connections));
         Assert.All(registrations, e => Assert.True(e.IsComposition));
         Assert.All(registrations, e => Assert.NotEqual("#ef4444", e.Stroke));
         foreach (IDiagramRenderer renderer in new IDiagramRenderer[] { TestServices.Get<HtmlDiagramRenderer>(), TestServices.Get<DrawIODiagramRenderer>() })
         {
-            var document = System.Xml.Linq.XDocument.Parse(System.Text.Encoding.UTF8.GetString(renderer.Render(new RenderModel(projects))));
+            var document = System.Xml.Linq.XDocument.Parse(System.Text.Encoding.UTF8.GetString(renderer.Render(new RenderModel(projects, diagramType: DiagramTypes.Composition))));
             Assert.Contains(document.Descendants(), e => (string?)e.Attribute("class") == "link composition" || ((string?)e.Attribute("style"))?.Contains("dashPattern=2 4") == true);
         }
     }

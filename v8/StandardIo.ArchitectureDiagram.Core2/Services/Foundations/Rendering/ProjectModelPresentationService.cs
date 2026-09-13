@@ -68,7 +68,8 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
         var dataTypes = types.Where(type => diagramType == DiagramTypes.Architecture && (type.IsDataType || !(type.HasDeclaredBehaviour ?? (!(type.IsInternal || type.Methods is not null) || (type.Methods?.Length ?? 0) > 0))))
             .Select(type => type.Name!).ToHashSet(StringComparer.Ordinal);
 
-        DefinedType[] visible = types.Where(predicate: type => !hidden.Contains(item: type.Name!) && !dataTypes.Contains(type.Name!))
+        var compositionOnly = links.Where(link => link.IsComposition).Select(link => link.FromType!).Where(name => !links.Any(link => !link.IsComposition && link.DependencyType == DependencyType.Consumed && link.FromType == name)).ToHashSet(StringComparer.Ordinal);
+        DefinedType[] visible = types.Where(predicate: type => !hidden.Contains(item: type.Name!) && !dataTypes.Contains(type.Name!) && !(diagramType == DiagramTypes.Architecture && compositionOnly.Contains(type.Name!)))
             .ToArray();
 
         string ShortName(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
@@ -95,7 +96,7 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
 
         foreach (TypeRelationship link in links)
         {
-            if (diagramType == DiagramTypes.Architecture && link.IsResultExtension) continue;
+            if (diagramType == DiagramTypes.Architecture && (link.IsResultExtension || link.IsComposition || compositionOnly.Contains(link.FromType!) || compositionOnly.Contains(link.ToType!))) continue;
             if (diagramType == DiagramTypes.Architecture && link.DependencyType == DependencyType.Inheritance
                 && (!byName[link.ToType!].IsInternal || byName[link.ToType!].FrameworkType == FrameworkType.Interface)) continue;
             if (dataTypes.Contains(link.FromType!) || dataTypes.Contains(link.ToType!) || hidden.Contains(item: link.FromType!))

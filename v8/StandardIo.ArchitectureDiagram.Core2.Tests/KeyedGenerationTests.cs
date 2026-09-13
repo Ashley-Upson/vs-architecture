@@ -159,7 +159,8 @@ public sealed partial class KeyedGenerationTests
         byte[] bytes = await service.RenderDiagramRenderRequestAsync(diagramRenderRequest: request, cancellationToken: CancellationToken.None);
         // Then
         Assert.Equal(expected: new byte[] { 42 }, actual: bytes);
-        Assert.Equal(expected: fixture.Trees, actual: fixture.RenderInput);
+        Assert.Equal(expected: new[] { fixture.Project }, actual: fixture.RenderInput);
+        Assert.Null(fixture.SplitInput);
     }
 
     private sealed class GenerationFixture : IProjectModelBuilderService, IProjectModelTreeService, IDiagramRenderer

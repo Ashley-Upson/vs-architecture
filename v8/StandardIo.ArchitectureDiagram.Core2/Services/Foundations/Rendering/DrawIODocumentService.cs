@@ -31,7 +31,7 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
                 bool inheritance = route.Inheritance;
                 var source = drawing.Nodes.Single(node => node.Id == route.SourceId);
                 string exitX = ((route.Points[0].X - source.X) / source.Width).ToString(CultureInfo.InvariantCulture);
-                root.Add(content: new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", drawing.Id), new XAttribute("edge", "1"), new XAttribute("value", ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId), new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;html=0;strokeColor=" + route.Stroke + ";fontColor=#ffffff;labelBackgroundColor=#263242;exitX=" + exitX + ";exitY=1;entryX=0.5;entryY=0;exitPerimeter=0;entryPerimeter=0;" + (inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(count: 1).Take(count: route.Points.Length - 2).Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
+                root.Add(content: new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", drawing.Id), new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId), new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;html=0;strokeColor=" + route.Stroke + ";fontColor=#ffffff;labelBackgroundColor=#263242;exitX=" + exitX + ";exitY=1;entryX=0.5;entryY=0;exitPerimeter=0;entryPerimeter=0;" + (inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(count: 1).Take(count: route.Points.Length - 2).Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
             }
         }
 
@@ -41,14 +41,14 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
             var source = owner.Nodes.Single(node => node.Id == route.SourceId);
             string exitX = ((route.Points[0].X - owner.X - source.X) / source.Width).ToString(CultureInfo.InvariantCulture);
             root.Add(new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", "1"),
-                new XAttribute("edge", "1"), new XAttribute("value", ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId),
+                new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId),
                 new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;strokeColor=" + route.Stroke + ";exitX=" + exitX + ";exitY=1;entryX=0.5;entryY=0;exitPerimeter=0;entryPerimeter=0;" + (route.Inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")),
                 new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"),
                     new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(1).Take(route.Points.Length - 2)
                         .Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
         }
 
-        var file = new XDocument(new XElement("mxfile", new XAttribute("host", "app.diagrams.net"), new XElement("diagram", new XAttribute("id", "architecture"), new XAttribute("name", "Architecture"), new XElement("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "0"), new XAttribute("gridSize", "10"), root))));
+        var file = new XDocument(new XElement("mxfile", new XAttribute("host", "app.diagrams.net"), new XElement("diagram", new XAttribute("id", renderModel.DiagramType.ToString()), new XAttribute("name", renderModel.DiagramType == DiagramTypes.DataModel ? "Entity Relationship" : renderModel.DiagramType.ToString()), new XElement("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "0"), new XAttribute("gridSize", "10"), root))));
         return Encoding.UTF8.GetBytes(s: file.ToString(options: SaveOptions.DisableFormatting));
     }
 

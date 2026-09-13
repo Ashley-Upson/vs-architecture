@@ -83,6 +83,15 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ILayoutOrchestrationService, LayoutOrchestrationService>();
         services.AddTransient(implementationFactory: provider => new LayoutModelBuilder(provider.GetRequiredService<ILayoutOrchestrationService>()));
         services.AddTransient<IRenderModelBuilderFactory, RenderModelBuilderFactory>();
+        services.AddTransient<IDiagramTabRendererFactory, DiagramTabRendererFactory>();
+        services.AddTransient<IDiagramTabBroker, DiagramTabBroker>();
+        services.AddTransient<IDiagramTabService, DiagramTabService>();
+        services.AddTransient<IDocumentCompilationService, DocumentCompilationService>();
+        services.AddTransient<IDiagramDocumentOrchestrationService, DiagramDocumentOrchestrationService>();
+        services.AddTransient<IContextualModelService, ContextualModelService>();
+        services.AddTransient<IContextualLayoutService, ContextualLayoutService>();
+        services.AddTransient<IContextualLayoutOrchestrationService, ContextualLayoutOrchestrationService>();
+        services.AddTransient(provider => new ContextualRenderModelBuilder(provider.GetRequiredService<IContextualLayoutOrchestrationService>()));
         services.AddTransient<IHtmlModelPreparationBroker, HtmlModelPreparationBroker>();
         services.AddTransient<IDrawIOModelPreparationBroker, DrawIOModelPreparationBroker>();
         services.AddTransient<IHtmlModelPreparationService, HtmlModelPreparationService>();
@@ -99,6 +108,11 @@ public static class ServiceCollectionExtensions
             services.AddKeyedTransient<IDiagramRenderer>(serviceKey: $"{DiagramFormats.DrawIO}_{diagramType}", implementationFactory: (provider, _) => provider.GetRequiredService<DrawIODiagramRenderer>());
             services.AddKeyedTransient<IDiagramRenderer>(serviceKey: $"{DiagramFormats.Html}_{diagramType}", implementationFactory: (provider, _) => provider.GetRequiredService<HtmlDiagramRenderer>());
         }
+
+        foreach (var type in new[] { DiagramTypes.Composition, DiagramTypes.DataModel })
+            services.AddKeyedTransient<IRenderModelBuilder>(type.ToString(), (provider, _) => provider.GetRequiredService<ContextualRenderModelBuilder>());
+        foreach (var format in Enum.GetValues<DiagramFormats>())
+            services.AddKeyedTransient<IDiagramRenderer>($"{format}_{DiagramTypes.All}", (provider, _) => new AllDiagramRenderer(provider.GetRequiredService<IDiagramDocumentOrchestrationService>(), format));
 
         services.AddTransient(implementationFactory: provider => new HtmlDiagramRenderer(provider.GetRequiredService<IHtmlModelPreparationService>(), provider.GetRequiredService<IHtmlDocumentService>()));
 

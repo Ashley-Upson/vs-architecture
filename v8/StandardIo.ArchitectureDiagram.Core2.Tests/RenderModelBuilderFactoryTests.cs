@@ -15,7 +15,8 @@ public sealed class RenderModelBuilderFactoryTests
     {
         using var provider = new ServiceCollection().AddArchitectureDiagram().BuildServiceProvider();
         var factory = provider.GetRequiredService<IRenderModelBuilderFactory>();
-        Assert.IsType<LayoutModelBuilder>(factory.CreateRenderModelBuilder(diagramType.ToString()));
+        if (diagramType == DiagramTypes.DataModel) Assert.IsType<ContextualRenderModelBuilder>(factory.CreateRenderModelBuilder(diagramType.ToString()));
+        else Assert.IsType<LayoutModelBuilder>(factory.CreateRenderModelBuilder(diagramType.ToString()));
     }
 
     [Theory]

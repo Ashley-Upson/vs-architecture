@@ -1,5 +1,5 @@
 namespace StandardIo.ArchitectureDiagram.Core2.Models;
-public sealed class DataModelRenderConfiguration
+public sealed class CompositionRenderConfiguration
 {
     public double NodeWidth { get; set; } = 300;
     public double NodeSpacing { get; set; } = 80;

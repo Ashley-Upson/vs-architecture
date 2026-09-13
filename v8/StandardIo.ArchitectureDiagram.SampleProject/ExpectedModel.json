@@ -2756,7 +2756,7 @@
       "Methods": []
     },
     {
-      "Name": "cCoder.Eventing.Models.EventMessage<T>",
+      "Name": "cCoder.Eventing.Models.EventMessage\u003CT\u003E",
       "AssemblyName": "cCoder.Eventing",
       "HasDeclaredBehaviour": false,
       "BaseTypeName": "cCoder.Eventing.Models.EventMessage",
@@ -2777,6 +2777,7 @@
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
       "FromMethod": null,
@@ -2820,7 +2821,7 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
-      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "ToType": "cCoder.Eventing.Models.EventMessage\u003CT\u003E",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2833,6 +2834,7 @@
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
       "FromMethod": null,
@@ -2876,7 +2878,7 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
-      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "ToType": "cCoder.Eventing.Models.EventMessage\u003CT\u003E",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2889,6 +2891,7 @@
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
       "FromMethod": null,
@@ -2932,7 +2935,7 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
-      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "ToType": "cCoder.Eventing.Models.EventMessage\u003CT\u003E",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2945,6 +2948,7 @@
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
       "FromMethod": null,
@@ -2988,7 +2992,7 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
-      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "ToType": "cCoder.Eventing.Models.EventMessage\u003CT\u003E",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -3001,6 +3005,7 @@
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
       "FromMethod": null,
@@ -3044,7 +3049,7 @@
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
-      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "ToType": "cCoder.Eventing.Models.EventMessage\u003CT\u003E",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -3519,435 +3524,477 @@
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
       "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddLogging",
-      "IsComposition": true
+      "ToMethod": "AddLogging"
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
       "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddSingleton",
-      "IsComposition": true
+      "ToMethod": "AddSingleton"
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
       "FromMethod": "AddSchoolSample",
-      "ToMethod": "GetRequiredService",
-      "IsComposition": true
+      "ToMethod": "GetRequiredService"
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "IsComposition": true,
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "IsComposition": true,
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "IsComposition": true,
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "IsComposition": true,
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "IsComposition": true,
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
       "FromMethod": null,
-      "ToMethod": null,
-      "IsComposition": true
+      "ToMethod": null
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
       "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddEventing",
-      "IsComposition": true
+      "ToMethod": "AddEventing"
     },
     {
       "DependencyType": "Consumed",
+      "IsComposition": true,
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
       "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
       "FromMethod": "AddSchoolSample",
-      "ToMethod": "AddEventingForType",
-      "IsComposition": true
+      "ToMethod": "AddEventingForType"
     },
     {
       "DependencyType": "Inheritance",

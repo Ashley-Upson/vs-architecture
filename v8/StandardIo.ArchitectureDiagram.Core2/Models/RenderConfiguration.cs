@@ -10,5 +10,6 @@ public sealed class RenderConfiguration
     public int MaxLayoutIterations { get; set; } = 1000;
     public ArchitectureRenderConfiguration Architecture { get; set; } = new();
     public CallChainRenderConfiguration CallChain { get; set; } = new();
+    public CompositionRenderConfiguration Composition { get; set; } = new();
     public DataModelRenderConfiguration DataModel { get; set; } = new();
 }

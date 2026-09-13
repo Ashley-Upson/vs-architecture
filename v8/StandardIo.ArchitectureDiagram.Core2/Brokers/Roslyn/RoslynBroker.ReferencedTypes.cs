@@ -9,7 +9,7 @@ internal partial class RoslynBroker
     public bool IsCompositionRoot(INamedTypeSymbol type) => type.IsStatic && type.GetMembers().OfType<IMethodSymbol>().Any(method =>
         method.Parameters.Any(parameter => parameter.Type.ToDisplayString() == "Microsoft.Extensions.DependencyInjection.IServiceCollection"));
 
-    public IEnumerable<INamedTypeSymbol> GetReferencedTypes(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
+    public IEnumerable<INamedTypeSymbol> GetReferencedTypes(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken, bool? compositionOnly = null)
     {
         var referenced = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         void Add(ITypeSymbol? symbol)
@@ -19,7 +19,7 @@ internal partial class RoslynBroker
             if (implementations.Length == 0) referenced.Add(named.OriginalDefinition);
             else foreach (var implementation in implementations) referenced.Add(implementation.OriginalDefinition);
         }
-        foreach (var constructor in type.InstanceConstructors.Where(c => !c.IsImplicitlyDeclared))
+        foreach (var constructor in type.InstanceConstructors.Where(c => !c.IsImplicitlyDeclared && compositionOnly != true))
             foreach (var parameter in constructor.Parameters) Add(parameter.Type);
         foreach (var declaration in type.DeclaringSyntaxReferences)
         {
@@ -29,10 +29,10 @@ internal partial class RoslynBroker
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!SymbolEqualityComparer.Default.Equals(semantic.GetEnclosingSymbol(node.SpanStart, cancellationToken)?.ContainingType, type)) continue;
-                if (node is BaseObjectCreationExpressionSyntax creation) Add(semantic.GetTypeInfo(creation, cancellationToken).Type);
-                if (node is TypeOfExpressionSyntax typeOf) Add(semantic.GetTypeInfo(typeOf.Type, cancellationToken).Type);
+                if (compositionOnly != true && node is BaseObjectCreationExpressionSyntax creation) Add(semantic.GetTypeInfo(creation, cancellationToken).Type);
+                if (compositionOnly != false && node is TypeOfExpressionSyntax typeOf) Add(semantic.GetTypeInfo(typeOf.Type, cancellationToken).Type);
                 // Generic arguments capture composition registrations without traversing the external library.
-                if (node is InvocationExpressionSyntax invocation && semantic.GetSymbolInfo(invocation, cancellationToken).Symbol is IMethodSymbol method)
+                if (compositionOnly != false && node is InvocationExpressionSyntax invocation && semantic.GetSymbolInfo(invocation, cancellationToken).Symbol is IMethodSymbol method)
                     foreach (var argument in method.TypeArguments) Add(argument);
             }
         }

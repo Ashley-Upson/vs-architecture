@@ -28,7 +28,7 @@ internal sealed class DiagramGenerationOrchestrationService(IProjectModelBuilder
             cancellationToken.ThrowIfCancellationRequested();
             ProjectModel project = await builderService.BuildAsync(projectFilePath: path, cancellationToken: cancellationToken);
 
-            if (request.RenderConfiguration.NoDuplicates)
+            if (request.RenderConfiguration.NoDuplicates || request.DiagramType != DiagramTypes.Architecture)
             {
                 models.Add(item: project);
             }
