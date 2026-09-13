@@ -51,13 +51,9 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
                     : projects.Where((candidate, index) => presentations[index].SourceTreeIndex is null
                         || presentations[index].SourceTreeIndex == projectIndex)
                         .SelectMany(candidate => candidate.Nodes).First(node => node.TypeName == link.ToType);
-                bool reviewExternal = renderModel.DiagramType == DiagramTypes.Architecture && !configuration.NoDuplicates && configuration.Architecture.InlineExternals &&
-                    drawings[projectIndex].Model.Types!.Any(type => type.Name == target.TypeName && !type.IsInternal) &&
-                    drawings[projectIndex].Model.Dependencies!.Any(dependency => dependency.FromType == link.FromType && dependency.ToType != link.FromType &&
-                        drawings[projectIndex].Model.Types!.Any(type => type.Name == dependency.ToType && type.IsInternal));
                 var connection = new RenderConnection(project.Id + "-edge-" + (connections.Count + crossProjectConnections.Count),
                     source.Id, target.Id, source.TypeName, target.TypeName, link.DependencyType == DependencyType.Inheritance,
-                    Array.Empty<DrawingPoint>(), reviewExternal ? "#ef4444" : configuration.ColourLines ? target.Fill : "#d1d5db");
+                    Array.Empty<DrawingPoint>(), configuration.ColourLines ? target.Fill : "#d1d5db");
                 if (local.ContainsKey(target.TypeName)) connections.Add(connection);
                 else crossProjectConnections.Add(connection);
             }

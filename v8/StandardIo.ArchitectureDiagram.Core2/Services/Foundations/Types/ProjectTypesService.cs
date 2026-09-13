@@ -31,7 +31,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
         INamedTypeSymbol[] definitions = roslynBroker.GetDefinedTypes(compilation: compilation)
             .ToArray();
 
-        IEnumerable<INamedTypeSymbol> targets = definitions.SelectMany(selector: type => roslynBroker.GetBaseTypes(type: type)
+        IEnumerable<INamedTypeSymbol> targets = definitions.SelectMany(selector: type => roslynBroker.GetReferencedTypes(compilation, type, cancellationToken).Concat(roslynBroker.GetBaseTypes(type: type))
             .Concat(second: roslynBroker.GetCalls(compilation: compilation, type: type, cancellationToken: cancellationToken)
             .Select(selector: call => call.DependencyType.OriginalDefinition)));
 
@@ -75,6 +75,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
             AssemblyName = isInternal ? null : type.ContainingAssembly.Identity.Name,
             FrameworkType = type.TypeKind switch { TypeKind.Interface => FrameworkType.Interface, TypeKind.Struct => FrameworkType.Struct, TypeKind.Enum => FrameworkType.Enum, _ => FrameworkType.Class },
             IsInternal = isInternal,
+            HasDeclaredBehaviour = type.GetMembers().OfType<IMethodSymbol>().Any(method => !method.IsImplicitlyDeclared && method.MethodKind is MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation),
             IsDataType = type.IsValueType || type.SpecialType is SpecialType.System_String or SpecialType.System_Array or SpecialType.System_Enum or SpecialType.System_ValueType ||
                 (!isInternal && type.ContainingNamespace.ToDisplayString().StartsWith("System.Collections", StringComparison.Ordinal) &&
                  (type.SpecialType == SpecialType.System_Collections_IEnumerable || type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T ||

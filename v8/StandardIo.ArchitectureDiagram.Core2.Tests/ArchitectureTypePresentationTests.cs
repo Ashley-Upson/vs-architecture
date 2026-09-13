@@ -111,7 +111,7 @@ public sealed class ArchitectureTypePresentationTests
         var result = TestServices.Get<IProjectModelPresentationService>().Prepare(project);
         // Then
         Assert.Equal(new[] { "Service", "Base" }, result.Model.Types!.Select(type => type.Name));
-        Assert.Empty(result.Model.Dependencies!);
+        Assert.Equal(DependencyType.Inheritance, Assert.Single(result.Model.Dependencies!).DependencyType);
         Assert.Equal("Service\nIContract\nBase", result.Labels["Service"]);
     }
 
@@ -135,7 +135,7 @@ public sealed class ArchitectureTypePresentationTests
         // Then
         Assert.Equal(noDuplicates ? 2 : 1, result.Projects.Length);
         var edge = result.Projects.SelectMany(box => box.Connections).Concat(result.CrossProjectConnections).Single(edge => edge.ToType == "External.Service");
-        Assert.Equal(noDuplicates || !internalChild ? "#d1d5db" : "#ef4444", edge.Stroke);
+        Assert.Equal(noDuplicates && internalChild ? "#ef4444" : "#d1d5db", edge.Stroke);
         var root = result.Projects.SelectMany(box => box.Nodes).Single(node => node.TypeName == "Root");
         Assert.True(root.TextLines[0].Bold);
     }

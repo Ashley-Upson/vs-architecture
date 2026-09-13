@@ -40,7 +40,11 @@ internal sealed class ProjectDependenciesService : IProjectDependenciesService
                 dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Inheritance, FromType = fromType, ToType = roslynBroker.GetTypeName(type: target.OriginalDefinition) });
             }
 
-            foreach (var call in roslynBroker.GetCalls(compilation: compilation, type: type, cancellationToken: cancellationToken))
+            var calls = roslynBroker.GetCalls(compilation, type, cancellationToken).ToArray();
+            foreach (var target in roslynBroker.GetReferencedTypes(compilation, type, cancellationToken).Where(target => !calls.Any(call => SymbolEqualityComparer.Default.Equals(call.DependencyType.OriginalDefinition, target.OriginalDefinition))))
+                dependencies.Add(new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = fromType, ToType = roslynBroker.GetTypeName(target.OriginalDefinition) });
+
+            foreach (var call in calls)
             {
                 dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Consumed, FromType = fromType, ToType = roslynBroker.GetTypeName(type: call.DependencyType.OriginalDefinition), FromMethod = call.Caller?.Name, ToMethod = call.Target.Name });
             }

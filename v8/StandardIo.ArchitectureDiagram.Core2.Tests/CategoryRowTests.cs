@@ -36,7 +36,7 @@ public sealed class CategoryRowTests
     [Theory]
     [InlineData("AlphaProcessingService", "BetaProcessingService", "AlphaBroker", "BetaBroker")]
     [InlineData("Example.Processings.Alpha", "Example.Processings.Beta", "Example.Brokers.Alpha", "Example.Brokers.Beta")]
-    public void ShouldUseSharedCategoriesAndAlignRowsAcrossProjects(string a, string b, string c, string d)
+    public void ShouldUseSharedCategoriesWithIndependentProjectRows(string a, string b, string c, string d)
     {
         var first = RenderConfigurationTests.Project("First", "EntryManager", a, c);
         first.Dependencies = [RenderConfigurationTests.Link("EntryManager", a), RenderConfigurationTests.Link(a, c)];
@@ -44,8 +44,9 @@ public sealed class CategoryRowTests
         second.Dependencies = [RenderConfigurationTests.Link(b, d)];
         var result = TestServices.Get<LayoutModelBuilder>().BuildRenderModel(new RenderModel([first, second]));
         var nodes = result.Projects.SelectMany(p => p.Nodes).ToDictionary(n => n.TypeName);
-        Assert.Equal(nodes[a].Y, nodes[b].Y);
-        Assert.Equal(nodes[c].Y, nodes[d].Y);
+        Assert.Equal(60, nodes[b].Y);
+        Assert.Equal(nodes[a].Y - 160, nodes[b].Y);
+        Assert.Equal(nodes[c].Y - 160, nodes[d].Y);
         Assert.True(nodes[c].Y > nodes[a].Y);
     }
 }

@@ -98,42 +98,14 @@ public sealed partial class SampleProjectExtractionTests
         // When: exercise the operation under test.
         ProjectModel[] trees = TestServices.Get<ProjectModelSplitter>().Split(projectModel: model);
         // Then: verify the resulting contract.
-        Assert.Equal(expected: 8, actual: trees.Length);
-
-        Assert.Equal(expected: expectedRootTypeNames.Select(selector: name => prefix + name), actual: trees.Take(count: 8)
-            .Select(selector: tree => tree.Types![0].Name));
-
-        ProjectModel schoolManager = Assert.Single(collection: trees, predicate: tree => tree.Types![0].Name == prefix + "Exposures.SchoolManager");
-
-        string[] schoolStack =
-        {
-            "Data.Models.SchoolDataContext",
-            "Exposures.SchoolManager",
-            "Exposures.ISchoolManager",
-            "Data.Exposures.ISchoolFactory",
-            "Services.Orchestrations.SchoolOrchestrationService",
-            "Services.Orchestrations.ISchoolOrchestrationService",
-            "Services.Processings.SchoolProcessingService",
-            "Services.Processings.ISchoolProcessingService",
-            "Services.Processings.SchoolEventProcessingService",
-            "Services.Processings.ISchoolEventProcessingService",
-            "Services.Foundations.SchoolService",
-            "Services.Foundations.ISchoolService",
-            "Services.Foundations.SchoolEventService",
-            "Services.Foundations.ISchoolEventService",
-            "Brokers.Storages.SchoolBroker",
-            "Brokers.Storages.ISchoolBroker",
-            "Brokers.Eventings.SchoolEventBroker",
-            "Brokers.Eventings.ISchoolEventBroker"
-        };
-
-        Assert.Equal(expected: schoolStack.Select(selector: name => prefix + name)
-            .Concat(second: expectedExternalTypeNames)
-            .OrderBy(keySelector: name => name, comparer: StringComparer.Ordinal), actual: schoolManager.Types!.Select(selector: type => type.Name)
-            .OrderBy(keySelector: name => name, comparer: StringComparer.Ordinal));
-
-        Assert.Equal(expected: 46, actual: schoolManager.Dependencies!.Length);
-        Assert.Equal(expected: 6, actual: trees.Count(predicate: tree => tree.Types!.Any(predicate: type => type.Name == prefix + "Data.Exposures.ISchoolFactory")));
+        Assert.Equal(2, trees.Length);
+        Assert.Equal(new[] { prefix + "Exposures.SchoolReportManager", prefix + "IServiceCollectionExtensions" }, trees.Select(tree => tree.Types![0].Name));
+        var composition = Assert.Single(trees, tree => tree.Types![0].Name == prefix + "IServiceCollectionExtensions");
+        Assert.Equal(101, composition.Types!.Length);
+        Assert.Equal(312, composition.Dependencies!.Length);
+        Assert.Contains(composition.Dependencies, link => link.FromType == prefix + "IServiceCollectionExtensions" && link.ToType == prefix + "Exposures.SchoolManager");
+        Assert.Contains(composition.Types, type => type.Name == prefix + "Brokers.Storages.SchoolBroker");
+        Assert.DoesNotContain(composition.Types, type => type.Name == prefix + "Exposures.SchoolReportManager");
         Assert.Equal(expected: before, actual: JsonSerializer.Serialize(value: model));
     }
 
@@ -152,12 +124,12 @@ public sealed partial class SampleProjectExtractionTests
             .ToArray();
         // Then: interface definitions become class labels; unique concrete type relationships remain exact.
 
-        Assert.Equal(expected: 8, actual: expectedTrees.Length);
-        Assert.Equal(expected: 20, actual: cells.Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
+        Assert.Equal(expected: 2, actual: expectedTrees.Length);
+        Assert.Equal(expected: 6, actual: cells.Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
 
         var allNames = cells.Where(cell => cell.Attribute("typeName") != null)
             .ToDictionary(cell => (string)cell.Attribute("id")!, cell => (string)cell.Attribute("typeName")!);
-        foreach (var boundary in expected.Types!.Where(type => !type.IsInternal))
+        foreach (var boundary in expected.Types!.Where(type => !type.IsInternal && !type.IsDataType && (type.HasDeclaredBehaviour ?? type.Methods!.Length > 0)))
         {
             var copies = cells.Where(cell => (string?)cell.Attribute("typeName") == boundary.Name).ToArray();
             int consumers = expectedTrees.Count(tree => tree.Dependencies!.Any(link =>
@@ -199,7 +171,7 @@ public sealed partial class SampleProjectExtractionTests
 
             Assert.Equal(expected: expectedLinks, actual: actualLinks);
             var expectedExternalLinks = expectedTrees[index].Dependencies!
-                .Where(link => link.DependencyType == DependencyType.Consumed && expectedTrees[index].Types!.Any(type => type.Name == link.ToType && !type.IsInternal))
+                .Where(link => link.DependencyType == DependencyType.Consumed && expectedTrees[index].Types!.Any(type => type.Name == link.ToType && !type.IsInternal && !type.IsDataType && (type.HasDeclaredBehaviour ?? type.Methods!.Length > 0)))
                 .Select(link => link.FromType + "|" + link.ToType).Distinct().OrderBy(value => value).ToArray();
             var actualExternalLinks = cells.Where(cell => (string?)cell.Attribute("edge") == "1" && (string?)cell.Attribute("parent") == "1" && names.ContainsKey((string)cell.Attribute("source")!))
                 .Select(cell => allNames[(string)cell.Attribute("source")!] + "|" + allNames[(string)cell.Attribute("target")!]).OrderBy(value => value).ToArray();
@@ -293,30 +265,30 @@ public sealed partial class SampleProjectExtractionTests
                 .OfType<string>()
                 .ToArray();
 
-            Assert.Equal(expected: 52, actual: typeNames.Length);
+            Assert.Equal(expected: 57, actual: typeNames.Length);
             Assert.Equal(expected: typeNames.Length, actual: typeNames.Distinct()
                 .Count());
         }
 
         if (format == "drawio")
         {
-            Assert.Equal(expected: noDuplicates ? 3 : 20, actual: document.Descendants(name: "mxCell")
+            Assert.Equal(expected: noDuplicates ? 5 : 6, actual: document.Descendants(name: "mxCell")
                 .Count(predicate: cell => (string? )cell.Attribute(name: "parent") == "1" && (string?)cell.Attribute("vertex") == "1"));
 
-            Assert.Equal(expected: noDuplicates ? 62 : 107, actual: document.Descendants(name: "mxCell")
+            Assert.Equal(expected: 110, actual: document.Descendants(name: "mxCell")
                 .Count(predicate: cell => (string? )cell.Attribute(name: "edge") == "1"));
         }
         else
         {
             System.Xml.Linq.XNamespace svg = "http://www.w3.org/2000/svg";
 
-            Assert.Equal(expected: noDuplicates ? 3 : 20, actual: document.Descendants(name: svg + "g")
+            Assert.Equal(expected: noDuplicates ? 5 : 6, actual: document.Descendants(name: svg + "g")
                 .Count(predicate: group => group.Attribute(name: "id")is not null));
 
-            Assert.Equal(expected: noDuplicates ? 52 : 102, actual: document.Descendants(name: svg + "g")
+            Assert.Equal(expected: 57, actual: document.Descendants(name: svg + "g")
                 .Count(predicate: group => group.Attribute(name: "data-type")is not null));
 
-            Assert.Equal(expected: noDuplicates ? 62 : 107, actual: document.Descendants(name: svg + "polyline")
+            Assert.Equal(expected: 110, actual: document.Descendants(name: svg + "polyline")
                 .Count());
 
             Assert.Single(collection: document.Descendants(name: "style"));
@@ -349,7 +321,7 @@ public sealed partial class SampleProjectExtractionTests
         var containers = document.Descendants().Where(element =>
             format == DiagramFormats.DrawIO ? (string?)element.Attribute("parent") == "1" && (string?)element.Attribute("vertex") == "1"
                 : element.Name.LocalName == "g" && element.Attribute("id") != null).ToArray();
-        Assert.Equal(3, containers.Length);
+        Assert.Equal(5, containers.Length);
         string[] names = document.Descendants().Select(element =>
             (string?)(element.Attribute("typeName") ?? element.Attribute("data-type"))).OfType<string>().ToArray();
         Assert.Contains(dataPrefix + "Exposures.SchoolFactory", names);
@@ -387,21 +359,22 @@ public sealed partial class SampleProjectExtractionTests
         var dataLinks = drawing.CrossProjectConnections.Where(edge => data.Nodes.Any(node => node.Id == edge.TargetId)).ToArray();
         foreach (var edge in dataLinks)
         {
-            Assert.Equal(4, edge.Points.Length);
-            Assert.Equal(edge.Points[1].Y, edge.Points[2].Y);
-            Assert.InRange(edge.Points[1].Y, consumingProject.Y + consumingProject.Height, data.Y + 60);
-            Assert.InRange(edge.Points[1].X, Math.Min(edge.Points[0].X, edge.Points[^1].X), Math.Max(edge.Points[0].X, edge.Points[^1].X));
-            Assert.InRange(edge.Points[2].X, Math.Min(edge.Points[0].X, edge.Points[^1].X), Math.Max(edge.Points[0].X, edge.Points[^1].X));
+            var target = data.Nodes.Single(node => node.Id == edge.TargetId);
+            double gutterTop = data.Nodes.Where(node => node.Y < target.Y).Select(node => data.Y + node.Y + node.Height)
+                .DefaultIfEmpty(consumingProject.Y + consumingProject.Height).Max();
+            Assert.Equal(edge.Points[^3].Y, edge.Points[^2].Y);
+            Assert.InRange(edge.Points[^2].Y, gutterTop, data.Y + target.Y);
+            Assert.All(edge.Points.Zip(edge.Points.Skip(1)), segment => Assert.True(segment.First.X == segment.Second.X || segment.First.Y == segment.Second.Y));
         }
-        Assert.Equal(10, dataLinks.Length);
+        Assert.Equal(11, dataLinks.Length);
         Assert.Equal(5, drawing.CrossProjectConnections.Count(edge => edge.TargetId == context.Id));
-        Assert.Equal(5, drawing.CrossProjectConnections.Count(edge => edge.TargetId == factory.Id));
+        Assert.Equal(6, drawing.CrossProjectConnections.Count(edge => edge.TargetId == factory.Id));
         foreach (var edge in dataLinks)
         {
             var sourceProject = drawing.Projects.Single(project => project.Nodes.Any(node => node.Id == edge.SourceId));
             var source = sourceProject.Nodes.Single(node => node.Id == edge.SourceId);
             var target = data.Nodes.Single(node => node.Id == edge.TargetId);
-            Assert.Equal(target.Fill, edge.Stroke);
+            Assert.Equal(target.Id == context.Id || source.TypeName.EndsWith("IServiceCollectionExtensions") ? "#ef4444" : target.Fill, edge.Stroke);
             Assert.Equal(sourceProject.Y + source.Y + source.Height, edge.Points[0].Y);
             Assert.Equal(data.X + target.X + target.Width / 2, edge.Points[^1].X);
             Assert.Equal(data.Y + target.Y, edge.Points[^1].Y);
@@ -425,7 +398,7 @@ public sealed partial class SampleProjectExtractionTests
             var crossLinks = xml.Descendants().Where(element =>
                 (element.Name.LocalName == "mxCell" && (string?)element.Attribute("parent") == "1" && (string?)element.Attribute("edge") == "1") ||
                 (element.Name.LocalName == "polyline" && element.Parent!.Name.LocalName == "svg")).ToArray();
-            Assert.Equal(15, crossLinks.Length);
+            Assert.Equal(20, crossLinks.Length);
         }
     }
 

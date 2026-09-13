@@ -86,7 +86,7 @@ internal static class DiagramRouting
                 points.Add(new(column, busY));
                 points.Add(new(targetX, busY));
                 points.Add(new(targetX, to.Y));
-                return new DrawingRoute(link, points.ToArray());
+                return new DrawingRoute(link, PreferContinuousCorridor(points.ToArray(), obstacles, clearance));
             }
             return new DrawingRoute(link, new[]
             {
@@ -98,6 +98,21 @@ internal static class DiagramRouting
         }).ToArray();
         SeparateHorizontalSegments(routes, nodes, horizontalOffset, reservedRoutes);
         return routes;
+    }
+
+    private static DrawingPoint[] PreferContinuousCorridor(DrawingPoint[] original, DrawingNode[] obstacles, double clearance)
+    {
+        if (original.Length <= 6) return original;
+        double Length(DrawingPoint[] points) => points.Zip(points.Skip(1)).Sum(pair => Math.Abs(pair.First.X - pair.Second.X) + Math.Abs(pair.First.Y - pair.Second.Y));
+        bool Clear(DrawingPoint[] points) => points.Zip(points.Skip(1)).All(pair => obstacles.All(node =>
+            pair.First.X == pair.Second.X
+                ? pair.First.X <= node.X - clearance || pair.First.X >= node.X + node.Width + clearance || Math.Max(pair.First.Y, pair.Second.Y) <= node.Y || Math.Min(pair.First.Y, pair.Second.Y) >= node.Y + node.Height
+                : pair.First.Y <= node.Y || pair.First.Y >= node.Y + node.Height || Math.Max(pair.First.X, pair.Second.X) <= node.X || Math.Min(pair.First.X, pair.Second.X) >= node.X + node.Width));
+        return obstacles.SelectMany(node => new[] { node.X - clearance, node.X + node.Width + clearance })
+            .Append(original[0].X).Append(original[^1].X).Distinct()
+            .Select(column => new[] { original[0], original[1], new DrawingPoint(column, original[1].Y), new DrawingPoint(column, original[^2].Y), original[^2], original[^1] })
+            .Where(points => Length(points) <= Length(original) + 0.001 && Clear(points))
+            .OrderBy(Length).FirstOrDefault() ?? original;
     }
 
     private static void SeparateHorizontalSegments(DrawingRoute[] routes, Dictionary<string, DrawingNode> nodes,

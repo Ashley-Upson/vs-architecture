@@ -69,15 +69,17 @@ internal partial class RoslynBroker
             .ToArray();
 
         var entries = calls.Select(selector: call => call.Caller)
-            .Where(predicate: caller => caller is null || caller.DeclaredAccessibility == Accessibility.Public || caller.MethodKind is MethodKind.ExplicitInterfaceImplementation or MethodKind.Constructor or MethodKind.StaticConstructor or MethodKind.PropertyGet or MethodKind.PropertySet)
+            .OrderBy(caller => caller is null || caller.DeclaredAccessibility == Accessibility.Public ? 0 : 1)
             .Distinct<IMethodSymbol?>(comparer: SymbolEqualityComparer.Default);
 
         INamedTypeSymbol[] implementations = GetDefinedTypes(compilation: compilation)
             .Where(predicate: candidate => candidate.TypeKind == TypeKind.Class && !candidate.IsAbstract)
             .ToArray();
 
+        var tracedHelpers = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
         foreach (IMethodSymbol? entry in entries)
         {
+            if (entry is not null && tracedHelpers.Contains(entry.OriginalDefinition)) continue;
             var pending = new Queue<(IMethodSymbol Target, INamedTypeSymbol DependencyType)>(collection: calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller, y: entry))
                 .Select(selector: call => (call.Target, call.DependencyType)));
 
@@ -103,6 +105,7 @@ internal partial class RoslynBroker
                         continue;
                     }
 
+                    tracedHelpers.Add(target.OriginalDefinition);
                     foreach (var helperCall in calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller?.OriginalDefinition, y: target.OriginalDefinition)))
                     {
                         pending.Enqueue(item: (helperCall.Target, helperCall.DependencyType));
@@ -203,10 +206,7 @@ internal partial class RoslynBroker
                 }
 
                 target = target.ReducedFrom ?? target;
-                if (target.IsExtensionMethod && !SymbolEqualityComparer.Default.Equals(target.ContainingAssembly, compilation.Assembly))
-                {
-                    continue;
-                }
+
 
                 var caller = enclosing as IMethodSymbol;
 

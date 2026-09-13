@@ -3,7 +3,212 @@
   "Path": "StandardIo.ArchitectureDiagram.SampleProject.csproj",
   "Types": [
     {
+      "Name": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
+      "AssemblyName": "Microsoft.Extensions.Logging",
+      "HasDeclaredBehaviour": true,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "AddLogging"
+        },
+        {
+          "Name": "AddLogging"
+        }
+      ]
+    },
+    {
+      "Name": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
+      "AssemblyName": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "HasDeclaredBehaviour": true,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedScoped"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedSingleton"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddKeyedTransient"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddScoped"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddSingleton"
+        },
+        {
+          "Name": "AddTransient"
+        },
+        {
+          "Name": "AddTransient"
+        },
+        {
+          "Name": "AddTransient"
+        },
+        {
+          "Name": "AddTransient"
+        },
+        {
+          "Name": "AddTransient"
+        },
+        {
+          "Name": "AddTransient"
+        },
+        {
+          "Name": "AddTransient"
+        }
+      ]
+    },
+    {
+      "Name": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+      "AssemblyName": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "HasDeclaredBehaviour": true,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateAsyncScope"
+        },
+        {
+          "Name": "CreateAsyncScope"
+        },
+        {
+          "Name": "CreateScope"
+        },
+        {
+          "Name": "GetRequiredService"
+        },
+        {
+          "Name": "GetRequiredService"
+        },
+        {
+          "Name": "GetService"
+        },
+        {
+          "Name": "GetServices"
+        },
+        {
+          "Name": "GetServices"
+        }
+      ]
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -26,13 +231,14 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -55,13 +261,11 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -83,6 +287,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -104,6 +309,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -125,6 +331,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -146,6 +353,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -167,6 +375,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -189,13 +401,14 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -218,13 +431,14 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -247,13 +461,14 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -276,13 +491,14 @@
         {
           "Name": "UpdateClass"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -305,13 +521,11 @@
         {
           "Name": "UpdateClassStudent"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -333,6 +547,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -354,6 +569,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -375,6 +591,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -387,6 +604,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -408,6 +626,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -420,6 +639,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -441,6 +661,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -463,13 +687,14 @@
         {
           "Name": "UpdateSchool"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -478,13 +703,14 @@
         {
           "Name": "Read"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -507,13 +733,14 @@
         {
           "Name": "UpdateStudent"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -522,13 +749,14 @@
         {
           "Name": "Read"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -551,14 +779,12 @@
         {
           "Name": "UpdateTeacher"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": false,
       "Fields": [],
@@ -570,8 +796,56 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+      ],
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "CreateSchoolDataContext"
+        }
+      ]
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": false,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": false,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": false,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
       "IsInternal": false,
       "Fields": [],
@@ -583,7 +857,31 @@
       ]
     },
     {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": false,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+      "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
+      "HasDeclaredBehaviour": false,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -606,13 +904,14 @@
         {
           "Name": "UpdateClassAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -635,13 +934,11 @@
         {
           "Name": "UpdateClassStudentAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -663,6 +960,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -684,6 +982,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -696,6 +995,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -717,6 +1017,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -729,6 +1030,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -750,6 +1052,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -771,6 +1074,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -784,13 +1091,14 @@
         {
           "Name": "ImportSchool"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -813,13 +1121,14 @@
         {
           "Name": "UpdateSchoolAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -828,13 +1137,14 @@
         {
           "Name": "CreateReport"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -857,13 +1167,14 @@
         {
           "Name": "UpdateStudentAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -886,13 +1197,11 @@
         {
           "Name": "UpdateTeacherAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -905,6 +1214,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -917,6 +1227,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -946,13 +1260,14 @@
         {
           "Name": "ImportSchool"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -975,13 +1290,14 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1004,13 +1320,14 @@
         {
           "Name": "UpdateClass"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1033,13 +1350,14 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1062,13 +1380,11 @@
         {
           "Name": "UpdateClassStudent"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1090,6 +1406,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1111,6 +1428,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1132,6 +1450,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1153,6 +1472,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1174,6 +1494,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1195,6 +1516,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1216,6 +1538,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1228,6 +1551,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1249,6 +1573,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1270,6 +1595,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1291,6 +1617,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1313,13 +1643,14 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1342,13 +1673,14 @@
         {
           "Name": "UpdateSchool"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1371,13 +1703,14 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -1386,13 +1719,14 @@
         {
           "Name": "Read"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1415,13 +1749,14 @@
         {
           "Name": "UpdateStudent"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1444,13 +1779,14 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1473,13 +1809,14 @@
         {
           "Name": "UpdateTeacher"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1506,13 +1843,14 @@
         {
           "Name": "UpdateClassAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1539,13 +1877,11 @@
         {
           "Name": "UpdateClassStudentAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1567,6 +1903,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1588,6 +1925,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1609,6 +1947,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1630,6 +1969,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1651,6 +1991,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1677,13 +2021,14 @@
         {
           "Name": "UpdateSchoolAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1710,13 +2055,14 @@
         {
           "Name": "UpdateStudentAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1743,13 +2089,14 @@
         {
           "Name": "UpdateTeacherAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1772,13 +2119,14 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1801,13 +2149,14 @@
         {
           "Name": "UpdateClass"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1830,13 +2179,14 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -1859,13 +2209,11 @@
         {
           "Name": "UpdateClassStudent"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1887,6 +2235,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1908,6 +2257,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1929,6 +2279,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1950,6 +2301,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1971,6 +2323,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -1992,6 +2345,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -2004,6 +2358,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -2025,6 +2380,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -2046,6 +2402,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -2058,6 +2415,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -2079,6 +2437,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -2100,6 +2459,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -2122,13 +2485,14 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -2151,13 +2515,14 @@
         {
           "Name": "UpdateSchool"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -2166,13 +2531,14 @@
         {
           "Name": "CreateReport"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -2195,13 +2561,14 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -2224,13 +2591,14 @@
         {
           "Name": "UpdateStudent"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -2239,13 +2607,14 @@
         {
           "Name": "CreateReport"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -2268,13 +2637,14 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [
@@ -2297,14 +2667,23 @@
         {
           "Name": "UpdateTeacher"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService"
       ]
+    },
+    {
+      "Name": "System.InvalidOperationException",
+      "AssemblyName": "System.Private.CoreLib",
+      "HasDeclaredBehaviour": false,
+      "BaseTypeName": "System.SystemException",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
     },
     {
       "Name": "cCoder.Eventing.IEventHub",
       "AssemblyName": "cCoder.Eventing",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": false,
       "Fields": [],
@@ -2320,6 +2699,71 @@
           "Name": "RaiseEventsAsync"
         }
       ]
+    },
+    {
+      "Name": "cCoder.Eventing.IServiceCollectionExtensions",
+      "AssemblyName": "cCoder.Eventing",
+      "HasDeclaredBehaviour": true,
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": [
+        {
+          "Name": "AddBulkEventProviders"
+        },
+        {
+          "Name": "AddEventProviders"
+        },
+        {
+          "Name": "AddEventing"
+        },
+        {
+          "Name": "AddEventing"
+        },
+        {
+          "Name": "AddEventing"
+        },
+        {
+          "Name": "AddEventingForType"
+        },
+        {
+          "Name": "AddEventingHostedServices"
+        },
+        {
+          "Name": "AddEventingHostedServices"
+        },
+        {
+          "Name": "AddEventingWeb"
+        },
+        {
+          "Name": "AddEventingWeb"
+        }
+      ]
+    },
+    {
+      "Name": "cCoder.Eventing.Models.EventAuthInfo",
+      "AssemblyName": "cCoder.Eventing",
+      "HasDeclaredBehaviour": false,
+      "InterfaceNames": [
+        "cCoder.Eventing.Models.IEventAuthInfo"
+      ],
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
+    },
+    {
+      "Name": "cCoder.Eventing.Models.EventMessage<T>",
+      "AssemblyName": "cCoder.Eventing",
+      "HasDeclaredBehaviour": false,
+      "BaseTypeName": "cCoder.Eventing.Models.EventMessage",
+      "FrameworkType": "Class",
+      "IsInternal": false,
+      "Fields": [],
+      "Properties": [],
+      "Methods": []
     }
   ],
   "Dependencies": [
@@ -2327,6 +2771,13 @@
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2359,9 +2810,30 @@
       "ToMethod": "RaiseEventAsync"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventAuthInfo",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2394,9 +2866,30 @@
       "ToMethod": "RaiseEventAsync"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventAuthInfo",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2429,9 +2922,30 @@
       "ToMethod": "RaiseEventAsync"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventAuthInfo",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2464,9 +2978,30 @@
       "ToMethod": "RaiseEventAsync"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventAuthInfo",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
       "FromMethod": null,
       "ToMethod": null
     },
@@ -2497,6 +3032,20 @@
       "ToType": "cCoder.Eventing.IEventHub",
       "FromMethod": "RaiseTeacherUpdatedAsync",
       "ToMethod": "RaiseEventAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventAuthInfo",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "ToType": "cCoder.Eventing.Models.EventMessage<T>",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Inheritance",
@@ -2541,6 +3090,13 @@
       "ToMethod": "FindIndex"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "ToType": "System.InvalidOperationException",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
@@ -2583,6 +3139,13 @@
       "ToMethod": "FindIndex"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "ToType": "System.InvalidOperationException",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
@@ -2623,6 +3186,13 @@
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
       "FromMethod": "UpdateSchool",
       "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "ToType": "System.InvalidOperationException",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Inheritance",
@@ -2674,6 +3244,13 @@
       "ToMethod": "FindIndex"
     },
     {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "ToType": "System.InvalidOperationException",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker",
@@ -2721,6 +3298,13 @@
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
       "FromMethod": "UpdateTeacher",
       "ToMethod": "FindIndex"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "ToType": "System.InvalidOperationException",
+      "FromMethod": null,
+      "ToMethod": null
     },
     {
       "DependencyType": "Inheritance",
@@ -2931,6 +3515,384 @@
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
       "FromMethod": "UpdateTeacherAsync",
       "ToMethod": "UpdateTeacherAsync"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddLogging"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddSingleton"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "GetRequiredService"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddEventing"
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "ToType": "cCoder.Eventing.IServiceCollectionExtensions",
+      "FromMethod": "AddSchoolSample",
+      "ToMethod": "AddEventingForType"
     },
     {
       "DependencyType": "Inheritance",

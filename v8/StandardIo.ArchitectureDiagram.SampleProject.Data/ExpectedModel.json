@@ -4,6 +4,7 @@
   "Types": [
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
       "Fields": [],
@@ -16,6 +17,10 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "HasDeclaredBehaviour": true,
+      "InterfaceNames": [
+        "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+      ],
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -24,13 +29,11 @@
         {
           "Name": "CreateSchoolDataContext"
         }
-      ],
-      "InterfaceNames": [
-        "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
       ]
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
+      "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -60,6 +63,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
+      "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -85,6 +89,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
+      "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -110,6 +115,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -143,6 +149,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+      "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -164,6 +171,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+      "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
       "Fields": [],
@@ -189,6 +197,13 @@
       "DependencyType": "Inheritance",
       "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
       "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "FromMethod": null,
+      "ToMethod": null
+    },
+    {
+      "DependencyType": "Consumed",
+      "FromType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "ToType": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
       "FromMethod": null,
       "ToMethod": null
     }

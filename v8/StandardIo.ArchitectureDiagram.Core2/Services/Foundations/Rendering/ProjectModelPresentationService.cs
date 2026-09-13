@@ -65,7 +65,7 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
         var hidden = owners.Select(selector: group => group.Key)
             .ToHashSet(comparer: StringComparer.Ordinal);
 
-        var dataTypes = types.Where(type => diagramType == DiagramTypes.Architecture && (type.Name!.StartsWith("System.", StringComparison.Ordinal) || type.IsDataType || (type.IsInternal || type.Methods is not null) && (type.Methods?.Length ?? 0) == 0))
+        var dataTypes = types.Where(type => diagramType == DiagramTypes.Architecture && (type.IsDataType || !(type.HasDeclaredBehaviour ?? (!(type.IsInternal || type.Methods is not null) || (type.Methods?.Length ?? 0) > 0))))
             .Select(type => type.Name!).ToHashSet(StringComparer.Ordinal);
 
         DefinedType[] visible = types.Where(predicate: type => !hidden.Contains(item: type.Name!) && !dataTypes.Contains(type.Name!))
@@ -90,7 +90,8 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
 
         foreach (TypeRelationship link in links)
         {
-            if (diagramType == DiagramTypes.Architecture && link.DependencyType == DependencyType.Inheritance) continue;
+            if (diagramType == DiagramTypes.Architecture && link.DependencyType == DependencyType.Inheritance
+                && (!byName[link.ToType!].IsInternal || byName[link.ToType!].FrameworkType == FrameworkType.Interface)) continue;
             if (dataTypes.Contains(link.FromType!) || dataTypes.Contains(link.ToType!) || hidden.Contains(item: link.FromType!))
             {
                 continue;

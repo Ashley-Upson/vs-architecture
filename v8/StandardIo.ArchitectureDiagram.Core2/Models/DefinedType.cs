@@ -13,6 +13,8 @@ public sealed class DefinedType
     public string? AssemblyName { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsDataType { get; set; }
+    /// <summary>Includes non-public declared behaviour; null supports older saved models.</summary>
+    public bool? HasDeclaredBehaviour { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? BaseTypeName { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

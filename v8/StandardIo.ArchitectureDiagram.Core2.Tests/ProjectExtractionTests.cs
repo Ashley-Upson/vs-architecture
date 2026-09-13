@@ -33,7 +33,7 @@ public sealed partial class ProjectExtractionTests
     }
 
     [Fact]
-    public async Task ShouldKeepInternalExtensionsAndExcludeExternalExtensionCallsAsync()
+    public async Task ShouldKeepInternalAndExternalExtensionCallsAsync()
     {
         // Given: extension declarations may target external types; ownership belongs to the declaring assembly.
         using var workspace = new AdhocWorkspace();
@@ -60,8 +60,9 @@ public sealed partial class ProjectExtractionTests
         // When
         var model = await ProjectModelTestFactory.ExtractAsync(project);
         // Then: both call syntaxes obey the same rule; ordinary external dependencies remain.
-        Assert.DoesNotContain(model.Types!, type => type.Name == "External.Extensions");
-        Assert.DoesNotContain(model.Dependencies!, link => link.ToType == "External.Extensions");
+        Assert.Contains(model.Types!, type => type.Name == "External.Extensions");
+        Assert.Contains(model.Dependencies!, link => link.ToType == "External.Extensions" && link.ToMethod == "ExternalCall");
+        Assert.Single(model.Dependencies!, link => link.ToType == "External.Extensions");
         Assert.Contains(model.Dependencies!, link => link.ToType == "Example.Extensions" && link.ToMethod == "InternalCall");
         Assert.Contains(model.Dependencies!, link => link.ToType == "External.Service" && link.ToMethod == "Call");
     }

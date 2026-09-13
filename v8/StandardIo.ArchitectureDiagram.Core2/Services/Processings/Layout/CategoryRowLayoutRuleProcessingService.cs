@@ -1,67 +1,42 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
-
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-
-internal sealed class CategoryRowLayoutRuleProcessingService(DepthLayoutRuleProcessingService depthRule) : ILayoutRuleProcessingService
+internal sealed class CategoryRowLayoutRuleProcessingService : ILayoutRuleProcessingService
 {
     public void ApplyRule(RenderModel model)
     {
         if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
-        var nodes = model.Projects.SelectMany(p => p.Nodes).ToDictionary(n => n.Id);
-        var projectGraph = LayoutGraph.ProjectGraph(model);
-        depthRule.ApplyRule(new RenderModel(projectGraph.Width, projectGraph.Height, [projectGraph])
-            { Configuration = model.Configuration, IsProjectGraph = true });
-        var projectRows = projectGraph.Nodes.ToDictionary(n => n.Id, n => n.Y);
-        var nodeProjects = model.Projects.SelectMany(p => p.Nodes.Select(n => (n.Id, ProjectId: p.Id))).ToDictionary(n => n.Id, n => n.ProjectId);
-        // Respect the existing cycle-breaking depth calculation.
-        var links = model.Projects.SelectMany(p => p.Connections)
-            .Where(e => nodes[e.TargetId].Y > nodes[e.SourceId].Y)
-            .Concat(model.CrossProjectConnections.Where(e => projectRows[nodeProjects[e.TargetId]] > projectRows[nodeProjects[e.SourceId]]))
-            .ToArray();
-        var membership = nodes.Values.ToDictionary(n => n.Id,
-            n => (n.Category ?? StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering.DiagramStyles.GetRoleCategory(n.TypeName)).ToString());
-        var outgoing = links.ToLookup(e => e.SourceId, e => e.TargetId);
-        var incoming = links.ToLookup(e => e.TargetId, e => e.SourceId);
-        var pending = nodes.Keys.ToHashSet(StringComparer.Ordinal);
-        var counts = nodes.Keys.ToDictionary(id => id, id => incoming[id].Count());
-        var rows = new Dictionary<string, int>();
-        var rowCategories = new Dictionary<int, string>();
-        int row = 0;
-        while (pending.Count > 0)
+        model.Rows.Clear();
+        foreach (var project in model.Projects)
         {
-            var ready = pending.Where(id => counts[id] == 0).ToArray();
-            // The depth rule already removed cycle-closing links, so ready cannot be empty.
-            var groups = ready.GroupBy(id => membership[id]).ToArray();
-            string category = groups.OrderBy(g => g.Key == nameof(RenderNodeCategory.Exposure) ? -1 : (int)Enum.Parse<RenderNodeCategory>(g.Key))
-                .ThenBy(g => g.Min(id => nodes[id].Y)).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
-            // Consume a category as one band where the dependency graph permits it.
-            // If another category must intervene, retain the category on a later exclusive row.
-            while (true)
+            var nodes = project.Nodes.ToDictionary(n => n.Id);
+            // Depth has already identified cycle-closing links. Cross-project links position boxes, not local rows.
+            var links = project.Connections.Where(e => nodes[e.TargetId].Y > nodes[e.SourceId].Y).ToArray();
+            var incoming = links.ToLookup(e => e.TargetId, e => e.SourceId);
+            var outgoing = links.ToLookup(e => e.SourceId, e => e.TargetId);
+            var categories = nodes.Values.ToDictionary(n => n.Id, n => n.Category ?? StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering.DiagramStyles.GetRoleCategory(n.TypeName));
+            var pending = nodes.Keys.ToHashSet(StringComparer.Ordinal);
+            var counts = nodes.Keys.ToDictionary(id => id, id => incoming[id].Count());
+            var rows = new System.Collections.Generic.Dictionary<string, int>();
+            int row = 0;
+            while (pending.Count > 0)
             {
-                var occupants = pending.Where(id => membership[id] == category && counts[id] == 0).ToArray();
-                if (occupants.Length == 0) break;
-                rowCategories[row] = category;
-                foreach (string id in occupants) { rows[id] = row; pending.Remove(id); }
-                foreach (string id in occupants)
-                    foreach (string child in outgoing[id]) counts[child]--;
+                var groups = pending.Where(id => counts[id] == 0).GroupBy(id => categories[id]);
+                // Ready categories with older satisfied parents take precedence over newly unlocked layers.
+                var group = groups.OrderBy(g => g.Min(id => incoming[id].Select(parent => rows[parent] + 1).DefaultIfEmpty(row + 1).Max()))
+                    .ThenBy(g => g.Key == RenderNodeCategory.Exposure ? -1 : (int)g.Key).First();
+                var occupants = group.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+                model.Rows[project.Id + ":" + group.Key + ":" + row] = new RenderRowGroup(row, occupants);
+                foreach (var id in occupants) { rows[id] = row; pending.Remove(id); }
+                foreach (var id in occupants) foreach (var child in outgoing[id]) counts[child]--;
                 row++;
             }
-        }
-        model.Rows = rows.GroupBy(p => p.Value).ToDictionary(g => rowCategories[g.Key] + ":" + g.Key,
-            g => new RenderRowGroup(g.Key, g.Select(p => p.Key).ToArray()));
-        // Neighbouring projects use the same slots; downstream tiers start fresh and
-        // omit bands absent from every project in that tier.
-        var tierRows = model.Projects.GroupBy(p => projectRows[p.Id]).ToDictionary(g => g.Key,
-            g => g.SelectMany(p => p.Nodes).Select(n => rows[n.Id]).Distinct().OrderBy(r => r)
-                .Select((value, index) => (value, index)).ToDictionary(p => p.value, p => p.index));
-        foreach (var project in model.Projects)
             for (int i = 0; i < project.Nodes.Length; i++)
             {
                 var node = project.Nodes[i];
-                project.Nodes[i] = node with { Y = 60 + tierRows[projectRows[project.Id]][rows[node.Id]] * model.Configuration.Architecture.RowDepth };
+                project.Nodes[i] = node with { Y = 60 + rows[node.Id] * model.Configuration.Architecture.RowDepth };
             }
+        }
     }
 }

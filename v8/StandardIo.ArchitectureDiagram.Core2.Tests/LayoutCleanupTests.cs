@@ -35,13 +35,13 @@ public sealed class LayoutCleanupTests
     }
 
     [Fact]
-    public void ShouldIgnoreSystemNamespaceTypesWithoutHidingSimilarlyNamedApplicationTypes()
+    public void ShouldKeepFrameworkAndApplicationBehaviourVisible()
     {
         var project = RenderConfigurationTests.Project("App", "App.Service", "System.Text.RegularExpressions.Regex", "Systematic.Service");
         project.Dependencies = [new() { DependencyType = DependencyType.Consumed, FromType = "App.Service", ToType = "System.Text.RegularExpressions.Regex" }, new() { DependencyType = DependencyType.Consumed, FromType = "App.Service", ToType = "Systematic.Service" }];
         var result = TestServices.Get<IProjectModelPresentationService>().Prepare(project);
-        Assert.Equal(new[] { "App.Service", "Systematic.Service" }, result.Model.Types!.Select(t => t.Name));
-        Assert.Equal("Systematic.Service", Assert.Single(result.Model.Dependencies!).ToType);
+        Assert.Equal(new[] { "App.Service", "System.Text.RegularExpressions.Regex", "Systematic.Service" }, result.Model.Types!.Select(t => t.Name));
+        Assert.Equal(2, result.Model.Dependencies!.Length);
     }
 
     [Fact]

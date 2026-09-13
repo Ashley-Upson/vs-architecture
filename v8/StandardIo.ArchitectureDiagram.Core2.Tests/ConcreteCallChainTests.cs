@@ -121,7 +121,7 @@ public sealed partial class ConcreteCallChainTests
             .ToArray();
         // Then: verify the resulting contract.
 
-        Assert.Equal(expected: publicEntryMethods, actual: calls.Select(selector: link => link.FromMethod));
+        Assert.Equal(expected: new[] { "Create", "NeverCalled", "Update" }, actual: calls.Select(selector: link => link.FromMethod));
 
         Assert.All(collection: calls, action: link =>
         {
@@ -225,7 +225,7 @@ public sealed partial class ConcreteCallChainTests
     }
 
     [Fact]
-    public async Task ShouldFollowOnlyTheCalledPrivateOverloadAndOmitPublicSelfDependenciesAsync()
+    public async Task ShouldRetainUncalledPrivateBehaviourWithoutAttributingItToPublicCallersAsync()
     {
         // Given: the fixture and inputs below.
         // When: exercise the operation under test.
@@ -245,10 +245,11 @@ public sealed partial class ConcreteCallChainTests
             .ToArray();
         // Then: verify the resulting contract.
 
-        Assert.Single(calls);
+        Assert.Equal(2, calls.Length);
         Assert.Contains(collection: calls, filter: link => link.ToType == "Used" && link.FromMethod == "Execute");
         Assert.DoesNotContain(collection: calls, filter: link => link.FromType == link.ToType);
-        Assert.DoesNotContain(collection: calls, filter: link => link.ToType == "Unused");
+        Assert.Contains(collection: calls, filter: link => link.ToType == "Unused" && link.FromMethod == "Helper");
+        Assert.DoesNotContain(calls, link => link.ToType == "Unused" && link.FromMethod == "Execute");
     }
 
     internal static async Task<ProjectModel> ExtractAsync(string source)

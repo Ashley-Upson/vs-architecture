@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ILayoutRuleProcessingService, ProjectPositioningLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, RoutingLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, CrossProjectRoutingLayoutRuleProcessingService>();
+        services.AddTransient<ILayoutRuleProcessingService, LayerLinkReviewRuleProcessingService>();
         services.AddTransient<IProjectModelLayoutService, ProjectModelLayoutService>();
         services.AddTransient<IProjectModelPresentationService, ProjectModelPresentationService>();
         services.AddTransient<IProjectTypesService, ProjectTypesService>();
