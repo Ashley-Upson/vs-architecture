@@ -10,7 +10,7 @@ internal sealed class ContextualModelService : IContextualModelService
     public ContextualDiagram Prepare(RenderModel model)
     {
         var types = model.ProjectModels.SelectMany(p => (p.Types ?? []).Select(t => (Project: p, Type: t)))
-            .GroupBy(x => x.Type.Name!).Select(g => g.OrderByDescending(x => x.Type.IsInternal).First()).ToArray();
+            .GroupBy(x => x.Type.Name!).Select(g => g.OrderByDescending(x => x.Type.IsInternal).First()).Where(x => x.Type.IsInternal).ToArray();
         bool Data(DefinedType t) => t.IsDataType || t.HasDeclaredBehaviour == false || t.HasDeclaredBehaviour is null && t.Methods is { Length: 0 };
         string Short(string name) => Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
         var links = new List<ContextualLink>();

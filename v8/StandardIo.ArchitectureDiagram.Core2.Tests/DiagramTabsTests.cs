@@ -11,6 +11,17 @@ using Xunit;
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class DiagramTabsTests
 {
+    [Fact]
+    public void ShouldEmitBrowserCompatibleFrameAndScriptMarkup()
+    {
+        var tabs = new[] { DiagramTypes.Architecture, DiagramTypes.Composition, DiagramTypes.DataModel }
+            .Select(t => new RenderedDiagramTab(t, Encoding.UTF8.GetBytes("<html><body>diagram</body></html>"))).ToArray();
+        string html = Encoding.UTF8.GetString(TestServices.Get<IDocumentCompilationService>().Compile(tabs, DiagramFormats.Html));
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(html,"</iframe>").Count);
+        string script = System.Text.RegularExpressions.Regex.Match(html,"<script>(.*?)</script>",System.Text.RegularExpressions.RegexOptions.Singleline).Groups[1].Value;
+        Assert.DoesNotContain("&gt;", script);
+        Assert.DoesNotContain("&amp;", script);
+    }
     private static Task<ProjectModel> Model() => ConcreteCallChainTests.ExtractAsync("""
         public class Item { public string Name { get; set; } }
         public class Order { public Item[] Items { get; set; } }

@@ -11,6 +11,25 @@ using Xunit;
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class LayoutRuleTests(Xunit.Abstractions.ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldAlignSingleChildChainsWithSharedTargetsWhenTheirRowHasSpace(bool sameRow)
+    {
+        RenderNode Node(string id,double x,double y) => new(id,id,id,"#fff",x,y,100,60,[]);
+        RenderConnection Edge(string id,string source) => new(id,source,"child",source,"child",false,[]);
+        var model = new RenderModel([]) { Projects = [new("project","project",0,0,1000,500,
+            [Node("first",0,0),Node("second",500,sameRow ? 0 : 100),Node("child",500,300)],
+            [Edge("a","first"),Edge("b","second")])] };
+        var rule = new LayoutCleanupRuleProcessingService();
+        rule.ApplyRule(model);
+        var nodes = model.Projects[0].Nodes;
+        if (!sameRow) Assert.Equal(nodes[2].X, nodes[0].X);
+        else Assert.True(Math.Abs(nodes[0].X-nodes[1].X) >= 100 + model.Configuration.Architecture.NodeSpacing);
+        var positions = nodes.Select(n => n.X).ToArray();
+        rule.ApplyRule(model);
+        Assert.Equal(positions,nodes.Select(n => n.X).ToArray());
+    }
     [Fact]
     public void ShouldCentreOverOuterChildEdgesWithUnequalWidthsAndGaps()
     {

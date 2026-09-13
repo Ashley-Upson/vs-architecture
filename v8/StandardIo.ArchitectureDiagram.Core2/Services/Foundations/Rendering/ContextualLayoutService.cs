@@ -21,7 +21,7 @@ internal sealed class ContextualLayoutService : IContextualLayoutService
             var nodes = new List<RenderNode>();
             double width = nodeWidth;
             double rowTop = 60;
-            foreach (var row in Rows(group.ToArray(), diagram.Links, composition))
+            foreach (var row in Rows(group.ToArray(), diagram.Links, composition, nodeWidth, nodeSpacing, rowSpacing))
             {
                 int column = 0;
                 foreach (var type in row)
@@ -37,6 +37,21 @@ internal sealed class ContextualLayoutService : IContextualLayoutService
             projects.Add(new RenderProject("context-project-" + projects.Count, group.Key, 40, top, nodes.Max(n => n.X + n.Width) + 40, h, nodes.ToArray(), []));
             top += h + projectSpacing;
         }
+        // Pack completed project boxes on a broad canvas; their local coordinates stay unchanged.
+        double canvasWidth = Math.Max(projects.Select(p => p.Width).DefaultIfEmpty(400).Max(),
+            Math.Sqrt(projects.Sum(p => (p.Width + projectSpacing) * (p.Height + projectSpacing)) * 1.5));
+        double left = 40, shelfTop = 40, shelfHeight = 0;
+        for (int i = 0; i < projects.Count; i++)
+        {
+            var project = projects[i];
+            if (left > 40 && left + project.Width > canvasWidth + 40)
+            {
+                left = 40; shelfTop += shelfHeight + projectSpacing; shelfHeight = 0;
+            }
+            projects[i] = project with { X = left, Y = shelfTop };
+            left += project.Width + projectSpacing; shelfHeight = Math.Max(shelfHeight, project.Height);
+        }
+        top = shelfTop + shelfHeight + 40;
         var owners = projects.SelectMany(p => p.Nodes.Select(n => (Project: p, Node: n))).ToDictionary(x => x.Node.TypeName);
         var cross = new List<RenderConnection>();
         foreach (var link in diagram.Links)
@@ -57,9 +72,12 @@ internal sealed class ContextualLayoutService : IContextualLayoutService
         RouteForwardLinks(model);
         return model;
     }
-    private static IEnumerable<ContextualType[]> Rows(ContextualType[] types, ContextualLink[] links, bool composition)
+    private static IEnumerable<ContextualType[]> Rows(ContextualType[] types, ContextualLink[] links, bool composition, double width, double spacing, double rowSpacing)
     {
-        if (!composition) return types.Chunk(4);
+        // Choose capacity from occupied area rather than forcing every graph into four columns.
+        double averageHeight = types.Average(t => Math.Max(60, t.Lines.Length * 18 + 24));
+        int columns = Math.Max(4, (int)Math.Ceiling(Math.Sqrt(types.Length * (averageHeight + rowSpacing) * 1.5 / (width + spacing))));
+        if (!composition) return NeighboursFirst(types, links).Chunk(columns);
         var names = types.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
         var local = links.Where(l => names.Contains(l.From) && names.Contains(l.To) && l.From != l.To).DistinctBy(l => (l.From, l.To)).ToArray();
         var depth = names.ToDictionary(n => n, _ => 0, StringComparer.Ordinal);
@@ -79,7 +97,27 @@ internal sealed class ContextualLayoutService : IContextualLayoutService
             }
         }
         return types.GroupBy(t => depth[t.Name]).OrderBy(g => g.Key)
-            .SelectMany(g => g.OrderBy(t => t.Name, StringComparer.Ordinal).Chunk(4));
+            .SelectMany(g => g.OrderBy(t => t.Name, StringComparer.Ordinal).Chunk(columns));
+    }
+
+    private static IEnumerable<ContextualType> NeighboursFirst(ContextualType[] types, ContextualLink[] links)
+    {
+        var byName = types.ToDictionary(t => t.Name);
+        var neighbours = links.SelectMany(l => new[] { (From: l.From, To: l.To), (From: l.To, To: l.From) }).ToLookup(l => l.From, l => l.To);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var root in types)
+        {
+            var pending = new Queue<string>();
+            pending.Enqueue(root.Name);
+            while (pending.Count > 0)
+            {
+                string name = pending.Dequeue();
+                if (!byName.ContainsKey(name) || !visited.Add(name)) continue;
+                yield return byName[name];
+                foreach (string neighbour in neighbours[name].Distinct().OrderBy(n => n, StringComparer.Ordinal))
+                    if (!visited.Contains(neighbour)) pending.Enqueue(neighbour);
+            }
+        }
     }
 
     private static void RouteForwardLinks(RenderModel model)

@@ -7,6 +7,42 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ContextualLayoutTests
 {
     [Fact]
+    public void ShouldPlaceRelatedEntitiesNextToEachOtherInsteadOfFollowingUnrelatedInputOrder()
+    {
+        var types = new[] { "A", "B", "C", "D", "AChild", "BChild", "CChild", "DChild" }
+            .Select(n => new ContextualType(n,"Project",[n])).ToArray();
+        var links = new[] { "A", "B", "C", "D" }.Select(n => new ContextualLink(n,n+"Child","child")).ToArray();
+        var model = TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),new(types,links));
+        foreach (var link in links)
+        {
+            var a = model.Projects[0].Nodes.Single(n=>n.TypeName==link.From);
+            var b = model.Projects[0].Nodes.Single(n=>n.TypeName==link.To);
+            Assert.Equal(a.Y,b.Y);
+            Assert.Equal(a.Width + model.Configuration.DataModel.NodeSpacing, Math.Abs(a.X-b.X));
+        }
+    }
+    [Fact]
+    public void ShouldUseABroadCanvasForLargeDataModels()
+    {
+        var types = Enumerable.Range(0,100).Select(i => new ContextualType("T"+i,"Project",["T"+i])).ToArray();
+        var model = TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([], diagramType: DiagramTypes.DataModel), new(types, []));
+        Assert.True(model.Projects[0].Nodes.GroupBy(n => n.Y).Max(row => row.Count()) > 4);
+        Assert.True(model.Width / model.Height > 0.7);
+        Assert.True(model.Width / model.Height < 2.5);
+    }
+    [Theory]
+    [InlineData(DiagramTypes.Composition)]
+    [InlineData(DiagramTypes.DataModel)]
+    public void ShouldOnlyIncludeTypesOwnedBySelectedProjects(DiagramTypes kind)
+    {
+        DefinedType Type(string name, bool owned) => new() { Name = name, IsInternal = owned, HasDeclaredBehaviour = kind == DiagramTypes.Composition, Properties = [] };
+        var first = new ProjectModel { Name = "First", Types = [Type("A",true), Type("B",false),Type("External",false)], Dependencies = [new() { FromType="A",ToType="B",IsComposition=true },new() { FromType="A",ToType="External",IsComposition=true }] };
+        var second = new ProjectModel { Name = "Second", Types = [Type("B",true)] };
+        var diagram = TestServices.Get<IContextualModelService>().Prepare(new RenderModel([first,second],diagramType:kind));
+        Assert.DoesNotContain(diagram.Types,t => t.Name == "External");
+        Assert.Contains(diagram.Types,t => t.Name == "B" && t.Project == "Second");
+    }
+    [Fact]
     public void ShouldPositionCompositionConsumersAboveTheirReferencesRegardlessOfInputOrder()
     {
         var diagram = new ContextualDiagram([new("Child", "Project", ["Child"]), new("Root", "Project", ["Root"])], [new("Root", "Child", "references")]);
