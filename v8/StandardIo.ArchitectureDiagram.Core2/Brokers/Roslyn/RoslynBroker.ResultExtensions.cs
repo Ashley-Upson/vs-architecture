@@ -46,7 +46,17 @@ internal partial class RoslynBroker
                     .ToArray();
                 return returns.Length > 0 && returns.All(Trace);
             case IdentifierNameSyntax identifier:
-                if (semantic.GetSymbolInfo(identifier, cancellationToken).Symbol is not ILocalSymbol local || !visited.Add(local)) return false;
+                var symbol = semantic.GetSymbolInfo(identifier, cancellationToken).Symbol;
+                if (symbol is IParameterSymbol parameter)
+                {
+                    // Method inputs are data supplied by callers; constructor inputs remain injected dependencies.
+                    if (parameter.ContainingSymbol is not IMethodSymbol { MethodKind: MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation }) return false;
+                    var methodBody = parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken)
+                        .Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
+                    return methodBody is not null && !methodBody.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                        .Any(a => a.SpanStart < identifier.SpanStart && SymbolEqualityComparer.Default.Equals(semantic.GetSymbolInfo(a.Left, cancellationToken).Symbol, parameter));
+                }
+                if (symbol is not ILocalSymbol local || !visited.Add(local)) return false;
                 var declaration = local.DeclaringSyntaxReferences.Select(r => r.GetSyntax(cancellationToken)).OfType<VariableDeclaratorSyntax>().FirstOrDefault();
                 if (declaration?.Initializer is not { } initializer) return false;
                 // A reassigned local needs control-flow analysis; do not guess its origin.

@@ -62,4 +62,33 @@ public sealed class ResultExtensionTests
         Assert.Contains(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Extensions");
         Assert.Contains(presented.Model.Types!, t => t.Name == "Extensions");
     }
+    [Theory]
+    [InlineData("items.ToArray();")]
+    [InlineData("Validate(items).ToArray();")]
+    [InlineData("var values = Validate(items); values.ToArray();")]
+    [InlineData("Enumerable.ToArray(items);")]
+    public async Task ShouldAttachExtensionsOnIncomingData(string expression)
+    {
+        var model = await ConcreteCallChainTests.ExtractAsync("""
+            using System.Collections.Generic;
+            public static class Enumerable { public static T[] ToArray<T>(this IEnumerable<T> items) => new T[0]; }
+            public class Payload { public string Value { get; set; } }
+            public static class Files { public static void Open() {} }
+            public class Connection { public void Connect() {} }
+            public class Consumer {
+                public void Run(IEnumerable<Payload> items) { EXPRESSION Files.Open(); new Connection(); }
+                private static IEnumerable<Payload> Validate(IEnumerable<Payload> items) {
+                    if (items == null) throw new System.ArgumentNullException(nameof(items));
+                    return items;
+                }
+            }
+            """.Replace("EXPRESSION", expression));
+        var presented = TestServices.Get<IProjectModelPresentationService>().Prepare(model);
+        Assert.DoesNotContain(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Enumerable");
+        Assert.Contains("Extensions: Enumerable", presented.Labels["Consumer"]);
+        Assert.DoesNotContain("ToArray", presented.Labels["Consumer"]);
+        Assert.Contains(model.Dependencies!, e => e.ToType == "Enumerable" && e.ToMethod == "ToArray");
+        Assert.Contains(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Files");
+        Assert.Contains(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Connection");
+    }
 }
