@@ -22,7 +22,7 @@ internal partial class RoslynBroker
     {
         cancellationToken.ThrowIfCancellationRequested();
         var semantic = compilation.GetSemanticModel(expression.SyntaxTree);
-        bool Trace(ExpressionSyntax value) => IsDependencyResult(value, compilation, consumer, visited, cancellationToken);
+        bool Trace(ExpressionSyntax value) => IsDependencyResult(value, compilation, consumer, new HashSet<ISymbol>(visited, SymbolEqualityComparer.Default), cancellationToken);
         switch (expression)
         {
             case ParenthesizedExpressionSyntax parenthesized: return Trace(parenthesized.Expression);
@@ -30,6 +30,10 @@ internal partial class RoslynBroker
             case AwaitExpressionSyntax awaited: return Trace(awaited.Expression);
             case MemberAccessExpressionSyntax member: return Trace(member.Expression);
             case ConditionalAccessExpressionSyntax conditional: return Trace(conditional.Expression);
+            case BinaryExpressionSyntax binary when binary.RawKind == (int)Microsoft.CodeAnalysis.CSharp.SyntaxKind.CoalesceExpression:
+                return Trace(binary.Left) && (binary.Right is CollectionExpressionSyntax { Elements.Count: 0 } || Trace(binary.Right));
+            case MemberBindingExpressionSyntax binding:
+                return binding.Ancestors().OfType<ConditionalAccessExpressionSyntax>().FirstOrDefault(candidate => candidate.WhenNotNull.Span.Contains(binding.Span)) is { } access && Trace(access.Expression);
             case ConditionalExpressionSyntax conditional: return Trace(conditional.WhenTrue) && Trace(conditional.WhenFalse);
             case InvocationExpressionSyntax invocation:
                 if (semantic.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method) return false;
@@ -50,7 +54,7 @@ internal partial class RoslynBroker
                 if (symbol is IParameterSymbol parameter)
                 {
                     // Method inputs are data supplied by callers; constructor inputs remain injected dependencies.
-                    if (parameter.ContainingSymbol is not IMethodSymbol { MethodKind: MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation }) return false;
+                    if (parameter.ContainingSymbol is not IMethodSymbol { MethodKind: MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation or MethodKind.AnonymousFunction }) return false;
                     var methodBody = parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken)
                         .Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
                     return methodBody is not null && !methodBody.DescendantNodes().OfType<AssignmentExpressionSyntax>()

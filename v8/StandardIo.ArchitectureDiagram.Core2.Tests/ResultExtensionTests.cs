@@ -91,4 +91,35 @@ public sealed class ResultExtensionTests
         Assert.Contains(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Files");
         Assert.Contains(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Connection");
     }
+    [Theory]
+    [InlineData("items.Any(role => role.Children.Any(child => true));")]
+    [InlineData("items?.Any(role => role.Children?.Any(child => true) ?? false);")]
+    [InlineData("var values = items?.ToArray() ?? []; values.Any(role => true);")]
+    [InlineData("Fetch(items).Any(role => true);")]
+    [InlineData("items.Any(role => role?.Children?.Any(child => true) ?? false);")]
+    public async Task ShouldAttachNestedLambdaAndConditionalCollectionUsage(string expression)
+    {
+        var model = await ConcreteCallChainTests.ExtractAsync("""
+            using System;
+            using System.Collections.Generic;
+            public static class Enumerable {
+                public static bool Any<T>(this IEnumerable<T> items, Func<T,bool> predicate) => false;
+                public static T[] ToArray<T>(this IEnumerable<T> items) => new T[0];
+            }
+            public class Role { public Role[] Children { get; set; } }
+            public static class Files { public static void Open() {} }
+            public class Consumer {
+                public void Run(Role[] items) { EXPRESSION Files.Open(); }
+                private Role[] Fetch(Role[] items) {
+                    var roles = items;
+                    if (roles.Length > 0) return roles;
+                    return roles.ToArray();
+                }
+            }
+            """.Replace("EXPRESSION", expression));
+        var presented = TestServices.Get<IProjectModelPresentationService>().Prepare(model);
+        Assert.DoesNotContain(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Enumerable");
+        Assert.Contains("Enumerable", presented.Labels["Consumer"]);
+        Assert.Contains(presented.Model.Dependencies!, e => e.FromType == "Consumer" && e.ToType == "Files");
+    }
 }
