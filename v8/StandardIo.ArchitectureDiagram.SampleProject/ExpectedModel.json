@@ -2672,6 +2672,7 @@
     {
       "Name": "System.InvalidOperationException",
       "AssemblyName": "System.Private.CoreLib",
+      "IsDataType": true,
       "HasDeclaredBehaviour": false,
       "BaseTypeName": "System.SystemException",
       "FrameworkType": "Class",

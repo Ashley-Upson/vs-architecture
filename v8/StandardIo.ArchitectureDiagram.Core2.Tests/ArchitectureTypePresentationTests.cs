@@ -10,6 +10,31 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ArchitectureTypePresentationTests
 {
     [Fact]
+    public async System.Threading.Tasks.Task ShouldExcludeExceptionHierarchyButKeepRawTypesAndOrdinaryNames()
+    {
+        var model = await ConcreteCallChainTests.ExtractAsync("""
+            public class DomainFailure : System.InvalidOperationException { public void Explain() {} }
+            public class SpecificFailure : DomainFailure { public void Describe() {} }
+            public class ExceptionReporter { public void Report() {} }
+            public class Consumer {
+                public void Run() {
+                    new System.Exception(); new System.InvalidOperationException();
+                    new DomainFailure(); new SpecificFailure(); new ExceptionReporter().Report();
+                }
+            }
+            """);
+        string[] excluded = ["System.Exception", "System.InvalidOperationException", "DomainFailure", "SpecificFailure"];
+        var presented = TestServices.Get<IProjectModelPresentationService>().Prepare(model);
+        foreach (string name in excluded)
+        {
+            Assert.Contains(model.Types!, t => t.Name == name);
+            Assert.DoesNotContain(presented.Model.Types!, t => t.Name == name);
+            Assert.DoesNotContain(presented.Model.Dependencies!, d => d.FromType == name || d.ToType == name);
+        }
+        Assert.Contains(presented.Model.Types!, t => t.Name == "ExceptionReporter");
+    }
+
+    [Fact]
     public void ShouldUseOnlyDirectContractsForLabelsWhenInterfaceMetadataIsAbsent()
     {
         // Given
