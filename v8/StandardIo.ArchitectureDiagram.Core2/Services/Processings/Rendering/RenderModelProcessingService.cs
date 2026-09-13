@@ -34,7 +34,7 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
             {
                 string[] lines = node.Label.Split(separator: '\n');
                 var textLines = lines.Select((line, index) => new RenderText(line, node.X + node.Width / 2, node.Y + node.Height / 2 + (index - (lines.Length - 1) / 2d) * 16, Bold: index == 0, FontSize: index > 0 && node.Type.BaseTypeName is not null && index == lines.Length - 1 ? 10 : 12)).ToArray();
-                return new RenderNode(node.Id, node.Type.Name!, node.Label, DiagramStyles.GetRoleColour(name: node.Type.Name!, isInternal: node.Type.IsInternal, layerColours: configuration.Architecture.LayerColours), node.X, node.Y, node.Width, node.Height, textLines);
+                return new RenderNode(node.Id, node.Type.Name!, node.Label, DiagramStyles.GetRoleColour(name: node.Type.Name!, isInternal: node.Type.IsInternal, layerColours: configuration.Architecture.LayerColours), node.X, node.Y, node.Width, node.Height, textLines) { Category = DiagramStyles.GetRoleCategory(node.Type.Name!, node.Type.IsInternal) };
             }).ToArray();
             return new RenderProject(drawing.Id, drawing.Model.Name ?? "Project", drawing.X, 40, drawing.Width, drawing.Height, nodes, Array.Empty<RenderConnection>());
         }).ToArray();

@@ -7,31 +7,37 @@ internal static class DiagramStyles
     internal static string GetRoleColour(string name, bool isInternal = true, string[]? layerColours = null)
     {
         layerColours ??= new StandardIo.ArchitectureDiagram.Core2.Models.ArchitectureRenderConfiguration().LayerColours;
+        return layerColours[(int)GetRoleCategory(name, isInternal)];
+    }
+
+    internal static StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory GetRoleCategory(string name, bool isInternal = true)
+    {
+        if (!isInternal) return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Exposure;
         if (name.Contains(value: ".Orchestrations.") || name.EndsWith(value: "OrchestrationService"))
         {
-            return layerColours[0];
+            return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Orchestration;
         }
 
         if (name.Contains(value: ".Processings.") || name.EndsWith(value: "ProcessingService"))
         {
-            return layerColours[1];
+            return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Processing;
         }
 
         if (name.Contains(value: ".Foundations."))
         {
-            return layerColours[2];
+            return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Foundation;
         }
 
         if (name.Contains(value: ".Brokers.") || name.EndsWith(value: "Broker"))
         {
-            return layerColours[3];
+            return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Broker;
         }
 
-        if (name.Contains(value: ".Exposures.") || name.EndsWith(value: "Controller") || name.EndsWith(value: "Manager"))
+        if (name.Contains(value: ".Exposures.") || name.EndsWith(value: "Controller") || name.EndsWith(value: "Manager") || name.EndsWith(value: "Hub") || name.EndsWith(value: "Context") || name.EndsWith(value: "Client"))
         {
-            return layerColours[4];
+            return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Exposure;
         }
 
-        return isInternal ? layerColours[5] : layerColours[6];
+        return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Other;
     }
 }
