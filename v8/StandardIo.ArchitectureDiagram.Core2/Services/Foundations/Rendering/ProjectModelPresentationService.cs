@@ -113,7 +113,7 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
             }
         }
 
-        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => type.AssemblyName is null || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType))
+        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => type.AssemblyName is null || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.Where(link => !string.Equals(link.FromType, link.ToType, StringComparison.Ordinal)).DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType))
             .Select(selector: link => new TypeRelationship { FromType = link.FromType, ToType = link.ToType, DependencyType = link.DependencyType })
             .ToArray() }, labels);
     }

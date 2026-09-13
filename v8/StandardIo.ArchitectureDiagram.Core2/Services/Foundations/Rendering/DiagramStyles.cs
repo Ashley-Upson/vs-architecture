@@ -33,7 +33,7 @@ internal static class DiagramStyles
             return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Broker;
         }
 
-        if (name.Contains(value: ".Exposures.") || name.EndsWith(value: "Controller") || name.EndsWith(value: "Manager") || name.EndsWith(value: "Hub") || name.EndsWith(value: "Context") || name.EndsWith(value: "Client"))
+        if (name.Contains(value: ".Exposures.") || name.EndsWith(value: "Controller") || name.EndsWith(value: "Manager") || name.EndsWith(value: "ServiceCollectionExtensions") || name.EndsWith(value: "Hub") || name.EndsWith(value: "Context") || name.EndsWith(value: "Client"))
         {
             return StandardIo.ArchitectureDiagram.Core2.Models.RenderNodeCategory.Exposure;
         }

@@ -46,6 +46,6 @@ internal sealed class ProjectDependenciesService : IProjectDependenciesService
             }
         }
 
-        project.Dependencies = dependencies.ToArray();
+        project.Dependencies = dependencies.Where(link => !string.Equals(link.FromType, link.ToType, StringComparison.Ordinal)).ToArray();
     }
 }

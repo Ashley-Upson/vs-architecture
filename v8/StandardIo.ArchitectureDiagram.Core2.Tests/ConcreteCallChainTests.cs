@@ -225,7 +225,7 @@ public sealed partial class ConcreteCallChainTests
     }
 
     [Fact]
-    public async Task ShouldFollowOnlyTheCalledPrivateOverloadAndRetainPublicLocalCallsAsync()
+    public async Task ShouldFollowOnlyTheCalledPrivateOverloadAndOmitPublicSelfDependenciesAsync()
     {
         // Given: the fixture and inputs below.
         // When: exercise the operation under test.
@@ -245,9 +245,9 @@ public sealed partial class ConcreteCallChainTests
             .ToArray();
         // Then: verify the resulting contract.
 
-        Assert.Equal(expected: 2, actual: calls.Length);
+        Assert.Single(calls);
         Assert.Contains(collection: calls, filter: link => link.ToType == "Used" && link.FromMethod == "Execute");
-        Assert.Contains(collection: calls, filter: link => link.ToType == "Manager" && link.ToMethod == "Public");
+        Assert.DoesNotContain(collection: calls, filter: link => link.FromType == link.ToType);
         Assert.DoesNotContain(collection: calls, filter: link => link.ToType == "Unused");
     }
 

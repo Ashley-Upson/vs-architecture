@@ -34,9 +34,8 @@ public sealed partial class ProjectModelPopulationTests
         Assert.DoesNotContain(project.Types!, type => type.Name == "ControllerBase");
         Assert.DoesNotContain(project.Dependencies!, link => link.ToType == "ControllerBase");
         Assert.Equal("ODataController", Assert.Single(project.Types!, type => type.Name == "AppController").BaseTypeName);
-        var callDependency = Assert.Single(project.Dependencies!, link => link.DependencyType == DependencyType.Consumed);
-        Assert.Equal("AppController", callDependency.ToType);
-        Assert.Equal("Content", callDependency.ToMethod);
+        // The inherited call is local to the consumed controller, so it adds no type dependency.
+        Assert.DoesNotContain(project.Dependencies!, link => link.DependencyType == DependencyType.Consumed);
     }
 
     [Theory]
