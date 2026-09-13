@@ -21,3 +21,5 @@ The existing format preparation brokers select IRenderModelBuilder through Rende
 AllDiagramRenderer delegates to DiagramDocumentOrchestrationService. DiagramTabService and DiagramTabBroker select each format/type renderer, then DocumentCompilationService compiles the returned tab contents. Draw.io pages share one mxfile; HTML tabs host independent documents so zoom, pan, SVG identifiers and styles remain isolated.
 
 Composition and DataModel each have NodeWidth, NodeSpacing, RowSpacing and ProjectSpacing configuration settings under their existing RenderConfiguration children. Defaults are 300, 80, 80 and 150 pixels respectively.
+
+Composition rows follow reference depth within each project, with deterministic handling of cycles. Data rows size themselves from their own members. Downward contextual links reuse the shared obstacle-aware router; same-row and backward relationships remain explicit and retain their member labels.
