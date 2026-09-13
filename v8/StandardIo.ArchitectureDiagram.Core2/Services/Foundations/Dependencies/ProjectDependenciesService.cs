@@ -47,7 +47,7 @@ internal sealed class ProjectDependenciesService : IProjectDependenciesService
 
             foreach (var call in calls)
             {
-                dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Consumed, IsComposition = isComposition, FromType = fromType, ToType = roslynBroker.GetTypeName(type: call.DependencyType.OriginalDefinition), FromMethod = call.Caller?.Name, ToMethod = call.Target.Name });
+                dependencies.Add(item: new TypeRelationship { DependencyType = DependencyType.Consumed, IsComposition = isComposition, FromType = fromType, ToType = roslynBroker.GetTypeName(type: call.DependencyType.OriginalDefinition), FromMethod = call.Caller?.Name, ToMethod = call.Target.Name, IsResultExtension = call.IsResultExtension });
             }
         }
 

@@ -72,6 +72,9 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
             .ToArray();
 
         string ShortName(string name) => System.Text.RegularExpressions.Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
+        var resultExtensions = links.Where(link => diagramType == DiagramTypes.Architecture && link.IsResultExtension)
+            .ToLookup(link => link.FromType!, link => link.ToType!);
+        var extensionTargets = resultExtensions.SelectMany(group => group).ToHashSet(StringComparer.Ordinal);
         var labels = visible.ToDictionary(type => type.Name!, type =>
         {
             var parts = new List<string> { ShortName(type.Name!) };
@@ -83,6 +86,8 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
             string? baseName = type.BaseTypeName ?? inheritance[type.Name!]
                 .Select(link => link.ToType!).FirstOrDefault(name => byName[name].FrameworkType == FrameworkType.Class);
             if (baseName is not null) parts.Add(ShortName(baseName));
+            var extensions = resultExtensions[type.Name!].Distinct().Select(ShortName).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+            if (extensions.Length > 0) parts.Add("Extensions: " + string.Join(", ", extensions.Take(2)) + (extensions.Length > 2 ? " (+" + (extensions.Length - 2) + ")" : ""));
             return string.Join("\n", parts);
         }, StringComparer.Ordinal);
 
@@ -90,6 +95,7 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
 
         foreach (TypeRelationship link in links)
         {
+            if (diagramType == DiagramTypes.Architecture && link.IsResultExtension) continue;
             if (diagramType == DiagramTypes.Architecture && link.DependencyType == DependencyType.Inheritance
                 && (!byName[link.ToType!].IsInternal || byName[link.ToType!].FrameworkType == FrameworkType.Interface)) continue;
             if (dataTypes.Contains(link.FromType!) || dataTypes.Contains(link.ToType!) || hidden.Contains(item: link.FromType!))
@@ -110,12 +116,12 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
 
             foreach (string owner in owners[link.ToType!].Where(owner => !dataTypes.Contains(owner)))
             {
-                dependencies.Add(item: new TypeRelationship { FromType = link.FromType, ToType = owner, DependencyType = link.DependencyType, IsComposition = link.IsComposition });
+                dependencies.Add(item: new TypeRelationship { FromType = link.FromType, ToType = owner, DependencyType = link.DependencyType, IsComposition = link.IsComposition, IsResultExtension = link.IsResultExtension });
             }
         }
 
-        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => type.AssemblyName is null || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.Where(link => !string.Equals(link.FromType, link.ToType, StringComparison.Ordinal)).DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType, link.IsComposition))
-            .Select(selector: link => new TypeRelationship { FromType = link.FromType, ToType = link.ToType, DependencyType = link.DependencyType, IsComposition = link.IsComposition })
+        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => (type.AssemblyName is null && !extensionTargets.Contains(type.Name!)) || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.Where(link => !string.Equals(link.FromType, link.ToType, StringComparison.Ordinal)).DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType, link.IsComposition, link.IsResultExtension))
+            .Select(selector: link => new TypeRelationship { FromType = link.FromType, ToType = link.ToType, DependencyType = link.DependencyType, IsComposition = link.IsComposition, IsResultExtension = link.IsResultExtension })
             .ToArray() }, labels);
     }
 }

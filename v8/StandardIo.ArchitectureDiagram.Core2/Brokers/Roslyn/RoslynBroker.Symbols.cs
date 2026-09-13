@@ -63,7 +63,7 @@ internal partial class RoslynBroker
         }
     }
 
-    public IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
+    public IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType, bool IsResultExtension)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
     {
         var calls = GetRawCalls(compilation: compilation, type: type, cancellationToken: cancellationToken)
             .ToArray();
@@ -80,8 +80,8 @@ internal partial class RoslynBroker
         foreach (IMethodSymbol? entry in entries)
         {
             if (entry is not null && tracedHelpers.Contains(entry.OriginalDefinition)) continue;
-            var pending = new Queue<(IMethodSymbol Target, INamedTypeSymbol DependencyType)>(collection: calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller, y: entry))
-                .Select(selector: call => (call.Target, call.DependencyType)));
+            var pending = new Queue<(IMethodSymbol Target, INamedTypeSymbol DependencyType, bool IsResultExtension)>(collection: calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller, y: entry))
+                .Select(selector: call => (call.Target, call.DependencyType, call.IsResultExtension)));
 
             var visitedHelpers = new HashSet<IMethodSymbol>(comparer: SymbolEqualityComparer.Default);
 
@@ -108,7 +108,7 @@ internal partial class RoslynBroker
                     tracedHelpers.Add(target.OriginalDefinition);
                     foreach (var helperCall in calls.Where(predicate: call => SymbolEqualityComparer.Default.Equals(x: call.Caller?.OriginalDefinition, y: target.OriginalDefinition)))
                     {
-                        pending.Enqueue(item: (helperCall.Target, helperCall.DependencyType));
+                        pending.Enqueue(item: (helperCall.Target, helperCall.DependencyType, helperCall.IsResultExtension));
                     }
 
                     continue;
@@ -119,13 +119,13 @@ internal partial class RoslynBroker
 
                 if (resolved.Length == 0)
                 {
-                    yield return (entry, target.OriginalDefinition, call.DependencyType.OriginalDefinition);
+                    yield return (entry, target.OriginalDefinition, call.DependencyType.OriginalDefinition, call.IsResultExtension);
                 }
                 else
                 {
                     foreach (IMethodSymbol implementation in resolved)
                     {
-                        yield return (entry, implementation.OriginalDefinition, implementation.ContainingType.OriginalDefinition);
+                        yield return (entry, implementation.OriginalDefinition, implementation.ContainingType.OriginalDefinition, call.IsResultExtension);
                     }
                 }
             }
@@ -180,7 +180,7 @@ internal partial class RoslynBroker
         return implementation;
     }
 
-    private IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType)> GetRawCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
+    private IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType, bool IsResultExtension)> GetRawCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
     {
         foreach (var declaration in type.DeclaringSyntaxReferences)
         {
@@ -205,6 +205,8 @@ internal partial class RoslynBroker
                     continue;
                 }
 
+                bool isResultExtension = target.IsExtensionMethod && GetExtensionReceiver(invocation, semanticModel, target) is { } value
+                    && IsDependencyResult(value, compilation, type, new HashSet<ISymbol>(SymbolEqualityComparer.Default), cancellationToken);
                 target = target.ReducedFrom ?? target;
 
 
@@ -226,7 +228,7 @@ internal partial class RoslynBroker
                     };
                 var receiverType = !target.IsStatic && target.ContainingType.TypeKind == TypeKind.Class
                     && receiver is INamedTypeSymbol { TypeKind: TypeKind.Class } namedReceiver ? namedReceiver : null;
-                yield return (caller, target, GetCollectionOwner(invocation, semanticModel) ?? receiverType ?? target.ContainingType);
+                yield return (caller, target, isResultExtension ? target.ContainingType : GetCollectionOwner(invocation, semanticModel) ?? receiverType ?? target.ContainingType, isResultExtension);
             }
         }
     }
