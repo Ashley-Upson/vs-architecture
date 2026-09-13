@@ -82,6 +82,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IRenderModelProcessingService, RenderModelProcessingService>();
         services.AddTransient<ILayoutOrchestrationService, LayoutOrchestrationService>();
         services.AddTransient(implementationFactory: provider => new LayoutModelBuilder(provider.GetRequiredService<ILayoutOrchestrationService>()));
+        services.AddTransient<IRenderModelBuilderFactory, RenderModelBuilderFactory>();
         services.AddTransient<IHtmlModelPreparationBroker, HtmlModelPreparationBroker>();
         services.AddTransient<IDrawIOModelPreparationBroker, DrawIOModelPreparationBroker>();
         services.AddTransient<IHtmlModelPreparationService, HtmlModelPreparationService>();
@@ -94,6 +95,7 @@ public static class ServiceCollectionExtensions
 
         foreach (DiagramTypes diagramType in Enum.GetValues<DiagramTypes>())
         {
+            services.AddKeyedTransient<IRenderModelBuilder>(serviceKey: diagramType.ToString(), implementationFactory: (provider, _) => provider.GetRequiredService<LayoutModelBuilder>());
             services.AddKeyedTransient<IDiagramRenderer>(serviceKey: $"{DiagramFormats.DrawIO}_{diagramType}", implementationFactory: (provider, _) => provider.GetRequiredService<DrawIODiagramRenderer>());
             services.AddKeyedTransient<IDiagramRenderer>(serviceKey: $"{DiagramFormats.Html}_{diagramType}", implementationFactory: (provider, _) => provider.GetRequiredService<HtmlDiagramRenderer>());
         }

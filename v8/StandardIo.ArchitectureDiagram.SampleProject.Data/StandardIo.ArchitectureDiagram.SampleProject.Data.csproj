@@ -5,6 +5,6 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="cCoder.CodeAnalysis" Version="2026.9.10.1034" PrivateAssets="all" />
+    <PackageReference Include="cCoder.CodeAnalysis" Version="2026.9.13.1434" PrivateAssets="all" />
   </ItemGroup>
 </Project>
