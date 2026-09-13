@@ -374,7 +374,7 @@ public sealed partial class SampleProjectExtractionTests
             var sourceProject = drawing.Projects.Single(project => project.Nodes.Any(node => node.Id == edge.SourceId));
             var source = sourceProject.Nodes.Single(node => node.Id == edge.SourceId);
             var target = data.Nodes.Single(node => node.Id == edge.TargetId);
-            Assert.Equal(target.Id == context.Id || source.TypeName.EndsWith("IServiceCollectionExtensions") ? "#ef4444" : target.Fill, edge.Stroke);
+            Assert.Equal(target.Fill, edge.Stroke);
             Assert.Equal(sourceProject.Y + source.Y + source.Height, edge.Points[0].Y);
             Assert.Equal(data.X + target.X + target.Width / 2, edge.Points[^1].X);
             Assert.Equal(data.Y + target.Y, edge.Points[^1].Y);

@@ -53,7 +53,7 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
                         .SelectMany(candidate => candidate.Nodes).First(node => node.TypeName == link.ToType);
                 var connection = new RenderConnection(project.Id + "-edge-" + (connections.Count + crossProjectConnections.Count),
                     source.Id, target.Id, source.TypeName, target.TypeName, link.DependencyType == DependencyType.Inheritance,
-                    Array.Empty<DrawingPoint>(), configuration.ColourLines ? target.Fill : "#d1d5db");
+                    Array.Empty<DrawingPoint>(), configuration.ColourLines ? target.Fill : "#d1d5db") { IsComposition = link.IsComposition };
                 if (local.ContainsKey(target.TypeName)) connections.Add(connection);
                 else crossProjectConnections.Add(connection);
             }

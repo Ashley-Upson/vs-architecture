@@ -23,9 +23,9 @@ internal sealed class CategoryRowLayoutRuleProcessingService : ILayoutRuleProces
             while (pending.Count > 0)
             {
                 var groups = pending.Where(id => counts[id] == 0).GroupBy(id => categories[id]);
-                // Ready categories with older satisfied parents take precedence over newly unlocked layers.
-                var group = groups.OrderBy(g => g.Min(id => incoming[id].Select(parent => rows[parent] + 1).DefaultIfEmpty(row + 1).Max()))
-                    .ThenBy(g => g.Key == RenderNodeCategory.Exposure ? -1 : (int)g.Key).First();
+                // Preserve the inferred architectural order. Unclassified helpers may occupy an intervening row.
+                var group = groups.OrderBy(g => g.Key == RenderNodeCategory.Other ? 0.5 : Array.IndexOf(project.ArchitecturalLayers, g.Key))
+                    .ThenBy(g => g.Min(id => incoming[id].Select(parent => rows[parent] + 1).DefaultIfEmpty(row + 1).Max())).First();
                 var occupants = group.OrderBy(id => id, StringComparer.Ordinal).ToArray();
                 model.Rows[project.Id + ":" + group.Key + ":" + row] = new RenderRowGroup(row, occupants);
                 foreach (var id in occupants) { rows[id] = row; pending.Remove(id); }

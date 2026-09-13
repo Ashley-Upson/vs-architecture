@@ -127,7 +127,7 @@ internal static class LayoutGraph
     {
         Name = project.Name,
         Types = project.Nodes.Select(node => new DefinedType { Name = node.TypeName }).ToArray(),
-        Dependencies = project.Connections.Select(edge => new TypeRelationship { FromType = edge.FromType, ToType = edge.ToType, DependencyType = edge.Inheritance ? DependencyType.Inheritance : DependencyType.Consumed }).ToArray()
+        Dependencies = project.Connections.Select(edge => new TypeRelationship { FromType = edge.FromType, ToType = edge.ToType, IsComposition = edge.IsComposition, DependencyType = edge.Inheritance ? DependencyType.Inheritance : DependencyType.Consumed }).ToArray()
     };
     internal static RenderNode[] Parents(RenderProject project, string id) => Topology(project).Parents.TryGetValue(id, out var parents)
         ? parents.Select(parent => project.Nodes[Index(project, parent)]).ToArray() : Array.Empty<RenderNode>();

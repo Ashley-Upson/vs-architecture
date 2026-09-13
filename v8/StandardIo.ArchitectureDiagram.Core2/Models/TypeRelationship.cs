@@ -5,6 +5,8 @@ namespace StandardIo.ArchitectureDiagram.Core2.Models;
 public sealed class TypeRelationship
 {
     public DependencyType DependencyType { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsComposition { get; set; }
     /// <summary>Full .NET name of the dependent type, without assembly qualification.</summary>
     public string? FromType { get; set; }
     /// <summary>Full .NET name of the referenced type, without assembly qualification.</summary>

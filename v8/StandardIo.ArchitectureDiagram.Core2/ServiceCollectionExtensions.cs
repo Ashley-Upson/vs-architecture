@@ -52,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ILayoutRuleFactory, LayoutRuleFactory>();
         services.AddTransient<IProjectModelLayoutBroker, ProjectModelLayoutBroker>();
         services.AddTransient<ILayoutRuleProcessingService, DepthLayoutRuleProcessingService>();
+        services.AddTransient<ILayoutRuleProcessingService, ArchitecturalLayerRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, CategoryRowLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, TreeSpacingLayoutRuleProcessingService>();
         services.AddTransient<ILayoutRuleProcessingService, SharedParentCentringLayoutRuleProcessingService>();

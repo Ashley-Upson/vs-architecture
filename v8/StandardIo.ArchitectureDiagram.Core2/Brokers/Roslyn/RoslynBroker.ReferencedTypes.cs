@@ -6,6 +6,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace StandardIo.ArchitectureDiagram.Core2.Brokers.Roslyn;
 internal partial class RoslynBroker
 {
+    public bool IsCompositionRoot(INamedTypeSymbol type) => type.IsStatic && type.GetMembers().OfType<IMethodSymbol>().Any(method =>
+        method.Parameters.Any(parameter => parameter.Type.ToDisplayString() == "Microsoft.Extensions.DependencyInjection.IServiceCollection"));
+
     public IEnumerable<INamedTypeSymbol> GetReferencedTypes(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
     {
         var referenced = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);

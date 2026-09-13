@@ -110,12 +110,12 @@ internal sealed class ProjectModelPresentationService : IProjectModelPresentatio
 
             foreach (string owner in owners[link.ToType!].Where(owner => !dataTypes.Contains(owner)))
             {
-                dependencies.Add(item: new TypeRelationship { FromType = link.FromType, ToType = owner, DependencyType = link.DependencyType });
+                dependencies.Add(item: new TypeRelationship { FromType = link.FromType, ToType = owner, DependencyType = link.DependencyType, IsComposition = link.IsComposition });
             }
         }
 
-        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => type.AssemblyName is null || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.Where(link => !string.Equals(link.FromType, link.ToType, StringComparison.Ordinal)).DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType))
-            .Select(selector: link => new TypeRelationship { FromType = link.FromType, ToType = link.ToType, DependencyType = link.DependencyType })
+        return new ProjectModelPresentation(new ProjectModel { Name = model.Name, Path = model.Path, Types = visible.Where(type => type.AssemblyName is null || dependencies.Any(link => link.FromType == type.Name || link.ToType == type.Name)).ToArray(), Dependencies = dependencies.Where(link => !string.Equals(link.FromType, link.ToType, StringComparison.Ordinal)).DistinctBy(keySelector: link => (link.FromType, link.ToType, link.DependencyType, link.IsComposition))
+            .Select(selector: link => new TypeRelationship { FromType = link.FromType, ToType = link.ToType, DependencyType = link.DependencyType, IsComposition = link.IsComposition })
             .ToArray() }, labels);
     }
 }

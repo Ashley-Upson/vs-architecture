@@ -14,6 +14,8 @@ internal interface IRoslynBroker
 
     IEnumerable<INamedTypeSymbol> GetBaseTypes(INamedTypeSymbol type);
 
+    bool IsCompositionRoot(INamedTypeSymbol type);
+
     IEnumerable<INamedTypeSymbol> GetReferencedTypes(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken);
 
     IEnumerable<(IMethodSymbol? Caller, IMethodSymbol Target, INamedTypeSymbol DependencyType)> GetCalls(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken);

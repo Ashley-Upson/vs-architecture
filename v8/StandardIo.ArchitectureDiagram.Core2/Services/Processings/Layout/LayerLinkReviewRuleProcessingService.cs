@@ -7,33 +7,29 @@ internal sealed class LayerLinkReviewRuleProcessingService : ILayoutRuleProcessi
     public void ApplyRule(RenderModel model)
     {
         if (model.DiagramType != DiagramTypes.Architecture) return;
-        RenderConnection Review(RenderConnection edge, double sourceY, double targetY, double[] rows, string targetFill) => edge with
+        var owners = model.Projects.SelectMany(p => p.Nodes.Select(n => (n.Id, Node: n, Project: p))).ToDictionary(x => x.Id);
+        RenderConnection Review(RenderConnection edge)
         {
-            Stroke = Array.IndexOf(rows, targetY) != Array.IndexOf(rows, sourceY) + 1
-                ? "#ef4444" : model.Configuration.ColourLines ? targetFill : "#d1d5db"
-        };
-        foreach (var project in model.Projects)
-        {
-            var nodes = project.Nodes.ToDictionary(n => n.Id);
-            var rows = project.Nodes.Select(n => n.Y).Distinct().OrderBy(y => y).ToArray();
-            for (int i = 0; i < project.Connections.Length; i++)
+            var source = owners[edge.SourceId]; var target = owners[edge.TargetId];
+            var from = source.Node.Category ?? RenderNodeCategory.Other;
+            var to = target.Node.Category ?? RenderNodeCategory.Other;
+            var order = source.Project.ArchitecturalLayers;
+            int a = Array.IndexOf(order, from), b = Array.IndexOf(order, to);
+            // Unknown categories and structural/composition links carry no runtime-layer verdict.
+            bool bad = false;
+            if (!edge.IsComposition && !edge.Inheritance && from != RenderNodeCategory.Other && to != RenderNodeCategory.Other)
             {
-                var edge = project.Connections[i];
-                project.Connections[i] = Review(edge, nodes[edge.SourceId].Y, nodes[edge.TargetId].Y, rows, nodes[edge.TargetId].Fill);
+                // Exposures start another stack. Brokers may hand off regardless of physical row/project.
+                if (from == to && source.Project.Id == target.Project.Id) bad = false;
+                else if (to == RenderNodeCategory.Exposure)
+                    bad = from != RenderNodeCategory.Broker && a >= 0 && a < order.Length - 1;
+                else if (a >= 0 && b >= 0)
+                    bad = from != to && b != a + 1;
             }
+            return edge with { Stroke = bad ? "#ef4444" : model.Configuration.ColourLines ? target.Node.Fill : "#d1d5db" };
         }
-        var owners = model.Projects.SelectMany(project => project.Nodes.Select(node => (node.Id, Project: project, Node: node))).ToDictionary(item => item.Id);
-        for (int i = 0; i < model.CrossProjectConnections.Length; i++)
-        {
-            var edge = model.CrossProjectConnections[i];
-            var source = owners[edge.SourceId];
-            var target = owners[edge.TargetId];
-            // Crossing the boundary joins the last source layer to the first destination layer.
-            bool adjacent = source.Node.Y == source.Project.Nodes.Max(n => n.Y)
-                && target.Node.Y == target.Project.Nodes.Min(n => n.Y)
-                && target.Project.Y > source.Project.Y;
-            model.CrossProjectConnections[i] = edge with { Stroke = adjacent
-                ? model.Configuration.ColourLines ? target.Node.Fill : "#d1d5db" : "#ef4444" };
-        }
+        foreach (var project in model.Projects)
+            for (int i = 0; i < project.Connections.Length; i++) project.Connections[i] = Review(project.Connections[i]);
+        for (int i = 0; i < model.CrossProjectConnections.Length; i++) model.CrossProjectConnections[i] = Review(model.CrossProjectConnections[i]);
     }
 }

@@ -135,7 +135,7 @@ public sealed class ArchitectureTypePresentationTests
         // Then
         Assert.Equal(noDuplicates ? 2 : 1, result.Projects.Length);
         var edge = result.Projects.SelectMany(box => box.Connections).Concat(result.CrossProjectConnections).Single(edge => edge.ToType == "External.Service");
-        Assert.Equal(noDuplicates && internalChild ? "#ef4444" : "#d1d5db", edge.Stroke);
+        Assert.Equal("#d1d5db", edge.Stroke);
         var root = result.Projects.SelectMany(box => box.Nodes).Single(node => node.TypeName == "Root");
         Assert.True(root.TextLines[0].Bold);
     }
