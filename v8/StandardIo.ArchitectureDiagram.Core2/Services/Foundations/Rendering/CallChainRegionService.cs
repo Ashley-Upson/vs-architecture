@@ -11,15 +11,23 @@ internal sealed class CallChainRegionService : ICallChainRegionService
         double proximity=model.Configuration.Composition.NodeSpacing,gap=Math.Max(60,model.Configuration.Composition.ProjectSpacing);
         double step=model.Configuration.Composition.NodeWidth+28+gap;
         var edges=model.Projects.SelectMany(p=>p.Connections).Concat(model.CrossProjectConnections).ToArray();
+        var treeParents=edges.Where(e=>e.IsTree).ToDictionary(e=>e.TargetId,e=>e.SourceId);
+        var consumed=edges.Where(e=>!e.IsTree).Select(e=>e.TargetId).ToHashSet();
+        string Root(string id){while(treeParents.TryGetValue(id,out var parent))id=parent;return id;}
         var regions=new List<RenderProject>();
         foreach(var project in model.Projects)
         foreach(var column in project.Nodes.GroupBy(n=>(int)Math.Round((n.X-40)/step)))
         {
+            // A type and its methods are one layout unit, including the span of
+            // their tree connectors. Root branches reserve a continuous layer.
+            var units=column.GroupBy(n=>Root(n.Id)).Select(g=>g.ToList()).ToList();
+            var roots=units.Where(unit=>!unit.Any(n=>consumed.Contains(n.Id))).ToArray();
+            if(roots.Length>1)units=units.Except(roots).Append(roots.SelectMany(unit=>unit).ToList()).ToList();
             var groups=new List<List<RenderNode>>();double bottom=double.NegativeInfinity;
-            foreach(var node in column.OrderBy(n=>n.Y))
+            foreach(var unit in units.OrderBy(unit=>unit.Min(n=>n.Y)))
             {
-                if(groups.Count==0||node.Y-bottom>proximity)groups.Add([]);
-                groups[^1].Add(node);bottom=Math.Max(bottom,node.Y+node.Height);
+                if(groups.Count==0||unit.Min(n=>n.Y)-bottom>proximity)groups.Add([]);
+                groups[^1].AddRange(unit);bottom=Math.Max(bottom,unit.Max(n=>n.Y+n.Height));
             }
             foreach(var group in groups)
             {

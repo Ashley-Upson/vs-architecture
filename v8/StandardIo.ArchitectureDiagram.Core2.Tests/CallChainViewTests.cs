@@ -8,6 +8,27 @@ public class CallChainViewTests
 {
     private static RenderConnection[] Calls(RenderModel model) => model.CrossProjectConnections.Concat(model.Projects.SelectMany(p=>p.Connections.Where(e=>!e.IsTree).Select(e=>e with {Points=e.Points.Select(q=>q with {X=q.X+p.X,Y=q.Y+p.Y}).ToArray()}))).ToArray();
     [Fact]
+    public async Task ShouldKeepTypesWithTheirMethodsAndPreserveTheRootLayer()
+    {
+        var project=await ConcreteCallChainTests.ExtractAsync("""
+            public class A { public void Run() { new B().Run(); } }
+            public class B { public void Run() { new C().Run(); } }
+            public class C { public void Run() {} }
+            public class OtherRoot { public void Run() { new B().Run(); } }
+            """);
+        var model=TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project],diagramType:DiagramTypes.CallChain));
+        Assert.DoesNotContain(model.CrossProjectConnections,e=>e.IsTree);
+        var rootRegion=Assert.Single(model.Projects,p=>p.Nodes.Any(n=>n.Label=="A"));
+        Assert.Contains(rootRegion.Nodes,n=>n.Label=="OtherRoot");
+        foreach(var region in model.Projects)
+        foreach(var tree in region.Connections.Where(e=>e.IsTree))
+        {
+            var a=region.Nodes.Single(n=>n.Id==tree.SourceId);var b=region.Nodes.Single(n=>n.Id==tree.TargetId);
+            Assert.Equal(a.X+28,b.X);
+            Assert.True(b.Y>a.Y);
+        }
+    }
+    [Fact]
     public async Task ShouldSplitDistantProjectRegionsAndRetainForwardCalls()
     {
         var project=await ConcreteCallChainTests.ExtractAsync("""
