@@ -38,9 +38,12 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 separation.TryGetValue(id, out var peers) && peers.Overlaps(branches[second]));
             double spacing = renderModel.IsProjectGraph ? renderModel.Configuration.Architecture.ProjectSpacing : renderModel.Configuration.Architecture.NodeSpacing;
             RenderNode Current(string id) => project.Nodes.Single(node => node.Id == id);
+            var independentSharedLeaves = LayoutGraph.SharedGroups(project).Where(group => group.Length == 1)
+                .Select(group => group[0].Id).Where(id => branches[id].Count == 1).ToHashSet();
             void Arrange(string owner)
             {
-                var roots = children[owner].OrderBy(id => Current(id).X).ThenBy(id => id, StringComparer.Ordinal).ToArray();
+                bool SharedLeaf(string id) => reclaimSpace && independentSharedLeaves.Contains(id);
+                var roots = children[owner].OrderBy(id => SharedLeaf(id)).ThenBy(id => Current(id).X).ThenBy(id => id, StringComparer.Ordinal).ToArray();
                 foreach (string root in roots) Arrange(root);
                 // Translate completed branches as units; later placement cannot undo
                 // their internal spacing or parent centring.
@@ -52,6 +55,17 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
                         .Select(branch => branch.Right + spacing).DefaultIfEmpty(left).Max();
+                    if (SharedLeaf(root))
+                    {
+                        // Shared leaves occupy their own row, after owned branches have
+                        // been packed. They must not reserve a column above that row.
+                        var peers = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root)).ToArray();
+                        double width = right - left;
+                        double preferred = LayoutGraph.Midpoint(LayoutGraph.Parents(project,root)) - width / 2;
+                        next = peers.SelectMany(branch => new[] { branch.Left - spacing - width, branch.Right + spacing })
+                            .Append(preferred).Where(x => peers.All(branch => x + width + spacing <= branch.Left + LayoutGraph.Tolerance || x >= branch.Right + spacing - LayoutGraph.Tolerance))
+                            .OrderBy(x => Math.Abs(x - preferred)).ThenBy(x => x).First();
+                    }
                     double delta = reclaimSpace ? next - left : Math.Max(0, next - left);
                     foreach (string id in branches[root]) LayoutGraph.Move(project, id, delta);
                     placed.Add((root, left + delta, right + delta, top, bottom));

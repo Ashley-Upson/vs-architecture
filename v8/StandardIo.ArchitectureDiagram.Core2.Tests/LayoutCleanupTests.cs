@@ -12,6 +12,28 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class LayoutCleanupTests
 {
     [Fact]
+    public void ShouldPackBranchesBeforePlacingSharedLeafInVacantBottomSlot()
+    {
+        RenderNode Node(string id,double x,double y)=>new(id,id,id,"orange",x,y,210,60,[]);
+        RenderConnection Edge(string a,string b)=>new(a+b,a,b,a,b,false,[]);
+        var project=new RenderProject("p","P",0,0,1700,700,
+            [Node("root",985,0),Node("authorization",580,160),Node("events",1120,160),Node("component",1390,160),
+             Node("hub",1120,320),Node("context",1390,320),Node("factory",850,320)],
+            [Edge("root","authorization"),Edge("root","events"),Edge("root","component"),Edge("authorization","factory"),
+             Edge("events","hub"),Edge("component","context"),Edge("component","factory")]);
+        var model=new RenderModel(1700,700,[project]);
+        var cleanup=new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.LayoutCleanupRuleProcessingService();
+        cleanup.ApplyRule(model);
+        RenderNode Find(string id)=>project.Nodes.Single(n=>n.Id==id);
+        Assert.Equal(270,Find("events").X-Find("authorization").X,5);
+        Assert.Equal(270,Find("component").X-Find("events").X,5);
+        Assert.Equal(Find("authorization").X,Find("factory").X,5);
+        var positions=project.Nodes.Select(n=>n.X).ToArray();
+        cleanup.ApplyRule(model);
+        Assert.Equal(positions,project.Nodes.Select(n=>n.X).ToArray());
+    }
+
+    [Fact]
     public void ShouldReclaimUnusedSpaceBetweenCompletedBranchesAndRemainStable()
     {
         var nodes = new[] {
