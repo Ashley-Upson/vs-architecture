@@ -22,6 +22,17 @@ public class DiagramTabsTests
         Assert.DoesNotContain("&gt;", script);
         Assert.DoesNotContain("&amp;", script);
     }
+    [Fact]
+    public void ShouldPreserveEmbeddedDocumentsExactlyWithCompactAttributeQuoting()
+    {
+        string content = "<html><body title=\"A &amp; B's &quot;quote&quot;\">" +
+            string.Concat(Enumerable.Repeat("<svg width=\"100\" height=\"200\"><text>λ &amp; &lt;</text></svg>",100)) + "</body></html>";
+        string html = Encoding.UTF8.GetString(TestServices.Get<IDocumentCompilationService>().Compile(
+            [new RenderedDiagramTab(DiagramTypes.Architecture, Encoding.UTF8.GetBytes(content))], DiagramFormats.Html));
+        var parsed = XElement.Parse(html);
+        Assert.Equal(content, parsed.Descendants("iframe").Single().Attribute("srcdoc")!.Value);
+        Assert.True(Encoding.UTF8.GetByteCount(html) < Encoding.UTF8.GetByteCount(parsed.ToString(SaveOptions.DisableFormatting)));
+    }
     private static Task<ProjectModel> Model() => ConcreteCallChainTests.ExtractAsync("""
         public class Item { public string Name { get; set; } }
         public class Order { public Item[] Items { get; set; } }
