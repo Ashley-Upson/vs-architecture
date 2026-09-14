@@ -10,6 +10,41 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class CompositionTreeTests
 {
     [Fact]
+    public async Task ShouldDefineSharedPrivateMethodsOnceAndKeepCallsAsLeaves()
+    {
+        var project=await ConcreteCallChainTests.ExtractAsync("""
+            using System;
+            public class Other { public void Work() {} }
+            public class Service {
+                public void Run() { TryCatch(() => new Other().Work()); }
+                public void Save() { TryCatch(() => new Other().Work()); }
+                private void TryCatch(Action action) { action(); Recover(); }
+                private void TryCatch(int value) { Recover(); }
+                private void Recover() { Finish(); }
+                private void Finish() { Recover(); }
+            }
+            """,frameworkReferences:true);
+        foreach(bool dedupe in new[]{false,true})
+        {
+            var tree=TestServices.Get<ICompositionTreeService>().Build(new RenderModel([project],new RenderConfiguration {NoDuplicates=dedupe},DiagramTypes.Composition)).Single(t=>t.Title.EndsWith(" / Service"));
+            var root=tree.Nodes.Single(n=>n.ParentId==null);
+            var definitions=tree.Nodes.Where(n=>n.MemberId!=null).ToArray();
+            Assert.All(definitions.GroupBy(n=>n.MemberId),g=>Assert.Single(g));
+            Assert.All(definitions.Where(n=>n.Label!="Lambda Expression"),n=>Assert.Equal(root.Id,n.ParentId));
+            Assert.Equal(2,definitions.Count(n=>n.Label=="TryCatch"));
+            var actionTryCatch=definitions.Single(n=>n.Label=="TryCatch" && n.MemberId!.Contains("Action"));
+            foreach(string name in new[]{"Run","Save"})
+            {
+                var method=definitions.Single(n=>n.Label==name);
+                var call=Assert.Single(tree.Nodes,n=>n.ParentId==method.Id&&n.TargetMemberId==actionTryCatch.MemberId);
+                Assert.DoesNotContain(tree.Nodes,n=>n.ParentId==call.Id);
+            }
+            var recover=definitions.Single(n=>n.Label=="Recover");
+            Assert.Contains(tree.Nodes,n=>n.ParentId==actionTryCatch.Id&&n.TargetMemberId==recover.MemberId);
+            Assert.Equal(2,tree.Nodes.Count(n=>n.Label=="Other → Work"));
+        }
+    }
+    [Fact]
     public async Task ShouldLinkOverloadsToTheirExactMethodAndBoundLocalRecursion()
     {
         var project = await ConcreteCallChainTests.ExtractAsync("""

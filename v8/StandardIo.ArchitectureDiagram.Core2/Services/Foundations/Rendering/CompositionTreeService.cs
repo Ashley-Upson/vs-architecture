@@ -40,34 +40,30 @@ internal sealed class CompositionTreeService : ICompositionTreeService
             string? Local(MethodReference call) => call.TypeName != name ? null : call.MethodId is not null && members.ContainsKey(call.MethodId) ? call.MethodId :
                 members.Where(m => m.Value.Name == call.MethodName).Select(m => m.Key).Take(2).ToArray() is { Length: 1 } matches ? matches[0] : null;
             var rendered = new HashSet<string>(StringComparer.Ordinal);
-            void RenderMember(string key, int depth, string parent, HashSet<string> path)
+            void RenderMember(string key, int depth, string parent)
             {
+                if (!rendered.Add(key)) return;
                 var member = members[key];
                 string label = member.Name.Length == 0 ? "Lambda Expression" : member.Name == ".ctor" ? "Constructor" : member.Name;
                 string[]? details = model.DiagramType == DiagramTypes.CallChain ? new[] { "Inputs" }
                     .Concat((member.Inputs ?? []).Select(p => "  " + Short(p.Type ?? "?") + " : " + p.Name))
                     .Concat(new[] { "Outputs", "  " + (member.Output is null ? "None" : Short(member.Output)) }).ToArray() : null;
                 string id = Add(name,label+(member.IsDeclaration ? " (declaration)" : ""),depth,parent,memberId:key,details:details);
-                rendered.Add(key);
-                var next = new HashSet<string>(path,StringComparer.Ordinal) { key };
                 foreach (string target in member.TypeNames.Distinct().OrderBy(n => n,StringComparer.Ordinal))
                     Add(target,Short(target),depth+1,id,targetType:target);
                 foreach (var call in Calls(member).Distinct().OrderBy(c => c.TypeName,StringComparer.Ordinal).ThenBy(c => c.MethodName,StringComparer.Ordinal))
                 {
                     string? local = Local(call);
-                    if (model.DiagramType != DiagramTypes.CallChain && local is not null && !next.Contains(local))
-                        RenderMember(local,depth+1,id,next);
-                    else Add(call.TypeName,Short(call.TypeName)+" → "+(call.MethodName==".ctor"?"Constructor":call.MethodName),depth+1,id,
-                        targetMemberId:call.MethodId ?? call.MethodName,targetType:call.TypeName);
+                    Add(call.TypeName,Short(call.TypeName)+" → "+(call.MethodName==".ctor"?"Constructor":call.MethodName.Length==0?"Lambda Expression":call.MethodName),depth+1,id,
+                        targetMemberId:local ?? call.MethodId ?? call.MethodName,targetType:call.TypeName);
                 }
-                foreach (string child in members.Where(m => m.Value.ParentId == key).Select(m => m.Key).OrderBy(k => k,StringComparer.Ordinal))
-                    if (!next.Contains(child)) RenderMember(child,depth+1,id,next);
+                foreach (string child in members.Where(m => m.Value.ParentId == key && m.Value.Name.Length == 0).Select(m => m.Key).OrderBy(k => k,StringComparer.Ordinal))
+                    RenderMember(child,depth+1,id);
             }
-            var locallyCalled = members.Values.SelectMany(Calls).Select(Local).Where(k => k != null).ToHashSet();
-            var top = members.Where(m => m.Value.ParentId == null || !members.ContainsKey(m.Value.ParentId))
-                .OrderBy(m => m.Value.Name == ".ctor" ? "" : m.Value.Name,StringComparer.Ordinal).ThenBy(m => m.Key,StringComparer.Ordinal).Select(m=>m.Key).ToArray();
-            foreach (string key in top.Where(k => model.DiagramType == DiagramTypes.CallChain || !locallyCalled.Contains(k))) RenderMember(key,1,root,new(StringComparer.Ordinal));
-            foreach (string key in top.Where(k => !rendered.Contains(k))) RenderMember(key,1,root,new(StringComparer.Ordinal));
+            var top = members.Where(m => m.Value.Name.Length > 0 || m.Value.ParentId == null || !members.ContainsKey(m.Value.ParentId))
+                .OrderBy(m => m.Value.Name == ".ctor" ? 0 : (m.Value.IsPublicContract ?? (type.Methods ?? []).Any(method=>method.Name==m.Value.Name)) ? 1 : 2)
+                .ThenBy(m => m.Value.Name,StringComparer.Ordinal).ThenBy(m => m.Key,StringComparer.Ordinal).Select(m=>m.Key).ToArray();
+            foreach (string key in top) RenderMember(key,1,root);
             trees.Add(new(entry.Project.Name+" / "+Short(name),nodes.ToArray()));
         }
         return trees.ToArray();
