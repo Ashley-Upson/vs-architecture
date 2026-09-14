@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Rendering;
@@ -14,7 +15,9 @@ internal sealed class ProjectModelCompositionProcessingService(IProjectModelPres
         if (renderModel.Configuration.NoDuplicates) return presentations.Take(renderModel.ProjectModels.Length)
             .Concat(presentations.Skip(renderModel.ProjectModels.Length).Where(external => external.Model.Types!.Length > 0)).ToArray();
 
-        var sources = presentations.Take(renderModel.ProjectModels.Length).ToArray();
+        var sources = presentations.Take(renderModel.ProjectModels.Length)
+            .SelectMany((source,index) => renderModel.DiagramType == DiagramTypes.Architecture
+                ? PrepareTree(source,renderModel.ProjectModels[index]) : new[] {source}).ToArray();
         var externalProjects = presentations.Skip(renderModel.ProjectModels.Length).ToArray();
         if (renderModel.Configuration.Architecture.InlineExternals && renderModel.DiagramType == DiagramTypes.Architecture)
         {
@@ -42,6 +45,35 @@ internal sealed class ProjectModelCompositionProcessingService(IProjectModelPres
             }, external.Labels) { SourceTreeIndex = index }).Where(external => external.Model.Types!.Length > 0);
         });
         return sources.Concat(scopedExternals).ToArray();
+    }
+
+    private static IEnumerable<ProjectModelPresentation> PrepareTree(ProjectModelPresentation source,ProjectModel original)
+    {
+        if(!original.IsSplitTree){yield return source;yield break;}
+        var types=source.Model.Types!;var names=types.Select(t=>t.Name!).ToHashSet(StringComparer.Ordinal);
+        var links=source.Model.Dependencies!;var outgoing=links.ToLookup(l=>l.FromType!);
+        // Splitting preceded Architecture filtering. Re-evaluate the visible graph
+        // so removed attachments cannot leave unrelated branches in a root's tree.
+        bool hasRoot=original.RootTypeName is not null && names.Contains(original.RootTypeName);
+        var referenced=links.Where(l=>l.FromType!=l.ToType && names.Contains(l.FromType!)).Select(l=>l.ToType!).ToHashSet();
+        var seeds=hasRoot?new[]{original.RootTypeName!}:types.Select(t=>t.Name!).Where(n=>!referenced.Contains(n)).Concat(types.Select(t=>t.Name!)).Distinct();
+        var covered=new HashSet<string>();
+        foreach(string seed in seeds)
+        {
+            if(covered.Contains(seed))continue;
+            var reachable=new HashSet<string>();var pending=new Queue<string>();pending.Enqueue(seed);
+            while(pending.TryDequeue(out string? current))
+            {
+                if(!reachable.Add(current))continue;
+                foreach(var link in outgoing[current])pending.Enqueue(link.ToType!);
+            }
+            covered.UnionWith(reachable);
+            yield return new ProjectModelPresentation(new ProjectModel {
+                Name=source.Model.Name,Path=source.Model.Path,
+                Types=types.Where(t=>reachable.Contains(t.Name!)).ToArray(),
+                Dependencies=links.Where(l=>reachable.Contains(l.FromType!)).ToArray()
+            },source.Labels);
+        }
     }
 
     private ProjectModelPresentation[] PrepareProjects(ProjectModel[] projectModels, DiagramTypes diagramType)

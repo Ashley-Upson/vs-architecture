@@ -43,7 +43,9 @@ internal sealed class ProjectModelSplitterProcessingService : IProjectModelSplit
         foreach (DefinedType root in roots)
         {
             string[] names = CollectReachableTypes(startingNames: new[] { root.Name! }, outgoing: outgoing);
-            results.Add(item: CreateModel(source: projectModel, names: names, types: typesByName, dependencies: dependencies));
+            var tree = CreateModel(source: projectModel, names: names, types: typesByName, dependencies: dependencies);
+            tree.RootTypeName = root.Name;
+            results.Add(tree);
             included.UnionWith(other: names);
         }
 
@@ -54,7 +56,8 @@ internal sealed class ProjectModelSplitterProcessingService : IProjectModelSplit
         if (leftovers.Length > 0)
         {
             string[] names = CollectReachableTypes(startingNames: leftovers, outgoing: outgoing);
-            results.Add(item: CreateModel(source: projectModel, names: names, types: typesByName, dependencies: dependencies));
+            var tree = CreateModel(source: projectModel, names: names, types: typesByName, dependencies: dependencies);
+            results.Add(tree);
         }
 
         return results.ToArray();
@@ -64,9 +67,11 @@ internal sealed class ProjectModelSplitterProcessingService : IProjectModelSplit
     {
         var selected = names.ToHashSet(comparer: StringComparer.Ordinal);
 
-        return this.projectModelService.CreateProjectModel(source: source, types: names.Select(selector: name => types[name])
+        var model = this.projectModelService.CreateProjectModel(source: source, types: names.Select(selector: name => types[name])
             .ToArray(), dependencies: dependencies.Where(predicate: link => selected.Contains(item: link.FromType!))
             .ToArray());
+        model.IsSplitTree = true;
+        return model;
     }
 
     private static string[] CollectReachableTypes(string[] startingNames, ILookup<string, TypeRelationship> outgoing)
