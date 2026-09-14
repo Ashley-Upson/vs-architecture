@@ -31,7 +31,7 @@ internal sealed partial class HtmlDocumentService
             document.getElementById('zoom-out').onclick = function () { zoom(scale / 1.25); };
             document.getElementById('zoom-reset').onclick = function () { zoom(1); };
             document.getElementById('zoom-fit').onclick = function () {
-                zoom(Math.min(viewport.clientWidth / width, viewport.clientHeight / height));
+                zoom(viewport.clientWidth / width);
                 viewport.scrollLeft = 0;
                 viewport.scrollTop = 0;
             };

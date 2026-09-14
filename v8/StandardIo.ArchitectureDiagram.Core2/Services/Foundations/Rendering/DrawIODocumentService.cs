@@ -52,7 +52,7 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
             string entryY = ((route.Points[^1].Y-targetOwner.Y-target.Y)/target.Height).ToString(CultureInfo.InvariantCulture);
             root.Add(new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", "1"),
                 new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId),
-                new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;strokeColor=" + route.Stroke + ";exitX=" + exitX + ";exitY=" + exitY + ";entryX=" + entryX + ";entryY=" + entryY + ";exitPerimeter=0;entryPerimeter=0;" + (route.Inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")),
+                new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;strokeColor=" + route.Stroke + ";exitX=" + exitX + ";exitY=" + exitY + ";entryX=" + entryX + ";entryY=" + entryY + ";exitPerimeter=0;entryPerimeter=0;" + (route.IsTree ? "endArrow=none;" : route.Inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")),
                 new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"),
                     new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(1).Take(route.Points.Length - 2)
                         .Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));

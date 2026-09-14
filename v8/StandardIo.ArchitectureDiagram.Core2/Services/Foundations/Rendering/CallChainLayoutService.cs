@@ -4,7 +4,7 @@ using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface ICallChainLayoutService { RenderModel Layout(RenderModel model,ContextualDiagram diagram); }
-internal sealed class CallChainLayoutService : ICallChainLayoutService
+internal sealed class CallChainLayoutService(ICallChainRegionService regions) : ICallChainLayoutService
 {
     private sealed record Branch(CompositionTree Tree,int Depth,List<Step> Steps,double Height);
     private sealed record Step(CompositionTreeNode Method,bool Recursive,List<Branch> Children,double Height);
@@ -106,7 +106,7 @@ internal sealed class CallChainLayoutService : ICallChainLayoutService
         }
         model.Projects=owners.Select((o,i)=>new RenderProject("call-project-"+i,o,projectX[o],40,projectWidth[o],nodes[o].Max(n=>n.Y+n.Height)+40,nodes[o].ToArray(),lines[o].ToArray())).ToArray();
         model.CrossProjectConnections=cross.ToArray();model.Width=x;model.Height=model.Projects.Select(p=>p.Y+p.Height+40).DefaultIfEmpty(200).Max();
-        return model;
+        return regions.Compact(model);
     }
     private static Dictionary<string,int> Ranks(string[] ids,ILookup<string,string> outgoing)
     {

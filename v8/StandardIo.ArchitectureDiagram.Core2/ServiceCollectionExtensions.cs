@@ -91,6 +91,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ICompositionTreeService, CompositionTreeService>();
         services.AddTransient<ICallChainModelService, CallChainModelService>();
         services.AddTransient<ICallChainLayoutService, CallChainLayoutService>();
+        services.AddTransient<ICallChainRegionService, CallChainRegionService>();
         services.AddTransient<ICompositionTreeLayoutService, CompositionTreeLayoutService>();
         services.AddTransient<IContextualModelService, ContextualModelService>();
         services.AddTransient<IContextualLayoutService, ContextualLayoutService>();
