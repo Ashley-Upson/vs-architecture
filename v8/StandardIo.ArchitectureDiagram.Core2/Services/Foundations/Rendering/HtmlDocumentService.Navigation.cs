@@ -30,11 +30,16 @@ internal sealed partial class HtmlDocumentService
             document.getElementById('zoom-in').onclick = function () { zoom(scale * 1.25); };
             document.getElementById('zoom-out').onclick = function () { zoom(scale / 1.25); };
             document.getElementById('zoom-reset').onclick = function () { zoom(1); };
-            document.getElementById('zoom-fit').onclick = function () {
+            function fit() {
                 zoom(viewport.clientWidth / width);
                 viewport.scrollLeft = 0;
                 viewport.scrollTop = 0;
             };
+            document.getElementById('zoom-fit').onclick = fit;
+            var fitted = false;
+            new ResizeObserver(function () {
+                if (!fitted && viewport.clientWidth > 0) { fit(); fitted = true; }
+            }).observe(viewport);
             viewport.addEventListener('wheel', function (event) {
                 if (!event.ctrlKey) return;
                 event.preventDefault();

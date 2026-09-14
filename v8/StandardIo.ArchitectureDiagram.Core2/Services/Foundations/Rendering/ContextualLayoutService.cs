@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IContextualLayoutService { RenderModel Layout(RenderModel model, ContextualDiagram diagram); }
-internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout, ICallChainLayoutService callChains) : IContextualLayoutService
+internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout, ICallChainLayoutService callChains, IDataModelRoutingService dataRoutes) : IContextualLayoutService
 {
     public RenderModel Layout(RenderModel model, ContextualDiagram diagram)
     {
@@ -18,7 +18,7 @@ internal sealed class ContextualLayoutService(ICompositionTreeLayoutService tree
         var projects = new List<RenderProject>();
         double top = 40;
         int id = 0;
-        foreach (var group in diagram.Types.GroupBy(t => t.Project))
+        foreach (var group in diagram.Types.GroupBy(t => (t.Project,t.NamespaceGroup)))
         {
             var nodes = new List<RenderNode>();
             double width = nodeWidth;
@@ -36,7 +36,7 @@ internal sealed class ContextualLayoutService(ICompositionTreeLayoutService tree
                 rowTop += row.Max(type => Math.Max(60, type.Lines.Length * 18 + 36)) + rowSpacing;
             }
             double h = nodes.Max(n => n.Y + n.Height) + 50;
-            projects.Add(new RenderProject("context-project-" + projects.Count, group.Key, 40, top, nodes.Max(n => n.X + n.Width) + 40, h, nodes.ToArray(), []));
+            projects.Add(new RenderProject("context-project-" + projects.Count, string.IsNullOrEmpty(group.Key.NamespaceGroup)?group.Key.Project:group.Key.Project+" / "+group.Key.NamespaceGroup, 40, top, nodes.Max(n => n.X + n.Width) + 40, h, nodes.ToArray(), []));
             top += h + projectSpacing;
         }
         // Pack completed project boxes on a broad canvas; their local coordinates stay unchanged.
@@ -71,7 +71,8 @@ internal sealed class ContextualLayoutService(ICompositionTreeLayoutService tree
         }
         model.Projects = projects.ToArray(); model.CrossProjectConnections = cross.ToArray();
         model.Width = projects.Select(p => p.X + p.Width + 40).DefaultIfEmpty(400).Max(); model.Height = Math.Max(200, top);
-        RouteForwardLinks(model);
+        if (model.DiagramType == DiagramTypes.DataModel) dataRoutes.Route(model);
+        else RouteForwardLinks(model);
         return model;
     }
     private static IEnumerable<ContextualType[]> Rows(ContextualType[] types, ContextualLink[] links, bool composition, double width, double spacing, double rowSpacing)

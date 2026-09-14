@@ -3,7 +3,10 @@ internal sealed record ContextualDiagram(ContextualType[] Types, ContextualLink[
 {
     public CompositionTree[]? Trees { get; init; }
 }
-internal sealed record ContextualType(string Name, string Project, string[] Lines);
+internal sealed record ContextualType(string Name, string Project, string[] Lines)
+{
+    public string? NamespaceGroup { get; init; }
+}
 internal sealed record ContextualLink(string From, string To, string Label);
 
 internal sealed record CompositionTree(string Title, CompositionTreeNode[] Nodes)

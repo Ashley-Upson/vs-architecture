@@ -152,6 +152,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
             AssemblyName = isInternal ? null : type.ContainingAssembly.Identity.Name,
             FrameworkType = type.TypeKind switch { TypeKind.Interface => FrameworkType.Interface, TypeKind.Struct => FrameworkType.Struct, TypeKind.Enum => FrameworkType.Enum, _ => FrameworkType.Class },
             IsInternal = isInternal,
+            IsAnonymousType = type.IsAnonymousType,
             HasDeclaredBehaviour = type.GetMembers().OfType<IMethodSymbol>().Any(method => !method.IsImplicitlyDeclared && method.MethodKind is MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation),
             IsDataType = IsExceptionType(type) || type.IsValueType || type.SpecialType is SpecialType.System_String or SpecialType.System_Array or SpecialType.System_Enum or SpecialType.System_ValueType ||
                 (!isInternal && type.ContainingNamespace.ToDisplayString().StartsWith("System.Collections", StringComparison.Ordinal) &&

@@ -20,7 +20,9 @@ public sealed class HtmlNavigationTests
         // Then
         foreach (string id in new[] { "zoom-in", "zoom-out", "zoom-fit", "zoom-reset" })
             Assert.Single(document.Descendants("button").Where(button => (string?)button.Attribute("id") == id));
-        Assert.Single(document.Descendants("script"));
+        Assert.Equal("Fit",document.Descendants("button").Single(b=>(string?)b.Attribute("id")=="zoom-fit").Value);
+        Assert.Contains("ResizeObserver",Assert.Single(document.Descendants("script")).Value);
+        Assert.DoesNotContain("&amp;",document.Descendants("script").Single().ToString());
         XNamespace svg = "http://www.w3.org/2000/svg";
         Assert.Equal("Source → Target", document.Descendants(svg + "polyline").Single().Element(svg + "title")!.Value);
     }

@@ -94,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ICallChainRegionService, CallChainRegionService>();
         services.AddTransient<ICompositionTreeLayoutService, CompositionTreeLayoutService>();
         services.AddTransient<IContextualModelService, ContextualModelService>();
+        services.AddTransient<IDataModelRoutingService, DataModelRoutingService>();
         services.AddTransient<IContextualLayoutService, ContextualLayoutService>();
         services.AddTransient<IContextualLayoutOrchestrationService, ContextualLayoutOrchestrationService>();
         services.AddTransient(provider => new ContextualRenderModelBuilder(provider.GetRequiredService<IContextualLayoutOrchestrationService>()));

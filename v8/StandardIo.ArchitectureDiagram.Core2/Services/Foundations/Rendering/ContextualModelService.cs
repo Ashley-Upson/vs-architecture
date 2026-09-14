@@ -12,7 +12,7 @@ internal sealed class ContextualModelService(ICompositionTreeService composition
         if (model.DiagramType == DiagramTypes.CallChain) return callChains.Prepare(model);
         var types = model.ProjectModels.SelectMany(p => (p.Types ?? []).Select(t => (Project: p, Type: t)))
             .GroupBy(x => x.Type.Name!).Select(g => g.OrderByDescending(x => x.Type.IsInternal).First()).Where(x => x.Type.IsInternal).ToArray();
-        bool Data(DefinedType t) => t.IsDataType || t.HasDeclaredBehaviour == false || t.HasDeclaredBehaviour is null && t.Methods is { Length: 0 };
+        bool Data(DefinedType t) => t.IsDataType || t.HasDeclaredBehaviour == false || t.HasDeclaredBehaviour is null && (t.Methods?.Length ?? 0) == 0;
         string Short(string name) => Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
         var links = new List<ContextualLink>();
         if (model.DiagramType == DiagramTypes.Composition)
@@ -23,7 +23,21 @@ internal sealed class ContextualModelService(ICompositionTreeService composition
             var used = links.SelectMany(l => new[] { l.From, l.To }).ToHashSet();
             return new(types.Where(x => used.Contains(x.Type.Name!)).Select(x => new ContextualType(x.Type.Name!, x.Type.IsInternal ? x.Project.Name ?? "Project" : x.Type.AssemblyName ?? "External", [Short(x.Type.Name!)])).ToArray(), links.Distinct().ToArray()) { Trees = compositionTrees.Build(model) };
         }
-        var data = types.Where(x => Data(x.Type)).ToArray();
+        var data = types.Where(x => Data(x.Type) && !x.Type.IsAnonymousType && !x.Type.Name!.Contains("<anonymous", StringComparison.OrdinalIgnoreCase)
+            && !x.Type.Name.Contains("<>f__AnonymousType", StringComparison.Ordinal)).ToArray();
+        string Namespace(string name) { int end=name.IndexOf('<'); if(end>=0)name=name[..end]; int dot=name.LastIndexOf('.');return dot<0?"":name[..dot]; }
+        var groups=new Dictionary<string,string>();
+        foreach(var project in data.GroupBy(x=>x.Project))
+        {
+            var namespaces=project.Select(x=>Namespace(x.Type.Name!)).Distinct().ToArray();
+            var common=namespaces[0].Split('.');
+            foreach(var ns in namespaces.Skip(1)) common=common.Take(common.Zip(ns.Split('.')).TakeWhile(pair=>pair.First==pair.Second).Count()).ToArray();
+            foreach(var item in project)
+            {
+                string ns=Namespace(item.Type.Name!);
+                groups[item.Type.Name!]=namespaces.Contains(string.Join(".",common))?string.Join(".",common):string.Join(".",ns.Split('.').Take(common.Length+1));
+            }
+        }
         foreach (var item in data)
         foreach (var member in (item.Type.Properties ?? []).Select(p => (p.Name, p.Type)).Concat((item.Type.Fields ?? []).Select(f => (f.Name, f.Type))))
         foreach (var target in data)
@@ -35,6 +49,6 @@ internal sealed class ContextualModelService(ICompositionTreeService composition
         }
         return new(data.Select(x => new ContextualType(x.Type.Name!, x.Type.IsInternal ? x.Project.Name ?? "Project" : x.Type.AssemblyName ?? "External",
             new[] { Short(x.Type.Name!) }.Concat((x.Type.Properties ?? []).Select(p => Short(p.Type ?? "?") + " : " + p.Name))
-            .Concat((x.Type.Fields ?? []).Select(f => Short(f.Type ?? "?") + " : " + f.Name)).ToArray())).ToArray(), links.Distinct().ToArray());
+            .Concat((x.Type.Fields ?? []).Select(f => Short(f.Type ?? "?") + " : " + f.Name)).ToArray()) { NamespaceGroup=groups[x.Type.Name!] }).ToArray(), links.Distinct().ToArray());
     }
 }

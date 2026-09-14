@@ -7,6 +7,42 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ContextualLayoutTests
 {
     [Fact]
+    public void ShouldRetainVisibleSelfRelationships()
+    {
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
+            new([new("Entity","Project",["Entity"])],[new("Entity","Entity","parent")]));
+        var edge=Assert.Single(Assert.Single(model.Projects).Connections);
+        Assert.True(edge.Points.Length>=4);
+        Assert.NotEqual(edge.Points[0],edge.Points[^1]);
+    }
+    [Fact]
+    public void ShouldGroupParentAndChildNamespacesAndExcludeBehaviourAndAnonymousTypes()
+    {
+        var project=new ProjectModel {Name="Project",Types=[
+            new() {Name="Shop.Sales.Order",HasDeclaredBehaviour=false,IsInternal=true},
+            new() {Name="Shop.Sales.Details.Line",HasDeclaredBehaviour=false,IsInternal=true},
+            new() {Name="Shop.Stock.Item",HasDeclaredBehaviour=false,IsInternal=true},
+            new() {Name="Shop.Service",HasDeclaredBehaviour=true,IsInternal=true},
+            new() {Name="<anonymous type: string Name>",HasDeclaredBehaviour=false,IsInternal=true}]};
+        var diagram=TestServices.Get<IContextualModelService>().Prepare(new RenderModel([project],diagramType:DiagramTypes.DataModel));
+        Assert.Equal(3,diagram.Types.Length);
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),diagram);
+        Assert.Equal(2,model.Projects.Length);
+        var sales=Assert.Single(model.Projects,p=>p.Nodes.Any(n=>n.TypeName=="Shop.Sales.Order"));
+        Assert.Contains(sales.Nodes,n=>n.TypeName=="Shop.Sales.Details.Line");
+    }
+    [Fact]
+    public void ShouldConnectAdjacentEntitiesDirectlyAcrossTheirFacingEdges()
+    {
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
+            new([new("A","Project",["A"]),new("B","Project",["B"])],[new("A","B","item")]));
+        var project=Assert.Single(model.Projects);var a=project.Nodes[0];var b=project.Nodes[1];var edge=Assert.Single(project.Connections);
+        Assert.Equal(2,edge.Points.Length);
+        Assert.Equal(a.X+a.Width,edge.Points[0].X);
+        Assert.Equal(b.X,edge.Points[1].X);
+        Assert.Equal(edge.Points[0].Y,edge.Points[1].Y);
+    }
+    [Fact]
     public void ShouldPlaceRelatedEntitiesNextToEachOtherInsteadOfFollowingUnrelatedInputOrder()
     {
         var types = new[] { "A", "B", "C", "D", "AChild", "BChild", "CChild", "DChild" }
