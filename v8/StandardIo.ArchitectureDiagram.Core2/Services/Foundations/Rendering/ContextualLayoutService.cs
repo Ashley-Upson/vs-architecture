@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IContextualLayoutService { RenderModel Layout(RenderModel model, ContextualDiagram diagram); }
-internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout) : IContextualLayoutService
+internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout, ICallChainLayoutService callChains) : IContextualLayoutService
 {
     public RenderModel Layout(RenderModel model, ContextualDiagram diagram)
     {
+        if (model.DiagramType == DiagramTypes.CallChain) return callChains.Layout(model, diagram);
         if (diagram.Trees is not null) return treeLayout.Layout(model, diagram.Trees);
         bool composition = model.DiagramType == DiagramTypes.Composition;
         double nodeWidth = composition ? model.Configuration.Composition.NodeWidth : model.Configuration.DataModel.NodeWidth;

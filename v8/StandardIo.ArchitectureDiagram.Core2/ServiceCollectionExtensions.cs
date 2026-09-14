@@ -89,6 +89,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IDocumentCompilationService, DocumentCompilationService>();
         services.AddTransient<IDiagramDocumentOrchestrationService, DiagramDocumentOrchestrationService>();
         services.AddTransient<ICompositionTreeService, CompositionTreeService>();
+        services.AddTransient<ICallChainModelService, CallChainModelService>();
+        services.AddTransient<ICallChainLayoutService, CallChainLayoutService>();
         services.AddTransient<ICompositionTreeLayoutService, CompositionTreeLayoutService>();
         services.AddTransient<IContextualModelService, ContextualModelService>();
         services.AddTransient<IContextualLayoutService, ContextualLayoutService>();

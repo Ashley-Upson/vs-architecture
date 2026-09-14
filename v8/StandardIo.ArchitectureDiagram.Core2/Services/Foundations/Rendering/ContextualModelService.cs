@@ -5,16 +5,17 @@ using System.Text.RegularExpressions;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IContextualModelService { ContextualDiagram Prepare(RenderModel model); }
-internal sealed class ContextualModelService(ICompositionTreeService compositionTrees) : IContextualModelService
+internal sealed class ContextualModelService(ICompositionTreeService compositionTrees, ICallChainModelService callChains) : IContextualModelService
 {
     public ContextualDiagram Prepare(RenderModel model)
     {
+        if (model.DiagramType == DiagramTypes.CallChain) return callChains.Prepare(model);
         var types = model.ProjectModels.SelectMany(p => (p.Types ?? []).Select(t => (Project: p, Type: t)))
             .GroupBy(x => x.Type.Name!).Select(g => g.OrderByDescending(x => x.Type.IsInternal).First()).Where(x => x.Type.IsInternal).ToArray();
         bool Data(DefinedType t) => t.IsDataType || t.HasDeclaredBehaviour == false || t.HasDeclaredBehaviour is null && t.Methods is { Length: 0 };
         string Short(string name) => Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
         var links = new List<ContextualLink>();
-        if (model.DiagramType is DiagramTypes.Composition or DiagramTypes.CallChain)
+        if (model.DiagramType == DiagramTypes.Composition)
         {
             var names = types.Where(x => !Data(x.Type)).Select(x => x.Type.Name!).ToHashSet();
             links.AddRange(model.ProjectModels.SelectMany(p => p.Dependencies ?? []).Where(d => d.IsComposition && names.Contains(d.FromType!) && names.Contains(d.ToType!))

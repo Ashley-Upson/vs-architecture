@@ -49,7 +49,7 @@ public class CompositionTreeTests
         Assert.DoesNotContain(a.Nodes, n => n.Label == "Work");
         Assert.Contains(a.Nodes, n => n.Label == "B → Work");
         var layout = TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project], diagramType: DiagramTypes.CallChain));
-        Assert.Equal(2, layout.Projects.Length);
+        Assert.Equal(2, layout.Projects.Count(p=>p.Nodes[0].TypeName is "A" or "B"));
         Assert.NotEmpty(layout.CrossProjectConnections);
         Assert.Contains(layout.Projects.SelectMany(p => p.Nodes), n => n.Label.Contains("Inputs") && n.Label.Contains("Int32 : value") && n.Label.Contains("Outputs") && n.Label.Contains("String"));
     }

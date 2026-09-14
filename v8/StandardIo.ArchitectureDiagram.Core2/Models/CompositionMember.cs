@@ -15,4 +15,6 @@ public sealed record CompositionMember(string Name, string[] TypeNames)
     public Field[]? Inputs { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Output { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsPublicContract { get; init; }
 }

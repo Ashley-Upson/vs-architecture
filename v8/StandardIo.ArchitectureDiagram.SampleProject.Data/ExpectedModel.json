@@ -22,7 +22,8 @@
           "Calls": [],
           "IsDeclaration": true,
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+          "IsPublicContract": true
         }
       ]
     },
@@ -50,11 +51,13 @@
             {
               "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
               "MethodName": ".ctor",
-              "MethodId": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.SchoolDataContext()"
+              "MethodId": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.SchoolDataContext()",
+              "IsPublicContract": false
             }
           ],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+          "IsPublicContract": true
         }
       ]
     },
@@ -94,7 +97,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Id.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Id",
@@ -107,7 +111,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_SchoolId",
@@ -115,7 +120,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.SchoolId.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_SchoolId",
@@ -128,7 +134,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Students",
@@ -136,7 +143,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Students.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent[]"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent[]",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Students",
@@ -149,7 +157,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Teacher",
@@ -157,7 +166,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Teacher.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Teacher",
@@ -170,7 +180,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_TeacherId",
@@ -178,7 +189,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.TeacherId.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_TeacherId",
@@ -191,7 +203,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         }
       ]
     },
@@ -227,7 +240,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.ClassId.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_ClassId",
@@ -240,7 +254,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Id",
@@ -248,7 +263,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.Id.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Id",
@@ -261,7 +277,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Student",
@@ -269,7 +286,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.Student.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Student",
@@ -282,7 +300,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_StudentId",
@@ -290,7 +309,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.StudentId.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_StudentId",
@@ -303,7 +323,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         }
       ]
     },
@@ -339,7 +360,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Classes.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class[]"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class[]",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Classes",
@@ -352,7 +374,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Id",
@@ -360,7 +383,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Id.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Id",
@@ -373,7 +397,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Students",
@@ -381,7 +406,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Students.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student[]"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student[]",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Students",
@@ -394,7 +420,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Teachers",
@@ -402,7 +429,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Teachers.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher[]"
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher[]",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Teachers",
@@ -415,7 +443,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         }
       ]
     },
@@ -459,7 +488,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.ClassStudents.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent>"
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent>",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Classes",
@@ -467,7 +497,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Classes.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class>"
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class>",
+          "IsPublicContract": false
         },
         {
           "Name": "OnModelCreating",
@@ -475,7 +506,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.OnModelCreating()",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": true
         },
         {
           "Name": "get_Schools",
@@ -483,7 +515,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Schools.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School>"
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School>",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Students",
@@ -491,7 +524,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Students.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student>"
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student>",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Teachers",
@@ -499,7 +533,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Teachers.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher>"
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher>",
+          "IsPublicContract": false
         }
       ]
     },
@@ -531,7 +566,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.Id.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Id",
@@ -544,7 +580,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Name",
@@ -552,7 +589,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.Name.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Name",
@@ -565,7 +603,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_SchoolId",
@@ -573,7 +612,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.SchoolId.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_SchoolId",
@@ -586,7 +626,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         }
       ]
     },
@@ -618,7 +659,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.Id.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Id",
@@ -631,7 +673,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_Name",
@@ -639,7 +682,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.Name.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_Name",
@@ -652,7 +696,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         },
         {
           "Name": "get_SchoolId",
@@ -660,7 +705,8 @@
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.SchoolId.get",
           "Calls": [],
           "Inputs": [],
-          "Output": "System.String"
+          "Output": "System.String",
+          "IsPublicContract": false
         },
         {
           "Name": "set_SchoolId",
@@ -673,7 +719,8 @@
               "Name": "value"
             }
           ],
-          "Output": "System.Void"
+          "Output": "System.Void",
+          "IsPublicContract": false
         }
       ]
     }

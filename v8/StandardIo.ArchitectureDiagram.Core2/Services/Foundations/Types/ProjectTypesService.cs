@@ -113,7 +113,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
                     semantic.GetSymbolInfo(node, cancellationToken).Symbol is IMethodSymbol target)
                 {
                     var called = target.ReducedFrom ?? target;
-                    members[id].Calls.Add(new(roslynBroker.GetTypeName(called.ContainingType.OriginalDefinition), called.Name) { MethodId = Identity(called.OriginalDefinition) });
+                    members[id].Calls.Add(new(roslynBroker.GetTypeName(called.ContainingType.OriginalDefinition), called.Name) { MethodId = Identity(called.OriginalDefinition), IsPublicContract = IsPublicContract(called) });
                     if (node is InvocationExpressionSyntax)
                         foreach (var argument in target.TypeArguments) AddType(id, argument);
                 }
@@ -129,10 +129,15 @@ internal sealed class ProjectTypesService : IProjectTypesService
                 Calls = m.Value.Calls.OrderBy(c => c.TypeName, StringComparer.Ordinal).ThenBy(c => c.MethodName, StringComparer.Ordinal).ToArray(),
                 Inputs = method.Parameters.Select(p => new Field { Name = p.Name, Type = GetMemberTypeName(p.Type) }).ToArray(),
                 Output = method.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor ? null : GetMemberTypeName(method.ReturnType),
+                IsPublicContract = IsPublicContract(method),
                 IsDeclaration = method.IsAbstract || method.IsExtern
             };
         }).ToArray();
     }
+
+    private static bool IsPublicContract(IMethodSymbol method) =>
+        method.MethodKind == MethodKind.Ordinary && method.DeclaredAccessibility == Accessibility.Public ||
+        method.MethodKind == MethodKind.ExplicitInterfaceImplementation;
 
     private DefinedType CreateType(INamedTypeSymbol type, bool isInternal)
     {
