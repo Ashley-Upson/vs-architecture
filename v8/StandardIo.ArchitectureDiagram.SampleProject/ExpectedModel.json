@@ -4,6 +4,7 @@
   "Types": [
     {
       "Name": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
+      "NamespaceName": "Microsoft.Extensions.DependencyInjection",
       "AssemblyName": "Microsoft.Extensions.Logging",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
@@ -21,6 +22,7 @@
     },
     {
       "Name": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
+      "NamespaceName": "Microsoft.Extensions.DependencyInjection",
       "AssemblyName": "Microsoft.Extensions.DependencyInjection.Abstractions",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
@@ -170,6 +172,7 @@
     },
     {
       "Name": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+      "NamespaceName": "Microsoft.Extensions.DependencyInjection",
       "AssemblyName": "Microsoft.Extensions.DependencyInjection.Abstractions",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
@@ -205,6 +208,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker"
@@ -392,6 +396,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker"
@@ -579,6 +584,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -663,6 +669,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -747,6 +754,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -831,6 +839,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -915,6 +924,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -999,6 +1009,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker"
@@ -1186,6 +1197,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker"
@@ -1373,6 +1385,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker"
@@ -1560,6 +1573,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker"
@@ -1755,6 +1769,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker"
@@ -1950,6 +1965,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2034,6 +2050,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2118,6 +2135,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2202,6 +2220,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2227,6 +2246,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2311,6 +2331,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2336,6 +2357,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -2420,6 +2442,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker"
@@ -2615,6 +2638,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker"
@@ -2642,6 +2666,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker"
@@ -2837,6 +2862,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker"
@@ -2864,6 +2890,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker"
@@ -3059,6 +3086,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
@@ -3073,6 +3101,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
@@ -3090,6 +3119,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
@@ -3100,6 +3130,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
@@ -3110,6 +3141,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
@@ -3120,6 +3152,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
@@ -3134,6 +3167,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
@@ -3144,6 +3178,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "AssemblyName": "StandardIo.ArchitectureDiagram.SampleProject.Data",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
@@ -3154,6 +3189,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager"
@@ -3285,6 +3321,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager"
@@ -3416,6 +3453,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3500,6 +3538,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3584,6 +3623,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3614,6 +3654,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3698,6 +3739,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3723,6 +3765,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3807,6 +3850,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -3891,6 +3935,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager"
@@ -3950,6 +3995,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager"
@@ -4081,6 +4127,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager"
@@ -4141,6 +4188,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager"
@@ -4272,6 +4320,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager"
@@ -4403,6 +4452,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -4729,6 +4779,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -4759,6 +4810,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService"
@@ -4878,6 +4930,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService"
@@ -5009,6 +5062,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService"
@@ -5140,6 +5194,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService"
@@ -5271,6 +5326,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService"
@@ -5402,6 +5458,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5486,6 +5543,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5570,6 +5628,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5654,6 +5713,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5738,6 +5798,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5822,6 +5883,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5906,6 +5968,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -5990,6 +6053,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -6015,6 +6079,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -6099,6 +6164,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -6183,6 +6249,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -6267,6 +6334,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService"
@@ -6398,6 +6466,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService"
@@ -6529,6 +6598,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService"
@@ -6660,6 +6730,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService"
@@ -6709,6 +6780,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService"
@@ -6840,6 +6912,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService"
@@ -6971,6 +7044,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService"
@@ -7102,6 +7176,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService"
@@ -7272,6 +7347,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService"
@@ -7442,6 +7518,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -7526,6 +7603,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -7610,6 +7688,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -7694,6 +7773,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -7778,6 +7858,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -7862,6 +7943,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService"
@@ -8032,6 +8114,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService"
@@ -8202,6 +8285,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
@@ -8372,6 +8456,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService"
@@ -8503,6 +8588,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService"
@@ -8634,6 +8720,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService"
@@ -8765,6 +8852,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService"
@@ -8896,6 +8984,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -8980,6 +9069,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9064,6 +9154,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9148,6 +9239,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9232,6 +9324,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9316,6 +9409,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9400,6 +9494,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9425,6 +9520,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9509,6 +9605,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9593,6 +9690,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9618,6 +9716,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9702,6 +9801,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -9786,6 +9886,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService"
@@ -9917,6 +10018,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService"
@@ -10048,6 +10150,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService"
@@ -10097,6 +10200,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService"
@@ -10228,6 +10332,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService"
@@ -10359,6 +10464,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService"
@@ -10419,6 +10525,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService"
@@ -10550,6 +10657,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService"
@@ -10681,6 +10789,7 @@
     },
     {
       "Name": "System.InvalidOperationException",
+      "NamespaceName": "System",
       "AssemblyName": "System.Private.CoreLib",
       "IsDataType": true,
       "HasDeclaredBehaviour": false,
@@ -10693,6 +10802,7 @@
     },
     {
       "Name": "cCoder.Eventing.IEventHub",
+      "NamespaceName": "cCoder.Eventing",
       "AssemblyName": "cCoder.Eventing",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
@@ -10713,6 +10823,7 @@
     },
     {
       "Name": "cCoder.Eventing.IServiceCollectionExtensions",
+      "NamespaceName": "cCoder.Eventing",
       "AssemblyName": "cCoder.Eventing",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
@@ -10754,6 +10865,7 @@
     },
     {
       "Name": "cCoder.Eventing.Models.EventAuthInfo",
+      "NamespaceName": "cCoder.Eventing.Models",
       "AssemblyName": "cCoder.Eventing",
       "HasDeclaredBehaviour": false,
       "InterfaceNames": [
@@ -10767,6 +10879,7 @@
     },
     {
       "Name": "cCoder.Eventing.Models.EventMessage<T>",
+      "NamespaceName": "cCoder.Eventing.Models",
       "AssemblyName": "cCoder.Eventing",
       "HasDeclaredBehaviour": false,
       "BaseTypeName": "cCoder.Eventing.Models.EventMessage",

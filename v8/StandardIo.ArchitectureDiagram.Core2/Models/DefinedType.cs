@@ -8,6 +8,8 @@ public sealed class DefinedType
 {
     /// <summary>Full .NET type name without assembly qualification.</summary>
     public string? Name { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? NamespaceName { get; set; }
     /// <summary>Declaring assembly for an external boundary; source types are owned by their ProjectModel.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? AssemblyName { get; set; }

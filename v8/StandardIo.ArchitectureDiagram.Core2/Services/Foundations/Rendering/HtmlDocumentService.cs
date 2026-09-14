@@ -22,7 +22,7 @@ internal sealed partial class HtmlDocumentService : IHtmlDocumentService
 
         foreach (RenderProject drawing in renderModel.Projects)
         {
-            var group = new XElement(svg + "g", new XAttribute("id", drawing.Id), new XAttribute("transform", $"translate({Number(value: drawing.X)} {Number(value: drawing.Y)})"), Rectangle(svg: svg, x: 0, y: 0, width: drawing.Width, height: drawing.Height, style: "scope"), new XElement(svg + "text", new XAttribute("x", "12"), new XAttribute("y", "26"), new XAttribute("class", "heading"), drawing.Name));
+            var group = new XElement(svg + "g", new XAttribute("id", drawing.Id), new XAttribute("transform", $"translate({Number(value: drawing.X)} {Number(value: drawing.Y)})"), Rectangle(svg: svg, x: 0, y: 0, width: drawing.Width, height: drawing.Height, style: "scope"), new XElement(svg + "text", new XAttribute("x", "12"), new XAttribute("y", "26"), new XAttribute("class", "heading"), drawing.Name.Contains('\n') ? (object)drawing.Name.Split('\n').Select((line,index)=>new XElement(svg + "tspan",new XAttribute("x",12),new XAttribute("dy",index==0?0:20),line)) : drawing.Name));
             foreach (RenderConnection route in drawing.Connections)
             {
                 string points = string.Join(separator: " ", values: route.Points.Select(point => $"{Number(value: point.X)},{Number(value: point.Y)}"));

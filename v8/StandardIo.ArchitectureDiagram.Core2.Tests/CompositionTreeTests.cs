@@ -10,6 +10,28 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class CompositionTreeTests
 {
     [Fact]
+    public async Task ShouldGroupTreesHorizontallyByNamespaceAndStackContainers()
+    {
+        var project=await ConcreteCallChainTests.ExtractAsync("""
+            namespace Example.One { public class A { public void Run() {} } public class B { public void Run() {} } public class Outer { public class Inner { public void Run() {} } } }
+            namespace Example.Two { public class C { public void Run() {} } }
+            """);
+        var model=TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project],diagramType:DiagramTypes.Composition));
+        Assert.Equal(2,model.Projects.Length);
+        var one=Assert.Single(model.Projects,p=>p.Name==project.Name+"\nExample.One");
+        var two=Assert.Single(model.Projects,p=>p.Name==project.Name+"\nExample.Two");
+        var a=Assert.Single(one.Nodes,n=>n.Label=="A");var b=Assert.Single(one.Nodes,n=>n.Label=="B");
+        Assert.Contains(one.Nodes,n=>n.TypeName=="Example.One.Outer.Inner");
+        Assert.Equal(a.Y,b.Y);Assert.True(b.X>a.X+a.Width);
+        Assert.Equal(one.X,two.X);Assert.True(two.Y>=one.Y+one.Height+model.Configuration.Composition.ProjectSpacing);
+        Assert.Empty(model.CrossProjectConnections);
+        var html=System.Xml.Linq.XDocument.Parse(Encoding.UTF8.GetString(TestServices.Get<IHtmlDocumentService>().Render(model)));
+        System.Xml.Linq.XNamespace svg="http://www.w3.org/2000/svg";
+        var heading=html.Descendants(svg+"text").First(t=>(string?)t.Attribute("class")=="heading");
+        Assert.Equal(new[]{project.Name,"Example.One"},heading.Elements(svg+"tspan").Select(t=>t.Value));
+        Assert.Contains(project.Name+"\nExample.One",System.Xml.Linq.XDocument.Parse(Encoding.UTF8.GetString(TestServices.Get<IDrawIODocumentService>().Render(model))).Descendants("mxCell").Select(c=>(string?)c.Attribute("value")));
+    }
+    [Fact]
     public async Task ShouldDefineSharedPrivateMethodsOnceAndKeepCallsAsLeaves()
     {
         var project=await ConcreteCallChainTests.ExtractAsync("""
@@ -212,10 +234,10 @@ public class CompositionTreeTests
             Assert.Equal(3,trees.Length);
             foreach(var tree in trees) Assert.Contains(tree.Nodes,n=>n.Label=="Shared");
             var layout=TestServices.Get<ICompositionTreeLayoutService>().Layout(model,trees);
-            Assert.Equal(3,layout.Projects.Length);
+            Assert.Single(layout.Projects);
             foreach(var drawing in layout.Projects)
             {
-                Assert.Equal(drawing.Nodes.Length-1,drawing.Connections.Length);
+                Assert.Equal(drawing.Nodes.Length-3,drawing.Connections.Length);
                 foreach(var edge in drawing.Connections)
                 {
                     var parent=drawing.Nodes.Single(n=>n.Id==edge.SourceId);var child=drawing.Nodes.Single(n=>n.Id==edge.TargetId);

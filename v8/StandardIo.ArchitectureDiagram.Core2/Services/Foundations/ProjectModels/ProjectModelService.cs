@@ -13,7 +13,7 @@ internal sealed class ProjectModelService : IProjectModelService
     {
         Name = source.Name,
         Path = source.Path,
-        Types = types.Select(selector: type => new DefinedType { Name = type.Name, HasDeclaredBehaviour = type.HasDeclaredBehaviour, IsDataType = type.IsDataType, IsAnonymousType = type.IsAnonymousType, BaseTypeName = type.BaseTypeName, InterfaceNames = type.InterfaceNames?.ToArray(), AssemblyName = type.AssemblyName, FrameworkType = type.FrameworkType, IsInternal = type.IsInternal, Fields = (type.Fields ?? Array.Empty<Field>()).Select(selector: field => new Field { Name = field.Name, Type = field.Type })
+        Types = types.Select(selector: type => new DefinedType { Name = type.Name, NamespaceName = type.NamespaceName, HasDeclaredBehaviour = type.HasDeclaredBehaviour, IsDataType = type.IsDataType, IsAnonymousType = type.IsAnonymousType, BaseTypeName = type.BaseTypeName, InterfaceNames = type.InterfaceNames?.ToArray(), AssemblyName = type.AssemblyName, FrameworkType = type.FrameworkType, IsInternal = type.IsInternal, Fields = (type.Fields ?? Array.Empty<Field>()).Select(selector: field => new Field { Name = field.Name, Type = field.Type })
             .ToArray(), Properties = (type.Properties ?? Array.Empty<Property>()).Select(selector: property => new Property { Name = property.Name, Type = property.Type })
             .ToArray(), Methods = (type.Methods ?? Array.Empty<Method>()).Select(selector: method => new Method { Name = method.Name })
             .ToArray() })

@@ -64,7 +64,9 @@ internal sealed class CompositionTreeService : ICompositionTreeService
                 .OrderBy(m => m.Value.Name == ".ctor" ? 0 : (m.Value.IsPublicContract ?? (type.Methods ?? []).Any(method=>method.Name==m.Value.Name)) ? 1 : 2)
                 .ThenBy(m => m.Value.Name,StringComparer.Ordinal).ThenBy(m => m.Key,StringComparer.Ordinal).Select(m=>m.Key).ToArray();
             foreach (string key in top) RenderMember(key,1,root);
-            trees.Add(new(entry.Project.Name+" / "+Short(name),nodes.ToArray()));
+            string plainName=name.Split('<')[0];int dot=plainName.LastIndexOf('.');
+            trees.Add(new(entry.Project.Name+" / "+Short(name),nodes.ToArray()) {
+                ProjectName=entry.Project.Name ?? "Project",NamespaceName=type.NamespaceName ?? (dot<0?"":plainName[..dot]) });
         }
         return trees.ToArray();
     }

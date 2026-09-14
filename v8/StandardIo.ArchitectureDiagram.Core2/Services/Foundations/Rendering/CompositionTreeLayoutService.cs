@@ -32,6 +32,30 @@ internal sealed class CompositionTreeLayoutService : ICompositionTreeLayoutServi
             }).ToArray();
             projects.Add(new("composition-"+projects.Count,tree.Title,0,0,nodes.Max(n=>n.X+n.Width)+40,nodes.Max(n=>n.Y+n.Height)+40,nodes,edges));
         }
+        if(model.DiagramType==DiagramTypes.Composition && trees.Any(t=>t.ProjectName!=null))
+        {
+            var treeDefinitions=trees.ToDictionary(t=>t.Nodes[0].Id);
+            var containers=new List<RenderProject>();double top=40;
+            foreach(var group in projects.GroupBy(p=>{
+                var tree=treeDefinitions[p.Nodes[0].Id];return (Project:tree.ProjectName??tree.Title,Namespace:tree.NamespaceName??"");
+            }).OrderBy(g=>g.Key.Project,StringComparer.Ordinal).ThenBy(g=>g.Key.Namespace,StringComparer.Ordinal))
+            {
+                var nodes=new List<RenderNode>();var connections=new List<RenderConnection>();double left=0;
+                foreach(var tree in group)
+                {
+                    nodes.AddRange(tree.Nodes.Select(n=>n with {X=n.X+left,TextLines=n.TextLines.Select(t=>t with {X=t.X+left}).ToArray()}));
+                    connections.AddRange(tree.Connections.Select(e=>e with {Points=e.Points.Select(p=>p with {X=p.X+left}).ToArray()}));
+                    left+=tree.Width+config.ProjectSpacing;
+                }
+                double containerHeight=group.Max(p=>p.Height);
+                containers.Add(new("composition-namespace-"+containers.Count,group.Key.Project+"\n"+(group.Key.Namespace.Length==0?"(global namespace)":group.Key.Namespace),
+                    40,top,left-config.ProjectSpacing,containerHeight,nodes.ToArray(),connections.ToArray()));
+                top+=containerHeight+config.ProjectSpacing;
+            }
+            model.Projects=containers.ToArray();model.CrossProjectConnections=[];
+            model.Width=containers.Max(p=>p.X+p.Width)+40;model.Height=containers.Max(p=>p.Y+p.Height)+40;
+            return model;
+        }
         double spacing = config.ProjectSpacing;
         double x=40,height=0;
         for(int i=0;i<projects.Count;i++)

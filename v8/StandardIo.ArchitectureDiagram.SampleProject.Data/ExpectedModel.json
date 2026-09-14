@@ -4,6 +4,7 @@
   "Types": [
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Interface",
       "IsInternal": true,
@@ -29,6 +30,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.SchoolFactory",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures",
       "HasDeclaredBehaviour": true,
       "InterfaceNames": [
         "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
@@ -63,6 +65,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -210,6 +213,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -330,6 +334,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -450,6 +455,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "HasDeclaredBehaviour": true,
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -540,6 +546,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
@@ -633,6 +640,7 @@
     },
     {
       "Name": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+      "NamespaceName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models",
       "HasDeclaredBehaviour": false,
       "FrameworkType": "Class",
       "IsInternal": true,
