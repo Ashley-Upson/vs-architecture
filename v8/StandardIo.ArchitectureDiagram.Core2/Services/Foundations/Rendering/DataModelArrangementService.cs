@@ -30,18 +30,43 @@ internal sealed class DataModelArrangementService : IDataModelArrangementService
             string root=component.OrderBy(n=>incoming[n].Any()).ThenByDescending(n=>outgoing[n].Count()).ThenBy(n=>n,StringComparer.Ordinal).First();
             var cells=new Dictionary<string,(int X,int Y)>{{root,(0,0)}};var occupied=new HashSet<(int,int)>{(0,0)};
             pending.Enqueue(root);
-            (int X,int Y)[] directions=[(1,0),(0,1),(-1,0),(0,-1)];
+            (int X,int Y)[] directions=[(1,0),(0,1),(-1,0),(0,-1),(1,1),(-1,1),(-1,-1),(1,-1)];
             while(pending.TryDequeue(out var parent))
-            foreach(string child in neighbours[parent].Distinct().OrderBy(n=>n,StringComparer.Ordinal))
+            foreach(string child in neighbours[parent].Distinct().OrderByDescending(n=>neighbours[n].Count()).ThenBy(n=>n,StringComparer.Ordinal))
             {
                 if(cells.ContainsKey(child))continue;
                 var origin=cells[parent];int radius=1; (int X,int Y) cell;
                 while(true)
                 {
                     var free=directions.Select(d=>(X:origin.X+d.X*radius,Y:origin.Y+d.Y*radius)).Where(p=>!occupied.Contains(p)).ToArray();
-                    if(free.Length>0){cell=free[0];break;}radius++;
+                    if(free.Length>0){cell=free.OrderBy(p=>neighbours[child].Where(cells.ContainsKey).Sum(n=>Math.Pow(p.X-cells[n].X,2)+Math.Pow(p.Y-cells[n].Y,2))).First();break;}radius++;
                 }
                 cells[child]=cell;occupied.Add(cell);pending.Enqueue(child);
+            }
+            // Refine the initial placement against the whole relationship graph,
+            // not only the first parent that happened to discover each entity.
+            var relationships=local.Where(l=>cells.ContainsKey(l.From)&&cells.ContainsKey(l.To)).DistinctBy(l=>string.CompareOrdinal(l.From,l.To)<0?(l.From,l.To):(l.To,l.From)).ToArray();
+            double Turn((int X,int Y) a,(int X,int Y) b,(int X,int Y) c)=>(b.X-a.X)*(c.Y-a.Y)-(b.Y-a.Y)*(c.X-a.X);
+            double Score()
+            {
+                double score=relationships.Sum(l=>Math.Sqrt(Math.Pow(cells[l.From].X-cells[l.To].X,2)+Math.Pow(cells[l.From].Y-cells[l.To].Y,2)));
+                for(int i=0;i<relationships.Length;i++)for(int j=i+1;j<relationships.Length;j++)
+                {
+                    var a=cells[relationships[i].From];var b=cells[relationships[i].To];var c=cells[relationships[j].From];var d=cells[relationships[j].To];
+                    if(Turn(a,b,c)*Turn(a,b,d)<0&&Turn(c,d,a)*Turn(c,d,b)<0)score+=8;
+                }
+                return score;
+            }
+            var movable=cells.Keys.Where(n=>n!=root).ToArray();double best=Score();
+            for(int pass=0;pass<8;pass++)
+            {
+                bool changed=false;
+                for(int i=0;i<movable.Length;i++)for(int j=i+1;j<movable.Length;j++)
+                {
+                    string a=movable[i],b=movable[j];(cells[a],cells[b])=(cells[b],cells[a]);double score=Score();
+                    if(score<best-0.001){best=score;changed=true;}else (cells[a],cells[b])=(cells[b],cells[a]);
+                }
+                if(!changed)break;
             }
             var rowTops=new Dictionary<int,double>();double top=0;
             foreach(var row in cells.GroupBy(p=>p.Value.Y).OrderBy(g=>g.Key))

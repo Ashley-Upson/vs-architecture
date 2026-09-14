@@ -7,6 +7,24 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ContextualLayoutTests
 {
     [Fact]
+    public void ShouldUseFacingEdgePositionsToAvoidBendsBetweenDifferentHeightEntities()
+    {
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
+            new([new("A","Project",Enumerable.Repeat("member",10).ToArray()),new("B","Project",["B"])],[new("A","B","item")]));
+        Assert.Equal(2,Assert.Single(Assert.Single(model.Projects).Connections).Points.Length);
+    }
+    [Fact]
+    public void ShouldUseSpaceBetweenAxesForLargeAggregateChildren()
+    {
+        var names=Enumerable.Range(0,12).Select(i=>"Child"+i).ToArray();
+        var types=names.Prepend("Root").Select(n=>new ContextualType(n,"Project",[n])).ToArray();
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
+            new(types,names.Select(n=>new ContextualLink("Root",n,"child")).ToArray()));
+        var nodes=Assert.Single(model.Projects).Nodes;
+        Assert.True(nodes.Max(n=>n.X)-nodes.Min(n=>n.X)<=4*(model.Configuration.DataModel.NodeWidth+model.Configuration.DataModel.NodeSpacing));
+        Assert.True(nodes.Select(n=>n.Y).Distinct().Count()<=5);
+    }
+    [Fact]
     public void ShouldEnterAndLeaveEntityEdgesPerpendicularly()
     {
         var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
