@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Brokers.Roslyn;
 
@@ -67,17 +68,33 @@ internal sealed class ProjectTypesService : IProjectTypesService
 
     private CompositionMember[]? ExtractCompositionMembers(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
     {
-        var members = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        void Add(string member, ITypeSymbol? target)
+        var members = new Dictionary<string, (IMethodSymbol Method, HashSet<string> Types, HashSet<MethodReference> Calls)>(StringComparer.Ordinal);
+        string Identity(IMethodSymbol method)
         {
-            if (target is not INamedTypeSymbol named) return;
-            if (!members.TryGetValue(member, out var names)) members[member] = names = new(StringComparer.Ordinal);
-            names.Add(roslynBroker.GetTypeName(named.OriginalDefinition));
+            if (method.MethodKind != MethodKind.AnonymousFunction) return method.ToDisplayString();
+            var reference = method.DeclaringSyntaxReferences.First();
+            return "lambda:" + System.IO.Path.GetFileName(reference.SyntaxTree.FilePath) + ":" + reference.Span.Start;
         }
-        foreach (var constructor in type.InstanceConstructors.Where(c => !c.IsImplicitlyDeclared))
+        string Register(IMethodSymbol method)
         {
-            if (!members.ContainsKey(".ctor")) members[".ctor"] = new(StringComparer.Ordinal);
-            foreach (var parameter in constructor.Parameters) Add(".ctor", parameter.Type);
+            string id = Identity(method);
+            if (!members.ContainsKey(id))
+            {
+                members[id] = (method, new(StringComparer.Ordinal), new());
+                if (method.MethodKind is MethodKind.AnonymousFunction or MethodKind.LocalFunction && method.ContainingSymbol is IMethodSymbol parent)
+                    Register(parent);
+            }
+            return id;
+        }
+        void AddType(string id, ITypeSymbol? target)
+        {
+            if (target is not null) members[id].Types.Add(GetMemberTypeName(target));
+        }
+        foreach (var method in type.GetMembers().OfType<IMethodSymbol>().Where(m => !m.IsImplicitlyDeclared))
+        {
+            string id = Register(method);
+            if (method.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor)
+                foreach (var parameter in method.Parameters) AddType(id, parameter.Type);
         }
         foreach (var declaration in type.DeclaringSyntaxReferences)
         {
@@ -85,15 +102,34 @@ internal sealed class ProjectTypesService : IProjectTypesService
             var semantic = roslynBroker.GetSemanticModel(compilation, syntax.SyntaxTree);
             foreach (var node in syntax.DescendantNodes())
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (node is AnonymousFunctionExpressionSyntax && semantic.GetOperation(node, cancellationToken) is IAnonymousFunctionOperation lambda &&
+                    SymbolEqualityComparer.Default.Equals(lambda.Symbol.ContainingType, type)) Register(lambda.Symbol);
                 if (semantic.GetEnclosingSymbol(node.SpanStart, cancellationToken) is not IMethodSymbol method ||
                     !SymbolEqualityComparer.Default.Equals(method.ContainingType, type)) continue;
-                if (node is TypeOfExpressionSyntax typeOf) Add(method.Name, semantic.GetTypeInfo(typeOf.Type, cancellationToken).Type);
-                if (node is InvocationExpressionSyntax invocation && semantic.GetSymbolInfo(invocation, cancellationToken).Symbol is IMethodSymbol target)
-                    foreach (var argument in target.TypeArguments) Add(method.Name, argument);
+                string id = Register(method);
+                if (node is TypeOfExpressionSyntax typeOf) AddType(id, semantic.GetTypeInfo(typeOf.Type, cancellationToken).Type);
+                if (node is InvocationExpressionSyntax or BaseObjectCreationExpressionSyntax or ConstructorInitializerSyntax &&
+                    semantic.GetSymbolInfo(node, cancellationToken).Symbol is IMethodSymbol target)
+                {
+                    var called = target.ReducedFrom ?? target;
+                    members[id].Calls.Add(new(roslynBroker.GetTypeName(called.ContainingType.OriginalDefinition), called.Name));
+                    if (node is InvocationExpressionSyntax)
+                        foreach (var argument in target.TypeArguments) AddType(id, argument);
+                }
             }
         }
-        return members.Count == 0 ? null : members.OrderBy(m => m.Key, StringComparer.Ordinal)
-            .Select(m => new CompositionMember(m.Key, m.Value.OrderBy(n => n, StringComparer.Ordinal).ToArray())).ToArray();
+        return members.Count == 0 ? null : members.OrderBy(m => m.Key, StringComparer.Ordinal).Select(m =>
+        {
+            var method = m.Value.Method;
+            return new CompositionMember(method.Name, m.Value.Types.OrderBy(n => n, StringComparer.Ordinal).ToArray())
+            {
+                Id = m.Key,
+                ParentId = method.MethodKind is MethodKind.AnonymousFunction or MethodKind.LocalFunction && method.ContainingSymbol is IMethodSymbol parent ? Identity(parent) : null,
+                Calls = m.Value.Calls.OrderBy(c => c.TypeName, StringComparer.Ordinal).ThenBy(c => c.MethodName, StringComparer.Ordinal).ToArray(),
+                IsDeclaration = method.IsAbstract || method.IsExtern
+            };
+        }).ToArray();
     }
 
     private DefinedType CreateType(INamedTypeSymbol type, bool isInternal)
@@ -167,8 +203,9 @@ internal sealed class ProjectTypesService : IProjectTypesService
 
         if (type is INamedTypeSymbol named)
         {
+            if (named.IsAnonymousType) return named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             named = named.TupleUnderlyingType ?? named;
-            var prefix = named.ContainingType is null ? (named.ContainingNamespace.IsGlobalNamespace ? "" : named.ContainingNamespace.ToDisplayString() + ".") : GetMemberTypeName(type: named.ContainingType) + ".";
+            var prefix = named.ContainingType is null ? (named.ContainingNamespace is null || named.ContainingNamespace.IsGlobalNamespace ? "" : named.ContainingNamespace.ToDisplayString() + ".") : GetMemberTypeName(type: named.ContainingType) + ".";
             var arguments = named.Arity == 0 ? "" : "<" + string.Join(separator: ", ", values: named.TypeArguments.Select(selector: argument => GetMemberTypeName(type: argument))) + ">";
             return prefix + named.Name + arguments;
         }

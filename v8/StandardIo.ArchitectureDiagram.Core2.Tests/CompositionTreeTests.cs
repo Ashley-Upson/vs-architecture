@@ -9,6 +9,54 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class CompositionTreeTests
 {
     [Fact]
+    public async Task ShouldRetainOpenGenericTypeReferences()
+    {
+        var model = await ConcreteCallChainTests.ExtractAsync("""
+            public class Root { public void Register() { _ = typeof(System.Collections.Generic.List<>); } }
+            """);
+        var member = model.Types!.Single(t => t.Name == "Root").CompositionMembers!.Single(m => m.Name == "Register");
+        Assert.Contains(member.TypeNames, name => name.StartsWith("System.Collections.Generic.List<"));
+    }
+    [Fact]
+    public async Task ShouldRetainCallsUsingAnonymousGenericArguments()
+    {
+        var model = await ConcreteCallChainTests.ExtractAsync("""
+            public class Root {
+                public void Run() { Consume(new { Value = 1 }); }
+                private void Consume<T>(T value) {}
+            }
+            """);
+        var member = model.Types!.Single(t => t.Name == "Root").CompositionMembers!.Single(m => m.Name == "Run");
+        Assert.Contains(member.Calls!, c => c.TypeName == "Root" && c.MethodName == "Consume");
+        Assert.All(member.TypeNames, name => Assert.False(string.IsNullOrWhiteSpace(name)));
+    }
+    [Fact]
+    public async Task ShouldShowFrameworkExtensionAndLocalCallsUnderTheirActualLambdaOrMethod()
+    {
+        var project=await ConcreteCallChainTests.ExtractAsync("""
+            using System;
+            using System.Linq;
+            public class Root {
+                public void Run() {
+                    Console.WriteLine("outside");
+                    Action first = () => Console.WriteLine("inside");
+                    Action second = () => { _ = new[] { 1, 2 }.Select(x => Math.Abs(x)).ToArray(); };
+                    Helper();
+                }
+                private void Helper() { _ = string.Concat("a", "b"); }
+            }
+            """, frameworkReferences: true);
+        var tree=TestServices.Get<ICompositionTreeService>().Build(new RenderModel([project])).Single(t=>t.Title.EndsWith(" / Root"));
+        var lambdas=tree.Nodes.Where(n=>n.Label=="Lambda Expression").ToArray();
+        Assert.Equal(3,lambdas.Length);
+        Assert.Contains(tree.Nodes,n=>n.Label=="Console → WriteLine" && lambdas.Any(l=>l.Id==n.ParentId));
+        Assert.Contains(tree.Nodes,n=>n.Label=="Enumerable → Select" && lambdas.Any(l=>l.Id==n.ParentId));
+        Assert.Contains(tree.Nodes,n=>n.Label=="Math → Abs" && lambdas.Any(l=>l.Id==n.ParentId));
+        Assert.Contains(tree.Nodes,n=>n.Label=="Root → Helper");
+        var helper=Assert.Single(tree.Nodes,n=>n.Label=="Helper");
+        Assert.Contains(tree.Nodes,n=>n.Label=="String → Concat" && n.ParentId==helper.Id);
+    }
+    [Fact]
     public async Task ShouldLabelAnonymousFunctionReferencesAsLambdaExpressions()
     {
         var model=await ConcreteCallChainTests.ExtractAsync("""
@@ -18,8 +66,11 @@ public class CompositionTreeTests
             }
             """);
         var root=model.Types!.Single(t=>t.Name=="Root");
-        Assert.Equal("",Assert.Single(root.CompositionMembers!).Name);
-        Assert.Equal(new[]{"Child"},root.CompositionMembers![0].TypeNames);
+        var lambdaMembers=root.CompositionMembers!.Where(m=>m.Name=="").ToArray();
+        Assert.Equal(2,lambdaMembers.Length);
+        Assert.Contains(lambdaMembers,m=>m.TypeNames.SequenceEqual(new[]{"Child"}));
+        Assert.Equal(2,lambdaMembers.Select(m=>m.Id).Distinct().Count());
+        Assert.Contains(lambdaMembers,m=>lambdaMembers.Any(parent=>parent.Id==m.ParentId));
         var trees=TestServices.Get<ICompositionTreeService>().Build(new RenderModel([model]));
         Assert.Contains(trees.SelectMany(t=>t.Nodes),n=>n.Label=="Lambda Expression");
         Assert.All(trees.SelectMany(t=>t.Nodes),n=>Assert.False(string.IsNullOrWhiteSpace(n.Label)));

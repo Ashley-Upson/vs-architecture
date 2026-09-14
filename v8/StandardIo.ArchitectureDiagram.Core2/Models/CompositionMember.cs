@@ -1,2 +1,14 @@
+using System.Text.Json.Serialization;
 namespace StandardIo.ArchitectureDiagram.Core2.Models;
-public sealed record CompositionMember(string Name, string[] TypeNames);
+/// <summary>Unfiltered declared-member facts; diagram projections decide which references to display.</summary>
+public sealed record CompositionMember(string Name, string[] TypeNames)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Id { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ParentId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MethodReference[]? Calls { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsDeclaration { get; init; }
+}

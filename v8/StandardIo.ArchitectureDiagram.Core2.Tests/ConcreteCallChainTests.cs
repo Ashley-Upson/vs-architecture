@@ -252,10 +252,10 @@ public sealed partial class ConcreteCallChainTests
         Assert.DoesNotContain(calls, link => link.ToType == "Unused" && link.FromMethod == "Execute");
     }
 
-    internal static async Task<ProjectModel> ExtractAsync(string source)
+    internal static async Task<ProjectModel> ExtractAsync(string source, bool frameworkReferences = false)
     {
         using var workspace = new AdhocWorkspace();
-        var info = ProjectInfo.Create(id: ProjectId.CreateNewId(), version: VersionStamp.Create(), name: "ConcreteCalls", assemblyName: "ConcreteCalls", language: LanguageNames.CSharp, filePath: Path.GetFullPath(path: "ConcreteCalls.csproj"), compilationOptions: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary), metadataReferences: new[] { MetadataReference.CreateFromFile(path: typeof(object).Assembly.Location) });
+        var info = ProjectInfo.Create(id: ProjectId.CreateNewId(), version: VersionStamp.Create(), name: "ConcreteCalls", assemblyName: "ConcreteCalls", language: LanguageNames.CSharp, filePath: Path.GetFullPath(path: "ConcreteCalls.csproj"), compilationOptions: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary), metadataReferences: (frameworkReferences ? ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator) : new[] { typeof(object).Assembly.Location }).Distinct().Select(path => MetadataReference.CreateFromFile(path)));
         Project project = workspace.AddProject(projectInfo: info);
         workspace.AddDocument(projectId: project.Id, name: "Source.cs", text: SourceText.From(text: source));
         return await ProjectModelTestFactory.ExtractAsync(project: workspace.CurrentSolution.GetProject(projectId: project.Id)!);

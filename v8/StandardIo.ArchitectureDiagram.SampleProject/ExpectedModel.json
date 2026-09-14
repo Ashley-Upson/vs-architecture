@@ -237,30 +237,92 @@
           "Name": ".ctor",
           "TypeNames": [
             "cCoder.Eventing.IEventHub"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker.ClassEventBroker(cCoder.Eventing.IEventHub)",
+          "Calls": []
         },
         {
           "Name": "RaiseClassCreatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker.RaiseClassCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseClassDeletedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker.RaiseClassDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseClassReadAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker.RaiseClassReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseClassUpdatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassEventBroker.RaiseClassUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         }
       ]
@@ -299,30 +361,92 @@
           "Name": ".ctor",
           "TypeNames": [
             "cCoder.Eventing.IEventHub"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker.ClassStudentEventBroker(cCoder.Eventing.IEventHub)",
+          "Calls": []
         },
         {
           "Name": "RaiseClassStudentCreatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker.RaiseClassStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseClassStudentDeletedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker.RaiseClassStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseClassStudentReadAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker.RaiseClassStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseClassStudentUpdatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ClassStudentEventBroker.RaiseClassStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         }
       ]
@@ -347,6 +471,36 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseClassCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker.RaiseClassCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker.RaiseClassDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker.RaiseClassReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker.RaiseClassUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -368,6 +522,36 @@
         },
         {
           "Name": "RaiseClassStudentUpdatedAsync"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseClassStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker.RaiseClassStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker.RaiseClassStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker.RaiseClassStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker.RaiseClassStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -391,6 +575,36 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseSchoolCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker.RaiseSchoolCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker.RaiseSchoolDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker.RaiseSchoolReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker.RaiseSchoolUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -413,6 +627,36 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker.RaiseStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker.RaiseStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker.RaiseStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker.RaiseStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -434,6 +678,36 @@
         },
         {
           "Name": "RaiseTeacherUpdatedAsync"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseTeacherCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker.RaiseTeacherCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker.RaiseTeacherDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker.RaiseTeacherReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker.RaiseTeacherUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -468,34 +742,96 @@
       ],
       "CompositionMembers": [
         {
-          "Name": ".ctor",
-          "TypeNames": [
-            "cCoder.Eventing.IEventHub"
-          ]
-        },
-        {
           "Name": "RaiseSchoolCreatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker.RaiseSchoolCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseSchoolDeletedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker.RaiseSchoolDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseSchoolReadAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker.RaiseSchoolReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseSchoolUpdatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker.RaiseSchoolUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
+        },
+        {
+          "Name": ".ctor",
+          "TypeNames": [
+            "cCoder.Eventing.IEventHub"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.SchoolEventBroker.SchoolEventBroker(cCoder.Eventing.IEventHub)",
+          "Calls": []
         }
       ]
     },
@@ -530,34 +866,96 @@
       ],
       "CompositionMembers": [
         {
-          "Name": ".ctor",
-          "TypeNames": [
-            "cCoder.Eventing.IEventHub"
-          ]
-        },
-        {
           "Name": "RaiseStudentCreatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker.RaiseStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseStudentDeletedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker.RaiseStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseStudentReadAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker.RaiseStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseStudentUpdatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker.RaiseStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
+        },
+        {
+          "Name": ".ctor",
+          "TypeNames": [
+            "cCoder.Eventing.IEventHub"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.StudentEventBroker.StudentEventBroker(cCoder.Eventing.IEventHub)",
+          "Calls": []
         }
       ]
     },
@@ -592,34 +990,96 @@
       ],
       "CompositionMembers": [
         {
-          "Name": ".ctor",
-          "TypeNames": [
-            "cCoder.Eventing.IEventHub"
-          ]
-        },
-        {
           "Name": "RaiseTeacherCreatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker.RaiseTeacherCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseTeacherDeletedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker.RaiseTeacherDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseTeacherReadAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker.RaiseTeacherReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
         },
         {
           "Name": "RaiseTeacherUpdatedAsync",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker.RaiseTeacherUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "cCoder.Eventing.IEventHub",
+              "MethodName": "RaiseEventAsync"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventAuthInfo",
+              "MethodName": ".ctor"
+            },
+            {
+              "TypeName": "cCoder.Eventing.Models.EventMessage<T>",
+              "MethodName": ".ctor"
+            }
           ]
+        },
+        {
+          "Name": ".ctor",
+          "TypeNames": [
+            "cCoder.Eventing.IEventHub"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.TeacherEventBroker.TeacherEventBroker(cCoder.Eventing.IEventHub)",
+          "Calls": []
         }
       ]
     },
@@ -657,7 +1117,87 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.ClassBroker(StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+              "MethodName": "CreateSchoolDataContext"
+            }
           ]
+        },
+        {
+          "Name": "CreateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.CreateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Add"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.DeleteClass(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "RemoveAll"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.ReadClass(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Find"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "FindIndex"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:ClassBroker.cs:1141",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:ClassBroker.cs:1500",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.DeleteClass(string)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:ClassBroker.cs:918",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassBroker.ReadClass(string)",
+          "Calls": []
         }
       ]
     },
@@ -695,7 +1235,87 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.ClassStudentBroker(StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+              "MethodName": "CreateSchoolDataContext"
+            }
           ]
+        },
+        {
+          "Name": "CreateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.CreateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Add"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.DeleteClassStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "RemoveAll"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.ReadClassStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Find"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "FindIndex"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:ClassStudentBroker.cs:1011",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.ReadClassStudent(string)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:ClassStudentBroker.cs:1282",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:ClassStudentBroker.cs:1695",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ClassStudentBroker.DeleteClassStudent(string)",
+          "Calls": []
         }
       ]
     },
@@ -719,6 +1339,36 @@
         {
           "Name": "UpdateClass"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker.CreateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker.DeleteClass(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker.ReadClass(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -740,6 +1390,36 @@
         },
         {
           "Name": "UpdateClassStudent"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker.CreateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker.DeleteClassStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker.ReadClassStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -763,6 +1443,36 @@
         {
           "Name": "UpdateSchool"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker.CreateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker.DeleteSchool(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker.ReadSchool(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -775,6 +1485,15 @@
       "Methods": [
         {
           "Name": "Read"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "Read",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker.Read()",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -798,6 +1517,36 @@
         {
           "Name": "UpdateStudent"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker.CreateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker.DeleteStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker.ReadStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -810,6 +1559,15 @@
       "Methods": [
         {
           "Name": "Read"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "Read",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker.Read()",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -832,6 +1590,36 @@
         },
         {
           "Name": "UpdateTeacher"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker.CreateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker.DeleteTeacher(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker.ReadTeacher(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -866,10 +1654,90 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.CreateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Add"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.DeleteSchool(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "RemoveAll"
+            }
+          ]
+        },
+        {
+          "Name": "ReadSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.ReadSchool(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Find"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.SchoolBroker(StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+              "MethodName": "CreateSchoolDataContext"
+            }
           ]
+        },
+        {
+          "Name": "UpdateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "FindIndex"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:SchoolBroker.cs:1156",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:SchoolBroker.cs:1521",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.DeleteSchool(string)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:SchoolBroker.cs:927",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolBroker.ReadSchool(string)",
+          "Calls": []
         }
       ]
     },
@@ -886,6 +1754,14 @@
       "Methods": [
         {
           "Name": "Read"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "Read",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.SchoolReportBroker.Read()",
+          "Calls": []
         }
       ]
     },
@@ -920,10 +1796,90 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.CreateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Add"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.DeleteStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "RemoveAll"
+            }
+          ]
+        },
+        {
+          "Name": "ReadStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.ReadStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Find"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.StudentBroker(StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+              "MethodName": "CreateSchoolDataContext"
+            }
           ]
+        },
+        {
+          "Name": "UpdateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "FindIndex"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:StudentBroker.cs:1177",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:StudentBroker.cs:1550",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.DeleteStudent(string)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:StudentBroker.cs:941",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentBroker.ReadStudent(string)",
+          "Calls": []
         }
       ]
     },
@@ -940,6 +1896,14 @@
       "Methods": [
         {
           "Name": "Read"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "Read",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.StudentReportBroker.Read()",
+          "Calls": []
         }
       ]
     },
@@ -974,10 +1938,90 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.CreateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Add"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.DeleteTeacher(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "RemoveAll"
+            }
+          ]
+        },
+        {
+          "Name": "ReadTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.ReadTeacher(string)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "Find"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.TeacherBroker(StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory",
+              "MethodName": "CreateSchoolDataContext"
+            }
           ]
+        },
+        {
+          "Name": "UpdateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "System.Collections.Generic.List<T>",
+              "MethodName": "FindIndex"
+            },
+            {
+              "TypeName": "System.InvalidOperationException",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:TeacherBroker.cs:1177",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:TeacherBroker.cs:1550",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.DeleteTeacher(string)",
+          "Calls": []
+        },
+        {
+          "Name": "",
+          "TypeNames": [],
+          "Id": "lambda:TeacherBroker.cs:941",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.TeacherBroker.ReadTeacher(string)",
+          "Calls": []
         }
       ]
     },
@@ -1110,6 +2154,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager.ClassManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager.CreateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+              "MethodName": "CreateClassAsync"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager.DeleteClassAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+              "MethodName": "DeleteClassAsync"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager.ReadClassAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+              "MethodName": "ReadClassAsync"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager.UpdateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+              "MethodName": "UpdateClassAsync"
+            }
           ]
         }
       ]
@@ -1148,6 +2238,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager.ClassStudentManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager.CreateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+              "MethodName": "CreateClassStudentAsync"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager.DeleteClassStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+              "MethodName": "DeleteClassStudentAsync"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager.ReadClassStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+              "MethodName": "ReadClassStudentAsync"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager.UpdateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+              "MethodName": "UpdateClassStudentAsync"
+            }
           ]
         }
       ]
@@ -1172,6 +2308,36 @@
         {
           "Name": "UpdateClassAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager.CreateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager.DeleteClassAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager.ReadClassAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassManager.UpdateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1194,6 +2360,36 @@
         {
           "Name": "UpdateClassStudentAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager.CreateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager.DeleteClassStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager.ReadClassStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IClassStudentManager.UpdateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1206,6 +2402,15 @@
       "Methods": [
         {
           "Name": "ImportSchool"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "ImportSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolImportManager.ImportSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1229,6 +2434,36 @@
         {
           "Name": "UpdateSchoolAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager.CreateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager.DeleteSchoolAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager.ReadSchoolAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolManager.UpdateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1241,6 +2476,15 @@
       "Methods": [
         {
           "Name": "CreateReport"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateReport",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ISchoolReportManager.CreateReport()",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1264,6 +2508,36 @@
         {
           "Name": "UpdateStudentAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager.CreateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager.DeleteStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager.ReadStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.IStudentManager.UpdateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1285,6 +2559,36 @@
         },
         {
           "Name": "UpdateTeacherAsync"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager.CreateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager.DeleteTeacherAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager.ReadTeacherAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ITeacherManager.UpdateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1310,10 +2614,23 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "ImportSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager.ImportSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
+              "MethodName": "ImportSchool"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager.SchoolImportManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService)",
+          "Calls": []
         }
       ]
     },
@@ -1348,9 +2665,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager.CreateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+              "MethodName": "CreateSchoolAsync"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager.DeleteSchoolAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+              "MethodName": "DeleteSchoolAsync"
+            }
+          ]
+        },
+        {
+          "Name": "ReadSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager.ReadSchoolAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+              "MethodName": "ReadSchoolAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager.SchoolManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager.UpdateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+              "MethodName": "UpdateSchoolAsync"
+            }
           ]
         }
       ]
@@ -1372,11 +2735,28 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateReport",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager.CreateReport()",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService",
+              "MethodName": "CreateReport"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService",
+              "MethodName": "CreateReport"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolReportManager.SchoolReportManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService, StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService)",
+          "Calls": []
         }
       ]
     },
@@ -1411,9 +2791,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager.CreateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+              "MethodName": "CreateStudentAsync"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager.DeleteStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+              "MethodName": "DeleteStudentAsync"
+            }
+          ]
+        },
+        {
+          "Name": "ReadStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager.ReadStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+              "MethodName": "ReadStudentAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager.StudentManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager.UpdateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+              "MethodName": "UpdateStudentAsync"
+            }
           ]
         }
       ]
@@ -1449,9 +2875,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager.CreateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+              "MethodName": "CreateTeacherAsync"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager.DeleteTeacherAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+              "MethodName": "DeleteTeacherAsync"
+            }
+          ]
+        },
+        {
+          "Name": "ReadTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager.ReadTeacherAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+              "MethodName": "ReadTeacherAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager.TeacherManager(StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager.UpdateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+              "MethodName": "UpdateTeacherAsync"
+            }
           ]
         }
       ]
@@ -1469,17 +2941,6 @@
         }
       ],
       "CompositionMembers": [
-        {
-          "Name": "",
-          "TypeNames": [
-            "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService",
-            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
-            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
-            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
-            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
-            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
-          ]
-        },
         {
           "Name": "AddSchoolSample",
           "TypeNames": [
@@ -1568,6 +3029,133 @@
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions",
+              "MethodName": "AddLogging"
+            },
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions",
+              "MethodName": "AddSingleton"
+            },
+            {
+              "TypeName": "cCoder.Eventing.IServiceCollectionExtensions",
+              "MethodName": "AddEventing"
+            },
+            {
+              "TypeName": "cCoder.Eventing.IServiceCollectionExtensions",
+              "MethodName": "AddEventingForType"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [
+            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService"
+          ],
+          "Id": "lambda:IServiceCollectionExtensions.cs:1888",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+              "MethodName": "GetRequiredService"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolManager",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [
+            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
+          ],
+          "Id": "lambda:IServiceCollectionExtensions.cs:2661",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+              "MethodName": "GetRequiredService"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.TeacherManager",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [
+            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService"
+          ],
+          "Id": "lambda:IServiceCollectionExtensions.cs:3436",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+              "MethodName": "GetRequiredService"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.StudentManager",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [
+            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService"
+          ],
+          "Id": "lambda:IServiceCollectionExtensions.cs:4179",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+              "MethodName": "GetRequiredService"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassManager",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [
+            "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService"
+          ],
+          "Id": "lambda:IServiceCollectionExtensions.cs:5030",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+              "MethodName": "GetRequiredService"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.ClassStudentManager",
+              "MethodName": ".ctor"
+            }
+          ]
+        },
+        {
+          "Name": "",
+          "TypeNames": [
+            "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService"
+          ],
+          "Id": "lambda:IServiceCollectionExtensions.cs:5309",
+          "ParentId": "StandardIo.ArchitectureDiagram.SampleProject.IServiceCollectionExtensions.AddSchoolSample(Microsoft.Extensions.DependencyInjection.IServiceCollection)",
+          "Calls": [
+            {
+              "TypeName": "Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions",
+              "MethodName": "GetRequiredService"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Exposures.SchoolImportManager",
+              "MethodName": ".ctor"
+            }
           ]
         }
       ]
@@ -1582,6 +3170,15 @@
       "Methods": [
         {
           "Name": "ImportSchool"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "ImportSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.ISchoolImportAggregationService.ImportSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1623,6 +3220,33 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "ImportSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService.ImportSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
+              "MethodName": "CreateClassAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService",
+              "MethodName": "CreateClassStudentAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
+              "MethodName": "CreateSchoolAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
+              "MethodName": "CreateStudentAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService",
+              "MethodName": "CreateTeacherAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService",
@@ -1630,7 +3254,9 @@
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Aggregations.SchoolImportAggregationService.SchoolImportAggregationService(StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService, StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService, StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService, StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService, StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService)",
+          "Calls": []
         }
       ]
     },
@@ -1668,6 +3294,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService.ClassEventService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "RaiseClassCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService.RaiseClassCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+              "MethodName": "RaiseClassCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService.RaiseClassDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+              "MethodName": "RaiseClassDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService.RaiseClassReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+              "MethodName": "RaiseClassReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassEventService.RaiseClassUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassEventBroker",
+              "MethodName": "RaiseClassUpdatedAsync"
+            }
           ]
         }
       ]
@@ -1706,6 +3378,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService.ClassService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService.CreateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+              "MethodName": "CreateClass"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService.DeleteClass(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+              "MethodName": "DeleteClass"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService.ReadClass(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+              "MethodName": "ReadClass"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassService.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassBroker",
+              "MethodName": "UpdateClass"
+            }
           ]
         }
       ]
@@ -1744,6 +3462,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService.ClassStudentEventService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "RaiseClassStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService.RaiseClassStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+              "MethodName": "RaiseClassStudentCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService.RaiseClassStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+              "MethodName": "RaiseClassStudentDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService.RaiseClassStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+              "MethodName": "RaiseClassStudentReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentEventService.RaiseClassStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IClassStudentEventBroker",
+              "MethodName": "RaiseClassStudentUpdatedAsync"
+            }
           ]
         }
       ]
@@ -1782,6 +3546,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService.ClassStudentService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService.CreateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+              "MethodName": "CreateClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService.DeleteClassStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+              "MethodName": "DeleteClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService.ReadClassStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+              "MethodName": "ReadClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ClassStudentService.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IClassStudentBroker",
+              "MethodName": "UpdateClassStudent"
+            }
           ]
         }
       ]
@@ -1806,6 +3616,36 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseClassCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService.RaiseClassCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService.RaiseClassDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService.RaiseClassReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService.RaiseClassUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1827,6 +3667,36 @@
         },
         {
           "Name": "UpdateClass"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService.CreateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService.DeleteClass(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService.ReadClass(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1850,6 +3720,36 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseClassStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService.RaiseClassStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService.RaiseClassStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService.RaiseClassStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService.RaiseClassStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1871,6 +3771,36 @@
         },
         {
           "Name": "UpdateClassStudent"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService.CreateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService.DeleteClassStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService.ReadClassStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1894,6 +3824,36 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseSchoolCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService.RaiseSchoolCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService.RaiseSchoolDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService.RaiseSchoolReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService.RaiseSchoolUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1915,6 +3875,36 @@
         },
         {
           "Name": "UpdateSchool"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService.CreateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService.DeleteSchool(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService.ReadSchool(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1938,6 +3928,36 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService.RaiseStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService.RaiseStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService.RaiseStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService.RaiseStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1950,6 +3970,15 @@
       "Methods": [
         {
           "Name": "Read"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "Read",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService.Read()",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -1973,6 +4002,36 @@
         {
           "Name": "UpdateStudent"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService.CreateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService.DeleteStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService.ReadStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -1995,6 +4054,36 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseTeacherCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService.RaiseTeacherCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService.RaiseTeacherDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService.RaiseTeacherReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService.RaiseTeacherUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2016,6 +4105,36 @@
         },
         {
           "Name": "UpdateTeacher"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService.CreateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService.DeleteTeacher(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService.ReadTeacher(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2050,10 +4169,56 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "RaiseSchoolCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService.RaiseSchoolCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+              "MethodName": "RaiseSchoolCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseSchoolDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService.RaiseSchoolDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+              "MethodName": "RaiseSchoolDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseSchoolReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService.RaiseSchoolReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+              "MethodName": "RaiseSchoolReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseSchoolUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService.RaiseSchoolUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker",
+              "MethodName": "RaiseSchoolUpdatedAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolEventService.SchoolEventService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ISchoolEventBroker)",
+          "Calls": []
         }
       ]
     },
@@ -2088,9 +4253,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService.CreateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+              "MethodName": "CreateSchool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService.DeleteSchool(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+              "MethodName": "DeleteSchool"
+            }
+          ]
+        },
+        {
+          "Name": "ReadSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService.ReadSchool(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+              "MethodName": "ReadSchool"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService.SchoolService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.SchoolService.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolBroker",
+              "MethodName": "UpdateSchool"
+            }
           ]
         }
       ]
@@ -2126,10 +4337,56 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "RaiseStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService.RaiseStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+              "MethodName": "RaiseStudentCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService.RaiseStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+              "MethodName": "RaiseStudentDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService.RaiseStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+              "MethodName": "RaiseStudentReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService.RaiseStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker",
+              "MethodName": "RaiseStudentUpdatedAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentEventService.StudentEventService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.IStudentEventBroker)",
+          "Calls": []
         }
       ]
     },
@@ -2150,10 +4407,23 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "Read",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService.Read()",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker",
+              "MethodName": "Read"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentReportService.StudentReportService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentReportBroker)",
+          "Calls": []
         }
       ]
     },
@@ -2188,9 +4458,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService.CreateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+              "MethodName": "CreateStudent"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService.DeleteStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+              "MethodName": "DeleteStudent"
+            }
+          ]
+        },
+        {
+          "Name": "ReadStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService.ReadStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+              "MethodName": "ReadStudent"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService.StudentService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.StudentService.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.IStudentBroker",
+              "MethodName": "UpdateStudent"
+            }
           ]
         }
       ]
@@ -2226,10 +4542,56 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "RaiseTeacherCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService.RaiseTeacherCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+              "MethodName": "RaiseTeacherCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseTeacherDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService.RaiseTeacherDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+              "MethodName": "RaiseTeacherDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseTeacherReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService.RaiseTeacherReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+              "MethodName": "RaiseTeacherReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseTeacherUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService.RaiseTeacherUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker",
+              "MethodName": "RaiseTeacherUpdatedAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherEventService.TeacherEventService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Eventings.ITeacherEventBroker)",
+          "Calls": []
         }
       ]
     },
@@ -2264,9 +4626,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService.CreateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+              "MethodName": "CreateTeacher"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService.DeleteTeacher(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+              "MethodName": "DeleteTeacher"
+            }
+          ]
+        },
+        {
+          "Name": "ReadTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService.ReadTeacher(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+              "MethodName": "ReadTeacher"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService.TeacherService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.TeacherService.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ITeacherBroker",
+              "MethodName": "UpdateTeacher"
+            }
           ]
         }
       ]
@@ -2310,6 +4718,72 @@
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService.ClassOrchestrationService(StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService, StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService.CreateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+              "MethodName": "RaiseClassCreatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+              "MethodName": "CreateClass"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService.DeleteClassAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+              "MethodName": "RaiseClassDeletedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+              "MethodName": "DeleteClass"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+              "MethodName": "ReadClass"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService.ReadClassAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+              "MethodName": "RaiseClassReadAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+              "MethodName": "ReadClass"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassOrchestrationService.UpdateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService",
+              "MethodName": "RaiseClassUpdatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService",
+              "MethodName": "UpdateClass"
+            }
           ]
         }
       ]
@@ -2353,6 +4827,72 @@
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService.ClassStudentOrchestrationService(StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService, StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService.CreateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+              "MethodName": "RaiseClassStudentCreatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+              "MethodName": "CreateClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService.DeleteClassStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+              "MethodName": "RaiseClassStudentDeletedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+              "MethodName": "DeleteClassStudent"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+              "MethodName": "ReadClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService.ReadClassStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+              "MethodName": "RaiseClassStudentReadAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+              "MethodName": "ReadClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ClassStudentOrchestrationService.UpdateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService",
+              "MethodName": "RaiseClassStudentUpdatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService",
+              "MethodName": "UpdateClassStudent"
+            }
           ]
         }
       ]
@@ -2377,6 +4917,36 @@
         {
           "Name": "UpdateClassAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService.CreateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService.DeleteClassAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService.ReadClassAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassOrchestrationService.UpdateClassAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2398,6 +4968,36 @@
         },
         {
           "Name": "UpdateClassStudentAsync"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService.CreateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService.DeleteClassStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService.ReadClassStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IClassStudentOrchestrationService.UpdateClassStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2421,6 +5021,36 @@
         {
           "Name": "UpdateSchoolAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService.CreateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService.DeleteSchoolAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService.ReadSchoolAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ISchoolOrchestrationService.UpdateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2443,6 +5073,36 @@
         {
           "Name": "UpdateStudentAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService.CreateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService.DeleteStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService.ReadStudentAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.IStudentOrchestrationService.UpdateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2464,6 +5124,36 @@
         },
         {
           "Name": "UpdateTeacherAsync"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService.CreateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService.DeleteTeacherAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService.ReadTeacherAsync(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.ITeacherOrchestrationService.UpdateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2502,10 +5192,76 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService.CreateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+              "MethodName": "RaiseSchoolCreatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+              "MethodName": "CreateSchool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService.DeleteSchoolAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+              "MethodName": "RaiseSchoolDeletedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+              "MethodName": "DeleteSchool"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+              "MethodName": "ReadSchool"
+            }
+          ]
+        },
+        {
+          "Name": "ReadSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService.ReadSchoolAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+              "MethodName": "RaiseSchoolReadAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+              "MethodName": "ReadSchool"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService.SchoolOrchestrationService(StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService, StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateSchoolAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.SchoolOrchestrationService.UpdateSchoolAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService",
+              "MethodName": "RaiseSchoolUpdatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService",
+              "MethodName": "UpdateSchool"
+            }
           ]
         }
       ]
@@ -2545,10 +5301,76 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService.CreateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+              "MethodName": "RaiseStudentCreatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+              "MethodName": "CreateStudent"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService.DeleteStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+              "MethodName": "RaiseStudentDeletedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+              "MethodName": "DeleteStudent"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+              "MethodName": "ReadStudent"
+            }
+          ]
+        },
+        {
+          "Name": "ReadStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService.ReadStudentAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+              "MethodName": "RaiseStudentReadAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+              "MethodName": "ReadStudent"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService.StudentOrchestrationService(StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService, StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateStudentAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.StudentOrchestrationService.UpdateStudentAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService",
+              "MethodName": "RaiseStudentUpdatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService",
+              "MethodName": "UpdateStudent"
+            }
           ]
         }
       ]
@@ -2588,10 +5410,76 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService.CreateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+              "MethodName": "RaiseTeacherCreatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+              "MethodName": "CreateTeacher"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService.DeleteTeacherAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+              "MethodName": "RaiseTeacherDeletedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+              "MethodName": "DeleteTeacher"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+              "MethodName": "ReadTeacher"
+            }
+          ]
+        },
+        {
+          "Name": "ReadTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService.ReadTeacherAsync(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+              "MethodName": "RaiseTeacherReadAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+              "MethodName": "ReadTeacher"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService.TeacherOrchestrationService(StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService, StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateTeacherAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Orchestrations.TeacherOrchestrationService.UpdateTeacherAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService",
+              "MethodName": "RaiseTeacherUpdatedAsync"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService",
+              "MethodName": "UpdateTeacher"
+            }
           ]
         }
       ]
@@ -2630,6 +5518,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService.ClassEventProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService)",
+          "Calls": []
+        },
+        {
+          "Name": "RaiseClassCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService.RaiseClassCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+              "MethodName": "RaiseClassCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService.RaiseClassDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+              "MethodName": "RaiseClassDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService.RaiseClassReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+              "MethodName": "RaiseClassReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassEventProcessingService.RaiseClassUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassEventService",
+              "MethodName": "RaiseClassUpdatedAsync"
+            }
           ]
         }
       ]
@@ -2668,6 +5602,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService.ClassProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService.CreateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+              "MethodName": "CreateClass"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService.DeleteClass(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+              "MethodName": "DeleteClass"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService.ReadClass(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+              "MethodName": "ReadClass"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassProcessingService.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassService",
+              "MethodName": "UpdateClass"
+            }
           ]
         }
       ]
@@ -2706,6 +5686,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService.ClassStudentEventProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService)",
+          "Calls": []
+        },
+        {
+          "Name": "RaiseClassStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService.RaiseClassStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+              "MethodName": "RaiseClassStudentCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService.RaiseClassStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+              "MethodName": "RaiseClassStudentDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService.RaiseClassStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+              "MethodName": "RaiseClassStudentReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseClassStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentEventProcessingService.RaiseClassStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentEventService",
+              "MethodName": "RaiseClassStudentUpdatedAsync"
+            }
           ]
         }
       ]
@@ -2744,6 +5770,52 @@
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService.ClassStudentProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService)",
+          "Calls": []
+        },
+        {
+          "Name": "CreateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService.CreateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+              "MethodName": "CreateClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService.DeleteClassStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+              "MethodName": "DeleteClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "ReadClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService.ReadClassStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+              "MethodName": "ReadClassStudent"
+            }
+          ]
+        },
+        {
+          "Name": "UpdateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ClassStudentProcessingService.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IClassStudentService",
+              "MethodName": "UpdateClassStudent"
+            }
           ]
         }
       ]
@@ -2768,6 +5840,36 @@
         {
           "Name": "RaiseClassUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseClassCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService.RaiseClassCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService.RaiseClassDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService.RaiseClassReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassEventProcessingService.RaiseClassUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2789,6 +5891,36 @@
         },
         {
           "Name": "UpdateClass"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService.CreateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService.DeleteClass(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService.ReadClass(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClass",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassProcessingService.UpdateClass(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2812,6 +5944,36 @@
         {
           "Name": "RaiseClassStudentUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseClassStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService.RaiseClassStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService.RaiseClassStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService.RaiseClassStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseClassStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentEventProcessingService.RaiseClassStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2833,6 +5995,36 @@
         },
         {
           "Name": "UpdateClassStudent"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService.CreateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService.DeleteClassStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService.ReadClassStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateClassStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IClassStudentProcessingService.UpdateClassStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2856,6 +6048,36 @@
         {
           "Name": "RaiseSchoolUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseSchoolCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService.RaiseSchoolCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService.RaiseSchoolDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService.RaiseSchoolReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseSchoolUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolEventProcessingService.RaiseSchoolUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2878,6 +6100,36 @@
         {
           "Name": "UpdateSchool"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService.CreateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService.DeleteSchool(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService.ReadSchool(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolProcessingService.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2890,6 +6142,15 @@
       "Methods": [
         {
           "Name": "CreateReport"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateReport",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ISchoolReportProcessingService.CreateReport()",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2913,6 +6174,36 @@
         {
           "Name": "RaiseStudentUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService.RaiseStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService.RaiseStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService.RaiseStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentEventProcessingService.RaiseStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2935,6 +6226,36 @@
         {
           "Name": "UpdateStudent"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService.CreateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService.DeleteStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService.ReadStudent(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentProcessingService.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2947,6 +6268,15 @@
       "Methods": [
         {
           "Name": "CreateReport"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateReport",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.IStudentReportProcessingService.CreateReport()",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -2970,6 +6300,36 @@
         {
           "Name": "RaiseTeacherUpdatedAsync"
         }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "RaiseTeacherCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService.RaiseTeacherCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService.RaiseTeacherDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService.RaiseTeacherReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "RaiseTeacherUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherEventProcessingService.RaiseTeacherUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        }
       ]
     },
     {
@@ -2991,6 +6351,36 @@
         },
         {
           "Name": "UpdateTeacher"
+        }
+      ],
+      "CompositionMembers": [
+        {
+          "Name": "CreateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService.CreateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "DeleteTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService.DeleteTeacher(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "ReadTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService.ReadTeacher(string)",
+          "Calls": [],
+          "IsDeclaration": true
+        },
+        {
+          "Name": "UpdateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.ITeacherProcessingService.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [],
+          "IsDeclaration": true
         }
       ]
     },
@@ -3025,10 +6415,56 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "RaiseSchoolCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService.RaiseSchoolCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+              "MethodName": "RaiseSchoolCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseSchoolDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService.RaiseSchoolDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+              "MethodName": "RaiseSchoolDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseSchoolReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService.RaiseSchoolReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+              "MethodName": "RaiseSchoolReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseSchoolUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService.RaiseSchoolUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService",
+              "MethodName": "RaiseSchoolUpdatedAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolEventProcessingService.SchoolEventProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolEventService)",
+          "Calls": []
         }
       ]
     },
@@ -3063,9 +6499,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService.CreateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+              "MethodName": "CreateSchool"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService.DeleteSchool(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+              "MethodName": "DeleteSchool"
+            }
+          ]
+        },
+        {
+          "Name": "ReadSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService.ReadSchool(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+              "MethodName": "ReadSchool"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService.SchoolProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateSchool",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolProcessingService.UpdateSchool(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ISchoolService",
+              "MethodName": "UpdateSchool"
+            }
           ]
         }
       ]
@@ -3087,10 +6569,23 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateReport",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService.CreateReport()",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
+              "MethodName": "Read"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.SchoolReportProcessingService.SchoolReportProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker)",
+          "Calls": []
         }
       ]
     },
@@ -3125,10 +6620,56 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "RaiseStudentCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService.RaiseStudentCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+              "MethodName": "RaiseStudentCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseStudentDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService.RaiseStudentDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+              "MethodName": "RaiseStudentDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseStudentReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService.RaiseStudentReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+              "MethodName": "RaiseStudentReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseStudentUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService.RaiseStudentUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService",
+              "MethodName": "RaiseStudentUpdatedAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentEventProcessingService.StudentEventProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentEventService)",
+          "Calls": []
         }
       ]
     },
@@ -3163,9 +6704,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService.CreateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+              "MethodName": "CreateStudent"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService.DeleteStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+              "MethodName": "DeleteStudent"
+            }
+          ]
+        },
+        {
+          "Name": "ReadStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService.ReadStudent(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+              "MethodName": "ReadStudent"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService.StudentProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateStudent",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentProcessingService.UpdateStudent(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentService",
+              "MethodName": "UpdateStudent"
+            }
           ]
         }
       ]
@@ -3187,11 +6774,28 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateReport",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService.CreateReport()",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
+              "MethodName": "Read"
+            },
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService",
+              "MethodName": "Read"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker",
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.StudentReportProcessingService.StudentReportProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Brokers.Storages.ISchoolReportBroker, StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.IStudentReportService)",
+          "Calls": []
         }
       ]
     },
@@ -3226,10 +6830,56 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "RaiseTeacherCreatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService.RaiseTeacherCreatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+              "MethodName": "RaiseTeacherCreatedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseTeacherDeletedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService.RaiseTeacherDeletedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+              "MethodName": "RaiseTeacherDeletedAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseTeacherReadAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService.RaiseTeacherReadAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+              "MethodName": "RaiseTeacherReadAsync"
+            }
+          ]
+        },
+        {
+          "Name": "RaiseTeacherUpdatedAsync",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService.RaiseTeacherUpdatedAsync(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService",
+              "MethodName": "RaiseTeacherUpdatedAsync"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService"
-          ]
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherEventProcessingService.TeacherEventProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherEventService)",
+          "Calls": []
         }
       ]
     },
@@ -3264,9 +6914,55 @@
       ],
       "CompositionMembers": [
         {
+          "Name": "CreateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService.CreateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+              "MethodName": "CreateTeacher"
+            }
+          ]
+        },
+        {
+          "Name": "DeleteTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService.DeleteTeacher(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+              "MethodName": "DeleteTeacher"
+            }
+          ]
+        },
+        {
+          "Name": "ReadTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService.ReadTeacher(string)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+              "MethodName": "ReadTeacher"
+            }
+          ]
+        },
+        {
           "Name": ".ctor",
           "TypeNames": [
             "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService"
+          ],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService.TeacherProcessingService(StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService)",
+          "Calls": []
+        },
+        {
+          "Name": "UpdateTeacher",
+          "TypeNames": [],
+          "Id": "StandardIo.ArchitectureDiagram.SampleProject.Services.Processings.TeacherProcessingService.UpdateTeacher(StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher)",
+          "Calls": [
+            {
+              "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Services.Foundations.ITeacherService",
+              "MethodName": "UpdateTeacher"
+            }
           ]
         }
       ]
