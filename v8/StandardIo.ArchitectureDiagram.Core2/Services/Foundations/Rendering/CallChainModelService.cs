@@ -31,7 +31,7 @@ internal sealed class CallChainModelService : ICallChainModelService
                 tree = [new("call-type-"+trees.Count,type,Short(type),0,null)]; trees.Add(type,tree);
             }
             string id="call-method-"+nodes.Count;
-            string[]? details=member is null ? null : new[]{"Inputs"}.Concat((member.Inputs ?? []).Select(p=>"  "+Short(p.Type??"?")+" : "+p.Name))
+            string[]? details=member is null ? null : (member.Inputs is { Length: > 0 } ? new[]{"Inputs"}.Concat(member.Inputs.Select(p=>"  "+Short(p.Type??"?")+" : "+p.Name)) : Array.Empty<string>())
                 .Concat(new[]{"Outputs","  "+Short(member.Output??"System.Void")}).ToArray();
             var node=new CompositionTreeNode(id,type,label,1,tree[0].Id) { MemberId=key,Details=details };
             nodes[(type,key)]=node;sourceMembers[id]=(type,label);tree.Add(node);return id;
@@ -95,6 +95,6 @@ internal sealed class CallChainModelService : ICallChainModelService
         }
         foreach(var type in owned.Keys)
         foreach(var member in members[type].Where(m=>Public(type,m.Value)&&!m.Value.IsDeclaration)) Trace(nodes[(type,member.Key)].Id,type,member.Key,new());
-        return new([],links.ToArray()) { Trees=trees.Select(t=>new CompositionTree((owned.TryGetValue(t.Key,out var owner)?owner.Project:"External")+" / "+Short(t.Key),t.Value.ToArray())).ToArray() };
+        return new([],links.ToArray()) { Trees=trees.Select(t=>new CompositionTree(Short(t.Key),t.Value.ToArray()) { ProjectName=owned.TryGetValue(t.Key,out var owner)?owner.Project: model.ProjectModels.SelectMany(p=>p.Types??[]).FirstOrDefault(type=>type.Name==t.Key)?.AssemblyName??"External" }).ToArray() };
     }
 }

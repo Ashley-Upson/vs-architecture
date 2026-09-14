@@ -4,82 +4,108 @@ using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface ICallChainLayoutService { RenderModel Layout(RenderModel model,ContextualDiagram diagram); }
-internal sealed class CallChainLayoutService(ICompositionTreeLayoutService containers) : ICallChainLayoutService
+internal sealed class CallChainLayoutService : ICallChainLayoutService
 {
+    private sealed record Branch(CompositionTree Tree,int Depth,List<Step> Steps,double Height);
+    private sealed record Step(CompositionTreeNode Method,bool Recursive,List<Branch> Children,double Height);
     public RenderModel Layout(RenderModel model,ContextualDiagram diagram)
     {
-        containers.Layout(model,diagram.Trees ?? []);
-        var projects=model.Projects.ToDictionary(p=>p.Id);
-        var owners=model.Projects.SelectMany(p=>p.Nodes.Select(n=>(n.Id,Owner:p.Id))).ToDictionary(x=>x.Id,x=>x.Owner);
-        var edges=diagram.Links.Select(l=>(From:owners[l.From],To:owners[l.To])).Where(e=>e.From!=e.To).Distinct().ToArray();
-        var outgoing=edges.ToLookup(e=>e.From,e=>e.To);
-        var incoming=edges.ToLookup(e=>e.To,e=>e.From);
-        var rank=Ranks(projects.Keys.ToArray(),outgoing);
-        double gap=Math.Max(60,model.Configuration.Composition.ProjectSpacing);
-        double x=40;
-        foreach(var column in projects.Keys.GroupBy(id=>rank[id]).OrderBy(g=>g.Key))
+        var catalog=diagram.Trees ?? [];
+        var methods=catalog.SelectMany(t=>t.Nodes.Where(n=>n.MemberId!=null).Select(n=>(Tree:t,Node:n))).ToDictionary(x=>x.Node.Id);
+        var calls=diagram.Links.ToLookup(l=>l.From,l=>l.To);
+        var incoming=diagram.Links.Select(l=>l.To).ToHashSet();
+        var seen=new HashSet<string>();
+        var roots=new List<Branch>();
+        double width=model.Configuration.Composition.NodeWidth,gap=Math.Max(60,model.Configuration.Composition.ProjectSpacing);
+        string Owner(CompositionTree tree)=>tree.ProjectName??"Project";
+        double NodeHeight(CompositionTreeNode n)=>n.Details is null?30:(n.Details.Length+1)*18+34;
+        Branch Build(CompositionTree tree,IEnumerable<string> selected,int depth,HashSet<string> path)
         {
-            double Preferred(string id) => incoming[id].Where(p=>rank[p]<rank[id]).Select(p=>projects[p].Y+projects[p].Height/2).DefaultIfEmpty(40).Average();
-            double cursor=40;
-            foreach(string id in column.OrderBy(Preferred).ThenByDescending(id=>outgoing[id].Count()).ThenBy(id=>projects[id].Name,StringComparer.Ordinal))
+            var steps=new List<Step>();
+            foreach(string id in selected.Distinct())
             {
-                var p=projects[id]; double y=Math.Max(cursor,Preferred(id)-p.Height/2);
-                projects[id]=p with { X=x,Y=y };cursor=y+p.Height+gap;
+                seen.Add(id);bool recursive=path.Contains(id);
+                var next=new HashSet<string>(path){id};var children=new List<Branch>();
+                if(!recursive)
+                foreach(var group in calls[id].GroupBy(target=>methods[target].Tree))
+                    children.Add(Build(group.Key,group,Owner(tree)==Owner(group.Key)?depth+1:0,next));
+                double height=Math.Max(NodeHeight(methods[id].Node),children.Sum(c=>c.Height)+Math.Max(0,children.Count-1)*30);
+                steps.Add(new(methods[id].Node,recursive,children,height));
             }
-            x+=column.Max(id=>projects[id].Width)+gap;
+            return new(tree,depth,steps,54+steps.Sum(m=>m.Height)+Math.Max(0,steps.Count-1)*30);
         }
-        var columns=projects.Values.GroupBy(p=>rank[p.Id]).ToDictionary(g=>g.Key,g=>g.ToArray());
-        var locations=projects.Values.SelectMany(p=>p.Nodes.Select(n=>(Project:p,Node:n))).ToDictionary(x=>x.Node.Id);
-        model.CrossProjectConnections=diagram.Links.Select((link,i)=>
+        foreach(var tree in catalog)
         {
-            var a=locations[link.From];var b=locations[link.To];
-            double ax=a.Project.X+a.Node.X+a.Node.Width,ay=a.Project.Y+a.Node.Y+a.Node.Height/2;
-            double by=b.Project.Y+b.Node.Y+b.Node.Height/2;
-            var points=new List<DrawingPoint> {new(ax,ay)};
-            double clearance=12+(i%6)*4;
-            if(link.From==link.To)
+            var entry=tree.Nodes.Where(n=>n.MemberId!=null&&!incoming.Contains(n.Id)).Select(n=>n.Id).ToArray();
+            if(entry.Length>0)roots.Add(Build(tree,entry,0,new()));
+        }
+        foreach(var method in methods.Values)
+            if(!seen.Contains(method.Node.Id))roots.Add(Build(method.Tree,[method.Node.Id],0,new()));
+        var branches=new List<Branch>();
+        void Gather(Branch branch){branches.Add(branch);foreach(var child in branch.Steps.SelectMany(m=>m.Children))Gather(child);}
+        foreach(var root in roots)Gather(root);
+        var owners=branches.Select(b=>Owner(b.Tree)).Distinct().ToArray();
+        var projectLinks=diagram.Links.Select(l=>(From:Owner(methods[l.From].Tree),To:Owner(methods[l.To].Tree))).Where(e=>e.From!=e.To).Distinct().ToArray();
+        var ranks=Ranks(owners,projectLinks.ToLookup(e=>e.From,e=>e.To));
+        var projectX=new Dictionary<string,double>();var projectWidth=new Dictionary<string,double>();
+        double x=40;
+        foreach(string owner in owners.OrderBy(o=>ranks[o]).ThenBy(o=>o,StringComparer.Ordinal))
+        {
+            projectX[owner]=x;
+            projectWidth[owner]=80+(branches.Where(b=>Owner(b.Tree)==owner).Max(b=>b.Depth)+1)*(width+28)+branches.Where(b=>Owner(b.Tree)==owner).Max(b=>b.Depth)*gap;
+            x+=projectWidth[owner]+gap;
+        }
+        var nodes=owners.ToDictionary(o=>o,_=>new List<RenderNode>());
+        var lines=owners.ToDictionary(o=>o,_=>new List<RenderConnection>());
+        var pending=new List<(string FromOwner,RenderNode From,string ToOwner,RenderNode To)>();
+        int serial=0;
+        RenderNode Node(string owner,CompositionTreeNode definition,double left,double top,bool recursive=false)
+        {
+            string label=definition.Label+(recursive?" (recursive call)":"");
+            var labels=new[]{label}.Concat(definition.Details??[]).ToArray();
+            var node=new RenderNode("call-node-"+serial++,definition.TypeName,string.Join("\n",labels),definition.MemberId is null?"#075985":"#334155",
+                left,top,width,NodeHeight(definition),labels.Select((text,i)=>new RenderText(text,definition.Details is null||i==0?left+width/2:left+12,
+                    definition.Details is null?top+15:i==0?top+17:top+34+i*18,i==0,12)).ToArray()){HasHeader=definition.Details!=null};
+            nodes[owner].Add(node);return node;
+        }
+        Dictionary<string,RenderNode> Place(Branch branch,double top)
+        {
+            string owner=Owner(branch.Tree);double left=40+branch.Depth*(width+28+gap);
+            var root=Node(owner,branch.Tree.Nodes[0],left,top);double cursor=top+54;
+            var result=new Dictionary<string,RenderNode>();
+            foreach(var step in branch.Steps)
             {
-                double side=a.Project.X+a.Project.Width+clearance;
-                double returnY=ay+a.Node.Height/4;
-                points.Add(new(side,ay));points.Add(new(side,returnY));points.Add(new(ax,returnY));
-            }
-            else if(rank[b.Project.Id]<=rank[a.Project.Id])
-            {
-                // Recursion and mutually calling types use the local right gutter.
-                double side=Math.Max(a.Project.X+a.Project.Width,b.Project.X+b.Project.Width)+clearance;
-                points.Add(new(side,ay));points.Add(new(side,by));points.Add(new(b.Project.X+b.Node.X+b.Node.Width,by));
-            }
-            else
-            {
-                double currentX=a.Project.X+a.Project.Width+clearance,currentY=ay;
-                points.Add(new(currentX,currentY));
-                for(int column=rank[a.Project.Id]+1;column<rank[b.Project.Id];column++)
+                double childY=cursor;
+                var targets=new List<(string Owner,RenderNode Node)>();
+                foreach(var child in step.Children)
                 {
-                    if(!columns.TryGetValue(column,out var obstacles)) continue;
-                    bool Clear(double y)=>obstacles.All(p=>y<=p.Y-12||y>=p.Y+p.Height+12);
-                    if(!Clear(currentY))
-                    {
-                        double y=obstacles.SelectMany(p=>new[]{p.Y-12,p.Y+p.Height+12}).Where(y=>y>=40&&Clear(y))
-                            .OrderBy(y=>Math.Abs(y-currentY)+Math.Abs(y-by)).First();
-                        points.Add(new(currentX,y));currentY=y;
-                    }
-                    currentX=obstacles.Max(p=>p.X+p.Width)+clearance;points.Add(new(currentX,currentY));
+                    var placed=Place(child,childY);
+                    targets.AddRange(placed.Values.Select(n=>(Owner(child.Tree),n)));childY+=child.Height+30;
                 }
-                double targetX=b.Project.X-clearance;
-                points.Add(new(targetX,currentY));points.Add(new(targetX,by));points.Add(new(b.Project.X+b.Node.X,by));
+                double center=targets.Count==0?cursor+step.Height/2:(targets.Min(t=>t.Node.Y)+targets.Max(t=>t.Node.Y+t.Node.Height))/2;
+                var method=Node(owner,step.Method,left+28,center-NodeHeight(step.Method)/2,step.Recursive);
+                result[step.Method.Id]=method;
+                lines[owner].Add(new("tree-edge-"+method.Id,root.Id,method.Id,root.TypeName,method.TypeName,false,
+                    [new(root.X+12,root.Y+root.Height),new(root.X+12,method.Y+method.Height/2),new(method.X,method.Y+method.Height/2)],"#64748b"){IsTree=true});
+                foreach(var target in targets)pending.Add((owner,method,target.Owner,target.Node));
+                cursor+=step.Height+30;
             }
-            var clean=new List<DrawingPoint>();
-            foreach(var point in points)
-            {
-                if(clean.Count>0&&clean[^1]==point)continue;
-                while(clean.Count>1&&((clean[^2].X==clean[^1].X&&clean[^1].X==point.X)||(clean[^2].Y==clean[^1].Y&&clean[^1].Y==point.Y))) clean.RemoveAt(clean.Count-1);
-                clean.Add(point);
-            }
-            return new RenderConnection("call-link-"+i,a.Node.Id,b.Node.Id,a.Node.TypeName,b.Node.TypeName,false,clean.ToArray(),"#38bdf8");
-        }).ToArray();
-        model.Projects=projects.Values.ToArray();
-        model.Width=model.Projects.Select(p=>p.X+p.Width+gap).DefaultIfEmpty(400).Max();
-        model.Height=model.Projects.Select(p=>p.Y+p.Height+40).DefaultIfEmpty(200).Max();
+            return result;
+        }
+        double y=60;
+        foreach(var root in roots.OrderByDescending(b=>b.Height)){Place(root,y);y+=root.Height+gap;}
+        var cross=new List<RenderConnection>();
+        foreach(var link in pending)
+        {
+            bool local=link.FromOwner==link.ToOwner;
+            double ax=link.From.X+link.From.Width+(local?0:projectX[link.FromOwner]),ay=link.From.Y+link.From.Height/2;
+            double bx=link.To.X+(local?0:projectX[link.ToOwner]),by=link.To.Y+link.To.Height/2;
+            var edge=new RenderConnection("call-edge-"+serial++,link.From.Id,link.To.Id,link.From.TypeName,link.To.TypeName,false,
+                ay==by?[new(ax,ay),new(bx,by)]:[new(ax,ay),new(ax+gap/2,ay),new(ax+gap/2,by),new(bx,by)],"#38bdf8");
+            if(local)lines[link.FromOwner].Add(edge);else cross.Add(edge with { Points=edge.Points.Select(p=>p with { Y=p.Y+40 }).ToArray() });
+        }
+        model.Projects=owners.Select((o,i)=>new RenderProject("call-project-"+i,o,projectX[o],40,projectWidth[o],nodes[o].Max(n=>n.Y+n.Height)+40,nodes[o].ToArray(),lines[o].ToArray())).ToArray();
+        model.CrossProjectConnections=cross.ToArray();model.Width=x;model.Height=model.Projects.Select(p=>p.Y+p.Height+40).DefaultIfEmpty(200).Max();
         return model;
     }
     private static Dictionary<string,int> Ranks(string[] ids,ILookup<string,string> outgoing)

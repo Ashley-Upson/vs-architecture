@@ -15,6 +15,7 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
     {
         var root = new XElement("root", new XElement("mxCell", new XAttribute("id", "0")), new XElement("mxCell", new XAttribute("id", "1"), new XAttribute("parent", "0")));
 
+        var locations=renderModel.Projects.SelectMany(p=>p.Nodes.Select(n=>(Project:p,Node:n))).ToDictionary(x=>x.Node.Id);
         foreach (RenderProject drawing in renderModel.Projects)
         {
             root.Add(content: new XElement("mxCell", new XAttribute("id", drawing.Id), new XAttribute("parent", "1"), new XAttribute("value", drawing.Name), new XAttribute("vertex", "1"), new XAttribute("style", "rounded=0;html=0;container=1;collapsible=0;fillColor=#263242;fontColor=#ffffff;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;fontSize=16;"), Geometry(x: drawing.X, y: drawing.Y, width: drawing.Width, height: drawing.Height)));
@@ -29,19 +30,23 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
             foreach (RenderConnection route in drawing.Connections)
             {
                 bool inheritance = route.Inheritance;
-                var source = drawing.Nodes.Single(node => node.Id == route.SourceId);
+                var source = locations[route.SourceId].Node;
+                var target = locations[route.TargetId].Node;
+                string exitY=((route.Points[0].Y-source.Y)/source.Height).ToString(CultureInfo.InvariantCulture);
+                string entryX=((route.Points[^1].X-target.X)/target.Width).ToString(CultureInfo.InvariantCulture);
+                string entryY=((route.Points[^1].Y-target.Y)/target.Height).ToString(CultureInfo.InvariantCulture);
                 string exitX = ((route.Points[0].X - source.X) / source.Width).ToString(CultureInfo.InvariantCulture);
-                root.Add(content: new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", drawing.Id), new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId), new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;html=0;strokeColor=" + route.Stroke + ";fontColor=#ffffff;labelBackgroundColor=#263242;exitX=" + exitX + (route.IsTree ? ";exitY=1;entryX=0;entryY=0.5;" : ";exitY=1;entryX=0.5;entryY=0;") + "exitPerimeter=0;entryPerimeter=0;" + (route.IsTree ? "endArrow=none;" : inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(count: 1).Take(count: route.Points.Length - 2).Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
+                root.Add(content: new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", drawing.Id), new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId), new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;html=0;strokeColor=" + route.Stroke + ";fontColor=#ffffff;labelBackgroundColor=#263242;exitX=" + exitX + (";exitY="+exitY+";entryX="+entryX+";entryY="+entryY+";") + "exitPerimeter=0;entryPerimeter=0;" + (route.IsTree ? "endArrow=none;" : inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(count: 1).Take(count: route.Points.Length - 2).Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
             }
         }
 
         foreach (RenderConnection route in renderModel.CrossProjectConnections)
         {
-            var owner = renderModel.Projects.Single(project => project.Nodes.Any(node => node.Id == route.SourceId));
-            var source = owner.Nodes.Single(node => node.Id == route.SourceId);
+            var owner = locations[route.SourceId].Project;
+            var source = locations[route.SourceId].Node;
             string exitX = ((route.Points[0].X - owner.X - source.X) / source.Width).ToString(CultureInfo.InvariantCulture);
-            var targetOwner = renderModel.Projects.Single(project => project.Nodes.Any(node => node.Id == route.TargetId));
-            var target = targetOwner.Nodes.Single(node => node.Id == route.TargetId);
+            var targetOwner = locations[route.TargetId].Project;
+            var target = locations[route.TargetId].Node;
             string exitY = ((route.Points[0].Y-owner.Y-source.Y)/source.Height).ToString(CultureInfo.InvariantCulture);
             string entryX = ((route.Points[^1].X-targetOwner.X-target.X)/target.Width).ToString(CultureInfo.InvariantCulture);
             string entryY = ((route.Points[^1].Y-targetOwner.Y-target.Y)/target.Height).ToString(CultureInfo.InvariantCulture);
