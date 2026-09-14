@@ -8,6 +8,37 @@ public class CallChainViewTests
 {
     private static RenderConnection[] Calls(RenderModel model) => model.CrossProjectConnections.Concat(model.Projects.SelectMany(p=>p.Connections.Where(e=>!e.IsTree).Select(e=>e with {Points=e.Points.Select(q=>q with {X=q.X+p.X,Y=q.Y+p.Y}).ToArray()}))).ToArray();
     [Fact]
+    public async Task ShouldPlaceTypeHeadingImmediatelyAboveFirstMethod()
+    {
+        var project=await ConcreteCallChainTests.ExtractAsync("""
+            public class A { public void Run() { new B().Run(); new C().Run(); } }
+            public class B { public void Run() { new C().Run(); } }
+            public class C { public void Run() {} }
+            """);
+        var model=TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project],diagramType:DiagramTypes.CallChain));
+        foreach(var region in model.Projects)
+        foreach(var tree in region.Connections.Where(e=>e.IsTree).GroupBy(e=>e.SourceId))
+        {
+            var heading=region.Nodes.Single(n=>n.Id==tree.Key);
+            double first=tree.Min(e=>region.Nodes.Single(n=>n.Id==e.TargetId).Y);
+            Assert.Equal(24,first-heading.Y-heading.Height);
+        }
+    }
+    [Fact]
+    public async Task ShouldCombineDirectlyAttachedLayersWithinProject()
+    {
+        var project=await ConcreteCallChainTests.ExtractAsync("""
+            public class A { public void Run() { new B().Run(); } }
+            public class B { public void Run() { System.IO.File.ReadAllText("file"); } }
+            """,frameworkReferences:true);
+        var model=TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project],diagramType:DiagramTypes.CallChain));
+        var region=Assert.Single(model.Projects,p=>p.Nodes.Any(n=>n.Label=="A"));
+        Assert.Contains(region.Nodes,n=>n.Label=="B");
+        var external=Assert.Single(model.Projects,p=>p.Nodes.Any(n=>n.TypeName=="System.IO.File"));
+        Assert.True(external.X>region.X+region.Width);
+        Assert.All(Calls(model),e=>Assert.True(e.Points.Zip(e.Points.Skip(1)).All(pair=>pair.First.X<=pair.Second.X)));
+    }
+    [Fact]
     public async Task ShouldKeepTypesWithTheirMethodsAndPreserveTheRootLayer()
     {
         var project=await ConcreteCallChainTests.ExtractAsync("""
@@ -29,7 +60,7 @@ public class CallChainViewTests
         }
     }
     [Fact]
-    public async Task ShouldSplitDistantProjectRegionsAndRetainForwardCalls()
+    public async Task ShouldMergeBranchesAttachedToContinuousRootRegionAndRetainForwardCalls()
     {
         var project=await ConcreteCallChainTests.ExtractAsync("""
             public class A { public void Run() { new B().Run(); } }
@@ -38,7 +69,7 @@ public class CallChainViewTests
             public class D { public void Run() {} }
             """);
         var model=TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project],diagramType:DiagramTypes.CallChain));
-        Assert.True(model.Projects.Length>1);
+        Assert.Single(model.Projects);
         Assert.All(model.Projects,p=>Assert.Equal(project.Name,p.Name));
         foreach(var e in model.CrossProjectConnections.Where(e=>!e.IsTree)) Assert.True(e.Points[^1].X>e.Points[0].X);
         for(int i=0;i<model.Projects.Length;i++)for(int j=i+1;j<model.Projects.Length;j++)

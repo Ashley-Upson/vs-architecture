@@ -90,6 +90,12 @@ internal sealed class CallChainLayoutService(ICallChainRegionService regions) : 
                 foreach(var target in targets)pending.Add((owner,method,target.Owner,target.Node));
                 cursor+=step.Height+30;
             }
+            // The heading follows its first method, whose position is determined
+            // by the consumed branches, rather than the reserved branch height.
+            double headingY=result.Values.Min(n=>n.Y)-root.Height-24;
+            double offset=headingY-root.Y;
+            nodes[owner][nodes[owner].FindIndex(n=>n.Id==root.Id)]=root with {
+                Y=headingY,TextLines=root.TextLines.Select(t=>t with {Y=t.Y+offset}).ToArray() };
             return result;
         }
         double y=60;

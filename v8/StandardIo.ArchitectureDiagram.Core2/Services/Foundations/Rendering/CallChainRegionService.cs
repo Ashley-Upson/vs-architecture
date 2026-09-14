@@ -15,6 +15,7 @@ internal sealed class CallChainRegionService : ICallChainRegionService
         var consumed=edges.Where(e=>!e.IsTree).Select(e=>e.TargetId).ToHashSet();
         string Root(string id){while(treeParents.TryGetValue(id,out var parent))id=parent;return id;}
         var regions=new List<RenderProject>();
+        var owners=new Dictionary<string,string>();
         foreach(var project in model.Projects)
         foreach(var column in project.Nodes.GroupBy(n=>(int)Math.Round((n.X-40)/step)))
         {
@@ -33,11 +34,32 @@ internal sealed class CallChainRegionService : ICallChainRegionService
             {
                 double left=group.Min(n=>n.X)-20,top=group.Min(n=>n.Y)-40;
                 var nodes=group.Select(n=>n with { X=n.X-left,Y=n.Y-top,TextLines=n.TextLines.Select(t=>t with { X=t.X-left,Y=t.Y-top }).ToArray() }).ToArray();
+                owners["call-region-"+regions.Count]=project.Id;
                 regions.Add(new("call-region-"+regions.Count,project.Name,project.X+left,project.Y+top,
                     group.Max(n=>n.X+n.Width)-left+20,group.Max(n=>n.Y+n.Height)-top+20,nodes,[]));
             }
         }
         var nodeRegions=regions.SelectMany(p=>p.Nodes.Select(n=>(n.Id,Region:p.Id))).ToDictionary(x=>x.Id,x=>x.Region);
+        // Adjacent columns connected by a direct call belong to one project
+        // region. Union before placement so downstream boxes clear its full width.
+        var original=regions.ToDictionary(p=>p.Id);
+        var sets=regions.ToDictionary(p=>p.Id,p=>p.Id);
+        string Set(string id){while(sets[id]!=id){sets[id]=sets[sets[id]];id=sets[id];}return id;}
+        foreach(var edge in edges.Where(e=>!e.IsTree))
+        {
+            var a=original[nodeRegions[edge.SourceId]];var b=original[nodeRegions[edge.TargetId]];
+            if(owners[a.Id]==owners[b.Id]&&Math.Abs(b.X-a.X-step)<1&&a.Y<b.Y+b.Height&&b.Y<a.Y+a.Height)
+                sets[Set(b.Id)]=Set(a.Id);
+        }
+        regions=regions.GroupBy(p=>Set(p.Id)).Select(group=>{
+            double left=group.Min(p=>p.X),top=group.Min(p=>p.Y);
+            var nodes=group.SelectMany(p=>p.Nodes.Select(n=>n with {
+                X=n.X+p.X-left,Y=n.Y+p.Y-top,
+                TextLines=n.TextLines.Select(t=>t with {X=t.X+p.X-left,Y=t.Y+p.Y-top}).ToArray() })).ToArray();
+            return new RenderProject(group.Key,group.First().Name,left,top,
+                group.Max(p=>p.X+p.Width)-left,group.Max(p=>p.Y+p.Height)-top,nodes,[]);
+        }).ToList();
+        nodeRegions=regions.SelectMany(p=>p.Nodes.Select(n=>(n.Id,Region:p.Id))).ToDictionary(x=>x.Id,x=>x.Region);
         var parents=edges.Where(e=>!e.IsTree&&nodeRegions[e.SourceId]!=nodeRegions[e.TargetId]).ToLookup(e=>nodeRegions[e.TargetId],e=>nodeRegions[e.SourceId]);
         var placed=new Dictionary<string,RenderProject>();var bands=new Dictionary<int,List<RenderProject>>();
         IEnumerable<int> Bands(RenderProject p)=>Enumerable.Range((int)(p.Y/1024),(int)((p.Y+p.Height)/1024)-(int)(p.Y/1024)+1);
@@ -58,7 +80,7 @@ internal sealed class CallChainRegionService : ICallChainRegionService
             var a=locations[edge.SourceId];var b=locations[edge.TargetId];bool same=a.Project.Id==b.Project.Id;
             double ax=a.Project.X+a.Node.X+(edge.IsTree?12:a.Node.Width),ay=a.Project.Y+a.Node.Y+(edge.IsTree?a.Node.Height:a.Node.Height/2);
             double bx=b.Project.X+b.Node.X,by=b.Project.Y+b.Node.Y+b.Node.Height/2;
-            double gutter=edge.IsTree?ax:a.Project.X+a.Project.Width+gap/2;
+            double gutter=edge.IsTree?ax:same?Math.Min(ax+gap/2,bx):a.Project.X+a.Project.Width+gap/2;
             DrawingPoint[] points=ay==by?[new(ax,ay),new(bx,by)]:[new(ax,ay),new(gutter,ay),new(gutter,by),new(bx,by)];
             if(same)local[a.Project.Id].Add(edge with {Points=points.Select(p=>p with { X=p.X-a.Project.X,Y=p.Y-a.Project.Y }).ToArray()});
             else cross.Add(edge with {Points=points});
