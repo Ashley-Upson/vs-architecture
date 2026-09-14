@@ -24,5 +24,7 @@ public sealed class DefinedType
     public bool IsInternal { get; set; }
     public Field[]? Fields { get; set; }
     public Property[]? Properties { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompositionMember[]? CompositionMembers { get; set; }
     public Method[]? Methods { get; set; }
 }

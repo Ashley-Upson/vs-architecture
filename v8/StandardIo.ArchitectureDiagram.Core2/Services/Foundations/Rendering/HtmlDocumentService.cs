@@ -27,7 +27,7 @@ internal sealed partial class HtmlDocumentService : IHtmlDocumentService
             {
                 string points = string.Join(separator: " ", values: route.Points.Select(point => $"{Number(value: point.X)},{Number(value: point.Y)}"));
                 bool inherited = route.Inheritance;
-                group.Add(content: new XElement(svg + "polyline", new XElement(svg + "title", (route.IsComposition ? "Composition: " : "") + route.FromType + " → " + route.ToType), new XAttribute("points", points), new XAttribute("stroke", route.Stroke), new XAttribute("class", inherited ? "link inherited" : route.IsComposition ? "link composition" : "link"), new XAttribute("data-from", route.FromType), new XAttribute("data-to", route.ToType), new XAttribute("marker-end", inherited ? "url(#inheritance)" : "url(#arrow)")));
+                group.Add(content: new XElement(svg + "polyline", new XElement(svg + "title", (route.IsComposition ? "Composition: " : "") + route.FromType + " → " + route.ToType), new XAttribute("points", points), new XAttribute("stroke", route.Stroke), new XAttribute("class", route.IsTree ? "link tree" : inherited ? "link inherited" : route.IsComposition ? "link composition" : "link"), new XAttribute("data-from", route.FromType), new XAttribute("data-to", route.ToType), new XAttribute("marker-end", route.IsTree ? "none" : inherited ? "url(#inheritance)" : "url(#arrow)")));
             }
 
             foreach (RenderNode node in drawing.Nodes)
@@ -38,10 +38,10 @@ internal sealed partial class HtmlDocumentService : IHtmlDocumentService
 
                 foreach (RenderText line in node.TextLines)
                 {
-                    text.Add(content: new XElement(svg + "tspan", new XAttribute("x", line.X), new XAttribute("y", line.Y), new XAttribute("font-weight", line.Bold ? "bold" : "normal"), new XAttribute("font-size", line.FontSize), line.Text));
+                    text.Add(content: new XElement(svg + "tspan", new XAttribute("x", line.X), new XAttribute("y", line.Y), new XAttribute("text-anchor", node.HasHeader && !line.Bold ? "start" : "middle"), new XAttribute("font-weight", line.Bold ? "bold" : "normal"), new XAttribute("font-size", line.FontSize), line.Text));
                 }
 
-                group.Add(content: new XElement(svg + "g", new XAttribute("data-type", node.TypeName), new XElement(svg + "title", node.TypeName), rectangle, text));
+                group.Add(content: new XElement(svg + "g", new XAttribute("data-type", node.TypeName), new XElement(svg + "title", node.TypeName), rectangle, node.HasHeader ? new XElement(svg + "line", new XAttribute("x1",node.X),new XAttribute("x2",node.X+node.Width),new XAttribute("y1",node.Y+34),new XAttribute("y2",node.Y+34),new XAttribute("stroke","#94a3b8")) : null, text));
             }
 
             canvas.Add(content: group);

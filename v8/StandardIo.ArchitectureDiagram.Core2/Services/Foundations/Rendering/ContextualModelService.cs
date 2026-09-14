@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IContextualModelService { ContextualDiagram Prepare(RenderModel model); }
-internal sealed class ContextualModelService : IContextualModelService
+internal sealed class ContextualModelService(ICompositionTreeService compositionTrees) : IContextualModelService
 {
     public ContextualDiagram Prepare(RenderModel model)
     {
@@ -20,7 +20,7 @@ internal sealed class ContextualModelService : IContextualModelService
             links.AddRange(model.ProjectModels.SelectMany(p => p.Dependencies ?? []).Where(d => d.IsComposition && names.Contains(d.FromType!) && names.Contains(d.ToType!))
                 .Select(d => new ContextualLink(d.FromType!, d.ToType!, "references")));
             var used = links.SelectMany(l => new[] { l.From, l.To }).ToHashSet();
-            return new(types.Where(x => used.Contains(x.Type.Name!)).Select(x => new ContextualType(x.Type.Name!, x.Type.IsInternal ? x.Project.Name ?? "Project" : x.Type.AssemblyName ?? "External", [Short(x.Type.Name!)])).ToArray(), links.Distinct().ToArray());
+            return new(types.Where(x => used.Contains(x.Type.Name!)).Select(x => new ContextualType(x.Type.Name!, x.Type.IsInternal ? x.Project.Name ?? "Project" : x.Type.AssemblyName ?? "External", [Short(x.Type.Name!)])).ToArray(), links.Distinct().ToArray()) { Trees = compositionTrees.Build(model) };
         }
         var data = types.Where(x => Data(x.Type)).ToArray();
         foreach (var item in data)
@@ -33,7 +33,7 @@ internal sealed class ContextualModelService : IContextualModelService
             links.Add(new(item.Type.Name!, name, member.Name + (many ? " [many]" : " [single]")));
         }
         return new(data.Select(x => new ContextualType(x.Type.Name!, x.Type.IsInternal ? x.Project.Name ?? "Project" : x.Type.AssemblyName ?? "External",
-            new[] { Short(x.Type.Name!) }.Concat((x.Type.Properties ?? []).Select(p => p.Name + ": " + Short(p.Type ?? "?")))
-            .Concat((x.Type.Fields ?? []).Select(f => f.Name + ": " + Short(f.Type ?? "?"))).ToArray())).ToArray(), links.Distinct().ToArray());
+            new[] { Short(x.Type.Name!) }.Concat((x.Type.Properties ?? []).Select(p => Short(p.Type ?? "?") + " : " + p.Name))
+            .Concat((x.Type.Fields ?? []).Select(f => Short(f.Type ?? "?") + " : " + f.Name)).ToArray())).ToArray(), links.Distinct().ToArray());
     }
 }

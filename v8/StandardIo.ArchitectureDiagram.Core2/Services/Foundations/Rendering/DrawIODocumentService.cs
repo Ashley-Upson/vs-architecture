@@ -22,7 +22,7 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
             foreach (RenderNode node in drawing.Nodes)
             {
                 string fill = node.Fill;
-                root.Add(content: new XElement("mxCell", new XAttribute("id", node.Id), new XAttribute("parent", drawing.Id), new XAttribute("value", string.Join("<br>", node.TextLines.Select(line => "<span style=\"font-size:" + line.FontSize.ToString(CultureInfo.InvariantCulture) + "px;font-weight:" + (line.Bold ? "bold" : "normal") + "\">" + System.Net.WebUtility.HtmlEncode(line.Text) + "</span>"))), new XAttribute("typeName", node.TypeName), new XAttribute("vertex", "1"), new XAttribute("style", "rounded=0;html=1;whiteSpace=wrap;fontColor=#ffffff;fontSize=12;fillColor=" + fill + ";"), Geometry(x: node.X, y: node.Y, width: node.Width, height: node.Height)));
+                root.Add(content: new XElement("mxCell", new XAttribute("id", node.Id), new XAttribute("parent", drawing.Id), new XAttribute("value", NodeLabel(node)), new XAttribute("typeName", node.TypeName), new XAttribute("vertex", "1"), new XAttribute("style", "rounded=0;html=1;whiteSpace=wrap;fontColor=#ffffff;fontSize=12;fillColor=" + fill + ";"), Geometry(x: node.X, y: node.Y, width: node.Width, height: node.Height)));
             }
 
 
@@ -31,7 +31,7 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
                 bool inheritance = route.Inheritance;
                 var source = drawing.Nodes.Single(node => node.Id == route.SourceId);
                 string exitX = ((route.Points[0].X - source.X) / source.Width).ToString(CultureInfo.InvariantCulture);
-                root.Add(content: new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", drawing.Id), new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId), new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;html=0;strokeColor=" + route.Stroke + ";fontColor=#ffffff;labelBackgroundColor=#263242;exitX=" + exitX + ";exitY=1;entryX=0.5;entryY=0;exitPerimeter=0;entryPerimeter=0;" + (inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(count: 1).Take(count: route.Points.Length - 2).Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
+                root.Add(content: new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", drawing.Id), new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId), new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;html=0;strokeColor=" + route.Stroke + ";fontColor=#ffffff;labelBackgroundColor=#263242;exitX=" + exitX + (route.IsTree ? ";exitY=1;entryX=0;entryY=0.5;" : ";exitY=1;entryX=0.5;entryY=0;") + "exitPerimeter=0;entryPerimeter=0;" + (route.IsTree ? "endArrow=none;" : inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")), new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"), new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(count: 1).Take(count: route.Points.Length - 2).Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));
             }
         }
 
@@ -50,6 +50,13 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
 
         var file = new XDocument(new XElement("mxfile", new XAttribute("host", "app.diagrams.net"), new XElement("diagram", new XAttribute("id", renderModel.DiagramType.ToString()), new XAttribute("name", renderModel.DiagramType == DiagramTypes.DataModel ? "Entity Relationship" : renderModel.DiagramType.ToString()), new XElement("mxGraphModel", new XAttribute("grid", "0"), new XAttribute("page", "0"), new XAttribute("gridSize", "10"), root))));
         return Encoding.UTF8.GetBytes(s: file.ToString(options: SaveOptions.DisableFormatting));
+    }
+
+    private static string NodeLabel(RenderNode node)
+    {
+        string Span(RenderText line) => "<span style=\"font-size:" + line.FontSize.ToString(CultureInfo.InvariantCulture) + "px;font-weight:" + (line.Bold ? "bold" : "normal") + "\">" + System.Net.WebUtility.HtmlEncode(line.Text) + "</span>";
+        if (!node.HasHeader) return string.Join("<br>",node.TextLines.Select(Span));
+        return "<div style=\"text-align:left\"><div style=\"text-align:center;border-bottom:1px solid #94a3b8;padding-bottom:8px;margin-bottom:8px\">" + Span(node.TextLines[0]) + "</div>" + string.Join("<br>",node.TextLines.Skip(1).Select(Span)) + "</div>";
     }
 
     private static XElement Geometry(double x, double y, double width, double height) =>

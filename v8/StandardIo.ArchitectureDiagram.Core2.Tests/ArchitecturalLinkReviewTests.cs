@@ -61,7 +61,7 @@ public sealed class ArchitecturalLinkReviewTests
         foreach (IDiagramRenderer renderer in new IDiagramRenderer[] { TestServices.Get<HtmlDiagramRenderer>(), TestServices.Get<DrawIODiagramRenderer>() })
         {
             var document = System.Xml.Linq.XDocument.Parse(System.Text.Encoding.UTF8.GetString(renderer.Render(new RenderModel(projects, diagramType: DiagramTypes.Composition))));
-            Assert.Contains(document.Descendants(), e => (string?)e.Attribute("class") == "link composition" || ((string?)e.Attribute("style"))?.Contains("dashPattern=2 4") == true);
+            Assert.Contains(document.Descendants(), e => (string?)e.Attribute("class") == "link tree" || ((string?)e.Attribute("style"))?.Contains("endArrow=none;") == true);
         }
     }
 }

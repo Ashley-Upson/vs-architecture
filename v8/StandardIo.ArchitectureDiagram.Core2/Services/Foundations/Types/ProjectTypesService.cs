@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Brokers.Roslyn;
 
@@ -56,10 +57,43 @@ internal sealed class ProjectTypesService : IProjectTypesService
 
             identities.Add(key: name, value: identity);
             bool isInternal = SymbolEqualityComparer.Default.Equals(x: type.ContainingAssembly, y: compilation.Assembly);
-            types.Add(item: CreateType(type: type, isInternal: isInternal));
+            var model = CreateType(type: type, isInternal: isInternal);
+            if (isInternal) model.CompositionMembers = ExtractCompositionMembers(compilation, type, cancellationToken);
+            types.Add(model);
         }
 
         project.Types = types.ToArray();
+    }
+
+    private CompositionMember[]? ExtractCompositionMembers(Compilation compilation, INamedTypeSymbol type, CancellationToken cancellationToken)
+    {
+        var members = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        void Add(string member, ITypeSymbol? target)
+        {
+            if (target is not INamedTypeSymbol named) return;
+            if (!members.TryGetValue(member, out var names)) members[member] = names = new(StringComparer.Ordinal);
+            names.Add(roslynBroker.GetTypeName(named.OriginalDefinition));
+        }
+        foreach (var constructor in type.InstanceConstructors.Where(c => !c.IsImplicitlyDeclared))
+        {
+            if (!members.ContainsKey(".ctor")) members[".ctor"] = new(StringComparer.Ordinal);
+            foreach (var parameter in constructor.Parameters) Add(".ctor", parameter.Type);
+        }
+        foreach (var declaration in type.DeclaringSyntaxReferences)
+        {
+            var syntax = roslynBroker.GetSyntax(declaration, cancellationToken);
+            var semantic = roslynBroker.GetSemanticModel(compilation, syntax.SyntaxTree);
+            foreach (var node in syntax.DescendantNodes())
+            {
+                if (semantic.GetEnclosingSymbol(node.SpanStart, cancellationToken) is not IMethodSymbol method ||
+                    !SymbolEqualityComparer.Default.Equals(method.ContainingType, type)) continue;
+                if (node is TypeOfExpressionSyntax typeOf) Add(method.Name, semantic.GetTypeInfo(typeOf.Type, cancellationToken).Type);
+                if (node is InvocationExpressionSyntax invocation && semantic.GetSymbolInfo(invocation, cancellationToken).Symbol is IMethodSymbol target)
+                    foreach (var argument in target.TypeArguments) Add(method.Name, argument);
+            }
+        }
+        return members.Count == 0 ? null : members.OrderBy(m => m.Key, StringComparer.Ordinal)
+            .Select(m => new CompositionMember(m.Key, m.Value.OrderBy(n => n, StringComparer.Ordinal).ToArray())).ToArray();
     }
 
     private DefinedType CreateType(INamedTypeSymbol type, bool isInternal)

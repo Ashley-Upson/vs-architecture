@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IContextualLayoutService { RenderModel Layout(RenderModel model, ContextualDiagram diagram); }
-internal sealed class ContextualLayoutService : IContextualLayoutService
+internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout) : IContextualLayoutService
 {
     public RenderModel Layout(RenderModel model, ContextualDiagram diagram)
     {
+        if (diagram.Trees is not null) return treeLayout.Layout(model, diagram.Trees);
         bool composition = model.DiagramType == DiagramTypes.Composition;
         double nodeWidth = composition ? model.Configuration.Composition.NodeWidth : model.Configuration.DataModel.NodeWidth;
         double nodeSpacing = composition ? model.Configuration.Composition.NodeSpacing : model.Configuration.DataModel.NodeSpacing;
@@ -27,11 +28,11 @@ internal sealed class ContextualLayoutService : IContextualLayoutService
                 foreach (var type in row)
                 {
                     double x = 40 + column++ * (width + nodeSpacing), y = rowTop;
-                    double height = Math.Max(60, type.Lines.Length * 18 + 24);
-                    var lines = type.Lines.Select((text, i) => new RenderText(text, x + width / 2, y + 20 + i * 18, i == 0, i == 0 ? 12 : 11)).ToArray();
-                    nodes.Add(new RenderNode("context-node-" + id++, type.Name, string.Join("\n", type.Lines), composition ? "#075985" : "#166534", x, y, width, height, lines));
+                    double height = Math.Max(60, type.Lines.Length * 18 + 36);
+                    var lines = type.Lines.Select((text, i) => new RenderText(text, i == 0 ? x + width / 2 : x + 12, y + (i == 0 ? 20 : 32 + i * 18), i == 0, i == 0 ? 12 : 11)).ToArray();
+                    nodes.Add(new RenderNode("context-node-" + id++, type.Name, string.Join("\n", type.Lines), composition ? "#075985" : "#166534", x, y, width, height, lines) { HasHeader = !composition });
                 }
-                rowTop += row.Max(type => Math.Max(60, type.Lines.Length * 18 + 24)) + rowSpacing;
+                rowTop += row.Max(type => Math.Max(60, type.Lines.Length * 18 + 36)) + rowSpacing;
             }
             double h = nodes.Max(n => n.Y + n.Height) + 50;
             projects.Add(new RenderProject("context-project-" + projects.Count, group.Key, 40, top, nodes.Max(n => n.X + n.Width) + 40, h, nodes.ToArray(), []));
@@ -75,7 +76,7 @@ internal sealed class ContextualLayoutService : IContextualLayoutService
     private static IEnumerable<ContextualType[]> Rows(ContextualType[] types, ContextualLink[] links, bool composition, double width, double spacing, double rowSpacing)
     {
         // Choose capacity from occupied area rather than forcing every graph into four columns.
-        double averageHeight = types.Average(t => Math.Max(60, t.Lines.Length * 18 + 24));
+        double averageHeight = types.Average(t => Math.Max(60, t.Lines.Length * 18 + 36));
         int columns = Math.Max(4, (int)Math.Ceiling(Math.Sqrt(types.Length * (averageHeight + rowSpacing) * 1.5 / (width + spacing))));
         if (!composition) return NeighboursFirst(types, links).Chunk(columns);
         var names = types.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
