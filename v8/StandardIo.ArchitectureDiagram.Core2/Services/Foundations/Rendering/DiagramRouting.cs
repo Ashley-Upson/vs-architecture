@@ -10,7 +10,7 @@ namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal static class DiagramRouting
 {
     internal static DrawingRoute[] CreateRoutes(ProjectModelDrawing drawing, RenderConfiguration? configuration = null,
-        IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes = null)
+        IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes = null, DiagramTypes diagramType = DiagramTypes.Architecture)
     {
         double horizontalOffset = (configuration ?? new()).HorizontalOffset;
         if (!double.IsFinite(horizontalOffset) || horizontalOffset <= 0)
@@ -55,6 +55,17 @@ internal static class DiagramRouting
             double sourceX = sourceExits[link];
             double targetX = to.X + to.Width / 2;
             double busY = busHeights[link.ToType!];
+            bool preferFewestBends = diagramType == DiagramTypes.Architecture && configuration is { NoDuplicates: false };
+            if (preferFewestBends && to.Y > from.Y + from.Height)
+            {
+                double nextRow = drawing.Nodes.Where(node => node.Y > from.Y + from.Height)
+                    .Select(node => node.Y).DefaultIfEmpty(to.Y).Min();
+                double departure = (from.Y + from.Height + nextRow) / 2;
+                DrawingPoint[] direct = [new(sourceX, from.Y + from.Height), new(sourceX, departure),
+                    new(targetX, departure), new(targetX, to.Y)];
+                if (Clear(direct, drawing.Nodes.Where(node => node.Id != from.Id && node.Id != to.Id).ToArray(), horizontalOffset))
+                    return new DrawingRoute(link, direct);
+            }
             var obstacles = drawing.Nodes.Where(node => node.Id != from.Id && node.Id != to.Id
                 && node.Y < busY && node.Y + node.Height > from.Y + from.Height).ToArray();
             if (obstacles.Any(node => sourceX > node.X && sourceX < node.X + node.Width))
@@ -86,7 +97,7 @@ internal static class DiagramRouting
                 points.Add(new(column, busY));
                 points.Add(new(targetX, busY));
                 points.Add(new(targetX, to.Y));
-                return new DrawingRoute(link, PreferContinuousCorridor(points.ToArray(), obstacles, clearance));
+                return new DrawingRoute(link, PreferContinuousCorridor(points.ToArray(), obstacles, clearance, preferFewestBends));
             }
             return new DrawingRoute(link, new[]
             {
@@ -100,20 +111,21 @@ internal static class DiagramRouting
         return routes;
     }
 
-    private static DrawingPoint[] PreferContinuousCorridor(DrawingPoint[] original, DrawingNode[] obstacles, double clearance)
+    private static DrawingPoint[] PreferContinuousCorridor(DrawingPoint[] original, DrawingNode[] obstacles, double clearance, bool preferFewestBends)
     {
         if (original.Length <= 6) return original;
         double Length(DrawingPoint[] points) => points.Zip(points.Skip(1)).Sum(pair => Math.Abs(pair.First.X - pair.Second.X) + Math.Abs(pair.First.Y - pair.Second.Y));
-        bool Clear(DrawingPoint[] points) => points.Zip(points.Skip(1)).All(pair => obstacles.All(node =>
-            pair.First.X == pair.Second.X
-                ? pair.First.X <= node.X - clearance || pair.First.X >= node.X + node.Width + clearance || Math.Max(pair.First.Y, pair.Second.Y) <= node.Y || Math.Min(pair.First.Y, pair.Second.Y) >= node.Y + node.Height
-                : pair.First.Y <= node.Y || pair.First.Y >= node.Y + node.Height || Math.Max(pair.First.X, pair.Second.X) <= node.X || Math.Min(pair.First.X, pair.Second.X) >= node.X + node.Width));
         return obstacles.SelectMany(node => new[] { node.X - clearance, node.X + node.Width + clearance })
             .Append(original[0].X).Append(original[^1].X).Distinct()
             .Select(column => new[] { original[0], original[1], new DrawingPoint(column, original[1].Y), new DrawingPoint(column, original[^2].Y), original[^2], original[^1] })
-            .Where(points => Length(points) <= Length(original) + 0.001 && Clear(points))
+            .Where(points => (preferFewestBends || Length(points) <= Length(original) + 0.001) && Clear(points, obstacles, clearance))
             .OrderBy(Length).FirstOrDefault() ?? original;
     }
+
+    private static bool Clear(DrawingPoint[] points, DrawingNode[] obstacles, double clearance) => points.Zip(points.Skip(1)).All(pair => obstacles.All(node =>
+            pair.First.X == pair.Second.X
+                ? pair.First.X <= node.X - clearance || pair.First.X >= node.X + node.Width + clearance || Math.Max(pair.First.Y, pair.Second.Y) <= node.Y || Math.Min(pair.First.Y, pair.Second.Y) >= node.Y + node.Height
+                : pair.First.Y <= node.Y || pair.First.Y >= node.Y + node.Height || Math.Max(pair.First.X, pair.Second.X) <= node.X || Math.Min(pair.First.X, pair.Second.X) >= node.X + node.Width));
 
     private static void SeparateHorizontalSegments(DrawingRoute[] routes, Dictionary<string, DrawingNode> nodes,
         double horizontalOffset, IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes)

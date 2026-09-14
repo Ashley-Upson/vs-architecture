@@ -132,7 +132,7 @@ internal sealed class ContextualLayoutService(ICompositionTreeLayoutService tree
             .Where(e => byId[e.TargetId].Y > byId[e.SourceId].Y + byId[e.SourceId].Height).ToArray();
         if (edges.Length == 0) return;
         var source = new ProjectModel { Dependencies = edges.Select(e => new TypeRelationship { FromType = e.SourceId, ToType = e.TargetId, DependencyType = DependencyType.Consumed }).ToArray() };
-        var routes = DiagramRouting.CreateRoutes(new ProjectModelDrawing("context", source, 0, model.Width, model.Height, nodes), model.Configuration);
+        var routes = DiagramRouting.CreateRoutes(new ProjectModelDrawing("context", source, 0, model.Width, model.Height, nodes), model.Configuration, diagramType: model.DiagramType);
         var points = edges.Select((e, i) => (e.Id, routes[i].Points)).ToDictionary(x => x.Id, x => x.Points);
         foreach (var project in model.Projects)
         for (int i = 0; i < project.Connections.Length; i++)

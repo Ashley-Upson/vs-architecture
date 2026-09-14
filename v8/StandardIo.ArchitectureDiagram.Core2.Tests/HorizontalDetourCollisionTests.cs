@@ -28,8 +28,10 @@ public sealed class HorizontalDetourCollisionTests
         Assert.All(routes, route => Assert.InRange(route.Points[1].Y, 61, 159));
     }
 
-    [Fact]
-    public void ShouldSeparateCrossProjectDetoursFromExistingInternalBuses()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldSeparateCrossProjectDetoursFromExistingInternalBuses(bool noDuplicates)
     {
         var owner = new RenderProject("owner", "Owner", 40, 40, 800, 300,
             [RenderNode("Source", 0, 0), RenderNode("Child", 400, 160), RenderNode("Obstacle", 0, 160)],
@@ -40,13 +42,14 @@ public sealed class HorizontalDetourCollisionTests
         {
             CrossProjectConnections = [new RenderConnection("cross", "Source", "External", "Source", "External", false, [])]
         };
+        model.Configuration.NoDuplicates = noDuplicates;
         new RoutingLayoutRuleProcessingService().ApplyRule(model);
 
         new CrossProjectRoutingLayoutRuleProcessingService().ApplyRule(model);
 
         var local = owner.Connections[0].Points.Select(p => new DrawingPoint(p.X + owner.X, p.Y + owner.Y)).ToArray();
         var cross = model.CrossProjectConnections[0].Points;
-        Assert.Equal(6, cross.Length);
+        Assert.Equal(noDuplicates ? 6 : 4, cross.Length);
         AssertNoHorizontalCollision(local, cross);
         Assert.Equal(new DrawingPoint(130, 100), cross[0]);
         Assert.Equal(new DrawingPoint(730, 360), cross[^1]);
