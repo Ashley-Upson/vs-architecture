@@ -54,7 +54,7 @@ internal sealed class CompositionTreeLayoutService : ICompositionTreeLayoutServi
         }
         // Route reference links through a band above the containers. Tree coordinates
         // remain local; cross-container links use document coordinates in both writers.
-        if(links.Count>0)
+        if(model.DiagramType != DiagramTypes.Composition && links.Count>0)
         {
             var targets=links.Select(l=>l.Target).Distinct().ToArray();
             double band=targets.Length*4+40;
