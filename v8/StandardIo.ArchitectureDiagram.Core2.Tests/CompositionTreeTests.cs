@@ -9,13 +9,53 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class CompositionTreeTests
 {
     [Fact]
-    public void ShouldNotExpandRuntimeCallsAsCompositionReferences()
+    public async Task ShouldLabelAnonymousFunctionReferencesAsLambdaExpressions()
+    {
+        var model=await ConcreteCallChainTests.ExtractAsync("""
+            public class Child { public void Run() {} }
+            public class Root {
+                public void Register() { System.Action callback = () => { System.Action nested = () => { _ = typeof(Child); }; }; }
+            }
+            """);
+        var root=model.Types!.Single(t=>t.Name=="Root");
+        Assert.Equal("",Assert.Single(root.CompositionMembers!).Name);
+        Assert.Equal(new[]{"Child"},root.CompositionMembers![0].TypeNames);
+        var trees=TestServices.Get<ICompositionTreeService>().Build(new RenderModel([model]));
+        Assert.Contains(trees.SelectMany(t=>t.Nodes),n=>n.Label=="Lambda Expression");
+        Assert.All(trees.SelectMany(t=>t.Nodes),n=>Assert.False(string.IsNullOrWhiteSpace(n.Label)));
+    }
+    [Fact]
+    public void ShouldOrderTreesLargestFirstWithoutWrappingOrChangingTheirInternalLayout()
+    {
+        CompositionTree Tree(string name, int count) => new(name,Enumerable.Range(0,count)
+            .Select(i=>new CompositionTreeNode(name+i,name,name+i,i==0?0:1,i==0?null:name+"0")).ToArray());
+        var trees=new[] { Tree("Small",2), Tree("Z",5), Tree("Large",12), Tree("A",5) };
+        var model=new RenderModel([],diagramType:DiagramTypes.Composition);
+        var service=TestServices.Get<ICompositionTreeLayoutService>();
+        var layout=service.Layout(model,trees);
+        Assert.Equal(new[]{"Large","A","Z","Small"},layout.Projects.Select(p=>p.Name));
+        Assert.All(layout.Projects,p=>Assert.Equal(40,p.Y));
+        for(int i=1;i<layout.Projects.Length;i++)
+            Assert.Equal(layout.Projects[i-1].X+layout.Projects[i-1].Width+model.Configuration.Composition.ProjectSpacing,layout.Projects[i].X);
+        foreach(var tree in trees)
+        {
+            var alone=service.Layout(new RenderModel([],diagramType:DiagramTypes.Composition),[tree]).Projects.Single();
+            var grouped=layout.Projects.Single(p=>p.Name==tree.Title);
+            Assert.Equal(alone.Nodes.Select(n=>(n.Id,n.Label,n.X,n.Y,n.Width,n.Height)),grouped.Nodes.Select(n=>(n.Id,n.Label,n.X,n.Y,n.Width,n.Height)));
+            Assert.Equal(alone.Connections.SelectMany(e=>e.Points),grouped.Connections.SelectMany(e=>e.Points));
+        }
+        Assert.Equal(layout.Projects.Max(p=>p.Height)+80,layout.Height);
+    }
+    [Fact]
+    public void ShouldShowRuntimeMethodDependenciesWithoutExpandingTheirCallChains()
     {
         DefinedType Type(string name) => new() { Name=name,IsInternal=true,HasDeclaredBehaviour=true,Methods=[new() {Name="Run"}] };
-        var project=new ProjectModel { Name="P",Types=[Type("Caller"),Type("Runtime")],Dependencies=[new() {FromType="Caller",ToType="Runtime",FromMethod="Run",DependencyType=DependencyType.Consumed}] };
+        var project=new ProjectModel { Name="P",Types=[Type("Caller"),Type("Runtime"),Type("Next")],Dependencies=[new() {FromType="Caller",ToType="Runtime",FromMethod="Run",ToMethod="Run",DependencyType=DependencyType.Consumed},new() {FromType="Runtime",ToType="Next",FromMethod="Run",ToMethod="Execute",DependencyType=DependencyType.Consumed}] };
         var trees=TestServices.Get<ICompositionTreeService>().Build(new RenderModel([project]));
         var caller=trees.Single(t=>t.Title=="P / Caller");
-        Assert.DoesNotContain(caller.Nodes,n=>n.TypeName=="Runtime");
+        var dependency=Assert.Single(caller.Nodes,n=>n.Label=="Runtime → Run");
+        Assert.DoesNotContain(caller.Nodes,n=>n.ParentId==dependency.Id);
+        Assert.DoesNotContain(caller.Nodes,n=>n.TypeName=="Next");
     }
     [Fact]
     public async Task ShouldRetainConstructorAndReferenceOnlyMethodAttribution()

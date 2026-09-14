@@ -13,6 +13,10 @@ internal sealed class CompositionTreeService : ICompositionTreeService
             .DistinctBy(x => x.Type.Name).Where(x => !x.Type.IsDataType && x.Type.HasDeclaredBehaviour != false &&
                 (x.Type.HasDeclaredBehaviour == true || x.Type.Methods is { Length: > 0 })).ToDictionary(x => x.Type.Name!);
         var links = model.ProjectModels.SelectMany(p => p.Dependencies ?? []).Where(d => d.IsComposition && d.DependencyType != DependencyType.Inheritance && !d.IsResultExtension).ToLookup(d => d.FromType!);
+        var calls = model.ProjectModels.SelectMany(p => p.Dependencies ?? [])
+            .Where(d => !d.IsComposition && !d.IsResultExtension && d.DependencyType != DependencyType.Inheritance &&
+                d.FromMethod != null && d.ToMethod != null && d.ToType != null && owned.ContainsKey(d.ToType))
+            .ToLookup(d => d.FromType!);
         IEnumerable<string> Targets(string name) => links[name].Select(d => d.ToType!).Concat((owned[name].Type.CompositionMembers ?? []).SelectMany(m => m.TypeNames)).Where(owned.ContainsKey).Where(n => n != name).Distinct();
         var incoming = owned.Keys.SelectMany(Targets).ToHashSet(StringComparer.Ordinal);
         var roots = owned.Keys.Where(n => !incoming.Contains(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
@@ -44,14 +48,18 @@ internal sealed class CompositionTreeService : ICompositionTreeService
                 foreach (var method in type.Methods ?? []) members.TryAdd(method.Name!, []);
                 foreach (var group in links[name].Where(d => d.FromMethod != null).GroupBy(d => d.FromMethod!))
                     members[group.Key] = members.GetValueOrDefault(group.Key, []).Concat(group.Select(d => d.ToType!));
+                foreach (var call in calls[name]) members.TryAdd(call.FromMethod!, []);
                 var attributed = members.Values.SelectMany(n => n).ToHashSet();
                 var other = links[name].Where(d => d.FromMethod == null && !attributed.Contains(d.ToType!)).Select(d => d.ToType!).Distinct().Where(owned.ContainsKey).ToArray();
                 if (other.Length > 0) members["Type references"] = other;
                 foreach (var member in members.OrderBy(m => m.Key == ".ctor" ? "" : m.Key, StringComparer.Ordinal))
                 {
-                    string memberId = Add(name,member.Key == ".ctor" ? "Constructor" : member.Key,depth+1,id);
+                    string memberId = Add(name,member.Key.Length == 0 ? "Lambda Expression" : member.Key == ".ctor" ? "Constructor" : member.Key,depth+1,id);
                     foreach (string target in member.Value.Distinct().Where(owned.ContainsKey).OrderBy(n => n,StringComparer.Ordinal))
                         Expand(target,depth+2,memberId,next);
+                    foreach (var call in calls[name].Where(d => d.FromMethod == member.Key).DistinctBy(d => (d.ToType,d.ToMethod))
+                        .OrderBy(d => d.ToType,StringComparer.Ordinal).ThenBy(d => d.ToMethod,StringComparer.Ordinal))
+                        Add(call.ToType!,Short(call.ToType!) + " → " + call.ToMethod,depth+2,memberId);
                 }
             }
             Expand(root,0,null,new(StringComparer.Ordinal));

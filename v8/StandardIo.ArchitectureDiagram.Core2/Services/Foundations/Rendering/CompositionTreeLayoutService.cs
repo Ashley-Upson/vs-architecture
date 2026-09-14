@@ -10,7 +10,7 @@ internal sealed class CompositionTreeLayoutService : ICompositionTreeLayoutServi
     {
         var config = model.Configuration.Composition;
         var projects = new List<RenderProject>();
-        foreach (var tree in trees)
+        foreach (var tree in trees.OrderByDescending(t => t.Nodes.Length).ThenBy(t => t.Title, StringComparer.Ordinal))
         {
             var nodes = tree.Nodes.Select((n,i) => new RenderNode(n.Id,n.TypeName,n.Label,n.Depth == 0 ? "#075985" : "#334155",
                 40+n.Depth*28,60+i*44,config.NodeWidth,30,
@@ -25,16 +25,14 @@ internal sealed class CompositionTreeLayoutService : ICompositionTreeLayoutServi
             projects.Add(new("composition-"+projects.Count,tree.Title,0,0,nodes.Max(n=>n.X+n.Width)+40,nodes.Max(n=>n.Y+n.Height)+40,nodes,edges));
         }
         double spacing = config.ProjectSpacing;
-        double limit = Math.Max(projects.Select(p=>p.Width).DefaultIfEmpty(400).Max(),Math.Sqrt(projects.Sum(p=>(p.Width+spacing)*(p.Height+spacing))*1.5));
-        double x=40,y=40,height=0;
+        double x=40,height=0;
         for(int i=0;i<projects.Count;i++)
         {
             var p=projects[i];
-            if(x>40 && x+p.Width>limit) { x=40; y+=height+spacing; height=0; }
-            projects[i]=p with { X=x,Y=y }; x+=p.Width+spacing; height=Math.Max(height,p.Height);
+            projects[i]=p with { X=x,Y=40 }; x+=p.Width+spacing; height=Math.Max(height,p.Height);
         }
         model.Projects=projects.ToArray();model.CrossProjectConnections=[];
-        model.Width=projects.Select(p=>p.X+p.Width+40).DefaultIfEmpty(400).Max();model.Height=y+height+40;
+        model.Width=projects.Select(p=>p.X+p.Width+40).DefaultIfEmpty(400).Max();model.Height=height+80;
         return model;
     }
 }
