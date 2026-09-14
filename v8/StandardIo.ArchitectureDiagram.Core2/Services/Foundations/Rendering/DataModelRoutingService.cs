@@ -13,6 +13,12 @@ internal sealed class DataModelRoutingService : IDataModelRoutingService
         var xs=nodes.SelectMany(n=>new[]{n.X-16,n.X+n.Width+16}).Distinct().ToArray();
         var ys=nodes.SelectMany(n=>new[]{n.Y-16,n.Y+n.Height+16}).Distinct().ToArray();
         DrawingPoint[] Ports(RenderNode n)=>[new(n.X,n.Y+n.Height/2),new(n.X+n.Width,n.Y+n.Height/2),new(n.X+n.Width/2,n.Y),new(n.X+n.Width/2,n.Y+n.Height)];
+        DrawingPoint Stub(RenderNode n,DrawingPoint p)=>p.X==n.X?new(p.X-16,p.Y):p.X==n.X+n.Width?new(p.X+16,p.Y):p.Y==n.Y?new(p.X,p.Y-16):new(p.X,p.Y+16);
+        bool Outside(RenderNode n,DrawingPoint port,DrawingPoint outside)=>
+            port.X==n.X && outside.X<port.X && outside.Y==port.Y ||
+            port.X==n.X+n.Width && outside.X>port.X && outside.Y==port.Y ||
+            port.Y==n.Y && outside.Y<port.Y && outside.X==port.X ||
+            port.Y==n.Y+n.Height && outside.Y>port.Y && outside.X==port.X;
         bool Clear(DrawingPoint[] points)
         {
             for(int i=1;i<points.Length;i++)
@@ -41,12 +47,13 @@ internal sealed class DataModelRoutingService : IDataModelRoutingService
             foreach(var a in Ports(byId[edge.SourceId]))
             foreach(var b in Ports(byId[edge.TargetId]))
             {
-                candidates.Add([a,new(a.X,b.Y),b]);candidates.Add([a,new(b.X,a.Y),b]);
-                foreach(double x in xs)candidates.Add([a,new(x,a.Y),new(x,b.Y),b]);
-                foreach(double y in ys)candidates.Add([a,new(a.X,y),new(b.X,y),b]);
+                var start=Stub(byId[edge.SourceId],a);var end=Stub(byId[edge.TargetId],b);
+                candidates.Add([a,start,new(start.X,end.Y),end,b]);candidates.Add([a,start,new(end.X,start.Y),end,b]);
+                foreach(double x in xs)candidates.Add([a,start,new(x,start.Y),new(x,end.Y),end,b]);
+                foreach(double y in ys)candidates.Add([a,start,new(start.X,y),new(end.X,y),end,b]);
             }
             double Cost(DrawingPoint[] points)=>points.Zip(points.Skip(1)).Sum(p=>Math.Abs(p.First.X-p.Second.X)+Math.Abs(p.First.Y-p.Second.Y))+(points.Length-2)*12;
-            return candidates.Select(Simplify).Where(p=>p.Length>=(edge.SourceId==edge.TargetId?4:2) && p[0]!=p[^1]).OrderBy(Cost).FirstOrDefault(Clear) ?? edge.Points;
+            return candidates.Select(Simplify).Where(p=>p.Length>=(edge.SourceId==edge.TargetId?4:2) && p[0]!=p[^1]).Where(p=>Outside(byId[edge.SourceId],p[0],p[1])&&Outside(byId[edge.TargetId],p[^1],p[^2])).OrderBy(Cost).FirstOrDefault(Clear) ?? edge.Points;
         }
         foreach(var project in model.Projects)
         for(int i=0;i<project.Connections.Length;i++)

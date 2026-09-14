@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IContextualLayoutService { RenderModel Layout(RenderModel model, ContextualDiagram diagram); }
-internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout, ICallChainLayoutService callChains, IDataModelRoutingService dataRoutes) : IContextualLayoutService
+internal sealed class ContextualLayoutService(ICompositionTreeLayoutService treeLayout, ICallChainLayoutService callChains, IDataModelRoutingService dataRoutes, IDataModelArrangementService dataArrangement) : IContextualLayoutService
 {
     public RenderModel Layout(RenderModel model, ContextualDiagram diagram)
     {
@@ -35,6 +35,7 @@ internal sealed class ContextualLayoutService(ICompositionTreeLayoutService tree
                 }
                 rowTop += row.Max(type => Math.Max(60, type.Lines.Length * 18 + 36)) + rowSpacing;
             }
+            if (!composition) nodes=dataArrangement.Arrange(nodes.ToArray(),diagram.Links,model.Configuration.DataModel).ToList();
             double h = nodes.Max(n => n.Y + n.Height) + 50;
             projects.Add(new RenderProject("context-project-" + projects.Count, string.IsNullOrEmpty(group.Key.NamespaceGroup)?group.Key.Project:group.Key.Project+" / "+group.Key.NamespaceGroup, 40, top, nodes.Max(n => n.X + n.Width) + 40, h, nodes.ToArray(), []));
             top += h + projectSpacing;

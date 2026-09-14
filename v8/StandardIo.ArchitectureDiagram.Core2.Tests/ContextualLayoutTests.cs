@@ -7,6 +7,33 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class ContextualLayoutTests
 {
     [Fact]
+    public void ShouldEnterAndLeaveEntityEdgesPerpendicularly()
+    {
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
+            new([new("A","Project",Enumerable.Repeat("member",10).ToArray()),new("B","Project",["B"])],[new("A","B","item")]));
+        var project=Assert.Single(model.Projects);var edge=Assert.Single(project.Connections);
+        var a=project.Nodes.Single(n=>n.Id==edge.SourceId);var b=project.Nodes.Single(n=>n.Id==edge.TargetId);
+        Assert.True(Outside(a,edge.Points[0],edge.Points[1]));
+        Assert.True(Outside(b,edge.Points[^1],edge.Points[^2]));
+    }
+    private static bool Outside(RenderNode node,DrawingPoint port,DrawingPoint outside) =>
+        port.X==node.X && outside.X<port.X && outside.Y==port.Y ||
+        port.X==node.X+node.Width && outside.X>port.X && outside.Y==port.Y ||
+        port.Y==node.Y && outside.Y<port.Y && outside.X==port.X ||
+        port.Y==node.Y+node.Height && outside.Y>port.Y && outside.X==port.X;
+    [Fact]
+    public void ShouldArrangeChildrenAroundRootAndSeparateUnattachedEntities()
+    {
+        var types=new[]{"Unattached","A","B","C","D","Root"}.Select(n=>new ContextualType(n,"Project",[n])).ToArray();
+        var links=new[]{"A","B","C","D"}.Select(n=>new ContextualLink("Root",n,"child")).ToArray();
+        var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),new(types,links));
+        var nodes=Assert.Single(model.Projects).Nodes;var root=nodes.Single(n=>n.TypeName=="Root");
+        var children=nodes.Where(n=>new[]{"A","B","C","D"}.Contains(n.TypeName)).ToArray();
+        Assert.True(children.Min(n=>n.X)<root.X && children.Max(n=>n.X)>root.X);
+        Assert.True(children.Min(n=>n.Y)<root.Y && children.Max(n=>n.Y)>root.Y);
+        Assert.True(nodes.Single(n=>n.TypeName=="Unattached").Y>=nodes.Where(n=>n.TypeName!="Unattached").Max(n=>n.Y+n.Height)+model.Configuration.DataModel.RowSpacing);
+    }
+    [Fact]
     public void ShouldRetainVisibleSelfRelationships()
     {
         var model=TestServices.Get<IContextualLayoutService>().Layout(new RenderModel([],diagramType:DiagramTypes.DataModel),
