@@ -40,9 +40,14 @@ internal sealed class DrawIODocumentService : IDrawIODocumentService
             var owner = renderModel.Projects.Single(project => project.Nodes.Any(node => node.Id == route.SourceId));
             var source = owner.Nodes.Single(node => node.Id == route.SourceId);
             string exitX = ((route.Points[0].X - owner.X - source.X) / source.Width).ToString(CultureInfo.InvariantCulture);
+            var targetOwner = renderModel.Projects.Single(project => project.Nodes.Any(node => node.Id == route.TargetId));
+            var target = targetOwner.Nodes.Single(node => node.Id == route.TargetId);
+            string exitY = ((route.Points[0].Y-owner.Y-source.Y)/source.Height).ToString(CultureInfo.InvariantCulture);
+            string entryX = ((route.Points[^1].X-targetOwner.X-target.X)/target.Width).ToString(CultureInfo.InvariantCulture);
+            string entryY = ((route.Points[^1].Y-targetOwner.Y-target.Y)/target.Height).ToString(CultureInfo.InvariantCulture);
             root.Add(new XElement("mxCell", new XAttribute("id", route.Id), new XAttribute("parent", "1"),
                 new XAttribute("edge", "1"), new XAttribute("value", route.Label ?? ""), new XAttribute("source", route.SourceId), new XAttribute("target", route.TargetId),
-                new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;strokeColor=" + route.Stroke + ";exitX=" + exitX + ";exitY=1;entryX=0.5;entryY=0;exitPerimeter=0;entryPerimeter=0;" + (route.Inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")),
+                new XAttribute("style", "edgeStyle=none;noEdgeStyle=1;rounded=0;strokeColor=" + route.Stroke + ";exitX=" + exitX + ";exitY=" + exitY + ";entryX=" + entryX + ";entryY=" + entryY + ";exitPerimeter=0;entryPerimeter=0;" + (route.Inheritance ? "endArrow=block;endFill=0;dashed=1;" : route.IsComposition ? "endArrow=classic;dashed=1;dashPattern=2 4;" : "endArrow=classic;")),
                 new XElement("mxGeometry", new XAttribute("relative", "1"), new XAttribute("as", "geometry"),
                     new XElement("Array", new XAttribute("as", "points"), route.Points.Skip(1).Take(route.Points.Length - 2)
                         .Select(point => new XElement("mxPoint", new XAttribute("x", point.X), new XAttribute("y", point.Y)))))));

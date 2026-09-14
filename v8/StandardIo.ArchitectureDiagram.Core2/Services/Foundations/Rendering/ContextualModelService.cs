@@ -14,7 +14,7 @@ internal sealed class ContextualModelService(ICompositionTreeService composition
         bool Data(DefinedType t) => t.IsDataType || t.HasDeclaredBehaviour == false || t.HasDeclaredBehaviour is null && t.Methods is { Length: 0 };
         string Short(string name) => Regex.Replace(name, @"(?:[A-Za-z_]\w*\.)+", "");
         var links = new List<ContextualLink>();
-        if (model.DiagramType == DiagramTypes.Composition)
+        if (model.DiagramType is DiagramTypes.Composition or DiagramTypes.CallChain)
         {
             var names = types.Where(x => !Data(x.Type)).Select(x => x.Type.Name!).ToHashSet();
             links.AddRange(model.ProjectModels.SelectMany(p => p.Dependencies ?? []).Where(d => d.IsComposition && names.Contains(d.FromType!) && names.Contains(d.ToType!))

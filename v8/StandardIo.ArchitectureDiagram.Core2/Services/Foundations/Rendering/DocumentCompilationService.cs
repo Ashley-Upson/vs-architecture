@@ -6,7 +6,7 @@ namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 internal interface IDocumentCompilationService { byte[] Compile(RenderedDiagramTab[] tabs, DiagramFormats format); }
 internal sealed class DocumentCompilationService : IDocumentCompilationService
 {
-    private static string Name(DiagramTypes type) => type == DiagramTypes.DataModel ? "Entity Relationship" : type.ToString();
+    private static string Name(DiagramTypes type) => type == DiagramTypes.DataModel ? "Entity Relationship" : type == DiagramTypes.CallChain ? "Call Chain" : type.ToString();
     public byte[] Compile(RenderedDiagramTab[] tabs, DiagramFormats format)
     {
         if (format == DiagramFormats.DrawIO)

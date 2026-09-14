@@ -20,7 +20,9 @@
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Exposures.ISchoolFactory.CreateSchoolDataContext()",
           "Calls": [],
-          "IsDeclaration": true
+          "IsDeclaration": true,
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext"
         }
       ]
     },
@@ -47,9 +49,12 @@
           "Calls": [
             {
               "TypeName": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext",
-              "MethodName": ".ctor"
+              "MethodName": ".ctor",
+              "MethodId": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.SchoolDataContext()"
             }
-          ]
+          ],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext"
         }
       ]
     },
@@ -87,61 +92,106 @@
           "Name": "get_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Id.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Id.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_SchoolId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.SchoolId.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_SchoolId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.SchoolId.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Students",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Students.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent[]"
         },
         {
           "Name": "set_Students",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Students.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent[]",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Teacher",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Teacher.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher"
         },
         {
           "Name": "set_Teacher",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.Teacher.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_TeacherId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.TeacherId.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_TeacherId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class.TeacherId.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         }
       ]
     },
@@ -175,49 +225,85 @@
           "Name": "get_ClassId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.ClassId.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_ClassId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.ClassId.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.Id.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.Id.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Student",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.Student.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student"
         },
         {
           "Name": "set_Student",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.Student.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_StudentId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.StudentId.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_StudentId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent.StudentId.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         }
       ]
     },
@@ -251,49 +337,85 @@
           "Name": "get_Classes",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Classes.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class[]"
         },
         {
           "Name": "set_Classes",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Classes.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class[]",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Id.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Id.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Students",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Students.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student[]"
         },
         {
           "Name": "set_Students",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Students.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student[]",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Teachers",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Teachers.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher[]"
         },
         {
           "Name": "set_Teachers",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School.Teachers.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher[]",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         }
       ]
     },
@@ -335,37 +457,49 @@
           "Name": "get_ClassStudents",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.ClassStudents.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.ClassStudent>"
         },
         {
           "Name": "get_Classes",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Classes.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Class>"
         },
         {
           "Name": "OnModelCreating",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.OnModelCreating()",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Schools",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Schools.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.School>"
         },
         {
           "Name": "get_Students",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Students.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student>"
         },
         {
           "Name": "get_Teachers",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.SchoolDataContext.Teachers.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.Collections.Generic.List<StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher>"
         }
       ]
     },
@@ -395,37 +529,64 @@
           "Name": "get_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.Id.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.Id.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Name",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.Name.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Name",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.Name.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_SchoolId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.SchoolId.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_SchoolId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Student.SchoolId.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         }
       ]
     },
@@ -455,37 +616,64 @@
           "Name": "get_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.Id.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Id",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.Id.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_Name",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.Name.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_Name",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.Name.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         },
         {
           "Name": "get_SchoolId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.SchoolId.get",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [],
+          "Output": "System.String"
         },
         {
           "Name": "set_SchoolId",
           "TypeNames": [],
           "Id": "StandardIo.ArchitectureDiagram.SampleProject.Data.Models.Teacher.SchoolId.set",
-          "Calls": []
+          "Calls": [],
+          "Inputs": [
+            {
+              "Type": "System.String",
+              "Name": "value"
+            }
+          ],
+          "Output": "System.Void"
         }
       ]
     }

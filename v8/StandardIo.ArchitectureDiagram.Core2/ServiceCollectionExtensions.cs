@@ -111,7 +111,7 @@ public static class ServiceCollectionExtensions
             services.AddKeyedTransient<IDiagramRenderer>(serviceKey: $"{DiagramFormats.Html}_{diagramType}", implementationFactory: (provider, _) => provider.GetRequiredService<HtmlDiagramRenderer>());
         }
 
-        foreach (var type in new[] { DiagramTypes.Composition, DiagramTypes.DataModel })
+        foreach (var type in new[] { DiagramTypes.Composition, DiagramTypes.CallChain, DiagramTypes.DataModel })
             services.AddKeyedTransient<IRenderModelBuilder>(type.ToString(), (provider, _) => provider.GetRequiredService<ContextualRenderModelBuilder>());
         foreach (var format in Enum.GetValues<DiagramFormats>())
             services.AddKeyedTransient<IDiagramRenderer>($"{format}_{DiagramTypes.All}", (provider, _) => new AllDiagramRenderer(provider.GetRequiredService<IDiagramDocumentOrchestrationService>(), format));

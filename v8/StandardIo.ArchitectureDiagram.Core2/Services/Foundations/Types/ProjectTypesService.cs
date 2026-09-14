@@ -113,7 +113,7 @@ internal sealed class ProjectTypesService : IProjectTypesService
                     semantic.GetSymbolInfo(node, cancellationToken).Symbol is IMethodSymbol target)
                 {
                     var called = target.ReducedFrom ?? target;
-                    members[id].Calls.Add(new(roslynBroker.GetTypeName(called.ContainingType.OriginalDefinition), called.Name));
+                    members[id].Calls.Add(new(roslynBroker.GetTypeName(called.ContainingType.OriginalDefinition), called.Name) { MethodId = Identity(called.OriginalDefinition) });
                     if (node is InvocationExpressionSyntax)
                         foreach (var argument in target.TypeArguments) AddType(id, argument);
                 }
@@ -127,6 +127,8 @@ internal sealed class ProjectTypesService : IProjectTypesService
                 Id = m.Key,
                 ParentId = method.MethodKind is MethodKind.AnonymousFunction or MethodKind.LocalFunction && method.ContainingSymbol is IMethodSymbol parent ? Identity(parent) : null,
                 Calls = m.Value.Calls.OrderBy(c => c.TypeName, StringComparer.Ordinal).ThenBy(c => c.MethodName, StringComparer.Ordinal).ToArray(),
+                Inputs = method.Parameters.Select(p => new Field { Name = p.Name, Type = GetMemberTypeName(p.Type) }).ToArray(),
+                Output = method.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor ? null : GetMemberTypeName(method.ReturnType),
                 IsDeclaration = method.IsAbstract || method.IsExtern
             };
         }).ToArray();

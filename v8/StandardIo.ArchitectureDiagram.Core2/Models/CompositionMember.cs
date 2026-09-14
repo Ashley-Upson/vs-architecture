@@ -11,4 +11,8 @@ public sealed record CompositionMember(string Name, string[] TypeNames)
     public MethodReference[]? Calls { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsDeclaration { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Field[]? Inputs { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Output { get; init; }
 }

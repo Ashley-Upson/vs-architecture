@@ -4,10 +4,55 @@ using System.Text;
 using System.Threading.Tasks;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
+using StandardIo.ArchitectureDiagram.Core2.Services.Orchestrations.Rendering;
 using Xunit;
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public class CompositionTreeTests
 {
+    [Fact]
+    public async Task ShouldLinkOverloadsToTheirExactMethodAndBoundLocalRecursion()
+    {
+        var project = await ConcreteCallChainTests.ExtractAsync("""
+            public class B { public void Work(int value) {} public void Work(string value) {} }
+            public class A { public void Run() { var b = new B(); b.Work(1); b.Work("x"); Repeat(); } private void Repeat() { Repeat(); } }
+            """);
+        var model = new RenderModel([project], diagramType: DiagramTypes.CallChain);
+        var trees = TestServices.Get<ICompositionTreeService>().Build(model);
+        var calls = trees.SelectMany(t => t.Nodes).Where(n => n.Label == "B → Work").ToArray();
+        Assert.Equal(2, calls.Length);
+        Assert.Equal(2, calls.Select(n => n.TargetMemberId).Distinct().Count());
+        var layout = TestServices.Get<ICompositionTreeLayoutService>().Layout(model, trees);
+        foreach (var call in calls)
+        {
+            var target = trees.SelectMany(t => t.Nodes).Single(n => n.TypeName == "B" && n.MemberId == call.TargetMemberId);
+            Assert.Contains(layout.CrossProjectConnections, e => e.SourceId == call.Id && e.TargetId == target.Id);
+        }
+        var composition = TestServices.Get<ICompositionTreeService>().Build(new RenderModel([project], diagramType: DiagramTypes.Composition));
+        Assert.Contains(composition.SelectMany(t => t.Nodes), n => n.Label == "A → Repeat");
+        Assert.True(composition.Sum(t => t.Nodes.Length) < 30);
+    }
+    [Fact]
+    public async Task ShouldKeepEachTypeInItsOwnContainerAndConnectCallChainMethods()
+    {
+        var project = await ConcreteCallChainTests.ExtractAsync("""
+            public class B { public string Work(int value) => value.ToString(); }
+            public class A {
+                private B b;
+                public A(B b) { this.b = b; }
+                public void Run() { Helper(); }
+                private void Helper() { b.Work(1); }
+            }
+            """);
+        var trees = TestServices.Get<ICompositionTreeService>().Build(new RenderModel([project], diagramType: DiagramTypes.Composition));
+        Assert.Equal(2, trees.Length);
+        var a = trees.Single(t => t.Title.EndsWith(" / A"));
+        Assert.DoesNotContain(a.Nodes, n => n.Label == "Work");
+        Assert.Contains(a.Nodes, n => n.Label == "B → Work");
+        var layout = TestServices.Get<IContextualLayoutOrchestrationService>().BuildRenderModel(new RenderModel([project], diagramType: DiagramTypes.CallChain));
+        Assert.Equal(2, layout.Projects.Length);
+        Assert.NotEmpty(layout.CrossProjectConnections);
+        Assert.Contains(layout.Projects.SelectMany(p => p.Nodes), n => n.Label.Contains("Inputs") && n.Label.Contains("Int32 : value") && n.Label.Contains("Outputs") && n.Label.Contains("String"));
+    }
     [Fact]
     public async Task ShouldRetainOpenGenericTypeReferences()
     {
@@ -52,7 +97,7 @@ public class CompositionTreeTests
         Assert.Contains(tree.Nodes,n=>n.Label=="Console → WriteLine" && lambdas.Any(l=>l.Id==n.ParentId));
         Assert.Contains(tree.Nodes,n=>n.Label=="Enumerable → Select" && lambdas.Any(l=>l.Id==n.ParentId));
         Assert.Contains(tree.Nodes,n=>n.Label=="Math → Abs" && lambdas.Any(l=>l.Id==n.ParentId));
-        Assert.Contains(tree.Nodes,n=>n.Label=="Root → Helper");
+
         var helper=Assert.Single(tree.Nodes,n=>n.Label=="Helper");
         Assert.Contains(tree.Nodes,n=>n.Label=="String → Concat" && n.ParentId==helper.Id);
     }
@@ -120,7 +165,7 @@ public class CompositionTreeTests
         Assert.Contains(root.CompositionMembers!,m=>m.Name=="Register" && m.TypeNames.Contains("Child"));
     }
     [Fact]
-    public void ShouldRepeatSharedTypesPerRootAndStopCircularExpansionInBothModes()
+    public void ShouldKeepReferencesAsLeavesAndRenderEachTypeOnceInBothModes()
     {
         DefinedType Type(string name,params string[] refs) => new() { Name=name,IsInternal=true,HasDeclaredBehaviour=true,Methods=[new() { Name="Run" }],CompositionMembers=[new("Run",refs)] };
         var project = new ProjectModel { Name="P",Types=[Type("A","Shared"),Type("B","Shared"),Type("Shared","Shared")] };
@@ -129,10 +174,10 @@ public class CompositionTreeTests
         {
             var model=new RenderModel([project],new RenderConfiguration { NoDuplicates=dedupe },DiagramTypes.Composition);
             var trees=TestServices.Get<ICompositionTreeService>().Build(model);
-            Assert.Equal(2,trees.Length);
-            foreach(var tree in trees) Assert.Contains(tree.Nodes,n=>n.Label=="Shared (circular reference)");
+            Assert.Equal(3,trees.Length);
+            foreach(var tree in trees) Assert.Contains(tree.Nodes,n=>n.Label=="Shared");
             var layout=TestServices.Get<ICompositionTreeLayoutService>().Layout(model,trees);
-            Assert.Equal(2,layout.Projects.Length);
+            Assert.Equal(3,layout.Projects.Length);
             foreach(var drawing in layout.Projects)
             {
                 Assert.Equal(drawing.Nodes.Length-1,drawing.Connections.Length);
