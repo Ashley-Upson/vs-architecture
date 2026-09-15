@@ -7,15 +7,17 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 
 public sealed class LayerGapRoutingTests
 {
-    [Fact]
-    public void ShouldTurnBelowParentAndDropDirectlyToChildInDuplicateView()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldTurnBelowParentAndDropDirectlyToChild(bool noDuplicates)
     {
         DrawingNode Node(string name,double x,double y,double width) =>
             new(name,new DefinedType { Name=name },name,x,y,width,60);
         var link=new TypeRelationship { FromType="Source",ToType="Target",DependencyType=DependencyType.Consumed };
         var drawing=new ProjectModelDrawing("p",new ProjectModel { Dependencies=[link] },0,700,600,
             [Node("Source",250,0,100),Node("First",100,160,300),Node("Second",200,320,300),Node("Target",550,480,100)]);
-        var points=Assert.Single(DiagramRouting.CreateRoutes(drawing,new RenderConfiguration { NoDuplicates=false })).Points;
+        var points=Assert.Single(DiagramRouting.CreateRoutes(drawing,new RenderConfiguration { NoDuplicates=noDuplicates })).Points;
         Assert.Equal(4,points.Length);
         Assert.InRange(points[1].Y,61,159);
         Assert.Equal(600,points[2].X);
@@ -24,7 +26,7 @@ public sealed class LayerGapRoutingTests
     }
 
     [Fact]
-    public void ShouldPreferOneClearCorridorOverShorterZigzagOnlyWithDuplicates()
+    public void ShouldPreferOneClearCorridorOverShorterZigzagInBothViews()
     {
         DrawingNode Node(string name,double x,double y,double width) =>
             new(name,new DefinedType { Name=name },name,x,y,width,60);
@@ -36,7 +38,7 @@ public sealed class LayerGapRoutingTests
         var combined=Assert.Single(DiagramRouting.CreateRoutes(drawing,new RenderConfiguration { NoDuplicates=true })).Points;
         Assert.Equal(6,split.Length);
         Assert.Equal(split[2].X,split[3].X);
-        Assert.True(combined.Length>split.Length);
+        Assert.Equal(split,combined);
         foreach(var segment in split.Zip(split.Skip(1)))
         foreach(var obstacle in nodes.Skip(1).Take(2))
             Assert.False(segment.First.X==segment.Second.X

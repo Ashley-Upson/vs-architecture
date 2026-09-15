@@ -121,14 +121,15 @@ internal static class LayoutGraph
         }
     }
 
-    internal static double BranchClearance(RenderProject project, string leftId, string rightId)
+    internal static double BranchClearance(RenderProject project, string leftId, string rightId, bool alignSharedRoots = false)
     {
         var left = OwnedBranch(project,leftId); var right = OwnedBranch(project,rightId);
         var leftRoot = project.Nodes.Single(node => node.Id == leftId);
         var rightRoot = project.Nodes.Single(node => node.Id == rightId);
         var leftParents = Parents(project,leftId); var rightParents = Parents(project,rightId);
         bool siblings = leftRoot.Y == rightRoot.Y && leftParents.Length == 1 && rightParents.Length == 1 && leftParents[0].Id == rightParents[0].Id;
-        if (!siblings) return right.Min(node => node.X) - left.Max(node => node.X + node.Width);
+        bool sharedRoot = alignSharedRoots && (left.Length == 1 && leftParents.Length == 0 || right.Length == 1 && rightParents.Length == 0);
+        if (!siblings && !sharedRoot) return right.Min(node => node.X) - left.Max(node => node.X + node.Width);
         // Compare occupied rows, allowing shallow siblings above wide descendants.
         return left.SelectMany(a => right.Where(b => a.Y < b.Y + b.Height && a.Y + a.Height > b.Y)
             .Select(b => b.X - a.X - a.Width)).DefaultIfEmpty(double.PositiveInfinity).Min();

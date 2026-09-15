@@ -46,7 +46,7 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
             {
                 var roots = group.OrderBy(root => root.X).ThenBy(root => root.Id, StringComparer.Ordinal).ToArray();
                 for (int index = 1; index < roots.Length; index++)
-                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id) < spacing - LayoutGraph.Tolerance)
+                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id, model.Configuration.NoDuplicates && model.Projects.Contains(project)) < spacing - LayoutGraph.Tolerance)
                         yield return $"Branch spacing: {roots[index].TypeName}";
             }
             foreach (var row in project.Nodes.GroupBy(node => node.Y))

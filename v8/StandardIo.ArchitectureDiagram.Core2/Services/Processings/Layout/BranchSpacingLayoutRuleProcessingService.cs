@@ -40,12 +40,20 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
             RenderNode Current(string id) => project.Nodes.Single(node => node.Id == id);
             var independentSharedLeaves = LayoutGraph.SharedGroups(project).Where(group => group.Length == 1)
                 .Select(group => group[0].Id).Where(id => branches[id].Count == 1).ToHashSet();
+            double? RootAnchor(string id)
+            {
+                if (!renderModel.Configuration.NoDuplicates || renderModel.IsProjectGraph || branches[id].Count != 1 || LayoutGraph.Parents(project,id).Length != 0) return null;
+                var targets = LayoutGraph.Children(project,id);
+                if (targets.Length == 0) return null;
+                return LayoutGraph.Midpoint(targets.Where(node => node.Y == targets.Min(child => child.Y))) - Current(id).Width / 2;
+            }
             void Arrange(string owner)
             {
                 bool SharedLeaf(string id) => reclaimSpace && independentSharedLeaves.Contains(id);
                 var siblings = children[owner].ToArray();
                 double Position(string id)
                 {
+                    if (RootAnchor(id) is double anchor) return anchor;
                     if (!reclaimSpace || branches[id].Count == 1 || LayoutGraph.Parents(project,id).Length < 2) return Current(id).X;
                     // A shared branch sits among the sibling branches containing its
                     // consumers, rather than retaining an unrelated initial position.
@@ -53,7 +61,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     var consumers = siblings.Where(sibling => sibling != id && branches[sibling].Overlaps(parents)).ToArray();
                     return consumers.Length > 1 ? consumers.Average(sibling => Current(sibling).X) : Current(id).X;
                 }
-                var roots = siblings.OrderBy(id => SharedLeaf(id)).ThenBy(Position).ThenBy(id => id, StringComparer.Ordinal).ToArray();
+                var roots = siblings.OrderBy(id => RootAnchor(id).HasValue).ThenBy(id => SharedLeaf(id)).ThenBy(Position).ThenBy(id => id, StringComparer.Ordinal).ToArray();
                 if (reclaimSpace && roots.Length > 2)
                 {
                     var owned = roots.Where(id => LayoutGraph.Parents(project,id) is var parents && parents.Length == 1 && parents[0].Id == owner).ToHashSet();
@@ -86,7 +94,16 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root)).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, renderModel.Configuration.NoDuplicates && !renderModel.IsProjectGraph)).DefaultIfEmpty(left).Max();
+                    if (RootAnchor(root) is double anchor)
+                    {
+                        var peers = placed.SelectMany(branch => branches[branch.Root].Select(Current))
+                            .Where(node => node.Y < bottom && node.Y + node.Height > top).ToArray();
+                        double width = right - left;
+                        next = peers.SelectMany(node => new[] { node.X - spacing - width, node.X + node.Width + spacing })
+                            .Append(anchor).Where(x => peers.All(node => x + width + spacing <= node.X + LayoutGraph.Tolerance || x >= node.X + node.Width + spacing - LayoutGraph.Tolerance))
+                            .OrderBy(x => Math.Abs(x - anchor)).ThenBy(x => x).First();
+                    }
                     if (SharedLeaf(root))
                     {
                         // Shared leaves occupy their own row, after owned branches have

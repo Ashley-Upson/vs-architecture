@@ -21,6 +21,8 @@ internal sealed class LayoutCleanupRuleProcessingService : ILayoutRuleProcessing
             foreach (string id in project.Nodes.OrderByDescending(n => n.Y).Select(n => n.Id).ToArray())
             {
                 var children = LayoutGraph.Children(project, id);
+                if (renderModel.Configuration.NoDuplicates && LayoutGraph.Parents(project,id).Length == 0 && LayoutGraph.OwnedChildren(project,id).Length == 0 && children.Length > 0)
+                    children = children.Where(child => child.Y == children.Min(node => node.Y)).ToArray();
                 if (children.Length != 1 || LayoutGraph.Parents(project, children[0].Id).Length < 2) continue;
                 var parent = project.Nodes.Single(n => n.Id == id);
                 var root = LayoutGraph.OwnedChainRoot(project, parent);
@@ -38,7 +40,7 @@ internal sealed class LayoutCleanupRuleProcessingService : ILayoutRuleProcessing
                 foreach (var node in branch)
                 foreach (var peer in project.Nodes.Where(n => !ids.Contains(n.Id) && n.Y < node.Y + node.Height && n.Y + n.Height > node.Y))
                     Reserve(node.X, node.X + node.Width, peer.X, peer.X + peer.Width);
-                foreach (var group in groups.Where(g => g.Any(ids.Contains)))
+                foreach (var group in groups.Where(g => !(renderModel.Configuration.NoDuplicates && branch.Length == 1) && g.Any(ids.Contains)))
                 foreach (string ownId in group.Where(ids.Contains))
                 foreach (string peerId in group.Where(n => !ids.Contains(n)))
                 {

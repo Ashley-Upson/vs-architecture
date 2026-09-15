@@ -55,7 +55,7 @@ internal static class DiagramRouting
             double sourceX = sourceExits[link];
             double targetX = to.X + to.Width / 2;
             double busY = busHeights[link.ToType!];
-            bool preferFewestBends = diagramType == DiagramTypes.Architecture && configuration is { NoDuplicates: false };
+            bool preferFewestBends = diagramType == DiagramTypes.Architecture && configuration is not null;
             if (preferFewestBends && to.Y > from.Y + from.Height)
             {
                 double nextRow = drawing.Nodes.Where(node => node.Y > from.Y + from.Height)

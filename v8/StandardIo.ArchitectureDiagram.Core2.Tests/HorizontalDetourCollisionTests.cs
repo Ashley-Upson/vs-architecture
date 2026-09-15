@@ -49,7 +49,7 @@ public sealed class HorizontalDetourCollisionTests
 
         var local = owner.Connections[0].Points.Select(p => new DrawingPoint(p.X + owner.X, p.Y + owner.Y)).ToArray();
         var cross = model.CrossProjectConnections[0].Points;
-        Assert.Equal(noDuplicates ? 6 : 4, cross.Length);
+        Assert.Equal(4, cross.Length);
         AssertNoHorizontalCollision(local, cross);
         Assert.Equal(new DrawingPoint(130, 100), cross[0]);
         Assert.Equal(new DrawingPoint(730, 360), cross[^1]);
