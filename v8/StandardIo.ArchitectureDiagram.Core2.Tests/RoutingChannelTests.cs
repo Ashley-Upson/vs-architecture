@@ -15,9 +15,11 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed partial class RoutingChannelTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ShouldNestFanOutByDestinationDistanceWithoutCrossings(bool reverse)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void ShouldNestFanOutByDestinationDistanceWithoutCrossings(bool reverse, bool duplicateView)
     {
         var drawing = CreateDrawing(count: 4);
         var nodes = drawing.Nodes.ToArray();
@@ -34,7 +36,7 @@ public sealed partial class RoutingChannelTests
             Array.Reverse(drawing.Model.Dependencies!);
         }
 
-        var routes = DiagramRouting.CreateRoutes(drawing: drawing with { Nodes = nodes })
+        var routes = DiagramRouting.CreateRoutes(drawing: drawing with { Nodes = nodes }, configuration: duplicateView ? new RenderConfiguration() : null)
             .OrderBy(route => route.Points[^1].X).ToArray();
         Assert.True(routes[0].Points[0].X < routes[1].Points[0].X);
         Assert.True(routes[1].Points[0].X < routes[2].Points[0].X);

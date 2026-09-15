@@ -12,6 +12,25 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class LayoutCleanupTests
 {
     [Fact]
+    public void ShouldFitShallowSiblingAboveWideDeepDescendants()
+    {
+        RenderNode Node(string id,double x,double y)=>new(id,id,id,"blue",x,y,210,60,[]);
+        RenderConnection Edge(string a,string b)=>new(a+b,a,b,a,b,false,[]);
+        var project=new RenderProject("p","P",0,0,2500,800,
+            [Node("root",900,0),Node("deep",540,160),Node("shallow",1600,160),Node("fork",540,320),Node("shortLeaf",1600,320),
+             Node("one",0,480),Node("two",540,480),Node("three",1080,480)],
+            [Edge("root","deep"),Edge("root","shallow"),Edge("deep","fork"),Edge("fork","one"),Edge("fork","two"),Edge("fork","three"),Edge("shallow","shortLeaf")]);
+        var model=new RenderModel(2500,800,[project]);
+        var cleanup=new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.LayoutCleanupRuleProcessingService();
+        cleanup.ApplyRule(model);
+        RenderNode Find(string id)=>project.Nodes.Single(n=>n.Id==id);
+        Assert.Equal(270,Find("shallow").X-Find("deep").X,5);
+        Assert.Equal(Find("shallow").X,Find("shortLeaf").X);
+        var positions=project.Nodes.Select(n=>n.X).ToArray();cleanup.ApplyRule(model);
+        Assert.Equal(positions,project.Nodes.Select(n=>n.X).ToArray());
+    }
+
+    [Fact]
     public void ShouldPackBranchesBeforePlacingSharedLeafInVacantBottomSlot()
     {
         RenderNode Node(string id,double x,double y)=>new(id,id,id,"orange",x,y,210,60,[]);

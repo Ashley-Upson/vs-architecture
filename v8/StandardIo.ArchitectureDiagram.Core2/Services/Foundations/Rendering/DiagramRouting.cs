@@ -172,7 +172,7 @@ internal static class DiagramRouting
             double spacing = Math.Min(horizontalOffset, gaps.Max(gap => gap.Second - gap.First) / 2);
             double height = gaps.Where(gap => gap.Second - gap.First >= spacing * 2 - 0.000001)
                 .Select(gap => Math.Clamp(preferred, gap.First + spacing, Math.Max(gap.First + spacing, gap.Second - spacing)))
-                .OrderBy(y => Math.Abs(y - preferred)).ThenBy(y => y).First();
+                .OrderBy(y => Math.Abs(y - preferred)).ThenByDescending(y => y).First();
             foreach (var segment in group)
             {
                 segment.Route.Points[segment.Index - 1] = segment.Route.Points[segment.Index - 1] with { Y = height };

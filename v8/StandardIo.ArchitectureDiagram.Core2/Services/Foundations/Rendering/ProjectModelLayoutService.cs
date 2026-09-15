@@ -44,11 +44,10 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
             }
             foreach (var group in LayoutGraph.BranchGroups(project))
             {
-                var branches = group.OrderBy(root => root.X).ThenBy(root => root.Id, StringComparer.Ordinal)
-                    .Select(root => LayoutGraph.OwnedBranch(project, root.Id)).ToArray();
-                for (int index = 1; index < branches.Length; index++)
-                    if (branches[index].Min(node => node.X) - branches[index - 1].Max(node => node.X + node.Width) < spacing - LayoutGraph.Tolerance)
-                        yield return $"Branch spacing: {branches[index][0].TypeName}";
+                var roots = group.OrderBy(root => root.X).ThenBy(root => root.Id, StringComparer.Ordinal).ToArray();
+                for (int index = 1; index < roots.Length; index++)
+                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id) < spacing - LayoutGraph.Tolerance)
+                        yield return $"Branch spacing: {roots[index].TypeName}";
             }
             foreach (var row in project.Nodes.GroupBy(node => node.Y))
             {

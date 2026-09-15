@@ -86,7 +86,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => branch.Right + spacing).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root)).DefaultIfEmpty(left).Max();
                     if (SharedLeaf(root))
                     {
                         // Shared leaves occupy their own row, after owned branches have
