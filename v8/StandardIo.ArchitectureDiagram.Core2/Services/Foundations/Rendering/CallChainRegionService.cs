@@ -80,7 +80,7 @@ internal sealed class CallChainRegionService : ICallChainRegionService
             var positioned=region with { X=x };placed[region.Id]=positioned;
             foreach(int band in Bands(positioned)){if(!bands.ContainsKey(band))bands[band]=[];bands[band].Add(positioned);}
         }
-        var routing=CallChainSpacing.ReserveTracks(placed.Values.ToArray(),edges,Root,gap,Math.Max(10,model.Configuration.HorizontalOffset));
+        var routing=CallChainSpacing.ReserveTracks(CallChainSpacing.CompactContainers(placed.Values.ToArray(),edges,Root,model.Configuration),edges,Root,gap,Math.Max(10,model.Configuration.HorizontalOffset));
         placed=routing.Projects.ToDictionary(p=>p.Id);
         var locations=placed.Values.SelectMany(p=>p.Nodes.Select(n=>(Project:p,Node:n))).ToDictionary(x=>x.Node.Id);
         var local=placed.Keys.ToDictionary(id=>id,_=>new List<RenderConnection>());var cross=new List<RenderConnection>();
