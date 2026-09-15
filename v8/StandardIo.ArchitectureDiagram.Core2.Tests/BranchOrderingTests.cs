@@ -9,6 +9,41 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class BranchOrderingTests
 {
     [Fact]
+    public void ShouldKeepBranchesSharingFactoryAdjacentInsteadOfStraddlingEventBranch()
+    {
+        RenderNode Node(string id,double x,double y)=>new(id,id,id,"blue",x,y,180,60,[]);
+        RenderConnection Edge(string a,string b)=>new(a+b,a,b,a,b,false,[]);
+        var project=new RenderProject("p","P",0,0,1000,600,
+            [Node("root",240,0),Node("authorization",0,160),Node("event",240,160),Node("page",480,160),
+             Node("factory",0,320),Node("hub",240,320),Node("context",480,320)],
+            [Edge("root","authorization"),Edge("root","event"),Edge("root","page"),Edge("authorization","factory"),
+             Edge("event","hub"),Edge("page","context"),Edge("page","factory")]);
+        var model=new RenderModel(1000,600,[project]);
+        new LayoutCleanupRuleProcessingService().ApplyRule(model);
+        var ordered=project.Nodes.Where(n=>n.Y==160).OrderBy(n=>n.X).Select(n=>n.Id).ToArray();
+        Assert.Equal(1,System.Math.Abs(System.Array.IndexOf(ordered,"authorization")-System.Array.IndexOf(ordered,"page")));
+    }
+
+    [Fact]
+    public void ShouldPlaceSharedOrchestrationBetweenItsCoordinationBranches()
+    {
+        RenderNode Node(string id,double x,double y)=>new(id,id,id,"blue",x,y,180,60,[]);
+        RenderConnection Edge(string a,string b)=>new(a+b,a,b,a,b,false,[]);
+        var project=new RenderProject("p","P",0,0,2000,800,
+            [Node("aggregate",700,0),Node("lifecycle",600,160),Node("manager",1200,160),
+             Node("app",0,320),Node("bootstrap",480,320),Node("role",720,320),Node("page",1200,320),Node("appChild",0,480)],
+            [Edge("aggregate","lifecycle"),Edge("aggregate","manager"),Edge("lifecycle","app"),Edge("lifecycle","bootstrap"),
+             Edge("lifecycle","role"),Edge("manager","app"),Edge("manager","page"),Edge("app","appChild")]);
+        var model=new RenderModel(2000,800,[project]);
+        var cleanup=new LayoutCleanupRuleProcessingService();cleanup.ApplyRule(model);
+        double X(string id)=>project.Nodes.Single(n=>n.Id==id).X;
+        Assert.True(X("bootstrap")<X("role") && X("role")<X("app") && X("app")<X("page"));
+        Assert.Equal(X("app"),X("appChild"));
+        var positions=project.Nodes.Select(n=>n.X).ToArray();cleanup.ApplyRule(model);
+        Assert.Equal(positions,project.Nodes.Select(n=>n.X).ToArray());
+    }
+
+    [Fact]
     public void ShouldFinishDescendantSpacingBeforePlacingNeighbouringTrees()
     {
         // Given: many consumers each own a deep branch and share another dependency.

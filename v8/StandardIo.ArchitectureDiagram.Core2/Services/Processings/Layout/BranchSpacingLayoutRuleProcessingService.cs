@@ -43,7 +43,39 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
             void Arrange(string owner)
             {
                 bool SharedLeaf(string id) => reclaimSpace && independentSharedLeaves.Contains(id);
-                var roots = children[owner].OrderBy(id => SharedLeaf(id)).ThenBy(id => Current(id).X).ThenBy(id => id, StringComparer.Ordinal).ToArray();
+                var siblings = children[owner].ToArray();
+                double Position(string id)
+                {
+                    if (!reclaimSpace || branches[id].Count == 1 || LayoutGraph.Parents(project,id).Length < 2) return Current(id).X;
+                    // A shared branch sits among the sibling branches containing its
+                    // consumers, rather than retaining an unrelated initial position.
+                    var parents = LayoutGraph.Parents(project,id).Select(node => node.Id).ToHashSet();
+                    var consumers = siblings.Where(sibling => sibling != id && branches[sibling].Overlaps(parents)).ToArray();
+                    return consumers.Length > 1 ? consumers.Average(sibling => Current(sibling).X) : Current(id).X;
+                }
+                var roots = siblings.OrderBy(id => SharedLeaf(id)).ThenBy(Position).ThenBy(id => id, StringComparer.Ordinal).ToArray();
+                if (reclaimSpace && roots.Length > 2)
+                {
+                    var owned = roots.Where(id => LayoutGraph.Parents(project,id) is var parents && parents.Length == 1 && parents[0].Id == owner).ToHashSet();
+                    var affinities = project.Connections.GroupBy(edge => edge.TargetId)
+                        .Select(group => roots.Where(id => owned.Contains(id) && group.Any(edge => branches[id].Contains(edge.SourceId))).ToArray())
+                        .Where(group => group.Length > 1).ToArray();
+                    int Cost() => affinities.Sum(group => group.Max(id => Array.IndexOf(roots,id)) - group.Min(id => Array.IndexOf(roots,id)));
+                    int cost = Cost();
+                    bool changed;
+                    do
+                    {
+                        changed = false;
+                        for (int index = 1; index < roots.Length; index++)
+                        {
+                            if (!owned.Contains(roots[index-1]) || !owned.Contains(roots[index])) continue;
+                            (roots[index-1],roots[index]) = (roots[index],roots[index-1]);
+                            int candidate = Cost();
+                            if (candidate < cost) { cost = candidate; changed = true; }
+                            else (roots[index-1],roots[index]) = (roots[index],roots[index-1]);
+                        }
+                    } while (changed);
+                }
                 foreach (string root in roots) Arrange(root);
                 // Translate completed branches as units; later placement cannot undo
                 // their internal spacing or parent centring.

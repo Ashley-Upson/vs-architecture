@@ -25,8 +25,9 @@ public sealed class LayoutCleanupTests
         var cleanup=new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.LayoutCleanupRuleProcessingService();
         cleanup.ApplyRule(model);
         RenderNode Find(string id)=>project.Nodes.Single(n=>n.Id==id);
-        Assert.Equal(270,Find("events").X-Find("authorization").X,5);
-        Assert.Equal(270,Find("component").X-Find("events").X,5);
+        var branchPositions = new[] { Find("authorization").X, Find("events").X, Find("component").X }.OrderBy(x => x).ToArray();
+        Assert.Equal(270,branchPositions[1]-branchPositions[0],5);
+        Assert.Equal(270,branchPositions[2]-branchPositions[1],5);
         Assert.Equal(Find("authorization").X,Find("factory").X,5);
         var positions=project.Nodes.Select(n=>n.X).ToArray();
         cleanup.ApplyRule(model);
