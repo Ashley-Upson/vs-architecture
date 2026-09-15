@@ -14,6 +14,8 @@ internal sealed class CallChainRegionService : ICallChainRegionService
         var treeParents=edges.Where(e=>e.IsTree).ToDictionary(e=>e.TargetId,e=>e.SourceId);
         var consumed=edges.Where(e=>!e.IsTree).Select(e=>e.TargetId).ToHashSet();
         string Root(string id){while(treeParents.TryGetValue(id,out var parent))id=parent;return id;}
+        CallChainSpacing.ClearExits(model,edges,Root,step,Math.Max(10,model.Configuration.HorizontalOffset));
+        CallChainSpacing.CompactTrees(model,edges,gap);
         var regions=new List<RenderProject>();
         var owners=new Dictionary<string,string>();
         foreach(var project in model.Projects)
@@ -59,6 +61,11 @@ internal sealed class CallChainRegionService : ICallChainRegionService
             return new RenderProject(group.Key,group.First().Name,left,top,
                 group.Max(p=>p.X+p.Width)-left,group.Max(p=>p.Y+p.Height)-top,nodes,[]);
         }).ToList();
+        // Merging can extend an outgoing call across additional columns. Reserve
+        // that longer exit while type units can still move inside the container.
+        var merged=new RenderModel(0,0,regions.ToArray());
+        CallChainSpacing.ClearExits(merged,edges,Root,step,Math.Max(10,model.Configuration.HorizontalOffset));
+        regions=merged.Projects.ToList();
         nodeRegions=regions.SelectMany(p=>p.Nodes.Select(n=>(n.Id,Region:p.Id))).ToDictionary(x=>x.Id,x=>x.Region);
         var parents=edges.Where(e=>!e.IsTree&&nodeRegions[e.SourceId]!=nodeRegions[e.TargetId]).ToLookup(e=>nodeRegions[e.TargetId],e=>nodeRegions[e.SourceId]);
         var placed=new Dictionary<string,RenderProject>();var bands=new Dictionary<int,List<RenderProject>>();
@@ -73,6 +80,8 @@ internal sealed class CallChainRegionService : ICallChainRegionService
             var positioned=region with { X=x };placed[region.Id]=positioned;
             foreach(int band in Bands(positioned)){if(!bands.ContainsKey(band))bands[band]=[];bands[band].Add(positioned);}
         }
+        var routing=CallChainSpacing.ReserveTracks(placed.Values.ToArray(),edges,Root,gap,Math.Max(10,model.Configuration.HorizontalOffset));
+        placed=routing.Projects.ToDictionary(p=>p.Id);
         var locations=placed.Values.SelectMany(p=>p.Nodes.Select(n=>(Project:p,Node:n))).ToDictionary(x=>x.Node.Id);
         var local=placed.Keys.ToDictionary(id=>id,_=>new List<RenderConnection>());var cross=new List<RenderConnection>();
         foreach(var edge in edges)
@@ -80,7 +89,7 @@ internal sealed class CallChainRegionService : ICallChainRegionService
             var a=locations[edge.SourceId];var b=locations[edge.TargetId];bool same=a.Project.Id==b.Project.Id;
             double ax=a.Project.X+a.Node.X+(edge.IsTree?12:a.Node.Width),ay=a.Project.Y+a.Node.Y+(edge.IsTree?a.Node.Height:a.Node.Height/2);
             double bx=b.Project.X+b.Node.X,by=b.Project.Y+b.Node.Y+b.Node.Height/2;
-            double gutter=edge.IsTree?ax:same?Math.Min(ax+gap/2,bx):a.Project.X+a.Project.Width+gap/2;
+            double gutter=edge.IsTree?ax:routing.Gutters[edge.Id];
             DrawingPoint[] points=ay==by?[new(ax,ay),new(bx,by)]:[new(ax,ay),new(gutter,ay),new(gutter,by),new(bx,by)];
             if(same)local[a.Project.Id].Add(edge with {Points=points.Select(p=>p with { X=p.X-a.Project.X,Y=p.Y-a.Project.Y }).ToArray()});
             else cross.Add(edge with {Points=points});
