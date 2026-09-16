@@ -127,7 +127,11 @@ internal static class LayoutGraph
         var leftRoot = project.Nodes.Single(node => node.Id == leftId);
         var rightRoot = project.Nodes.Single(node => node.Id == rightId);
         var leftParents = Parents(project,leftId); var rightParents = Parents(project,rightId);
-        bool siblings = leftRoot.Y == rightRoot.Y && leftParents.Length == 1 && rightParents.Length == 1 && leftParents[0].Id == rightParents[0].Id;
+        bool sameParent = leftParents.Length == 1 && rightParents.Length == 1 && leftParents[0].Id == rightParents[0].Id;
+        if (!sameParent && (left.Max(node=>node.Y+node.Height) <= right.Min(node=>node.Y) ||
+            right.Max(node=>node.Y+node.Height) <= left.Min(node=>node.Y)))
+            return double.PositiveInfinity;
+        bool siblings = leftRoot.Y == rightRoot.Y && sameParent;
         // Shared graphs have no exclusive rectangular subtree ownership. Independent
         // branches may use empty rows on either side of one another; siblings still
         // preserve their ordering. Measure actual occupied intervals in that case.

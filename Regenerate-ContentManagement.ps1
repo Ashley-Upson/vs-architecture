@@ -9,9 +9,8 @@ Rebuilds the v8 CLI and regenerates the ContentManagement architecture diagrams.
 .\Regenerate-ContentManagement.ps1 -View Both -MaxLayoutIterations 1000
 .NOTES
 Run with PowerShell 7 (pwsh). Outputs are written beside this script.
-The default 25-pass limit bounds layout retries: the split view currently has a
-known branch-spacing convergence issue. Failed outputs retain their previous
-files, other outputs are still attempted, and the script exits 1 on any failure.
+The default 25-pass limit bounds layout retries. Failed outputs retain their
+previous files, other outputs are still attempted, and the script exits 1 on any failure.
 Logs are retained in the temporary directory printed at the start of the run.
 #>
 [CmdletBinding()]

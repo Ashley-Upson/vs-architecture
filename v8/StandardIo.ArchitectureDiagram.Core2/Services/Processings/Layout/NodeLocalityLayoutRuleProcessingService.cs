@@ -7,7 +7,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
 {
     public void ApplyRule(RenderModel model)
     {
-        if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture || !model.Configuration.NoDuplicates) return;
+        if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         foreach (var project in model.Projects) Improve(project, model);
     }
 
@@ -17,6 +17,8 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
         var indices = project.Nodes.Select((node,index)=>(node.Id,index)).ToDictionary(p=>p.Id,p=>p.index);
         RenderNode Node(string id) => project.Nodes[indices[id]];
         var groups = LayoutGraph.BranchGroups(project).Select(g=>g.Select(n=>n.Id).ToArray()).ToArray();
+        var siblings = project.Nodes.Select(n=>LayoutGraph.OwnedChildren(project,n.Id).Select(c=>c.Id).ToArray())
+            .Where(group=>group.Length>1).ToArray();
         var edges = project.Connections.Where(e=>Node(e.TargetId).Y>Node(e.SourceId).Y).ToArray();
         var passages=edges.Concat(model.CrossProjectConnections.Where(e=>indices.ContainsKey(e.SourceId)))
             .GroupBy(e=>e.SourceId).Select(g=>(Source:g.Key,
@@ -46,7 +48,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
             {
                 var roots=group.OrderBy(id=>Node(id).X).ThenBy(id=>id,StringComparer.Ordinal).ToArray();
                 for(int i=1;i<roots.Length;i++)
-                    if(LayoutGraph.BranchClearance(project,roots[i-1],roots[i],true,respectBranchOrder:false)<spacing-LayoutGraph.Tolerance) return false;
+                    if(LayoutGraph.BranchClearance(project,roots[i-1],roots[i],model.Configuration.NoDuplicates,respectBranchOrder:false)<spacing-LayoutGraph.Tolerance) return false;
             }
             return project.Nodes.All(n=>double.IsFinite(n.X));
         }
@@ -94,7 +96,12 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
             }
             var candidate=Score();
             bool better=candidate.Crossings<score.Crossings || candidate.Crossings==score.Crossings && candidate.Length<score.Length-LayoutGraph.Tolerance;
-            if(!moved || !better || !Valid() || project.Nodes.Max(n=>n.X+n.Width)-project.Nodes.Min(n=>n.X)>width+LayoutGraph.Tolerance ||
+            // Moving an already untangled sibling set around only to shorten its
+            // spokes disrupts stable tree ordering. Reorder it only to remove crossings.
+            bool reordered = !model.Configuration.NoDuplicates && candidate.Crossings >= score.Crossings && siblings.Any(group=>
+                !group.OrderBy(child=>before[indices[child]].X).ThenBy(child=>child,StringComparer.Ordinal)
+                    .SequenceEqual(group.OrderBy(child=>Node(child).X).ThenBy(child=>child,StringComparer.Ordinal)));
+            if(!moved || !better || reordered || !Valid() || project.Nodes.Max(n=>n.X+n.Width)-project.Nodes.Min(n=>n.X)>width+LayoutGraph.Tolerance ||
                 blocked is not null && !BlockedPassages().IsSubsetOf(blocked))
                 Array.Copy(before,project.Nodes,before.Length);
         }
