@@ -19,12 +19,12 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
         string[] errors = Array.Empty<string>();
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
-            // Newly reserved passages change which parents may be recentred.
+            // Cross-project placement follows passage clearing; settle newly reserved passages after that placement.
             int passageCount = renderModel.PassageOffsetParents.Count;
             renderModel.LayoutIterations = iteration + 1;
             foreach (var rule in rules) rule.ApplyRule(renderModel);
             errors = Validate(renderModel).ToArray();
-            if (errors.Length == 0 && passageCount == renderModel.PassageOffsetParents.Count) return renderModel;
+            if (errors.Length == 0 && (renderModel.CrossProjectConnections.Length == 0 || passageCount == renderModel.PassageOffsetParents.Count)) return renderModel;
         }
         if (errors.Length == 0) return renderModel;
         throw new InvalidOperationException($"Layout did not converge after {maxIterations} iterations: {string.Join("; ", errors)}");
