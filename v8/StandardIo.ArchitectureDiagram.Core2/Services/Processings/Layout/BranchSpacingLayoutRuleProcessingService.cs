@@ -56,14 +56,17 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 double Position(string id)
                 {
                     if (RootAnchor(id) is double anchor) return anchor;
-                    if (reclaimSpace && sharedNodes && !renderModel.IsProjectGraph && branches[id].Count == 1)
+                    if ((reclaimSpace || renderModel.LayoutInitialized) && sharedNodes && !renderModel.IsProjectGraph && branches[id].Count == 1)
                     {
                         var directConsumers = LayoutGraph.Parents(project,id);
                         if (directConsumers.Length > 1)
                         {
-                            var group = sharedGroups.Single(group => group.Any(node => node.Id == id));
-                            return directConsumers.Average(node => LayoutGraph.Centre(node))
-                                + Current(id).X - LayoutGraph.Midpoint(group.Select(node => Current(node.Id)));
+                            var group = sharedGroups.Single(group => group.Any(node => node.Id == id))
+                                .Select(node => Current(node.Id)).Where(node => node.Y == Current(id).Y)
+                                .OrderBy(node => node.X).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray();
+                            double width = group.Sum(node => node.Width) + spacing * (group.Length - 1);
+                            double offset = group.TakeWhile(node => node.Id != id).Sum(node => node.Width + spacing);
+                            return directConsumers.Average(node => LayoutGraph.Centre(node)) - width / 2 + offset;
                         }
                     }
                     if (!reclaimSpace || branches[id].Count == 1 || LayoutGraph.Parents(project,id).Length < 2) return Current(id).X;
@@ -106,7 +109,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, reclaimSpace && sharedNodes && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, (reclaimSpace || renderModel.LayoutInitialized) && sharedNodes && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
                     if (RootAnchor(root) is double anchor)
                     {
                         var peers = placed.SelectMany(branch => branches[branch.Root].Select(Current))

@@ -7,6 +7,21 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 
 public sealed class ArchitectureModeParityTests
 {
+    [Fact]
+    public void ShouldKeepSharedLeafGroupsTogetherDespiteLargeInitialGaps()
+    {
+        RenderNode Node(string id,double x,double y)=>new(id,id,id,"blue",x,y,180,60,[]);
+        RenderConnection Edge(string a,string b)=>new(a+b,a,b,a,b,false,[]);
+        var project=new RenderProject("p","P",0,0,2500,400,
+            [Node("A",0,0),Node("B",240,0),Node("C",600,0),Node("D",840,0),
+             Node("Left",0,160),Node("Right",2000,160),Node("Middle1",1000,160),Node("Middle2",1240,160)],
+            [Edge("A","Left"),Edge("A","Right"),Edge("B","Left"),Edge("B","Right"),
+             Edge("C","Middle1"),Edge("C","Middle2"),Edge("D","Middle1"),Edge("D","Middle2")]);
+        new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.LayoutCleanupRuleProcessingService().ApplyRule(new RenderModel(2500,400,[project]));
+        var ordered=project.Nodes.Where(n=>n.Y==160).OrderBy(n=>n.X).Select(n=>n.Id).ToArray();
+        Assert.Equal(1,System.Math.Abs(System.Array.IndexOf(ordered,"Left")-System.Array.IndexOf(ordered,"Right")));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
