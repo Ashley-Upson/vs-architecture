@@ -22,8 +22,6 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
             // belong to the smallest branch containing all their consumers, when one exists.
             var branches = project.Nodes.ToDictionary(node => node.Id,
                 node => LayoutGraph.OwnedBranch(project, node.Id).Select(member => member.Id).ToHashSet());
-            var occupiedRows = branches.ToDictionary(branch => branch.Key, branch => project.Nodes
-                .Where(node => branch.Value.Contains(node.Id)).Select(node => node.Y).ToHashSet());
             var owners = project.Nodes.ToDictionary(node => node.Id, node => branches
                 .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
                 .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
@@ -108,7 +106,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, sharedNodes && !occupiedRows[branch.Root].SetEquals(occupiedRows[root]) && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, reclaimSpace && sharedNodes && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
                     if (RootAnchor(root) is double anchor)
                     {
                         var peers = placed.SelectMany(branch => branches[branch.Root].Select(Current))
