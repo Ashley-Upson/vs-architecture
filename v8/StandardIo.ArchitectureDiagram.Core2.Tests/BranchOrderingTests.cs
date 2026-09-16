@@ -9,6 +9,24 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed class BranchOrderingTests
 {
     [Fact]
+    public void ShouldOrderSharedLeafGroupsByTheirConsumersInCombinedView()
+    {
+        RenderNode Node(string id,double x,double y)=>new(id,id,id,"blue",x,y,180,60,[]);
+        RenderConnection Edge(string a,string b)=>new(a+b,a,b,a,b,false,[]);
+        var project=new RenderProject("p","P",0,0,2000,600,
+            [Node("a",0,0),Node("b",240,0),Node("c",720,0),Node("d",960,0),
+             Node("aa",0,160),Node("bb",240,160),Node("cc",720,160),Node("dd",960,160),
+             Node("right1",0,320),Node("right2",240,320),Node("left1",720,320),Node("left2",960,320)],
+            [Edge("a","aa"),Edge("b","bb"),Edge("c","cc"),Edge("d","dd"),
+             Edge("aa","left1"),Edge("bb","left1"),Edge("aa","left2"),Edge("bb","left2"),
+             Edge("cc","right1"),Edge("dd","right1"),Edge("cc","right2"),Edge("dd","right2")]);
+        var model=new RenderModel(2000,600,[project]);model.Configuration.NoDuplicates=true;
+        new LayoutCleanupRuleProcessingService().ApplyRule(model);
+        double X(string id)=>project.Nodes.Single(n=>n.Id==id).X;
+        Assert.True(System.Math.Max(X("left1"),X("left2"))<System.Math.Min(X("right1"),X("right2")));
+    }
+
+    [Fact]
     public void ShouldKeepBranchesSharingFactoryAdjacentInsteadOfStraddlingEventBranch()
     {
         RenderNode Node(string id,double x,double y)=>new(id,id,id,"blue",x,y,180,60,[]);

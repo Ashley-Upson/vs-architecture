@@ -54,6 +54,11 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 double Position(string id)
                 {
                     if (RootAnchor(id) is double anchor) return anchor;
+                    if (reclaimSpace && renderModel.Configuration.NoDuplicates && !renderModel.IsProjectGraph && branches[id].Count == 1)
+                    {
+                        var directConsumers = LayoutGraph.Parents(project,id);
+                        if (directConsumers.Length > 1) return directConsumers.Average(node => LayoutGraph.Centre(node)) - Current(id).Width / 2;
+                    }
                     if (!reclaimSpace || branches[id].Count == 1 || LayoutGraph.Parents(project,id).Length < 2) return Current(id).X;
                     // A shared branch sits among the sibling branches containing its
                     // consumers, rather than retaining an unrelated initial position.
