@@ -22,8 +22,14 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
             // belong to the smallest branch containing all their consumers, when one exists.
             var branches = project.Nodes.ToDictionary(node => node.Id,
                 node => LayoutGraph.OwnedBranch(project, node.Id).Select(member => member.Id).ToHashSet());
-            var dependencyTargets = branches.ToDictionary(branch => branch.Key, branch => project.Connections
-                .Where(edge => branch.Value.Contains(edge.SourceId)).Select(edge => edge.TargetId).ToHashSet());
+            var components = project.Nodes.ToDictionary(node => node.Id, node => node.Id);
+            string Component(string id)
+            {
+                while (components[id] != id) id = components[id];
+                return id;
+            }
+            foreach (var edge in project.Connections)
+                components[Component(edge.TargetId)] = Component(edge.SourceId);
             var owners = project.Nodes.ToDictionary(node => node.Id, node => branches
                 .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
                 .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
@@ -108,7 +114,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, (reclaimSpace && sharedNodes || dependencyTargets[branch.Root].Overlaps(dependencyTargets[root])) && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, sharedNodes && Component(branch.Root) == Component(root) && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
                     if (RootAnchor(root) is double anchor)
                     {
                         var peers = placed.SelectMany(branch => branches[branch.Root].Select(Current))
