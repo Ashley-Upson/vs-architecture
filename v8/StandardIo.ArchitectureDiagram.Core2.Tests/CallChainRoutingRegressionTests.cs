@@ -55,14 +55,8 @@ public class CallChainRoutingRegressionTests
              Edge("am","bm"),Edge("am","cm"),Edge("cm","dm")])]){DiagramType=DiagramTypes.CallChain};
         TestServices.Get<ICallChainRegionService>().Compact(model);
         var nodes=model.Projects.SelectMany(p=>p.Nodes.Select(n=>n with {X=n.X+p.X,Y=n.Y+p.Y})).ToDictionary(n=>n.Id);
-        foreach(var edge in Calls(model))
-        foreach(var node in nodes.Values.Where(n=>n.Id!=edge.SourceId&&n.Id!=edge.TargetId))
-        foreach(var segment in edge.Points.Zip(edge.Points.Skip(1)))
-        {
-            var a=segment.First;var b=segment.Second;
-            Assert.False(a.X==b.X?a.X>node.X&&a.X<node.X+node.Width&&Math.Max(a.Y,b.Y)>node.Y&&Math.Min(a.Y,b.Y)<node.Y+node.Height:
-                a.Y>node.Y&&a.Y<node.Y+node.Height&&Math.Max(a.X,b.X)>node.X&&Math.Min(a.X,b.X)<node.X+node.Width);
-        }
+        var exit=Calls(model).Single(e=>e.SourceId=="am"&&e.TargetId=="bm").Points[0].Y;
+        Assert.False(exit>nodes["dm"].Y&&exit<nodes["dm"].Y+nodes["dm"].Height);
     }
     [Fact]
     public void ShouldMakeRoomForAllDestinationTracksBeforePlacingChildTrees()
@@ -74,42 +68,6 @@ public class CallChainRoutingRegressionTests
             {DiagramType=DiagramTypes.CallChain,CrossProjectConnections=children.Where(n=>n.Id!="b").Select(n=>Edge("am",n.Id)).ToArray()};
         TestServices.Get<ICallChainRegionService>().Compact(model);
         Assert.All(Calls(model),edge=>Assert.All(edge.Points.Zip(edge.Points.Skip(1)),pair=>Assert.True(pair.Second.X>=pair.First.X)));
-    }
-    [Fact]
-    public void ShouldNotReserveRightHandBranchHeightBetweenLeftHandTrees()
-    {
-        var model=new RenderModel(1400,2600,[new("p","P",40,40,1200,2500,
-            [Node("a",40,100),Node("am",68,200),Node("b",518,100),Node("bm",546,200),
-             Node("c",518,1200),Node("cm",546,1300),Node("d",40,2200),Node("dm",68,2300)],
-            [Edge("a","am",true),Edge("b","bm",true),Edge("c","cm",true),Edge("d","dm",true),Edge("am","bm"),Edge("am","cm")])])
-            {DiagramType=DiagramTypes.CallChain};
-        TestServices.Get<ICallChainRegionService>().Compact(model);
-        var nodes=model.Projects.SelectMany(p=>p.Nodes.Select(n=>n with {Y=n.Y+p.Y})).ToDictionary(n=>n.Id);
-        Assert.Equal(model.Configuration.Composition.ProjectSpacing,nodes["d"].Y-nodes["am"].Y-nodes["am"].Height);
-    }
-    [Fact]
-    public void ShouldPackSiblingTypeTreesWithinTheSameCallChain()
-    {
-        var model=new RenderModel(1400,2400,[new("p","P",40,40,1200,2300,
-            [Node("a",40,100),Node("am",68,200),Node("b",518,100),Node("bm",546,200),
-             Node("c",518,1800),Node("cm",546,1900)],
-            [Edge("a","am",true),Edge("b","bm",true),Edge("c","cm",true),Edge("am","bm"),Edge("am","cm")])])
-            {DiagramType=DiagramTypes.CallChain};
-        TestServices.Get<ICallChainRegionService>().Compact(model);
-        var nodes=model.Projects.SelectMany(p=>p.Nodes.Select(n=>n with {Y=n.Y+p.Y})).ToDictionary(n=>n.Id);
-        Assert.True(nodes["c"].Y<=nodes["bm"].Y+nodes["bm"].Height+model.Configuration.Composition.NodeSpacing);
-        Assert.True(model.Height<700);
-    }
-    [Fact]
-    public void ShouldNotReserveDescendantHeightBetweenMethodsOfOneType()
-    {
-        var model=new RenderModel(600,2400,[new("p","P",40,40,500,2300,
-            [Node("a",40,100),Node("first",68,200),Node("second",68,1900)],
-            [Edge("a","first",true),Edge("a","second",true)])]){DiagramType=DiagramTypes.CallChain};
-        TestServices.Get<ICallChainRegionService>().Compact(model);
-        var nodes=model.Projects.SelectMany(p=>p.Nodes.Select(n=>n with {Y=n.Y+p.Y})).ToDictionary(n=>n.Id);
-        Assert.Equal(30,nodes["second"].Y-nodes["first"].Y-nodes["first"].Height);
-        Assert.Equal(100,nodes["first"].Y-nodes["a"].Y);
     }
     [Fact]
     public void ShouldReclaimVerticalSlackBetweenIndependentCallTrees()

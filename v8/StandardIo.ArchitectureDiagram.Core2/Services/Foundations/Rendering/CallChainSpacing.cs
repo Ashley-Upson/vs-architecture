@@ -7,89 +7,12 @@ namespace StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 
 internal static class CallChainSpacing
 {
-    public static RenderProject[] CompactContainers(RenderProject[] projects,RenderConnection[] edges,Func<string,string> root,RenderConfiguration configuration)
-    {
-        double gap=Math.Max(60,configuration.Composition.ProjectSpacing),step=configuration.Composition.NodeWidth+28+gap;
-        double clearance=Math.Max(10,configuration.HorizontalOffset);
-        var components=projects.SelectMany(p=>p.Nodes).ToDictionary(n=>n.Id,n=>n.Id);
-        string Component(string id){while(components[id]!=id){components[id]=components[components[id]];id=components[id];}return id;}
-        foreach(var edge in edges)components[Component(edge.TargetId)]=Component(edge.SourceId);
-        var callers=edges.Where(e=>!e.IsTree).ToLookup(e=>e.TargetId,e=>e.SourceId);
-        var compacted=projects.Select(project=>{
-            var positioned=new Dictionary<string,RenderNode>();
-            double Desired(IEnumerable<RenderNode> unit)
-            {
-                var heading=unit.Single(n=>root(n.Id)==n.Id);var candidates=new List<double>();double offset=0;
-                foreach(var method in unit.Where(n=>n.Id!=heading.Id).OrderBy(n=>n.Y))
-                {
-                    offset=offset==0?method.Y-heading.Y:offset+30;
-                    foreach(string caller in callers[method.Id].Where(positioned.ContainsKey))
-                        candidates.Add(positioned[caller].Y+positioned[caller].Height/2-offset-method.Height/2);
-                    offset+=method.Height;
-                }
-                candidates.Sort();return candidates.Count==0?40:Math.Max(40,candidates[candidates.Count/2]);
-            }
-            foreach(var column in project.Nodes.GroupBy(n=>(int)Math.Round((n.X-20)/step)).OrderBy(g=>g.Key))
-            {
-                double end=40;string? previous=null;
-                foreach(var unit in column.GroupBy(n=>root(n.Id)).OrderBy(Desired).ThenBy(g=>g.Min(n=>n.Y)))
-                {
-                    var heading=unit.Single(n=>n.Id==unit.Key);string component=Component(heading.Id);
-                    double top=Math.Max(Desired(unit),previous is null?40:end+(previous==component?configuration.Composition.NodeSpacing:gap));
-                    positioned[heading.Id]=Move(heading,top-heading.Y);end=top+heading.Height;
-                    bool first=true;
-                    foreach(var method in unit.Where(n=>n.Id!=unit.Key).OrderBy(n=>n.Y))
-                    {
-                        double y=first?top+method.Y-heading.Y:end+30;
-                        positioned[method.Id]=Move(method,y-method.Y);end=y+method.Height;first=false;
-                    }
-                    previous=component;
-                }
-            }
-            return project with {Nodes=project.Nodes.Select(n=>positioned[n.Id]).ToArray(),Height=positioned.Values.Max(n=>n.Y+n.Height)+20};
-        }).ToArray();
-        var localModel=new RenderModel(0,0,compacted);
-        ClearExits(localModel,edges,root,step,clearance);
-        var locations=localModel.Projects.SelectMany(p=>p.Nodes.Select(n=>(n.Id,Project:p,Node:n))).ToDictionary(n=>n.Id);
-        var outgoing=edges.Where(e=>!e.IsTree&&locations[e.SourceId].Project.Id!=locations[e.TargetId].Project.Id).ToLookup(e=>locations[e.SourceId].Project.Id);
-        var incoming=edges.Where(e=>!e.IsTree&&locations[e.SourceId].Project.Id!=locations[e.TargetId].Project.Id).ToLookup(e=>locations[e.TargetId].Project.Id);
-        var placed=new List<RenderProject>();
-        var placedById=new Dictionary<string,RenderProject>();
-        double PreferredY(RenderProject region)
-        {
-            var candidates=incoming[region.Id].Where(e=>placedById.ContainsKey(locations[e.SourceId].Project.Id)).Select(e=>{
-                var source=locations[e.SourceId];var target=locations[e.TargetId];
-                return placedById[source.Project.Id].Y+source.Node.Y+source.Node.Height/2-target.Node.Y-target.Node.Height/2;
-            }).OrderBy(y=>y).ToArray();
-            return candidates.Length==0?40:Math.Max(40,candidates[candidates.Length/2]);
-        }
-        var exits=new List<(double Left,double Right,double Y,string Target)>();
-        foreach(var column in localModel.Projects.GroupBy(p=>p.X).OrderBy(g=>g.Key))
-        foreach(var region in column.OrderBy(PreferredY).ThenBy(p=>p.Y))
-        {
-            var forbidden=placed.Where(p=>p.X<region.X+region.Width&&region.X<p.X+p.Width)
-                .Select(p=>(Start:p.Y-region.Height-20,End:p.Y+p.Height+20)).ToList();
-            foreach(var exit in exits.Where(e=>e.Left<region.X+region.Width&&e.Right>region.X))
-            foreach(var node in region.Nodes.Where(n=>n.Id!=exit.Target&&n.X+region.X<exit.Right&&exit.Left<n.X+region.X+n.Width))
-                forbidden.Add((exit.Y-node.Y-node.Height-clearance,exit.Y-node.Y+clearance));
-            double y=PreferredY(region);
-            foreach(var interval in forbidden.OrderBy(i=>i.Start))if(y>interval.Start&&y<interval.End)y=interval.End;
-            var positioned=region with {Y=y};placed.Add(positioned);placedById[region.Id]=positioned;
-            foreach(var edge in outgoing[region.Id])
-            {
-                var source=locations[edge.SourceId].Node;
-                var heading=locations[root(edge.TargetId)];
-                exits.Add((region.X+source.X+source.Width,heading.Project.X+heading.Node.X-clearance,y+source.Y+source.Height/2,edge.TargetId));
-            }
-        }
-        return placed.ToArray();
-    }
-
     public static (RenderProject[] Projects,Dictionary<string,double> Gutters) ReserveTracks(
         RenderProject[] projects,RenderConnection[] edges,Func<string,string> root,double gap,double spacing)
     {
         var nodes=projects.SelectMany(p=>p.Nodes.Select(n=>n with {X=n.X+p.X,Y=n.Y+p.Y,
             TextLines=n.TextLines.Select(t=>t with {X=t.X+p.X,Y=t.Y+p.Y}).ToArray()})).ToDictionary(n=>n.Id);
+        var owners=projects.SelectMany(p=>p.Nodes.Select(n=>(n.Id,Project:p.Id))).ToDictionary(n=>n.Id,n=>n.Project);
         var columns=new Dictionary<string,int>();
         double columnWidth=nodes.Values.Select(n=>n.Width+28).DefaultIfEmpty(328).Max();
         double left=double.NegativeInfinity;int column=-1;
@@ -98,11 +21,13 @@ internal static class CallChainSpacing
             if(nodes[unit.Key].X>=left+columnWidth){left=nodes[unit.Key].X;column++;}
             foreach(var node in unit)columns[node.Id]=column;
         }
+        var rightColumns=projects.ToDictionary(p=>p.Id,p=>p.Nodes.Select(n=>columns[n.Id]).DefaultIfEmpty(0).Max());
         var lanes=new Dictionary<string,(int Column,int Lane)>();
         var counts=new int[column+1];
         // One vertical interval per destination. Reuse a lane only when intervals
         // do not overlap, then reserve its width before positioning any columns.
-        foreach(var channel in edges.Where(e=>!e.IsTree).GroupBy(e=>columns[e.TargetId]-1))
+        foreach(var channel in edges.Where(e=>!e.IsTree).GroupBy(e=>owners[e.SourceId]==owners[e.TargetId]
+            ?columns[e.SourceId]:rightColumns[owners[e.SourceId]]))
         {
             var ends=new List<double>();
             var destinations=channel.GroupBy(e=>e.TargetId).Select(group=>new {
