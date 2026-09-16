@@ -19,11 +19,14 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
         string[] errors = Array.Empty<string>();
         for (int iteration = 0; iteration < maxIterations; iteration++)
         {
+            // Newly reserved passages change which parents may be recentred.
+            int passageCount = renderModel.PassageOffsetParents.Count;
             renderModel.LayoutIterations = iteration + 1;
             foreach (var rule in rules) rule.ApplyRule(renderModel);
             errors = Validate(renderModel).ToArray();
-            if (errors.Length == 0) return renderModel;
+            if (errors.Length == 0 && passageCount == renderModel.PassageOffsetParents.Count) return renderModel;
         }
+        if (errors.Length == 0) return renderModel;
         throw new InvalidOperationException($"Layout did not converge after {maxIterations} iterations: {string.Join("; ", errors)}");
     }
 
@@ -46,7 +49,7 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
             {
                 var roots = group.OrderBy(root => root.X).ThenBy(root => root.Id, StringComparer.Ordinal).ToArray();
                 for (int index = 1; index < roots.Length; index++)
-                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id, model.Configuration.NoDuplicates && model.Projects.Contains(project), respectBranchOrder: false) < spacing - LayoutGraph.Tolerance)
+                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id, model.Projects.Contains(project), respectBranchOrder: false) < spacing - LayoutGraph.Tolerance)
                         yield return $"Branch spacing: {roots[index].TypeName}";
             }
             foreach (var row in project.Nodes.GroupBy(node => node.Y))

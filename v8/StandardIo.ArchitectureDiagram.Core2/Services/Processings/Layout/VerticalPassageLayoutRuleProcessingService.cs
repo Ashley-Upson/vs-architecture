@@ -9,7 +9,7 @@ internal sealed class VerticalPassageLayoutRuleProcessingService : ILayoutRulePr
 {
     public void ApplyRule(RenderModel model)
     {
-        if (!model.Configuration.NoDuplicates || model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
+        if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         double clearance=model.Configuration.HorizontalOffset;
         double spacing=model.Configuration.Architecture.NodeSpacing;
         foreach(var project in model.Projects)
@@ -48,10 +48,12 @@ internal sealed class VerticalPassageLayoutRuleProcessingService : ILayoutRulePr
                 bool KeepsSiblingOrder(double candidate)
                 {
                     foreach(string member in moving) LayoutGraph.Move(project,member,candidate);
-                    bool valid=siblingGroups.All(group=>
+                    // A translation cannot change spacing inside wholly moved groups,
+                    // or repair unrelated groups that a later rule will arrange.
+                    bool valid=siblingGroups.Where(group=>group.Any(moving.Contains) && !group.All(moving.Contains)).All(group=>
                     {
                         var ordered=group.OrderBy(child=>Current(child).X).ThenBy(child=>child,StringComparer.Ordinal).ToArray();
-                        return ordered.Zip(ordered.Skip(1)).All(pair=>LayoutGraph.BranchClearance(project,pair.First,pair.Second,true)>=spacing-LayoutGraph.Tolerance);
+                        return ordered.Zip(ordered.Skip(1)).Where(pair=>moving.Contains(pair.First) || moving.Contains(pair.Second)).All(pair=>LayoutGraph.BranchClearance(project,pair.First,pair.Second,true)>=spacing-LayoutGraph.Tolerance);
                     });
                     foreach(string member in moving) LayoutGraph.Move(project,member,-candidate);
                     return valid;

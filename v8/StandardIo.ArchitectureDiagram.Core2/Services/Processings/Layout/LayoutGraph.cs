@@ -145,6 +145,8 @@ internal static class LayoutGraph
             .Select(b => b.X - a.X - a.Width)).DefaultIfEmpty(double.PositiveInfinity).Min();
     }
 
+    internal static bool HasSharedNodes(RenderProject project) => project.Nodes.Any(node => Parents(project, node.Id).Length > 1);
+
     internal const double Tolerance = 0.01;
     internal static double Centre(RenderNode node) => node.X + node.Width / 2;
     internal static ProjectModel ToProjectModel(RenderProject project) => new()

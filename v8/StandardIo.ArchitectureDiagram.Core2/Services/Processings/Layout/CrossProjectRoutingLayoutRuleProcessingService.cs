@@ -14,7 +14,7 @@ internal sealed class CrossProjectRoutingLayoutRuleProcessingService : ILayoutRu
         var nodes = renderModel.Projects.SelectMany(project => project.Nodes.Select(node =>
             new DrawingNode(node.Id, new DefinedType { Name = node.Id }, node.Label,
                 project.X + node.X, project.Y + node.Y, node.Width, node.Height))).ToArray();
-        if (renderModel.Configuration.NoDuplicates)
+        if (renderModel.DiagramType == DiagramTypes.Architecture)
         {
             var local = renderModel.Projects.SelectMany(project => project.Connections.Select((edge,index)=>(Project:project,Index:index,Edge:edge))).ToArray();
             var allEdges = local.Select(item=>item.Edge).Concat(renderModel.CrossProjectConnections).ToArray();

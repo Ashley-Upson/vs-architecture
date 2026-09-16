@@ -7,7 +7,7 @@ internal sealed class GutterSpacingLayoutRuleProcessingService : ILayoutRuleProc
 {
     public void ApplyRule(RenderModel model)
     {
-        if (!model.Configuration.NoDuplicates || model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
+        if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         foreach (var project in model.Projects)
         {
             var nodes=project.Nodes.ToDictionary(node=>node.Id);

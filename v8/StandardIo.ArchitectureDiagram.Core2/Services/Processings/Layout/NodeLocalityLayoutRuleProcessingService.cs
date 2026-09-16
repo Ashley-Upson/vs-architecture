@@ -13,6 +13,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
 
     private static void Improve(RenderProject project, RenderModel model)
     {
+        bool sharedNodes = LayoutGraph.HasSharedNodes(project);
         double spacing = model.Configuration.Architecture.NodeSpacing;
         var indices = project.Nodes.Select((node,index)=>(node.Id,index)).ToDictionary(p=>p.Id,p=>p.index);
         RenderNode Node(string id) => project.Nodes[indices[id]];
@@ -48,7 +49,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
             {
                 var roots=group.OrderBy(id=>Node(id).X).ThenBy(id=>id,StringComparer.Ordinal).ToArray();
                 for(int i=1;i<roots.Length;i++)
-                    if(LayoutGraph.BranchClearance(project,roots[i-1],roots[i],model.Configuration.NoDuplicates,respectBranchOrder:false)<spacing-LayoutGraph.Tolerance) return false;
+                    if(LayoutGraph.BranchClearance(project,roots[i-1],roots[i],sharedNodes,respectBranchOrder:false)<spacing-LayoutGraph.Tolerance) return false;
             }
             return project.Nodes.All(n=>double.IsFinite(n.X));
         }
@@ -98,7 +99,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
             bool better=candidate.Crossings<score.Crossings || candidate.Crossings==score.Crossings && candidate.Length<score.Length-LayoutGraph.Tolerance;
             // Moving an already untangled sibling set around only to shorten its
             // spokes disrupts stable tree ordering. Reorder it only to remove crossings.
-            bool reordered = !model.Configuration.NoDuplicates && candidate.Crossings >= score.Crossings && siblings.Any(group=>
+            bool reordered = !sharedNodes && candidate.Crossings >= score.Crossings && siblings.Any(group=>
                 !group.OrderBy(child=>before[indices[child]].X).ThenBy(child=>child,StringComparer.Ordinal)
                     .SequenceEqual(group.OrderBy(child=>Node(child).X).ThenBy(child=>child,StringComparer.Ordinal)));
             if(!moved || !better || reordered || !Valid() || project.Nodes.Max(n=>n.X+n.Width)-project.Nodes.Min(n=>n.X)>width+LayoutGraph.Tolerance ||

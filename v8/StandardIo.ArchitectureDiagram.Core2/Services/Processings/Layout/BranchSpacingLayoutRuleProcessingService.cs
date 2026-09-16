@@ -17,10 +17,13 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
     {
         foreach (var project in renderModel.Projects)
         {
+            bool sharedNodes = LayoutGraph.HasSharedNodes(project);
             // Finish descendants before reserving their entire branch bounds. Shared nodes
             // belong to the smallest branch containing all their consumers, when one exists.
             var branches = project.Nodes.ToDictionary(node => node.Id,
                 node => LayoutGraph.OwnedBranch(project, node.Id).Select(member => member.Id).ToHashSet());
+            var dependencyTargets = branches.ToDictionary(branch => branch.Key, branch => project.Connections
+                .Where(edge => branch.Value.Contains(edge.SourceId)).Select(edge => edge.TargetId).ToHashSet());
             var owners = project.Nodes.ToDictionary(node => node.Id, node => branches
                 .Where(branch => branch.Value.Count > branches[node.Id].Count && branch.Value.Contains(node.Id))
                 .OrderBy(branch => branch.Value.Count).Select(branch => branch.Key).FirstOrDefault());
@@ -38,13 +41,14 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 separation.TryGetValue(id, out var peers) && peers.Overlaps(branches[second]));
             double spacing = renderModel.IsProjectGraph ? renderModel.Configuration.Architecture.ProjectSpacing : renderModel.Configuration.Architecture.NodeSpacing;
             RenderNode Current(string id) => project.Nodes.Single(node => node.Id == id);
-            var independentSharedLeaves = LayoutGraph.SharedGroups(project).Where(group => group.Length == 1)
+            var sharedGroups = LayoutGraph.SharedGroups(project).ToArray();
+            var independentSharedLeaves = sharedGroups.Where(group => group.Length == 1)
                 .Select(group => group[0].Id).Where(id => branches[id].Count == 1).ToHashSet();
             double? RootAnchor(string id)
             {
-                if (renderModel.PassageOffsetParents.Contains(id) || !renderModel.Configuration.NoDuplicates || renderModel.IsProjectGraph || branches[id].Count != 1 || LayoutGraph.Parents(project,id).Length != 0) return null;
+                if (renderModel.PassageOffsetParents.Contains(id) || !sharedNodes || renderModel.IsProjectGraph || branches[id].Count != 1 || LayoutGraph.Parents(project,id).Length != 0) return null;
                 var targets = LayoutGraph.Children(project,id);
-                if (targets.Length == 0) return null;
+                if (targets.Select(node => node.Y).Distinct().Count() < 2) return null;
                 return LayoutGraph.Midpoint(targets.Where(node => node.Y == targets.Min(child => child.Y))) - Current(id).Width / 2;
             }
             void Arrange(string owner)
@@ -54,10 +58,15 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 double Position(string id)
                 {
                     if (RootAnchor(id) is double anchor) return anchor;
-                    if (reclaimSpace && renderModel.Configuration.NoDuplicates && !renderModel.IsProjectGraph && branches[id].Count == 1)
+                    if (reclaimSpace && sharedNodes && !renderModel.IsProjectGraph && branches[id].Count == 1)
                     {
                         var directConsumers = LayoutGraph.Parents(project,id);
-                        if (directConsumers.Length > 1) return directConsumers.Average(node => LayoutGraph.Centre(node)) - Current(id).Width / 2;
+                        if (directConsumers.Length > 1)
+                        {
+                            var group = sharedGroups.Single(group => group.Any(node => node.Id == id));
+                            return directConsumers.Average(node => LayoutGraph.Centre(node))
+                                + Current(id).X - LayoutGraph.Midpoint(group.Select(node => Current(node.Id)));
+                        }
                     }
                     if (!reclaimSpace || branches[id].Count == 1 || LayoutGraph.Parents(project,id).Length < 2) return Current(id).X;
                     // A shared branch sits among the sibling branches containing its
@@ -99,7 +108,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, renderModel.Configuration.NoDuplicates && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, (reclaimSpace && sharedNodes || dependencyTargets[branch.Root].Overlaps(dependencyTargets[root])) && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
                     if (RootAnchor(root) is double anchor)
                     {
                         var peers = placed.SelectMany(branch => branches[branch.Root].Select(Current))
