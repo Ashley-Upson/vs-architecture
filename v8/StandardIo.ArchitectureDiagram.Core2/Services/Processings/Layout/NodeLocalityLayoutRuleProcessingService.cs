@@ -78,7 +78,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
             moving.ExceptWith(branch);
             return true;
         }
-        void TryMove(string id,double preferred)
+        bool TryMove(string id,double preferred)
         {
             var before=project.Nodes.ToArray();
             var score=Score();
@@ -103,7 +103,11 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
                     .SequenceEqual(group.OrderBy(child=>Node(child).X).ThenBy(child=>child,StringComparer.Ordinal)));
             if(!moved || !better || reordered || !Valid() || project.Nodes.Max(n=>n.X+n.Width)-project.Nodes.Min(n=>n.X)>width+LayoutGraph.Tolerance ||
                 blocked is not null && !BlockedPassages().IsSubsetOf(blocked))
+            {
                 Array.Copy(before,project.Nodes,before.Length);
+                return false;
+            }
+            return true;
         }
         // Parent-first recursion is bounded by the visited set; bottom-up sweeps let
         // the next proposal use the positions accepted for the previous branch.
@@ -116,6 +120,22 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
                 if(!visited.Add(id)) return;
                 var parents=LayoutGraph.Parents(project,id).Where(n=>n.Y<Node(id).Y).ToArray();
                 foreach(var parent in parents) Visit(parent.Id);
+                var children=LayoutGraph.Children(project,id);
+                if(parents.Length>0 && children.Any(child=>LayoutGraph.Parents(project,child.Id).Length>1))
+                {
+                    // A broker can be near its parent but on the wrong side of a
+                    // neighbouring branch for its shared dependencies. Consider the
+                    // nearest available row slots before asking neighbours to move.
+                    var node=Node(id);
+                    double preferred=LayoutGraph.Midpoint(children)-node.Width/2;
+                    var peers=project.Nodes.Where(n=>n.Id!=id && n.Y==node.Y).ToArray();
+                    var slots=peers.SelectMany(n=>new[]{n.X-spacing-node.Width,n.X+n.Width+spacing})
+                        .Append(preferred).Distinct()
+                        .Where(x=>peers.All(n=>x+node.Width+spacing<=n.X+LayoutGraph.Tolerance || x>=n.X+n.Width+spacing-LayoutGraph.Tolerance))
+                        .OrderBy(x=>Math.Abs(x-preferred)).ThenBy(x=>x).ToArray();
+                    foreach(double slot in slots)
+                        if(TryMove(id,slot)) break;
+                }
                 if(parents.Length>0)
                     TryMove(id,LayoutGraph.Midpoint(parents.Select(n=>Node(n.Id)))-Node(id).Width/2);
             }
