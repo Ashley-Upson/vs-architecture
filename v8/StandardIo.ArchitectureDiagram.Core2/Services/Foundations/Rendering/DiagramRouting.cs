@@ -108,7 +108,44 @@ internal static class DiagramRouting
             });
         }).ToArray();
         SeparateHorizontalSegments(routes, nodes, horizontalOffset, reservedRoutes);
+        OrderSourceExits(routes, nodes, horizontalOffset);
         return routes;
+    }
+
+    // Horizontal separation can change bend order. Assign exits from the final
+    // routes so outer stems turn first and inner stems cannot cross those runs.
+    internal static void OrderSourceExits(DrawingRoute[] routes, Dictionary<string, DrawingNode> nodes, double offset)
+    {
+        foreach (var group in routes.GroupBy(route => route.Relationship.FromType))
+        {
+            if (group.Count() < 2) continue;
+            bool crosses = group.Any(horizontal => horizontal.Points.Length >= 3 && group.Any(vertical =>
+                vertical != horizontal && vertical.Points.Length >= 2
+                && vertical.Points[0].X > Math.Min(horizontal.Points[1].X, horizontal.Points[2].X)
+                && vertical.Points[0].X < Math.Max(horizontal.Points[1].X, horizontal.Points[2].X)
+                && horizontal.Points[1].Y > Math.Min(vertical.Points[0].Y, vertical.Points[1].Y)
+                && horizontal.Points[1].Y < Math.Max(vertical.Points[0].Y, vertical.Points[1].Y)));
+            if (!crosses) continue;
+            var source = nodes[group.Key!];
+            double centre = source.X + source.Width / 2;
+            foreach (var side in group.Where(route => route.Points.Length >= 4)
+                .GroupBy(route => Math.Sign(route.Points[2].X - centre)).Where(side => side.Key != 0))
+            {
+                var ordered = side.OrderBy(route => route.Points[1].Y)
+                    .ThenByDescending(route => Math.Abs(route.Points[2].X - centre))
+                    .ThenBy(route => route.Relationship.ToType, StringComparer.Ordinal).ToArray();
+                double step = Math.Min(offset, (source.Width / 2 - 5) / ordered.Length);
+                for (int index = 0; index < ordered.Length; index++)
+                {
+                    var points = ordered[index].Points;
+                    double x = centre + side.Key * step * (ordered.Length - index);
+                    var candidate = new[] { points[0] with { X = x }, points[1] with { X = x }, points[2] };
+                    if (!Clear(candidate, nodes.Values.Where(node => node.Id != source.Id).ToArray(), 0)) continue;
+                    points[0] = candidate[0];
+                    points[1] = candidate[1];
+                }
+            }
+        }
     }
 
     private static DrawingPoint[] PreferContinuousCorridor(DrawingPoint[] original, DrawingNode[] obstacles, double clearance, bool preferFewestBends)

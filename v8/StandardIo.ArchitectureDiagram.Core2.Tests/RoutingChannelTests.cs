@@ -14,6 +14,52 @@ using Xunit;
 namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 public sealed partial class RoutingChannelTests
 {
+    [Fact]
+    public void ShouldOrderLocalAndCrossProjectExitsTogether()
+    {
+        RenderNode Node(string id,double x)=>new(id,id,id,"blue",x,id=="source"?0:160,180,60,[]);
+        RenderConnection Edge(int i)=>new("edge"+i,"source","target"+i,"source","target"+i,false,[]);
+        var model=new RenderModel(4400,400,
+            [new RenderProject("local","Local",0,0,4400,400,
+                new[]{Node("source",1800)}.Concat(Enumerable.Range(0,12).Where(i=>i%2==0).Select(i=>Node("target"+i,i*330))).ToArray(),
+                Enumerable.Range(0,12).Where(i=>i%2==0).Select(Edge).ToArray()),
+             new RenderProject("external","External",0,0,4400,400,
+                Enumerable.Range(0,12).Where(i=>i%2==1).Select(i=>Node("target"+i,i*330)).ToArray(),[])])
+            {CrossProjectConnections=Enumerable.Range(0,12).Where(i=>i%2==1).Select(Edge).ToArray()};
+        model.Configuration.NoDuplicates=true;
+        new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.RoutingLayoutRuleProcessingService().ApplyRule(model);
+        new StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout.CrossProjectRoutingLayoutRuleProcessingService().ApplyRule(model);
+        var edges=model.Projects[0].Connections.Concat(model.CrossProjectConnections).ToArray();
+        foreach(var horizontal in edges)
+        foreach(var vertical in edges.Where(e=>e!=horizontal))
+        {
+            var a=horizontal.Points[1];var b=horizontal.Points[2];
+            var c=vertical.Points[0];var d=vertical.Points[1];
+            Assert.False(c.X>Math.Min(a.X,b.X)&&c.X<Math.Max(a.X,b.X)&&a.Y>c.Y&&a.Y<d.Y);
+        }
+    }
+
+    [Fact]
+    public void ShouldKeepDenseFanOutExitsClearOfSiblingHorizontalRuns()
+    {
+        var drawing=CreateDrawing(12);
+        var nodes=drawing.Nodes.ToArray();
+        nodes[0]=nodes[0] with { X=1800 };
+        for(int i=0;i<12;i++)
+        {
+            nodes[i+12]=nodes[i+12] with { X=i*330 };
+            drawing.Model.Dependencies![i].FromType=nodes[0].Type.Name;
+        }
+        var routes=DiagramRouting.CreateRoutes(drawing with {Nodes=nodes},new RenderConfiguration {NoDuplicates=true});
+        foreach(var horizontal in routes)
+        foreach(var vertical in routes.Where(r=>r!=horizontal))
+        {
+            var a=horizontal.Points[1];var b=horizontal.Points[2];
+            var c=vertical.Points[0];var d=vertical.Points[1];
+            Assert.False(c.X>Math.Min(a.X,b.X)&&c.X<Math.Max(a.X,b.X)&&a.Y>c.Y&&a.Y<d.Y);
+        }
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

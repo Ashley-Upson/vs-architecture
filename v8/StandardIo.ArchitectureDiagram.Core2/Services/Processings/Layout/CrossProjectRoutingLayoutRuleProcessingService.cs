@@ -28,5 +28,18 @@ internal sealed class CrossProjectRoutingLayoutRuleProcessingService : ILayoutRu
         var routes = DiagramRouting.CreateRoutes(drawing, renderModel.Configuration, reservedRoutes);
         for (int index = 0; index < routes.Length; index++)
             renderModel.CrossProjectConnections[index] = renderModel.CrossProjectConnections[index] with { Points = routes[index].Points };
+
+        // Local and cross-project links leave the same physical node. Reconcile
+        // their exit order together once both sets have their final gutter bends.
+        var localEdges = renderModel.Projects.SelectMany(project => project.Connections.Select((edge,index) =>
+            (Project:project,Index:index,Route:new DrawingRoute(new TypeRelationship {FromType=edge.SourceId,ToType=edge.TargetId},
+                edge.Points.Select(point=>new DrawingPoint(project.X+point.X,project.Y+point.Y)).ToArray())))).ToArray();
+        var crossRoutes = renderModel.CrossProjectConnections.Select(edge=>new DrawingRoute(
+            new TypeRelationship {FromType=edge.SourceId,ToType=edge.TargetId},edge.Points)).ToArray();
+        DiagramRouting.OrderSourceExits(localEdges.Select(edge=>edge.Route).Concat(crossRoutes).ToArray(),
+            nodes.ToDictionary(node=>node.Id),renderModel.Configuration.HorizontalOffset);
+        foreach (var edge in localEdges)
+            edge.Project.Connections[edge.Index] = edge.Project.Connections[edge.Index] with
+            { Points=edge.Route.Points.Select(point=>new DrawingPoint(point.X-edge.Project.X,point.Y-edge.Project.Y)).ToArray() };
     }
 }
