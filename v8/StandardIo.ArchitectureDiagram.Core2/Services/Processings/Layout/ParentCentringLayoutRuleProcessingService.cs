@@ -13,6 +13,7 @@ internal sealed class ParentCentringLayoutRuleProcessingService : ILayoutRulePro
         foreach (var project in renderModel.Projects)
         foreach (var parent in project.Nodes.OrderByDescending(node => node.Y).ToArray())
         {
+            if (renderModel.PassageOffsetParents.Contains(parent.Id)) continue;
             var children = LayoutGraph.OwnedChildren(project, parent.Id);
             if (children.Length == 0) continue;
             LayoutGraph.Move(project, parent.Id, LayoutGraph.Midpoint(children) - LayoutGraph.Centre(parent));

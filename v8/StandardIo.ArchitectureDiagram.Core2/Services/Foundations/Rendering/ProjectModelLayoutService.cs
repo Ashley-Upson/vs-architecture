@@ -39,14 +39,14 @@ internal sealed class ProjectModelLayoutService(IProjectModelLayoutBroker projec
                 if (parent.X < -LayoutGraph.Tolerance || parent.Y < -LayoutGraph.Tolerance || parent.X + parent.Width > project.Width + LayoutGraph.Tolerance || parent.Y + parent.Height > project.Height + LayoutGraph.Tolerance)
                     yield return $"Container bounds: {parent.TypeName}";
                 var children = LayoutGraph.OwnedChildren(project, parent.Id);
-                if (children.Length > 0 && Math.Abs(LayoutGraph.Centre(parent) - LayoutGraph.Midpoint(children)) > LayoutGraph.Tolerance)
+                if (children.Length > 0 && !model.PassageOffsetParents.Contains(parent.Id) && Math.Abs(LayoutGraph.Centre(parent) - LayoutGraph.Midpoint(children)) > LayoutGraph.Tolerance)
                     yield return $"Parent centring: {parent.TypeName}";
             }
             foreach (var group in LayoutGraph.BranchGroups(project))
             {
                 var roots = group.OrderBy(root => root.X).ThenBy(root => root.Id, StringComparer.Ordinal).ToArray();
                 for (int index = 1; index < roots.Length; index++)
-                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id, model.Configuration.NoDuplicates && model.Projects.Contains(project)) < spacing - LayoutGraph.Tolerance)
+                    if (LayoutGraph.BranchClearance(project, roots[index - 1].Id, roots[index].Id, model.Configuration.NoDuplicates && model.Projects.Contains(project), respectBranchOrder: false) < spacing - LayoutGraph.Tolerance)
                         yield return $"Branch spacing: {roots[index].TypeName}";
             }
             foreach (var row in project.Nodes.GroupBy(node => node.Y))

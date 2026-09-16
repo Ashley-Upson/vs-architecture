@@ -42,7 +42,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                 .Select(group => group[0].Id).Where(id => branches[id].Count == 1).ToHashSet();
             double? RootAnchor(string id)
             {
-                if (!renderModel.Configuration.NoDuplicates || renderModel.IsProjectGraph || branches[id].Count != 1 || LayoutGraph.Parents(project,id).Length != 0) return null;
+                if (renderModel.PassageOffsetParents.Contains(id) || !renderModel.Configuration.NoDuplicates || renderModel.IsProjectGraph || branches[id].Count != 1 || LayoutGraph.Parents(project,id).Length != 0) return null;
                 var targets = LayoutGraph.Children(project,id);
                 if (targets.Length == 0) return null;
                 return LayoutGraph.Midpoint(targets.Where(node => node.Y == targets.Min(child => child.Y))) - Current(id).Width / 2;
@@ -99,7 +99,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     double left = nodes.Min(node => node.X), right = nodes.Max(node => node.X + node.Width);
                     double top = nodes.Min(node => node.Y), bottom = nodes.Max(node => node.Y + node.Height);
                     double next = placed.Where(branch => branch.Top < bottom && branch.Bottom > top || MustSeparate(root, branch.Root))
-                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, renderModel.Configuration.NoDuplicates && !renderModel.IsProjectGraph)).DefaultIfEmpty(left).Max();
+                        .Select(branch => left + spacing - LayoutGraph.BranchClearance(project, branch.Root, root, renderModel.Configuration.NoDuplicates && !renderModel.IsProjectGraph, respectBranchOrder: reclaimSpace)).Where(double.IsFinite).DefaultIfEmpty(left).Max();
                     if (RootAnchor(root) is double anchor)
                     {
                         var peers = placed.SelectMany(branch => branches[branch.Root].Select(Current))
@@ -124,7 +124,7 @@ internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProc
                     foreach (string id in branches[root]) LayoutGraph.Move(project, id, delta);
                     placed.Add((root, left + delta, right + delta, top, bottom));
                 }
-                if (owner.Length == 0) return;
+                if (owner.Length == 0 || renderModel.PassageOffsetParents.Contains(owner)) return;
                 var ownedChildren = LayoutGraph.OwnedChildren(project, owner);
                 if (ownedChildren.Length > 0)
                     LayoutGraph.Move(project, owner, LayoutGraph.Midpoint(ownedChildren) - LayoutGraph.Centre(Current(owner)));

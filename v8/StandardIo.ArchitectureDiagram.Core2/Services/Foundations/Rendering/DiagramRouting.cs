@@ -18,6 +18,7 @@ internal static class DiagramRouting
             throw new ArgumentOutOfRangeException(nameof(horizontalOffset));
         }
 
+        bool preserveExits = configuration?.NoDuplicates == true && diagramType == DiagramTypes.Architecture;
         var nodes = drawing.Nodes.ToDictionary(keySelector: node => node.Type.Name!);
         TypeRelationship[] links = drawing.Model.Dependencies ?? Array.Empty<TypeRelationship>();
         var sourceExits = links.ToDictionary(keySelector: link => link,
@@ -34,9 +35,13 @@ internal static class DiagramRouting
             foreach (var direction in source.GroupBy(link => Math.Sign(nodes[link.ToType!].X + nodes[link.ToType!].Width / 2 - center)))
             {
                 var destinations = direction.GroupBy(link => link.ToType)
-                    .OrderBy(group => Math.Abs(nodes[group.Key!].X + nodes[group.Key!].Width / 2 - center))
+                    .OrderByDescending(group => preserveExits ? nodes[group.Key!].Y : 0)
+                    .ThenBy(group => Math.Abs(nodes[group.Key!].X + nodes[group.Key!].Width / 2 - center))
                     .ThenBy(group => group.Key, StringComparer.Ordinal).ToArray();
                 double step = Math.Min(horizontalOffset, (from.Width / 2 - 5) / destinations.Length);
+                if (preserveExits && direction.Key != 0)
+                    step = Math.Min(step, destinations.Select((group,index) =>
+                        Math.Abs(nodes[group.Key!].X + nodes[group.Key!].Width / 2 - center) / (index + 1)).Min());
                 for (int index = 0; index < destinations.Length; index++)
                 {
                     foreach (var link in destinations[index])
@@ -55,6 +60,13 @@ internal static class DiagramRouting
             double sourceX = sourceExits[link];
             double targetX = to.X + to.Width / 2;
             double busY = busHeights[link.ToType!];
+            if (preserveExits && drawing.Nodes.Any(node => node.Y > from.Y + from.Height && node.Y < to.Y))
+            {
+                DrawingPoint[] passage = [new(sourceX, from.Y + from.Height), new(sourceX, busY),
+                    new(targetX, busY), new(targetX, to.Y)];
+                if (Clear(passage, drawing.Nodes.Where(node => node.Id != from.Id && node.Id != to.Id).ToArray(), horizontalOffset))
+                    return new DrawingRoute(link, passage);
+            }
             bool preferFewestBends = diagramType == DiagramTypes.Architecture && configuration is not null;
             if (preferFewestBends && to.Y > from.Y + from.Height)
             {
@@ -107,8 +119,8 @@ internal static class DiagramRouting
                 new DrawingPoint(targetX, to.Y)
             });
         }).ToArray();
-        SeparateHorizontalSegments(routes, nodes, horizontalOffset, reservedRoutes);
-        OrderSourceExits(routes, nodes, horizontalOffset);
+        SeparateHorizontalSegments(routes, nodes, horizontalOffset, reservedRoutes, preserveExits);
+        if (!preserveExits) OrderSourceExits(routes, nodes, horizontalOffset);
         return routes;
     }
 
@@ -165,7 +177,7 @@ internal static class DiagramRouting
                 : pair.First.Y <= node.Y || pair.First.Y >= node.Y + node.Height || Math.Max(pair.First.X, pair.Second.X) <= node.X || Math.Min(pair.First.X, pair.Second.X) >= node.X + node.Width));
 
     private static void SeparateHorizontalSegments(DrawingRoute[] routes, Dictionary<string, DrawingNode> nodes,
-        double horizontalOffset, IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes)
+        double horizontalOffset, IEnumerable<(string TargetId, DrawingPoint[] Points)>? reservedRoutes, bool preserveExits = false)
     {
         var occupied = new List<(string TargetId, double Left, double Right, double Y)>();
         foreach (var route in reservedRoutes ?? [])
@@ -188,12 +200,15 @@ internal static class DiagramRouting
                 Y: route.Points[index].Y,
                 Left: Math.Min(route.Points[index - 1].X, route.Points[index].X),
                 Right: Math.Max(route.Points[index - 1].X, route.Points[index].X))))
-            .GroupBy(segment => (segment.TargetId, segment.Y))
-            .OrderByDescending(group => group.Any(segment => segment.Index == segment.Route.Points.Length - 2))
+            .GroupBy(segment => (segment.TargetId, segment.Y, Source: preserveExits && segment.Index == 2 ? segment.Route.Relationship.FromType : null))
+            .OrderBy(group => preserveExits ? group.Key.Source : null, StringComparer.Ordinal)
+            .ThenByDescending(group => preserveExits && group.Key.Source is not null ? Math.Abs(group.First().Route.Points[0].X - nodes[group.Key.Source].X - nodes[group.Key.Source].Width / 2) : 0)
+            .ThenByDescending(group => group.Any(segment => segment.Index == segment.Route.Points.Length - 2))
             .ThenBy(group => group.Key.Y)
             .ThenByDescending(group => group.Max(segment => segment.Right) - group.Min(segment => segment.Left))
             .ThenBy(group => group.Key.TargetId, StringComparer.Ordinal).ToArray();
 
+        var departures = new List<(string Source, int Side, double Top, double Bottom, double Y)>();
         foreach (var group in segments)
         {
             double left = group.Min(segment => segment.Left), right = group.Max(segment => segment.Right);
@@ -202,6 +217,13 @@ internal static class DiagramRouting
                 .Where(y => y < preferred).DefaultIfEmpty(preferred - horizontalOffset * 2).Max();
             double bottom = nodes.Values.Select(node => node.Y)
                 .Where(y => y > preferred).DefaultIfEmpty(preferred + horizontalOffset * 2).Min();
+            double gutterTop = top;
+            int side = group.Key.Source is null ? 0 : Math.Sign(group.First().Route.Points[2].X - group.First().Route.Points[0].X);
+            if (preserveExits && group.Key.Source is not null)
+            {
+                top = departures.Where(run => run.Source == group.Key.Source && run.Side == side && run.Top == gutterTop && run.Bottom == bottom)
+                    .Select(run => run.Y).DefaultIfEmpty(top).Max();
+            }
             var boundaries = occupied.Where(run => run.TargetId != group.Key.TargetId
                     && run.Right >= left && right >= run.Left && run.Y > top && run.Y < bottom)
                 .Select(run => run.Y).Append(top).Append(bottom).Distinct().OrderBy(y => y).ToArray();
@@ -216,6 +238,7 @@ internal static class DiagramRouting
                 segment.Route.Points[segment.Index] = segment.Route.Points[segment.Index] with { Y = height };
             }
             occupied.Add((group.Key.TargetId, left, right, height));
+            if (preserveExits && group.Key.Source is not null) departures.Add((group.Key.Source, side, gutterTop, bottom, height));
         }
     }
 

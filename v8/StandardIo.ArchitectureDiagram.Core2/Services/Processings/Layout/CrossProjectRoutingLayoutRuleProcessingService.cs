@@ -14,6 +14,25 @@ internal sealed class CrossProjectRoutingLayoutRuleProcessingService : ILayoutRu
         var nodes = renderModel.Projects.SelectMany(project => project.Nodes.Select(node =>
             new DrawingNode(node.Id, new DefinedType { Name = node.Id }, node.Label,
                 project.X + node.X, project.Y + node.Y, node.Width, node.Height))).ToArray();
+        if (renderModel.Configuration.NoDuplicates)
+        {
+            var local = renderModel.Projects.SelectMany(project => project.Connections.Select((edge,index)=>(Project:project,Index:index,Edge:edge))).ToArray();
+            var allEdges = local.Select(item=>item.Edge).Concat(renderModel.CrossProjectConnections).ToArray();
+            var combined = new ProjectModelDrawing("combined",new ProjectModel
+            {
+                Dependencies=allEdges.Select(edge=>new TypeRelationship {FromType=edge.SourceId,ToType=edge.TargetId}).ToArray()
+            },0,renderModel.Width,renderModel.Height,nodes);
+            var combinedRoutes=DiagramRouting.CreateRoutes(combined,renderModel.Configuration);
+            for(int index=0;index<local.Length;index++)
+            {
+                var item=local[index];
+                item.Project.Connections[item.Index]=item.Edge with { Points=combinedRoutes[index].Points
+                    .Select(point=>new DrawingPoint(point.X-item.Project.X,point.Y-item.Project.Y)).ToArray() };
+            }
+            for(int index=0;index<renderModel.CrossProjectConnections.Length;index++)
+                renderModel.CrossProjectConnections[index]=renderModel.CrossProjectConnections[index] with {Points=combinedRoutes[local.Length+index].Points};
+            return;
+        }
         var projectModel = new ProjectModel
         {
             Dependencies = renderModel.CrossProjectConnections.Select(edge => new TypeRelationship

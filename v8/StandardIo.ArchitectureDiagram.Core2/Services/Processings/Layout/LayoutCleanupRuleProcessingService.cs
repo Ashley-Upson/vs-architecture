@@ -20,6 +20,7 @@ internal sealed class LayoutCleanupRuleProcessingService : ILayoutRuleProcessing
             var groups = LayoutGraph.BranchGroups(project).Select(g => g.Select(n => n.Id).ToArray()).ToArray();
             foreach (string id in project.Nodes.OrderByDescending(n => n.Y).Select(n => n.Id).ToArray())
             {
+                if (renderModel.PassageOffsetParents.Contains(id)) continue;
                 var children = LayoutGraph.Children(project, id);
                 if (renderModel.Configuration.NoDuplicates && LayoutGraph.Parents(project,id).Length == 0 && LayoutGraph.OwnedChildren(project,id).Length == 0 && children.Length > 0)
                     children = children.Where(child => child.Y == children.Min(node => node.Y)).ToArray();

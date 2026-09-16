@@ -51,7 +51,8 @@ public sealed class HorizontalDetourCollisionTests
         var cross = model.CrossProjectConnections[0].Points;
         Assert.Equal(4, cross.Length);
         AssertNoHorizontalCollision(local, cross);
-        Assert.Equal(new DrawingPoint(130, 100), cross[0]);
+        // Combined routing allocates the deeper destination the first right-hand exit.
+        Assert.Equal(new DrawingPoint(noDuplicates ? 140 : 130, 100), cross[0]);
         Assert.Equal(new DrawingPoint(730, 360), cross[^1]);
     }
 
