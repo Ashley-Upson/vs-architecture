@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class NodeLocalityLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel model)
+    protected override void ApplyArchitectureRule(RenderModel model)
     {
         if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         foreach (var project in model.Projects) Improve(project, model);
@@ -21,14 +21,7 @@ internal sealed class NodeLocalityLayoutRuleProcessingService : ILayoutRuleProce
         var siblings = project.Nodes.Select(n=>LayoutGraph.OwnedChildren(project,n.Id).Select(c=>c.Id).ToArray())
             .Where(group=>group.Length>1).ToArray();
         var edges = project.Connections.Where(e=>Node(e.TargetId).Y>Node(e.SourceId).Y).ToArray();
-        var passages=edges.Concat(model.CrossProjectConnections.Where(e=>indices.ContainsKey(e.SourceId)))
-            .GroupBy(e=>e.SourceId).Select(g=>(Source:g.Key,
-            Bottom:g.Max(e=>indices.ContainsKey(e.TargetId)?Node(e.TargetId).Y:double.PositiveInfinity),
-            Radius:Math.Min(Node(g.Key).Width/2-5,g.Count()*model.Configuration.HorizontalOffset))).ToArray();
-        HashSet<(string Source,string Obstacle)> BlockedPassages() => passages.SelectMany(p=>
-            project.Nodes.Where(n=>n.Y>Node(p.Source).Y+Node(p.Source).Height && n.Y<p.Bottom &&
-                n.X<LayoutGraph.Centre(Node(p.Source))+p.Radius && n.X+n.Width>LayoutGraph.Centre(Node(p.Source))-p.Radius)
-                .Select(n=>(p.Source,n.Id))).ToHashSet();
+        HashSet<(string Source,string Obstacle)> BlockedPassages() => LayoutPassages.Blocked(model,project);
         var pairs = edges.SelectMany((a,i)=>edges.Skip(i+1)
             .Where(b=>a.SourceId!=b.SourceId && a.TargetId!=b.TargetId &&
                 Node(a.SourceId).Y==Node(b.SourceId).Y && Node(a.TargetId).Y==Node(b.TargetId).Y)

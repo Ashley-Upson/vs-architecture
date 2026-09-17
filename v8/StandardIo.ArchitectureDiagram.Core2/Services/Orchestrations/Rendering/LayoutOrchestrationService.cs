@@ -8,7 +8,7 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 using StandardIo.ArchitectureDiagram.Core2.Services.Processings.Rendering;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Orchestrations.Rendering;
-internal sealed class LayoutOrchestrationService(IProjectModelLayoutService layoutService, IRenderModelProcessingService renderModelProcessingService, StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Commands.IRenderConfigurationService configurationService) : ILayoutOrchestrationService
+internal sealed class LayoutOrchestrationService(IProjectModelLayoutService layoutService, ILayoutInitializationService initializationService, IRenderModelProcessingService renderModelProcessingService, StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Commands.IRenderConfigurationService configurationService) : ILayoutOrchestrationService
 {
     public RenderModel BuildRenderModel(RenderModel renderModel)
     {
@@ -16,6 +16,7 @@ internal sealed class LayoutOrchestrationService(IProjectModelLayoutService layo
         ArgumentNullException.ThrowIfNull(renderModel.ProjectModels);
         configurationService.Validate(renderModel.Configuration);
         renderModelProcessingService.PrepareRenderModel(renderModel);
+        initializationService.Initialize(renderModel);
         return layoutService.Layout(renderModel);
     }
 }

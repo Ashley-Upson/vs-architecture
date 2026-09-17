@@ -6,11 +6,18 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class BranchSpacingLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class BranchSpacingLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override System.Collections.Generic.IEnumerable<string> GetArchitectureViolations(RenderModel model) => LayoutConditions.BranchSpacing(model);
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
-        ArrangeBranches(renderModel, reclaimSpace: false);
+        bool needsSpace = renderModel.Projects.Any(project => LayoutGraph.BranchGroups(project).Any(group =>
+        {
+            var roots = group.OrderBy(node => node.X).ToArray();
+            return roots.Zip(roots.Skip(1)).Any(pair => LayoutGraph.BranchClearance(project, pair.First.Id, pair.Second.Id,
+                LayoutGraph.HasSharedNodes(project), respectBranchOrder: false) < (renderModel.IsProjectGraph ? renderModel.Configuration.Architecture.ProjectSpacing : renderModel.Configuration.Architecture.NodeSpacing) - LayoutGraph.Tolerance);
+        }));
+        if (!renderModel.LayoutInitialized || needsSpace) ArrangeBranches(renderModel, reclaimSpace: false);
     }
 
     internal static void ArrangeBranches(RenderModel renderModel, bool reclaimSpace)

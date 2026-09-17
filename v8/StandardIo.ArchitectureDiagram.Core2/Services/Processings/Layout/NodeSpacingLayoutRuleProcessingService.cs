@@ -6,10 +6,12 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class NodeSpacingLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class NodeSpacingLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override System.Collections.Generic.IEnumerable<string> GetArchitectureViolations(RenderModel model) => LayoutConditions.NodeSpacing(model);
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
+        if (!GetViolations(renderModel).Any()) return;
         foreach (var project in renderModel.Projects)
         foreach (double y in project.Nodes.Select(node => node.Y).Distinct().OrderBy(y => y))
         {

@@ -7,10 +7,11 @@ using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class RoutingLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class RoutingLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
+        if (renderModel.DiagramType == DiagramTypes.Architecture && renderModel.CrossProjectConnections.Length > 0) return;
         foreach (var project in renderModel.Projects)
         {
             var model = LayoutGraph.ToProjectModel(project);

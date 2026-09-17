@@ -1,5 +1,9 @@
 # Layout rule interaction review
 
+Historical review. The current execution contract and rule catalogue are linked from
+[the V8 documentation gateway](README.md). This file records earlier findings, not
+the current registration order or completion behaviour.
+
 ## Findings
 
 The branch regression was a constraint conflict, not an extraction problem.

@@ -6,9 +6,10 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class ParentCentringLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class ParentCentringLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override System.Collections.Generic.IEnumerable<string> GetArchitectureViolations(RenderModel model) => LayoutConditions.ParentCentring(model);
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
         foreach (var project in renderModel.Projects)
         foreach (var parent in project.Nodes.OrderByDescending(node => node.Y).ToArray())

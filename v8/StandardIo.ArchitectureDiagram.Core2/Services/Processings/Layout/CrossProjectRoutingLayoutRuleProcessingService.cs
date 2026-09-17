@@ -6,9 +6,9 @@ using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 using StandardIo.ArchitectureDiagram.Core2.Services.Foundations.Rendering;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class CrossProjectRoutingLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class CrossProjectRoutingLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
         if (renderModel.CrossProjectConnections.Length == 0) return;
         var nodes = renderModel.Projects.SelectMany(project => project.Nodes.Select(node =>

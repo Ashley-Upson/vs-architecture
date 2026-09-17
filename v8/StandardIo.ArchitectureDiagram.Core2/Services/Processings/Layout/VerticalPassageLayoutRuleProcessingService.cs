@@ -5,9 +5,9 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
 
-internal sealed class VerticalPassageLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class VerticalPassageLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel model)
+    protected override void ApplyArchitectureRule(RenderModel model)
     {
         if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         double clearance=model.Configuration.HorizontalOffset;

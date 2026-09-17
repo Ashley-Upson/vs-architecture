@@ -11,6 +11,8 @@ internal sealed class RenderModelProcessingService(IProjectModelCompositionProce
 {
     public RenderModel PrepareRenderModel(RenderModel renderModel)
     {
+        renderModel.Rows.Clear();
+        renderModel.PassageOffsetParents.Clear();
         renderModel.LayoutInitialized = false;
         renderModel.ProjectLayoutInitialized = false;
         renderModel.SharedParentLayoutInitialized = false;

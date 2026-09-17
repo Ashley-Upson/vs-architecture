@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class SharedParentCentringLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class SharedParentCentringLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
         // Shared centring seeds the layout. Reapplying it after branch packing can undo
         // required clearance, so subsequent passes retain the packed positions.

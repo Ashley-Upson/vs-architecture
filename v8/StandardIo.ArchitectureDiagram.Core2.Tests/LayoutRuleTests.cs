@@ -21,7 +21,7 @@ public class LayoutRuleTests(Xunit.Abstractions.ITestOutputHelper output)
         var model = new RenderModel([]) { Projects = [new("project","project",0,0,1000,500,
             [Node("first",0,0),Node("second",500,sameRow ? 0 : 100),Node("child",500,300)],
             [Edge("a","first"),Edge("b","second")])] };
-        var rule = new LayoutCleanupRuleProcessingService();
+        var rule = new SharedChainAlignmentLayoutRuleProcessingService();
         rule.ApplyRule(model);
         var nodes = model.Projects[0].Nodes;
         if (!sameRow) Assert.Equal(nodes[2].X, nodes[0].X);
@@ -64,6 +64,7 @@ public class LayoutRuleTests(Xunit.Abstractions.ITestOutputHelper output)
     {
         var services = new ServiceCollection().AddArchitectureDiagram();
         services.RemoveAll<ILayoutRuleProcessingService>();
+        services.AddSingleton<ILayoutInitializationService>(new NoInitialization());
         var rule = new DelayedRule();
         services.AddSingleton<ILayoutRuleProcessingService>(rule);
         using var provider = services.BuildServiceProvider();
@@ -75,7 +76,7 @@ public class LayoutRuleTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(1, rule.Calls);
         model.Configuration.MaxLayoutIterations = 2;
         service.Layout(model);
-        Assert.Equal(2, rule.Calls);
+        Assert.Equal(3, rule.Calls);
         model.Configuration.MaxLayoutIterations = 0;
         Assert.Throws<ArgumentOutOfRangeException>(() => service.Layout(model));
     }
@@ -108,8 +109,14 @@ public class LayoutRuleTests(Xunit.Abstractions.ITestOutputHelper output)
         return new RenderModel(600, 400, new[] { new RenderProject("project", "Project", 40, 40, 500, 350, new[] { parent, child }, new[] { edge }) });
     }
 
+    private sealed class NoInitialization : ILayoutInitializationService
+    {
+        public void Initialize(RenderModel model) { }
+    }
+
     private sealed class DelayedRule : ILayoutRuleProcessingService
     {
+        public System.Collections.Generic.IEnumerable<string> GetViolations(RenderModel model) => LayoutConditions.ParentCentring(model);
         public int Calls { get; private set; }
         public void ApplyRule(RenderModel renderModel)
         {
