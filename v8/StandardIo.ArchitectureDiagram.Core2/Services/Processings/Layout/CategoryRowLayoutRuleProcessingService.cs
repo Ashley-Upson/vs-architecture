@@ -2,11 +2,12 @@ using System;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class CategoryRowLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class CategoryRowLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel model)
+    protected override void ApplyArchitectureRule(RenderModel model)
     {
         if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
+        var previousRows = model.Rows.ToDictionary(pair => pair.Key, pair => pair.Value);
         model.Rows.Clear();
         foreach (var project in model.Projects)
         {
@@ -32,6 +33,10 @@ internal sealed class CategoryRowLayoutRuleProcessingService : ILayoutRuleProces
                 foreach (var id in occupants) foreach (var child in outgoing[id]) counts[child]--;
                 row++;
             }
+            bool sameRows = model.Rows.Where(pair => pair.Key.StartsWith(project.Id + ":", StringComparison.Ordinal))
+                .All(pair => previousRows.TryGetValue(pair.Key, out var previous) &&
+                    System.Text.Json.JsonSerializer.Serialize(previous) == System.Text.Json.JsonSerializer.Serialize(pair.Value));
+            if (sameRows && previousRows.Count > 0) continue;
             for (int i = 0; i < project.Nodes.Length; i++)
             {
                 var node = project.Nodes[i];

@@ -17,6 +17,7 @@ public class CombinedLayoutTests
              Edge("wide","one"),Edge("wide","two"),Edge("wide","three"),Edge("service","serviceChild")]);
         var model=new RenderModel(6000,800,[project]);model.Configuration.NoDuplicates=true;
         new LayoutCleanupRuleProcessingService().ApplyRule(model);
+        new SharedChainAlignmentLayoutRuleProcessingService().ApplyRule(model);
         Assert.Equal(project.Nodes.Single(n=>n.Id=="service").X,project.Nodes.Single(n=>n.Id=="root").X,5);
     }
 
@@ -46,6 +47,7 @@ public class CombinedLayoutTests
             [Edge("root","service"),Edge("root","logging"),Edge("other","service"),Edge("other","logging")]);
         var model=new RenderModel(2000,800,[project]);model.Configuration.NoDuplicates=true;
         new LayoutCleanupRuleProcessingService().ApplyRule(model);
+        new SharedChainAlignmentLayoutRuleProcessingService().ApplyRule(model);
         var roots=project.Nodes.Where(n=>n.Y==0).OrderBy(n=>n.X).ToArray();
         Assert.True(roots.All(n=>System.Math.Abs(n.X-project.Nodes.Single(s=>s.Id=="service").X)<=270));
     }

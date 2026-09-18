@@ -1,25 +1,33 @@
-# Independent v8 scaffold
+# Architecture diagrams - V8
 
-The solution's v8 folder contains Core2, Core2.Tests, DiagramCLI and SampleProject. These projects
-have no references to Ashley's projects. Existing projects are restored to the
-branch baseline.
+The compiler model is shared evidence. Each diagram selects its own meaning; layout arranges that meaning; writers draw the result without rediscovering layout.
 
-From the repository root:
+## Production stages
+
+1. [Request and configuration](documentation/stages/request.md)
+2. [Compiler model](documentation/stages/compiler-model.md)
+3. [Contextual diagram model](documentation/stages/contextual-model.md)
+4. [Render model and layout](documentation/stages/render-model.md)
+5. [Format rendering](documentation/stages/rendering.md)
+6. [Document compilation](documentation/stages/document.md)
+
+[Rule execution contract](documentation/rule-contract.md) | [Layout rule catalogue](documentation/rules/readme.md) | [Selectable implementations](documentation/implementations/readme.md)
+
+The command orchestrates these stages through their exposure points. `All` fetches compiler data once and builds four independent tabs. A single diagram request produces only that diagram. Configuration travels with `RenderModel.Configuration`.
+
+## Maintenance
+
+A rule describes one condition and the fields it may change. Correct the rule when its direction is wrong; do not add an opposing cleanup pass. Keep its document and regression test aligned with the implementation. Duplicate selection changes the graph, not the architecture layout contract.
+
+## Run and verify
+
+From the repository root, using .NET 10:
 
 ```powershell
-dotnet run --project v8/DiagramCLI -- Architecture "C:\path\First.csproj" "C:\path\Second.csproj"
-dotnet run --project v8/DiagramCLI -- Data "C:\path\First.csproj"
+dotnet run --project v8/DiagramCLI -- All "C:\path\Project.csproj" --format Html --output diagram.html
+dotnet run --project v8/DiagramCLI -- Architecture "C:\path\Project.csproj" --format DrawIO --output diagram.drawio --noduplicates
 dotnet run --project v8/DiagramCLI -- --help
 dotnet test v8/StandardIo.ArchitectureDiagram.Core2.Tests
 ```
 
-The first argument selects the diagram type (case-insensitive); remaining arguments
-are existing C# project paths. DiagramCLI creates the two-property request and calls
-DiagramGenerator. The scaffold reports "Diagram generation is not implemented yet."
-and exits with code 1; it does not generate output yet.
-
-The [sample project](StandardIo.ArchitectureDiagram.SampleProject/README.md) is the
-readable proving ground for extraction tests and future Draw.io acceptance tests.
-All four v8 projects target .NET 10. The public ProjectModelBuilder.BuildAsync accepts
-a project/file/folder path and returns one ProjectModel through the internal orchestration.
-Diagram generation remains a separate unfinished stage.
+The [sample project](StandardIo.ArchitectureDiagram.SampleProject/README.md) supplies integration scenarios. The solution also includes its Data project. `--config` reads the render configuration JSON tree; `--max-layout-iterations` bounds convergence work.

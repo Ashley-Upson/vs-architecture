@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class ArchitecturalLayerRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class ArchitecturalLayerRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel model)
+    protected override void ApplyArchitectureRule(RenderModel model)
     {
         if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         foreach (var project in model.Projects)

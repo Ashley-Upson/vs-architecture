@@ -6,10 +6,12 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class DepthLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class DepthLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel renderModel)
+    protected override System.Collections.Generic.IEnumerable<string> GetArchitectureViolations(RenderModel model) => LayoutConditions.Depth(model);
+    protected override void ApplyArchitectureRule(RenderModel renderModel)
     {
+        if (renderModel.Rows.Count > 0) return;
         foreach (var project in renderModel.Projects)
         {
             var model = LayoutGraph.ToProjectModel(project);

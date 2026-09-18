@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
-internal sealed class GutterSpacingLayoutRuleProcessingService : ILayoutRuleProcessingService
+internal sealed class GutterSpacingLayoutRuleProcessingService : ArchitectureLayoutRuleProcessingService
 {
-    public void ApplyRule(RenderModel model)
+    protected override void ApplyArchitectureRule(RenderModel model)
     {
-        if (!model.Configuration.NoDuplicates || model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
+        if (model.IsProjectGraph || model.DiagramType != DiagramTypes.Architecture) return;
         foreach (var project in model.Projects)
         {
             var nodes=project.Nodes.ToDictionary(node=>node.Id);

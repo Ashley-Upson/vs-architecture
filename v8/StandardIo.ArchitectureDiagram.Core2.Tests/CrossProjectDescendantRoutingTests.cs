@@ -23,9 +23,9 @@ public sealed class CrossProjectDescendantRoutingTests
         var child = owner.Nodes.Single(node => node.TypeName == "Child");
         var route = Assert.Single(model.CrossProjectConnections);
 
-        // Then: the external line avoids the internal child without moving it off-centre.
+        // Then: the external line avoids the internal child by reserving the same vertical passage used in both views.
         var source = owner.Nodes.Single(node => node.TypeName == "Source");
-        Assert.Equal(source.X, child.X);
+        Assert.Contains(source.Id, model.PassageOffsetParents);
         for (int index = 1; index < route.Points.Length; index++)
         {
             var a = route.Points[index - 1]; var b = route.Points[index];

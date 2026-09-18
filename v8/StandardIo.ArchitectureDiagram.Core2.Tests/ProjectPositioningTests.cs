@@ -22,10 +22,10 @@ public sealed class ProjectPositioningTests
         RenderConnection Edge(string from, string to) => new(from + to, from + "-node", to + "-node", from, to, false, Array.Empty<DrawingPoint>());
         var model = new RenderModel(0, 0, new[] { Project("A", 1000, 400), Project("B", 300, 200), Project("C", 700, 600), Project("D", 500, 200) })
         { Configuration = new RenderConfiguration { Architecture = new ArchitectureRenderConfiguration { ProjectSpacing = projectSpacing } }, CrossProjectConnections = new[] { Edge("A", "B"), Edge("A", "C"), Edge("B", "D"), Edge("C", "D") } };
-        var rule = TestServices.Get<ILayoutRuleFactory>().GetLayoutRuleServices().OfType<ProjectPositioningLayoutRuleProcessingService>().Single();
+        var rules = TestServices.Get<ILayoutRuleFactory>().GetLayoutRuleServices().Where(rule => rule.GetType().Name.StartsWith("Project", StringComparison.Ordinal) || rule is CanvasBoundsLayoutRuleProcessingService).ToArray();
 
         // When: apply the project rule as the iterative layout pipeline does.
-        for (int iteration = 0; iteration < 100; iteration++) rule.ApplyRule(model);
+        for (int iteration = 0; iteration < 100; iteration++) foreach(var rule in rules) rule.ApplyRule(model);
 
         // Then: spacing uses actual widths, and centring uses the outer group edges.
         var a = model.Projects[0]; var b = model.Projects[1]; var c = model.Projects[2]; var d = model.Projects[3];

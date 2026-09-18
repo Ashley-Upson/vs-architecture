@@ -18,7 +18,7 @@ internal static class DiagramRouting
             throw new ArgumentOutOfRangeException(nameof(horizontalOffset));
         }
 
-        bool preserveExits = configuration?.NoDuplicates == true && diagramType == DiagramTypes.Architecture;
+        bool preserveExits = configuration is not null && diagramType == DiagramTypes.Architecture;
         var nodes = drawing.Nodes.ToDictionary(keySelector: node => node.Type.Name!);
         TypeRelationship[] links = drawing.Model.Dependencies ?? Array.Empty<TypeRelationship>();
         var sourceExits = links.ToDictionary(keySelector: link => link,

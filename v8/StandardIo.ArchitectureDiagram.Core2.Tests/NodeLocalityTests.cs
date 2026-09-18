@@ -7,8 +7,10 @@ namespace StandardIo.ArchitectureDiagram.Core2.Tests;
 
 public sealed class NodeLocalityTests
 {
-    [Fact]
-    public void ShouldMoveSharedChildrenTowardsConsumersAndPushNeighbourAside()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShouldMoveSharedChildrenTowardsConsumersAndPushNeighbourAside(bool noDuplicates)
     {
         RenderNode Node(string id, double x, double y) => new(id,id,id,"blue",x,y,180,60,[]);
         RenderConnection Edge(string a,string b) => new(a+b,a,b,a,b,false,[]);
@@ -17,7 +19,7 @@ public sealed class NodeLocalityTests
              Node("LeftChild",840,160),Node("RightChild",120,160)],
             [Edge("A","LeftChild"),Edge("B","LeftChild"),Edge("C","RightChild"),Edge("D","RightChild")]);
         var model = new RenderModel(1500,600,[project]);
-        model.Configuration.NoDuplicates=true;
+        model.Configuration.NoDuplicates=noDuplicates;
         new NodeLocalityLayoutRuleProcessingService().ApplyRule(model);
         Assert.True(project.Nodes.Single(n=>n.Id=="LeftChild").X < project.Nodes.Single(n=>n.Id=="RightChild").X);
         Assert.True(project.Nodes.Single(n=>n.Id=="RightChild").X-project.Nodes.Single(n=>n.Id=="LeftChild").X>=240);
@@ -41,6 +43,18 @@ public sealed class NodeLocalityTests
         model.PassageOffsetParents.Add("Source");
         new NodeLocalityLayoutRuleProcessingService().ApplyRule(model);
         Assert.True(project.Nodes.Single(n=>n.Id=="Child").X>=180);
+    }
+
+    [Fact]
+    public void ShouldNotReserveHorizontalSpaceBetweenVerticallyDisjointBranches()
+    {
+        // A shared factory ends above a stream dependency and its owned descendant.
+        // Their horizontal spans may overlap because their vertical spans do not.
+        RenderNode Node(string id,double y)=>new(id,id,id,"blue",100,y,180,60,[]);
+        var project=new RenderProject("p","P",0,0,1000,600,
+            [Node("Factory",160),Node("StreamDependency",320),Node("Encoding",480)],
+            [new RenderConnection("edge","StreamDependency","Encoding","StreamDependency","Encoding",false,[])]);
+        Assert.Equal(double.PositiveInfinity,LayoutGraph.BranchClearance(project,"StreamDependency","Factory"));
     }
 
     [Fact]

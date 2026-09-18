@@ -16,4 +16,5 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
     <ProjectReference Include="..\StandardIo.ArchitectureDiagram.Core2\StandardIo.ArchitectureDiagram.Core2.csproj" />
   </ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Fixtures\*.json" /></ItemGroup>
 </Project>
