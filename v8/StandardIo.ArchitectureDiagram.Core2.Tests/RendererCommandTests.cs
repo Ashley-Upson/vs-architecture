@@ -140,6 +140,35 @@ public sealed partial class RendererCommandTests
         Assert.Equal(expected: DiagramTypes.Architecture, actual: request.DiagramType);
     }
 
+    [Fact]
+    public void ShouldSplitCompleteCommandsForOneProcess()
+    {
+        // Given
+        string[] command =
+        [
+            "Architecture", "one.csproj", "-o", "one.html", "-f", "Html",
+            "--next",
+            "Architecture", "one.csproj", "-o", "one.drawio", "-f", "DrawIO"
+        ];
+
+        // When
+        string[][] commands = DiagramRenderCommand.SplitBatchCommands(
+            command: command);
+
+        // Then
+        Assert.Equal(expected: 2, actual: commands.Length);
+        Assert.Equal(expected: "one.html", actual: commands[0][3]);
+        Assert.Equal(expected: "one.drawio", actual: commands[1][3]);
+
+        Assert.Throws<ArgumentException>(
+            testCode: () => DiagramRenderCommand.SplitBatchCommands(
+                command: ["--next", "Architecture"]));
+
+        Assert.Throws<ArgumentException>(
+            testCode: () => DiagramRenderCommand.SplitBatchCommands(
+                command: ["Architecture", "--next"]));
+    }
+
     [Theory]
     [InlineData("--help")]
     [InlineData("-h")]

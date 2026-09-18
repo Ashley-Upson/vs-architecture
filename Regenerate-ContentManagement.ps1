@@ -51,24 +51,39 @@ try {
     $views = if ($View -eq 'Both') { @('Combined', 'Split') } else { @($View) }
     $failures = 0
     foreach ($diagramView in $views) {
+        $stem = if ($diagramView -eq 'Combined') { 'ContentManagement' } else { 'ContentManagement.WithDuplicates' }
+        $generationLog = Join-Path $runDirectory "$stem.log"
+        $commands = @()
+
         foreach ($format in @('Html', 'DrawIO')) {
-            $stem = if ($diagramView -eq 'Combined') { 'ContentManagement' } else { 'ContentManagement.WithDuplicates' }
             $extension = if ($format -eq 'Html') { 'html' } else { 'drawio' }
+            $stagedOutput = Join-Path $runDirectory "$stem.$extension"
+            $command = @('All') + $resolvedProjects + @(
+                '--output', $stagedOutput, '--format', $format,
+                '--config', $resolvedConfig, '--max-layout-iterations', "$MaxLayoutIterations")
+
+            if ($diagramView -eq 'Combined') { $command += '--noduplicates' }
+            if ($commands.Count -gt 0) { $commands += '--next' }
+            $commands += $command
+        }
+
+        Write-Host "Generating $stem HTML and DrawIO from one project model..."
+        & dotnet $cliAssembly @commands *> $generationLog
+        if ($LASTEXITCODE -ne 0) {
+            $failures += 2
+            Write-Warning "$stem outputs failed; their existing files were preserved."
+            Get-Content -LiteralPath $generationLog -Tail 10 | Write-Host
+            continue
+        }
+
+        foreach ($extension in @('html', 'drawio')) {
             $filename = "$stem.$extension"
             $stagedOutput = Join-Path $runDirectory $filename
             $destination = Join-Path $PSScriptRoot $filename
-            $generationLog = Join-Path $runDirectory "$filename.log"
-            $cliArguments = @($cliAssembly, 'All') + $resolvedProjects + @(
-                '--output', $stagedOutput, '--format', $format,
-                '--config', $resolvedConfig, '--max-layout-iterations', "$MaxLayoutIterations")
-            if ($diagramView -eq 'Combined') { $cliArguments += '--noduplicates' }
 
-            Write-Host "Generating $filename..."
-            & dotnet @cliArguments *> $generationLog
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stagedOutput)) {
+            if (-not (Test-Path -LiteralPath $stagedOutput)) {
                 $failures++
-                Write-Warning "$filename failed; its existing file was preserved."
-                Get-Content -LiteralPath $generationLog -Tail 10 | Write-Host
+                Write-Warning "$filename was not produced; its existing file was preserved."
                 continue
             }
 

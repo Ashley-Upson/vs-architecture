@@ -13,17 +13,32 @@ try
     var services = new ServiceCollection();
     services.AddArchitectureDiagram();
     using ServiceProvider provider = services.BuildServiceProvider();
-    DiagramRenderResult result = await provider.GetRequiredService<DiagramRenderCommand>()
-        .ExecuteAsync(command: args);
-    if (result.OutputPath is null)
+    DiagramRenderCommand renderCommand = provider.GetRequiredService<DiagramRenderCommand>();
+    int exitCode = 0;
+
+    foreach (string[] command in DiagramRenderCommand.SplitBatchCommands(command: args))
     {
-        Console.WriteLine(value: Encoding.UTF8.GetString(bytes: result.Content));
-        return 0;
+        try
+        {
+            DiagramRenderResult result = await renderCommand.ExecuteAsync(command: command);
+
+            if (result.OutputPath is null)
+            {
+                Console.WriteLine(value: Encoding.UTF8.GetString(bytes: result.Content));
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path: result.OutputPath)!);
+            await File.WriteAllBytesAsync(path: result.OutputPath, bytes: result.Content);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine(value: exception.Message);
+            exitCode = 1;
+        }
     }
 
-    Directory.CreateDirectory(Path.GetDirectoryName(path: result.OutputPath)!);
-    await File.WriteAllBytesAsync(path: result.OutputPath, bytes: result.Content);
-    return 0;
+    return exitCode;
 }
 catch (Exception exception)
 {

@@ -124,6 +124,12 @@ internal static class LayoutGraph
     internal static double BranchClearance(RenderProject project, string leftId, string rightId, bool alignSharedRoots = false, bool respectBranchOrder = true)
     {
         var left = OwnedBranch(project,leftId); var right = OwnedBranch(project,rightId);
+        return BranchClearance(project, leftId, rightId, left, right, alignSharedRoots, respectBranchOrder);
+    }
+
+    internal static double BranchClearance(RenderProject project, string leftId, string rightId,
+        RenderNode[] left, RenderNode[] right, bool alignSharedRoots = false, bool respectBranchOrder = true)
+    {
         var leftRoot = project.Nodes.Single(node => node.Id == leftId);
         var rightRoot = project.Nodes.Single(node => node.Id == rightId);
         var leftParents = Parents(project,leftId); var rightParents = Parents(project,rightId);

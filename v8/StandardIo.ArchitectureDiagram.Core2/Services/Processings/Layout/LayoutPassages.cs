@@ -5,7 +5,8 @@ using StandardIo.ArchitectureDiagram.Core2.Models;
 namespace StandardIo.ArchitectureDiagram.Core2.Services.Processings.Layout;
 internal static class LayoutPassages
 {
-    internal static HashSet<(string Source,string Obstacle)> Blocked(RenderModel model,RenderProject project)
+    internal static HashSet<(string Source,string Obstacle)> Blocked(RenderModel model,RenderProject project,
+        IReadOnlySet<string>? affectedNodeIds = null)
     {
         var nodes=project.Nodes.ToDictionary(n=>n.Id);
         var outgoing=project.Connections.Concat(model.CrossProjectConnections.Where(e=>nodes.ContainsKey(e.SourceId))).GroupBy(e=>e.SourceId).ToArray();
@@ -13,6 +14,7 @@ internal static class LayoutPassages
         double clearance=model.Configuration.HorizontalOffset;
         foreach(var node in project.Nodes) foreach(var group in outgoing)
         {
+            if (affectedNodeIds is not null && !affectedNodeIds.Contains(node.Id) && !affectedNodeIds.Contains(group.Key)) continue;
             var source=nodes[group.Key];
             if(source.Y+source.Height>=node.Y) continue;
             int count=group.Count(e=>!nodes.ContainsKey(e.TargetId)||nodes[e.TargetId].Y>node.Y);
